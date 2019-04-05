@@ -1,0 +1,123 @@
+kind: StatefulSet
+apiVersion: apps/v1
+metadata:
+    name: {{ required "name required " .Values.name }}
+    namespace: {{ required "namespace required" .Values.namespace }}
+spec:
+    replicas: {{ required "replicas required" .Values.replicas }}
+    selector:
+        matchLabels:
+          app: vxflextest
+    template:
+      metadata:
+        labels:
+          app: vxflextest
+      spec:
+        serviceAccount: vxflextest
+        hostNetwork: true
+        containers:
+          - name: test
+            image: docker.io/centos:latest
+            command: [ "/bin/sleep", "3600" ]
+            volumeMounts:
+              - mountPath: "/data0"
+                name: pvolx0
+              - mountPath: "/data1"
+                name: pvolx1
+              - mountPath: "/data2"
+                name: pvolx2
+              - mountPath: "/data3"
+                name: pvolx3
+              - mountPath: "/data4"
+                name: pvolx4
+              - mountPath: "/data5"
+                name: pvolx5
+              - mountPath: "/data6"
+                name: pvolx6
+              - mountPath: "/data7"
+                name: pvolx7
+              - mountPath: "/data8"
+                name: pvolx8
+              - mountPath: "/data9"
+                name: pvolx9
+    volumeClaimTemplates:
+    - metadata:
+        name: pvolx0
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        resources:
+          requests:
+            storage: 8Gi
+    - metadata:
+        name: pvolx1
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        resources:
+          requests:
+            storage: 8Gi
+    - metadata:
+        name: pvolx2
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        resources:
+          requests:
+            storage: 8Gi
+    - metadata:
+        name: pvolx3
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        resources:
+          requests:
+            storage: 8Gi
+    - metadata:
+        name: pvolx4
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        resources:
+          requests:
+            storage: 8Gi
+    - metadata:
+        name: pvolx5
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        resources:
+          requests:
+            storage: 8Gi
+    - metadata:
+        name: pvolx6
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        resources:
+          requests:
+            storage: 8Gi
+    - metadata:
+        name: pvolx7
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        resources:
+          requests:
+            storage: 8Gi
+    - metadata:
+        name: pvolx8
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        resources:
+          requests:
+            storage: 8Gi
+    - metadata:
+        name: pvolx9
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        resources:
+          requests:
+            storage: 8Gi

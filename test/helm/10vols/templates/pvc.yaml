@@ -1,0 +1,140 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pvol0
+  namespace: test
+spec:
+  accessModes:
+  - ReadWriteOnce
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 8Gi
+  storageClassName: vxflexos
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pvol1
+  namespace: test
+spec:
+  accessModes:
+  - ReadWriteOnce
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 8Gi
+  storageClassName: vxflexos
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pvol2
+  namespace: test
+spec:
+  accessModes:
+  - ReadWriteOnce
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 8Gi
+  storageClassName: vxflexos
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pvol3
+  namespace: test
+spec:
+  accessModes:
+  - ReadWriteOnce
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 8Gi
+  storageClassName: vxflexos
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pvol4
+  namespace: test
+spec:
+  accessModes:
+  - ReadWriteOnce
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 8Gi
+  storageClassName: vxflexos
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pvol5
+  namespace: test
+spec:
+  accessModes:
+  - ReadWriteOnce
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 8Gi
+  storageClassName: vxflexos-xfs
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pvol6
+  namespace: test
+spec:
+  accessModes:
+  - ReadWriteOnce
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 8Gi
+  storageClassName: vxflexos-xfs
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pvol7
+  namespace: test
+spec:
+  accessModes:
+  - ReadWriteOnce
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 8Gi
+  storageClassName: vxflexos-xfs
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pvol8
+  namespace: test
+spec:
+  accessModes:
+  - ReadWriteOnce
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 8Gi
+  storageClassName: vxflexos-xfs
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pvol9
+  namespace: test
+spec:
+  accessModes:
+  - ReadWriteOnce
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 8Gi
+  storageClassName: vxflexos-xfs
+---

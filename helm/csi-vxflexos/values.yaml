@@ -1,0 +1,71 @@
+# "systemName" defines the name of the VxFlex OS system from which volumes will
+# be provisioned. This must either be set to the VxFlex OS system name or system ID.
+# systemName: systemname
+
+# "restGateway" defines the VxFlex OS REST API endpoint, with full URL, typically leveraging HTTPS.
+# You must set this for your VxFlex OS installations REST gateway.
+# restGateway: https://123.0.0.1
+
+# "storagePool" defines the VxFlex OS storage pool from which this driver will # provision volumes.
+# You must set this for the primary storage pool to be used
+# storagePool: sp
+
+#"mdmIP" defines the MDM(s) the SDC's should register with on start, comma separated
+# You must set this to the MDM IPs for your VxFlex OS system.
+mdmIP: 192.168.1.1
+
+# "volumeNamePrefix" defines a string prepended to each volume created by the CSI driver.
+volumeNamePrefix: k8s
+
+# "controllerCount" defines the number of VxFlex controller nodes to deploy to
+# the Kubernetes release
+controllerCount: 1
+
+# Where is the drv_cfg binary on the host?  
+# By default, /bin/emc, but might be /var/vcap/packages/vxflexos_kernel on PKS
+# IT IS RECOMMENDED YOU DO NOT CHANGE THIS.
+vxflexosbinpath: /bin/emc
+
+# Enable this to automatically delete all snapshots in a consistency group when a snap in the group is deleted
+enablesnapshotcgdelete: "false"
+
+# Enable list volume operation to include snapshots (since creating a volume from a snap actually results in a new snap)
+# It is recommend this be false unless Kubernetes needs this for some reason.
+enablelistvolumesnapshot: "false"
+
+# The installation process will generate multiple storageclasses based on these parameters.
+# Only the primary storageclass for the driver will be marked default if specified.
+storageClass:
+  # "storageClass.name" defines the name of the storage class to be defined.
+  name: vxflexos
+
+  # "storageClass.isDefault" defines whether the primary storage class should be the # default.
+  isDefault: "true"
+
+  # "storageClass.reclaimPolicy" defines what will happen when a volume is
+  # removed from the Kubernetes API. Valid values are "Retain" and "Delete".
+  reclaimPolicy: Delete
+
+# IT IS RECOMMENDED YOU DO NOT CHANGE THE IMAGES TO BE DONLOADED.
+images:
+  # "images.driver" defines the container images used for the driver container.
+  driver: dellemc/csi-vxflexos:v1.0.0
+
+  # "images.attacher" defines the container images used for the csi attacher
+  # container.
+  #attacher: quay.io/k8scsi/csi-attacher:v0.4.2 #for CSI 0.3.0 only (obsolete)
+  attacher: quay.io/k8scsi/csi-attacher:v1.0.1 #doesn't work with CSI 0.3.0 driver
+
+  # "images.provisioner" defines the container images used for the csi provisioner
+  # container.
+  #provisioner: quay.io/k8scsi/csi-provisioner:v0.4.2 #for CSI 0.3.0 only (obsolete)
+  provisioner: quay.io/k8scsi/csi-provisioner:v1.0.1 #doesn't work with CSI 0.3.0 driver
+
+  # "images.snapshotter" defines the container image used for the csi snapshotter
+  snapshotter: quay.io/k8scsi/csi-snapshotter:v1.0.1
+
+  # "images.registrar" defines the container images used for the csi registrar
+  # container.
+  #registrar: quay.io/k8scsi/driver-registrar:v0.4.2 #for CSI 0.3.0 only (obsolete)
+  registrar: quay.io/k8scsi/csi-node-driver-registrar:v1.0.2 #doesn't work with CSI 0.3.0 driver
+

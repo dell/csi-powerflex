@@ -1,0 +1,71 @@
+#!/bin/sh
+
+# Determine the kubernetes version
+kubeversion=$(kubectl version  | grep 'Server Version' | sed -e 's/^.*GitVersion:"//' -e 's/",.*//')
+echo Kubernetes version $kubeversion
+
+# Determine the nodes
+MINION_NODES=$(kubectl get nodes -o wide | grep  -v -e master -e INTERNAL | awk ' { print $6; }')
+MASTER_NODES=$(kubectl get nodes -o wide | awk ' /master/{ print $6; }')
+echo Kubernetes master nodes: $MASTER_NODES
+echo Kubernetes minion nodes: $MINION_NODES
+
+echo Verifying the SDC installation.
+sdcfail=0
+for node in $MINION_NODES
+do
+	ssh $node /opt/emc/scaleio/sdc/bin/drv_cfg --query_mdm
+	rv=$?
+	if [ $rv -ne 0 ]; then 
+		echo "*******************************************************************"
+		echo "Node $node doees not have the SDC installed";
+		echo "*******************************************************************"
+		sdcfail=1;
+	 fi
+	
+done
+if [ $sdcfail -ne 0 ]; then echo "YOU MUST INSTALL THE VXFLEXOS SDC ON ALL MINION (WORKER) NODES"; exit 2; fi
+
+# Variables used for verification
+FEATURE_GATES="VolumeSnapshotDataSource=true KubeletPluginsWatcher=true CSINodeInfo=true CSIDriverRegistry=true BlockVolume=true CSIBlockVolume=true"
+MASTER_PROCS="/usr/bin/kubelet kube-apiserver kube-scheduler kube-controller-manager"
+MINION_PROCS="/usr/bin/kubelet"
+fail=0
+
+echo Verifying the feature gates.
+for node in $MASTER_NODES
+do
+	echo ssh $node ps -ef >.ps.out
+	ssh $node ps -ef >.ps.out
+	for gate in $FEATURE_GATES
+	do
+	#echo checking $node for $gate ...
+		for proc in $MASTER_PROCS
+		do
+		#echo proc $proc
+		count=$(grep $proc .ps.out | grep -c $gate)
+		#echo $node $gate $proc $count
+		[ $count -ne "1" ] && { echo "node $node proc $proc gate $gate failed"; fail=1; }
+		done
+	done
+done
+
+for node in $MINION_NODES
+do
+	echo ssh $node ps -ef >.ps.out
+	ssh $node ps -ef >.ps.out
+	for gate in $FEATURE_GATES
+	do
+	#echo checking $node for $gate ...
+		for proc in $MINION_PROCS
+		do
+		#echo proc $proc
+		count=$(grep $proc .ps.out | grep -c $gate)
+		#echo $node $gate $proc $count
+		[ $count -ne "1" ] && { echo "node $node proc $proc gate $gate failed"; fail=1; }
+		done
+	done
+done
+
+echo fail: $fail
+exit $fail

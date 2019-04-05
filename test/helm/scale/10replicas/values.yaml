@@ -1,0 +1,3 @@
+Replicas: 1
+StorageClassName: "default"
+Namespace: "test"

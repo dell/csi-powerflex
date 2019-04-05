@@ -1,0 +1,43 @@
+kind: StatefulSet
+apiVersion: apps/v1
+metadata:
+    name: vxflextest
+    namespace: test
+spec:
+    replicas: {{ required "replicas required" .Values.replicas }}
+    selector:
+        matchLabels:
+          app: vxflextest
+    template:
+      metadata:
+        labels:
+          app: vxflextest
+      spec:
+        serviceAccount: vxflextest
+        hostNetwork: true
+        containers:
+          - name: test
+            image: docker.io/centos:latest
+            command: [ "/bin/sleep", "3600" ]
+            volumeMounts:
+              - mountPath: "/data0"
+                name: pvol0
+              - mountPath: "/data1"
+                name: pvol1
+    volumeClaimTemplates:
+    - metadata:
+        name: pvol0
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: vxflexos
+        resources:
+          requests:
+            storage: 8Gi
+    - metadata:
+        name: pvol1
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        resources:
+          requests:
+            storage: 8Gi

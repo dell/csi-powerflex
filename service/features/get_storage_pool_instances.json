@@ -1,0 +1,114 @@
+[
+  {
+    "rebalanceIoPriorityAppBwPerDeviceThresholdInKbps": null,
+    "rebuildIoPriorityAppBwPerDeviceThresholdInKbps": null,
+    "rebalanceIoPriorityAppIopsPerDeviceThreshold": null,
+    "useRmcache": false,
+    "rebuildIoPriorityQuietPeriodInMsec": null,
+    "rebalanceIoPriorityQuietPeriodInMsec": null,
+    "rebuildIoPriorityNumOfConcurrentIosPerDevice": 1,
+    "zeroPaddingEnabled": true,
+    "backgroundScannerMode": "Disabled",
+    "rebalanceIoPriorityPolicy": "favorAppIos",
+    "protectionDomainId": "b8b3919900000000",
+    "backgroundScannerBWLimitKBps": 0,
+    "rebuildIoPriorityBwLimitPerDeviceInKbps": 10240,
+    "sparePercentage": 10,
+    "rmcacheWriteHandlingMode": "Cached",
+    "checksumEnabled": false,
+    "useRfcache": false,
+    "rebuildEnabled": true,
+    "rebalanceEnabled": true,
+    "numOfParallelRebuildRebalanceJobsPerDevice": 2,
+    "capacityAlertHighThreshold": 80,
+    "capacityAlertCriticalThreshold": 90,
+    "rebuildIoPriorityAppIopsPerDeviceThreshold": null,
+    "rebalanceIoPriorityNumOfConcurrentIosPerDevice": 1,
+    "rebalanceIoPriorityBwLimitPerDeviceInKbps": 10240,
+    "rebuildIoPriorityPolicy": "limitNumOfConcurrentIos",
+    "name": "viki_pool_HDD_20181031",
+    "id": "e65f9c2700000000",
+    "links": [
+      {
+        "rel": "self",
+        "href": "/api/instances/StoragePool::e65f9c2700000000"
+      },
+      {
+        "rel": "/api/StoragePool/relationship/Statistics",
+        "href": "/api/instances/StoragePool::e65f9c2700000000/relationships/Statistics"
+      },
+      {
+        "rel": "/api/StoragePool/relationship/Volume",
+        "href": "/api/instances/StoragePool::e65f9c2700000000/relationships/Volume"
+      },
+      {
+        "rel": "/api/StoragePool/relationship/Device",
+        "href": "/api/instances/StoragePool::e65f9c2700000000/relationships/Device"
+      },
+      {
+        "rel": "/api/StoragePool/relationship/VTree",
+        "href": "/api/instances/StoragePool::e65f9c2700000000/relationships/VTree"
+      },
+      {
+        "rel": "/api/parent/relationship/protectionDomainId",
+        "href": "/api/instances/ProtectionDomain::b8b3919900000000"
+      }
+    ]
+  },
+  {
+    "rebalanceIoPriorityAppBwPerDeviceThresholdInKbps": null,
+    "rebuildIoPriorityAppBwPerDeviceThresholdInKbps": null,
+    "rebalanceIoPriorityAppIopsPerDeviceThreshold": null,
+    "useRmcache": false,
+    "rebuildIoPriorityQuietPeriodInMsec": null,
+    "rebalanceIoPriorityQuietPeriodInMsec": null,
+    "rebuildIoPriorityNumOfConcurrentIosPerDevice": 1,
+    "zeroPaddingEnabled": true,
+    "backgroundScannerMode": "Disabled",
+    "rebalanceIoPriorityPolicy": "favorAppIos",
+    "protectionDomainId": "b8b3919900000000",
+    "backgroundScannerBWLimitKBps": 0,
+    "rebuildIoPriorityBwLimitPerDeviceInKbps": 10240,
+    "sparePercentage": 10,
+    "rmcacheWriteHandlingMode": "Cached",
+    "checksumEnabled": false,
+    "useRfcache": false,
+    "rebuildEnabled": true,
+    "rebalanceEnabled": true,
+    "numOfParallelRebuildRebalanceJobsPerDevice": 2,
+    "capacityAlertHighThreshold": 80,
+    "capacityAlertCriticalThreshold": 90,
+    "rebuildIoPriorityAppIopsPerDeviceThreshold": null,
+    "rebalanceIoPriorityNumOfConcurrentIosPerDevice": 1,
+    "rebalanceIoPriorityBwLimitPerDeviceInKbps": 10240,
+    "rebuildIoPriorityPolicy": "limitNumOfConcurrentIos",
+    "name": "other_storage_pool",
+    "id": "e65f9c2700000001",
+    "links": [
+      {
+        "rel": "self",
+        "href": "/api/instances/StoragePool::e65f9c2700000000"
+      },
+      {
+        "rel": "/api/StoragePool/relationship/Statistics",
+        "href": "/api/instances/StoragePool::e65f9c2700000000/relationships/Statistics"
+      },
+      {
+        "rel": "/api/StoragePool/relationship/Volume",
+        "href": "/api/instances/StoragePool::e65f9c2700000000/relationships/Volume"
+      },
+      {
+        "rel": "/api/StoragePool/relationship/Device",
+        "href": "/api/instances/StoragePool::e65f9c2700000000/relationships/Device"
+      },
+      {
+        "rel": "/api/StoragePool/relationship/VTree",
+        "href": "/api/instances/StoragePool::e65f9c2700000000/relationships/VTree"
+      },
+      {
+        "rel": "/api/parent/relationship/protectionDomainId",
+        "href": "/api/instances/ProtectionDomain::b8b3919900000000"
+      }
+    ]
+  }
+]

@@ -1,0 +1,35 @@
+{
+  "sizeInKb": 8388608,
+  "vtreeId": "c36a59ef00000001",
+  "storagePoolId": "e65f9c2700000000",
+  "isObfuscated": false,
+  "volumeType": "ThickProvisioned",
+  "consistencyGroupId": "__CONSISTENCY_GROUP_ID__",
+  "ancestorVolumeId": "__ANCESTOR_ID__",
+  "useRmcache": true,
+  "creationTime": 1542129719,
+  "mappedSdcInfo": __MAPPED_SDC_INFO__,
+  "mappingToAllSdcsEnabled": false,
+  "isVvol": false,
+  "name": "__NAME__",
+  "id": "__ID__",
+  "links": [
+    {
+      "rel": "self",
+      "href": "/api/instances/Volume::72ce476b00000002"
+    },
+    {
+      "rel": "/api/Volume/relationship/Statistics",
+      "href": "/api/instances/Volume::72ce476b00000002/relationships/Statistics"
+    },
+    {
+      "rel": "/api/parent/relationship/vtreeId",
+      "href": "/api/instances/VTree::c36a59ef00000001"
+    },
+    {
+      "rel": "/api/parent/relationship/storagePoolId",
+      "href": "/api/instances/StoragePool::e65f9c2700000000"
+    }
+  ]
+}
+

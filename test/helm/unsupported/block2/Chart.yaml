@@ -1,0 +1,9 @@
+name: vxflex-csi
+version: 0.0.1
+appVersion: 2.6.0
+description: |
+  Tests VxFlexOS CSI deployments.
+keywords:
+- vxflexos-csi
+- storage
+engine: gotpl

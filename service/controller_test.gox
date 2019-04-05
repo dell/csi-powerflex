@@ -1,0 +1,82 @@
+package service_test
+
+import (
+	"context"
+	"testing"
+
+	csi "github.com/container-storage-interface/spec/lib/go/csi/v0"
+	"github.com/stretchr/testify/assert"
+)
+
+func TestControllerGetCaps(t *testing.T) {
+
+	ctx := context.Background()
+
+	gclient, stop := startServer(ctx, t)
+	defer stop()
+
+	client := csi.NewControllerClient(gclient)
+
+	rpcs := map[csi.ControllerServiceCapability_RPC_Type]struct{}{
+		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME:     struct{}{},
+		csi.ControllerServiceCapability_RPC_PUBLISH_UNPUBLISH_VOLUME: struct{}{},
+		csi.ControllerServiceCapability_RPC_LIST_VOLUMES:             struct{}{},
+		csi.ControllerServiceCapability_RPC_GET_CAPACITY:             struct{}{},
+	}
+
+	resp, err := client.ControllerGetCapabilities(ctx,
+		&csi.ControllerGetCapabilitiesRequest{})
+
+	assert.NoError(t, err)
+	caps := resp.GetCapabilities()
+	assert.NotEmpty(t, caps)
+	assert.Len(t, caps, len(rpcs))
+
+	for _, cap := range caps {
+		assert.Contains(t, rpcs, cap.GetRpc().GetType())
+		delete(rpcs, cap.GetRpc().GetType())
+	}
+	assert.Empty(t, rpcs)
+}
+
+/*
+func TestControllerProbe(t *testing.T) {
+	ctx := context.Background()
+
+	os.Setenv("X_CSI_VXFLEXOS_ENDPOINT", "https://localhost:443")
+
+	gclient, stop := startServer(ctx, t)
+	defer stop()
+
+	client := csi.NewControllerClient(gclient)
+}
+*/
+
+func startServer(ctx context.Context, t *testing.T) (*grpc.ClientConn, func()) {
+
+	// Create a new SP instance and serve it with a piped connection.
+	sp := provider.New()
+	lis, err := memconn.Listen("csi-test")
+	assert.NoError(t, err)
+	go func() {
+		if err := sp.Serve(ctx, lis); err != nil {
+			assert.EqualError(t, err, "http: Server closed")
+		}
+	}()
+
+	clientOpts := []grpc.DialOption{
+		grpc.WithInsecure(),
+		grpc.WithDialer(func(string, time.Duration) (net.Conn, error) {
+			return memconn.Dial("csi-test")
+		}),
+	}
+
+	// Create a client for the piped connection.
+	client, err := grpc.DialContext(ctx, "", clientOpts...)
+	assert.NoError(t, err)
+
+	return client, func() {
+		client.Close()
+		sp.GracefulStop(ctx)
+	}
+}

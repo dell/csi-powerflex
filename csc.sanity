@@ -1,0 +1,42 @@
+#!/bin/sh
+source env.sh
+
+echo; echo "getting plugin-info"
+csc -e unix_sock identity plugin-info
+sleep 5
+
+echo; echo "probling the plugin (health check)"
+csc -e unix_sock identity probe
+sleep 5
+
+echo; echo "creating a volume"
+csc -e unix_sock controller create-volume tomcsc1 --cap 1,mount,xfs --params storagepool=$STORAGE_POOL  | tee output
+volumeId=$(cat output | awk '{ print $1; exit; }' | tr -d '"' )
+echo volume id: $volumeId
+sleep 5
+
+echo; echo "listing volumes"
+csc -e unix_sock controller list-volumes
+sleep 5
+
+echo; echo "publish volume"
+csc -e unix_sock controller publish $volumeId --cap 1,mount,xfs --node-id $SDC_GUID
+sleep 5
+
+echo; echo "listing volumes on local node"
+echo ls /dev/disk/by-id
+ls /dev/disk/by-id
+sleep 5
+
+echo; echo "unpublish volume"
+csc -e unix_sock controller unpublish $volumeId --node-id $SDC_GUID
+sleep 5
+
+echo; echo "deleting volume"
+csc -e unix_sock controller delete-volume $volumeId
+sleep 5
+
+
+
+
+

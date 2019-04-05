@@ -1,0 +1,2 @@
+Replicas: 1
+StorageClassName: "vxflexos"
