@@ -1,8 +1,8 @@
-# CSI plugin for VxFlex OS
+# CSI Driver for VxFlex OS
 
 ## Description
 CSI driver for VxFlex OS is a Container Storage Interface ([CSI](https://github.com/container-storage-interface/spec))
-plugin that provides VxFlex OS support. It supports CSI specification version 1.0.
+driver that provides VxFlex OS support. It supports CSI specification version 1.0.
 
 This project may be compiled as a stand-alone binary using Golang that, when
 run, provides a valid CSI endpoint. This project can also be built
@@ -23,9 +23,9 @@ You can run an integration test on a Linux system by populating the file `env.sh
 with values for your VxFlex OS system and then run "make integration-test".
 
 ## Runtime Dependencies
-The Node portion of the plugin can be run on any node that is configured as a
+The Node portion of the driver can be run on any node that is configured as a
 VxFlex OS SDC. This means that the `scini` kernel module must be loaded. Also,
-if the `X_CSI_VXFLEXOS_SDCGUID` environment variable is not set, the plugin will
+if the `X_CSI_VXFLEXOS_SDCGUID` environment variable is not set, the driver will
 try to query the SDC GUID by executing the binary
 `/opt/emc/scaleio/sdc/bin/drv_cfg`. If that binary is not present, the Node
 Service cannot be run.
@@ -36,16 +36,16 @@ Installation in Kubernetes should be done using the `install.vxflexos` script
 and accompanying Helm chart in the helm directory. There are verbose
 instructions for this in the `doc` directory, see
 `CSI Driver for VxFlex OS Product Guide and Release Notes v1.0.pdf`.
-The plugin will be started in Kubernetes as a result of executing the installation
+The driver will be started in Kubernetes as a result of executing the installation
 script.
 
 
-## Using plugin
+## Using driver
 
 A number of test helm charts and scripts are found in the directory test/helm.
 Product Guide provides descriptions of how to run these and explains how they work.
 
-If you want to interact with the plugin directly,
+If you want to interact with the driver directly,
 you can use the Container Storage Client (`csc`) program provided via the
 [GoCSI](https://github.com/rexray/gocsi) project:
 
@@ -56,18 +56,18 @@ $ go install github.com/rexray/gocsi/csc
 (This is only recommended for developers.)
 
 Then, have `csc` use the same `CSI_ENDPOINT`, and you can issue commands
-to the plugin. Some examples...
+to the driver. Some examples...
 
-Get the plugin's supported versions and plugin info:
+Get the driver's supported versions and driver info:
 
 ```bash
-$ ./csc -v 0.1.0 -e csi.sock identity plugin-info
+$ ./csc -v 0.1.0 -e csi.sock identity driver-info
 ...
 "url"="https://github.com/dell/csi-vxflexos"
 ```
 
 ### Parameters
-When using the plugin, some commands accept additional parameters, some of which
+When using the driver, some commands accept additional parameters, some of which
 may be required for the command to work, or may change the behavior of the
 command. Those parameters are listed here.
 
