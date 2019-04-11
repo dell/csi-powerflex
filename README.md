@@ -61,7 +61,7 @@ to the driver. Some examples...
 Get the driver's supported versions and driver info:
 
 ```bash
-$ ./csc -v 0.1.0 -e csi.sock identity driver-info
+$ ./csc -v 0.1.0 -e csi.sock identity plugin-info
 ...
 "url"="https://github.com/dell/csi-vxflexos"
 ```
