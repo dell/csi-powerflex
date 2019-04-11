@@ -1,7 +1,7 @@
 # CSI Driver for VxFlex OS
 
 ## Description
-CSI driver for VxFlex OS is a Container Storage Interface ([CSI](https://github.com/container-storage-interface/spec))
+CSI Driver for VxFlex OS is a Container Storage Interface ([CSI](https://github.com/container-storage-interface/spec))
 driver that provides VxFlex OS support. It supports CSI specification version 1.0.
 
 This project may be compiled as a stand-alone binary using Golang that, when
@@ -34,8 +34,7 @@ Service cannot be run.
 
 Installation in Kubernetes should be done using the `install.vxflexos` script
 and accompanying Helm chart in the helm directory. There are verbose
-instructions for this in the `doc` directory, see
-`CSI Driver for VxFlex OS Product Guide and Release Notes v1.0.pdf`.
+instructions for this, see `CSI Driver for VxFlex OS Product Guide and Release Notes v1.0.pdf`.
 The driver will be started in Kubernetes as a result of executing the installation
 script.
 
