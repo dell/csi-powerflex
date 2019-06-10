@@ -49,7 +49,7 @@ storageClass:
 # IT IS RECOMMENDED YOU DO NOT CHANGE THE IMAGES TO BE DONLOADED.
 images:
   # "images.driver" defines the container images used for the driver container.
-  driver: dellemc/csi-vxflexos:v1.0.0
+  driver: dellemc/csi-vxflexos:v1.1.0
 
   # "images.attacher" defines the container images used for the csi attacher
   # container.

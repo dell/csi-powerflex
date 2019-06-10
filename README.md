@@ -33,8 +33,8 @@ Service cannot be run.
 ## Installation
 
 Installation in Kubernetes should be done using the `install.vxflexos` script
-and accompanying Helm chart in the helm directory. There are verbose
-instructions for this, see `CSI Driver for VxFlex OS Product Guide and Release Notes v1.0.pdf`.
+and accompanying Helm chart in the helm directory. For more information, please refer 
+to the `CSI Driver for VxFlex OS Product Guide` and `CSI Driver for VxFlex OS Release Notes`.
 The driver will be started in Kubernetes as a result of executing the installation
 script.
 
