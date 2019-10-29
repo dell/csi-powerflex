@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -322,6 +323,11 @@ func (f *feature) getNodePublishVolumeRequest() *csi.NodePublishVolumeRequest {
 	req := new(csi.NodePublishVolumeRequest)
 	req.VolumeId = f.volID
 	req.Readonly = false
+
+	if f.capability.AccessMode.Mode == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
+		req.Readonly = true
+	}
+
 	req.VolumeCapability = f.capability
 	block := f.capability.GetBlock()
 	if block != nil {
@@ -333,6 +339,26 @@ func (f *feature) getNodePublishVolumeRequest() *csi.NodePublishVolumeRequest {
 	}
 	f.nodePublishVolumeRequest = req
 	return req
+}
+
+func (f *feature) whenICallNodePublishVolumeWithPoint(arg1 string, arg2 string) error {
+	_, err := os.Stat(arg2)
+	if err != nil && os.IsNotExist(err) {
+		err = os.Mkdir(arg2, 0777)
+		if err != nil {
+			return err
+		}
+
+	}
+	err = f.nodePublishVolume(f.volID, arg2)
+	if err != nil {
+		fmt.Printf("NodePublishVolume failed: %s\n", err.Error())
+		f.addError(err)
+	} else {
+		fmt.Printf("NodePublishVolume completed successfully\n")
+	}
+	time.Sleep(SleepTime)
+	return nil
 }
 
 func (f *feature) whenICallNodePublishVolume(arg1 string) error {
@@ -375,6 +401,22 @@ func (f *feature) whenICallNodeUnpublishVolume(arg1 string) error {
 		fmt.Printf("NodeUnpublishVolume completed successfully\n")
 	}
 	time.Sleep(SleepTime)
+	return nil
+}
+
+func (f *feature) whenICallNodeUnpublishVolumeWithPoint(arg1, arg2 string) error {
+
+	err := f.nodeUnpublishVolume(f.volID, arg2)
+	if err != nil {
+		fmt.Printf("NodeUnpublishVolume failed: %s\n", err.Error())
+		f.addError(err)
+	} else {
+		fmt.Printf("NodeUnpublishVolume completed successfully\n")
+	}
+	time.Sleep(SleepTime)
+
+	err = syscall.Unmount(arg2, 0)
+	err = os.RemoveAll(arg2)
 	return nil
 }
 
@@ -478,7 +520,7 @@ func (f *feature) iCallCreateSnapshotConsistencyGroup() error {
 	}
 	req := &csi.CreateSnapshotRequest{
 		SourceVolumeId: f.volIDList[0],
-		Name:           "",
+		Name:           "snaptest",
 	}
 	req.Parameters = make(map[string]string)
 	req.Parameters["VolumeIDList"] = volumeIDList
@@ -894,7 +936,9 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^a capability with voltype "([^"]*)" access "([^"]*)" fstype "([^"]*)"$`, f.aCapabilityWithVoltypeAccessFstype)
 	s.Step(`^a volume request "([^"]*)" "(\d+)"$`, f.aVolumeRequest)
 	s.Step(`^when I call NodePublishVolume "([^"]*)"$`, f.whenICallNodePublishVolume)
+	s.Step(`^when I call NodePublishVolumeWithPoint "([^"]*)" "([^"]*)"$`, f.whenICallNodePublishVolumeWithPoint)
 	s.Step(`^when I call NodeUnpublishVolume "([^"]*)"$`, f.whenICallNodeUnpublishVolume)
+	s.Step(`^when I call NodeUnpublishVolumeWithPoint "([^"]*)" "([^"]*)"$`, f.whenICallNodeUnpublishVolumeWithPoint)
 	s.Step(`^verify published volume with voltype "([^"]*)" access "([^"]*)" fstype "([^"]*)"$`, f.verifyPublishedVolumeWithVoltypeAccessFstype)
 	s.Step(`^I call CreateSnapshot$`, f.iCallCreateSnapshot)
 	s.Step(`^I call CreateSnapshotConsistencyGroup$`, f.iCallCreateSnapshotConsistencyGroup)

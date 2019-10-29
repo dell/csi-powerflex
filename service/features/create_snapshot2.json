@@ -1,0 +1,2 @@
+this file is to force the driver to fail at creating a snapshot.
+It helps boost unit test coverage 

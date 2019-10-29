@@ -100,6 +100,12 @@ func (s *service) NodeUnpublishVolume(
 		return nil, err
 	}
 
+	privTgt := req.GetTargetPath()
+	if privTgt == "" {
+		return nil, status.Error(codes.InvalidArgument, "A Staging Target argument is required")
+	}
+	removeWithRetry(privTgt)
+
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
@@ -219,5 +225,11 @@ func (s *service) NodeGetInfo(
 
 func (s *service) NodeGetVolumeStats(
 	ctx context.Context, req *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "")
+
+}
+
+
+func (s *service) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "")
 }

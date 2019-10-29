@@ -2,12 +2,14 @@
 # Verify the kubernetes installation has the feature gates needed.
 sh ./verify.kubernetes
 rc=$?
-if [ $rc -ne 0 ] ; 
-	then echo "*******************************************************************************"
+if [ $rc -ne 0 ] ;
+        then echo "*******************************************************************************"
              echo "Warning: Kubernetes --feature-gates not correctly configured... it may not work"
-	     echo "*******************************************************************************"
+             echo "*******************************************************************************"
              sleep 5
 fi
+
+
 # Make sure the vxflexos-cred has already been established
 kubectl get secrets -n vxflexos | grep vxflexos-cred --quiet
 if [ $? -ne 0 ];
@@ -24,12 +26,19 @@ if [ $? -ne 0 ];
     then echo "installing nodeinfo CRD"; kubectl create -f nodeinfo.yaml
 fi
 helm install --values myvalues.yaml --name vxflexos --namespace vxflexos ./csi-vxflexos
-sleep 10
-kubectl get pods --namespace vxflexos
-sleep 5
-kubectl get pods --namespace vxflexos
-sleep 5
-kubectl get pods --namespace vxflexos
+
+running=$(kubectl get pods -n vxflexos | grep "Running" | wc -l)
+target=$(kubectl get pods -n vxflexos | grep "vxflexos"|wc -l)
+
+while (($running<$target))
+do
+        running=$(kubectl get pods -n vxflexos | grep "Running" | wc -l)
+	target=$(kubectl get pods -n vxflexos | grep "vxflexos"|wc -l)
+        echo running $running / $target
+        kubectl get pods -n vxflexos
+        sleep 10
+done
+
 echo "CSIDrivers:"
 kubectl get csidrivers
 echo "CSINodeInfos:"

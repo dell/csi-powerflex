@@ -2,7 +2,6 @@ package provider
 
 import (
 	"github.com/rexray/gocsi"
-
 	"github.com/dell/csi-vxflexos/service"
 )
 
@@ -22,10 +21,6 @@ func New() gocsi.StoragePluginProvider {
 			// Enable serial volume access
 			gocsi.EnvVarSerialVolAccess + "=true",
 
-			// Treat the following fields as required:
-			//    * ControllerPublishVolumeRequest.NodeId
-			//    * GetNodeIDResponse.NodeId
-			gocsi.EnvVarRequireNodeID + "=true",
 		},
 	}
 }

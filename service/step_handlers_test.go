@@ -32,6 +32,14 @@ var (
 		CreateSnapshotError           bool
 		RemoveVolumeError             bool
 		VolumeInstancesError          bool
+		BadVolIDError                 bool
+		WrongVolIDError               bool
+		NoEndpointError               bool
+		NoUserError                   bool
+		NoPasswordError               bool
+		NoSysNameError                bool
+		NoAdminError                  bool
+		WrongSysNameError             bool
 	}
 )
 
@@ -66,6 +74,15 @@ func getHandler() http.Handler {
 	stepHandlersErrors.CreateSnapshotError = false
 	stepHandlersErrors.RemoveVolumeError = false
 	stepHandlersErrors.VolumeInstancesError = false
+	stepHandlersErrors.BadVolIDError = false
+	stepHandlersErrors.WrongVolIDError = false
+	stepHandlersErrors.NoEndpointError = false
+	stepHandlersErrors.NoUserError = false
+	stepHandlersErrors.NoPasswordError = false
+	stepHandlersErrors.NoSysNameError = false
+	stepHandlersErrors.NoAdminError = false
+	stepHandlersErrors.WrongSysNameError = false
+
 	sdcMappings = sdcMappings[:0]
 	sdcMappingsID = ""
 	return handler
@@ -300,12 +317,24 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 		}
 		for _, snapParam := range req.SnapshotDefs {
 			// For now3, only a single snapshot ID is supported
+
 			id := "72cee42500000003"
+
+			if stepHandlersErrors.WrongVolIDError {
+				id = "72cee42500000002"
+			}
+
+			fmt.Println("Id is ", id)
 			volumeIDToName[id] = snapParam.SnapshotName
 			volumeNameToID[snapParam.SnapshotName] = id
 			volumeIDToAncestorID[id] = snapParam.VolumeID
 			volumeIDToConsistencyGroupID[id] = "null"
 		}
+
+		if stepHandlersErrors.WrongVolIDError {
+			returnJSONFile("features", "create_snapshot2.json", w, nil)
+		}
+
 		returnJSONFile("features", "create_snapshot.json", w, nil)
 	case "removeVolume":
 		if stepHandlersErrors.RemoveVolumeError {
@@ -372,6 +401,11 @@ func handleRelationships(w http.ResponseWriter, r *http.Request) {
 
 // handleInstances will retrieve specific instances
 func handleInstances(w http.ResponseWriter, r *http.Request) {
+	if stepHandlersErrors.BadVolIDError {
+		writeError(w, "id must be a hexadecimal number", http.StatusRequestTimeout, codes.InvalidArgument)
+		return
+	}
+
 	if stepHandlersErrors.GetVolByIDError {
 		writeError(w, "induced error", http.StatusRequestTimeout, codes.Internal)
 		return

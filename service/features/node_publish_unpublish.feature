@@ -19,8 +19,7 @@ Feature: VxFlex OS CSI interface
     | "mount"      | "multiple-writer"              | "ext4"     | "Invalid access mode"                        |
     | "block"      | "single-writer"                | "none"     | "none"                                       |
     | "block"      | "multiple-writer"              | "none"     | "none"                                       |
-
-
+       
   Scenario Outline: Node publish block volumes various induced error use cases from examples
     Given a VxFlexOS service
     And a controller published volume
@@ -39,7 +38,7 @@ Feature: VxFlex OS CSI interface
     | "NoSymlinkForNodePublish"               | "not published to node"                                    |
     # may be different for Windows vs. Linux
     | "NoBlockDevForNodePublish"              | "is not a block device@@not published to node"             |
-    | "TargetNotCreatedForNodePublish"        | "publish target"                                           |
+    | "TargetNotCreatedForNodePublish"        | "none"                                                     |
     # may be different for Windows vs. Linux
     | "PrivateDirectoryNotExistForNodePublish"| "cannot find the path specified@@no such file or directory"|
     | "BlockMkfilePrivateDirectoryNodePublish"| "existing path is not a directory"                         |
@@ -67,7 +66,7 @@ Feature: VxFlex OS CSI interface
     | "NoSymlinkForNodePublish"               | "not published to node"                                     |
     # may be different for Windows vs. Linux
     | "NoBlockDevForNodePublish"              | "is not a block device@@not published to node"              |
-    | "TargetNotCreatedForNodePublish"        | "publish target"                                            |
+    | "TargetNotCreatedForNodePublish"        | "none"                                                      |
     # may be different for Windows vs. Linux
     | "PrivateDirectoryNotExistForNodePublish"| "cannot find the path specified@@no such file or directory" |
     | "BlockMkfilePrivateDirectoryNodePublish"| "existing path is not a directory"                          |
@@ -112,7 +111,7 @@ Feature: VxFlex OS CSI interface
     | "block"      | "multiple-reader"              | "none"     | "read only not supported for Block Volume"   |
     | "mount"      | "single-reader"                | "none"     | "none"                                       |
     | "mount"      | "single-reader"                | "xfs"      | "none"                                       |
-    | "mount"      | "multiple-reader"              | "ext4"     | "Invalid access mode"                        |
+    | "mount"      | "multiple-reader"              | "ext4"     | "none"                                       |
     | "mount"      | "single-writer"                | "ext4"     | "access mode conflicts with existing mounts" |
     | "mount"      | "multiple-writer"              | "ext4"     | "Invalid access mode"                        |
 
@@ -133,10 +132,20 @@ Feature: VxFlex OS CSI interface
     | "mount"      | "single-reader"                | "none"     | "none"                                       |
     | "mount"      | "single-reader"                | "xfs"      | "none"                                       |
     | "block"      | "multiple-reader"              | "none"     | "read only not supported for Block Volume"   |
-    | "mount"      | "multiple-reader"              | "ext4"     | "Invalid access mode"                        |
+    | "mount"      | "multiple-reader"              | "ext4"     | "none"                                       |
     | "mount"      | "single-writer"                | "ext4"     | "access mode conflicts with existing mounts" |
     | "mount"      | "multiple-writer"              | "ext4"     | "Invalid access mode"                        |
 
+
+  Scenario: Node publish volume with volume context
+    Given a VxFlexOS service
+    And a controller published volume
+    And a capability with voltype "mount" access "single-reader" fstype "none"
+    And get Node Publish Volume Request
+    And I give request volume context
+    When I call Probe
+    And I call NodePublishVolume "SDC_GUID"
+    Then the error contains "none"  
 
   Scenario Outline: Node Unpublish various use cases from examples
     Given a VxFlexOS service

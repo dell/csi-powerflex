@@ -68,6 +68,7 @@ func (s *service) CreateVolume(
 	if err := s.requireProbe(ctx); err != nil {
 		return nil, err
 	}
+
 	s.logStatistics()
 
 	cr := req.GetCapacityRange()
@@ -84,6 +85,8 @@ func (s *service) CreateVolume(
 
 	params := req.GetParameters()
 
+	params = mergeStringMaps(params, req.GetSecrets())
+
 	// We require the storagePool name for creation
 	sp, ok := params[KeyStoragePool]
 	if !ok {
@@ -97,6 +100,12 @@ func (s *service) CreateVolume(
 	if name == "" {
 		return nil, status.Error(codes.InvalidArgument,
 			"Name cannot be empty")
+	}
+
+	if len(name) > 31 {
+		name = name[0:31]
+		fmt.Printf("Requested name %s longer than 31 character max, truncated to %s\n", req.Name, name)
+		req.Name = name
 	}
 
 	// Volume content source support Snapshots only
@@ -185,7 +194,17 @@ func (s *service) CreateVolume(
 
 	s.clearCache()
 
-	return csiResp, nil
+	vol, err = s.getVolByID(vi.VolumeId)
+
+	counter := 0
+
+	for err != nil && counter < 100 {
+		time.Sleep(3 * time.Millisecond)
+		vol, err = s.getVolByID(vi.VolumeId)
+		counter = counter + 1
+	}
+
+	return csiResp, err
 }
 
 // Copies the interesting parameters to the output map.
@@ -304,6 +323,11 @@ func validateVolSize(cr *csi.CapacityRange) (int64, error) {
 	// Determine what actual size of volume will be, and check that
 	// we do not exceed maxSize
 	sizeGiB = minSize / kiBytesInGiB
+	// if the requested size was less than 1GB, set the request to 1GB
+	// so it can be rounded to a 8GiB boundary correctly
+	if sizeGiB == 0 {
+		sizeGiB = 1
+	}
 	mod := sizeGiB % VolSizeMultipleGiB
 	if mod > 0 {
 		sizeGiB = sizeGiB - mod + VolSizeMultipleGiB
@@ -343,6 +367,14 @@ func (s *service) DeleteVolume(
 			log.WithFields(log.Fields{"id": id}).Debug("volume is currently being deleted", id)
 			return &csi.DeleteVolumeResponse{}, nil
 		}
+
+		if strings.Contains(err.Error(), "must be a hexadecimal number") {
+
+			log.WithFields(log.Fields{"id": id}).Debug("volume id must be a hexadecimal number", id)
+			return &csi.DeleteVolumeResponse{}, nil
+
+		}
+
 		return nil, status.Errorf(codes.Internal,
 			"failure checking volume status before deletion: %s",
 			err.Error())
@@ -363,7 +395,20 @@ func (s *service) DeleteVolume(
 			"error removing volume: %s", err.Error())
 	}
 
+	vol, err = s.getVolByID(id)
+	counter := 0
+
+	for err != nil && strings.Contains(err.Error(), sioVolumeRemovalOperationInProgress) && counter < 100 {
+		time.Sleep(3 * time.Millisecond)
+		vol, err = s.getVolByID(id)
+		counter = counter + 1
+	}
+
 	s.clearCache()
+
+	if err != nil && !strings.Contains(err.Error(), "Could not find the volume") {
+		return nil, err
+	}
 
 	return &csi.DeleteVolumeResponse{}, nil
 }
@@ -393,8 +438,10 @@ func (s *service) ControllerPublishVolume(
 	}
 
 	vol, err := s.getVolByID(volID)
+
 	if err != nil {
-		if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) {
+
+		if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
 			return nil, status.Error(codes.NotFound,
 				"volume not found")
 		}
@@ -593,7 +640,7 @@ func (s *service) ControllerUnpublishVolume(
 	targetVolume.Volume = vol
 
 	unmapVolumeSdcParam := &siotypes.UnmapVolumeSdcParam{
-		SdcID: sdcID,
+		SdcID:   sdcID,
 		AllSdcs: "",
 	}
 
@@ -617,7 +664,7 @@ func (s *service) ValidateVolumeCapabilities(
 	volID := req.GetVolumeId()
 	vol, err := s.getVolByID(volID)
 	if err != nil {
-		if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) {
+		if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
 			return nil, status.Error(codes.NotFound,
 				"volume not found")
 		}
@@ -690,10 +737,6 @@ func valVolumeCaps(
 			continue
 		}
 		switch am.Mode {
-		case csi.VolumeCapability_AccessMode_UNKNOWN:
-			supported = false
-			reason = errUnknownAccessMode
-			break
 		case csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER:
 			break
 		case csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY:
@@ -708,8 +751,9 @@ func valVolumeCaps(
 				reason = errNoMultiNodeWriter
 			}
 			break
+
 		default:
-			// This is to guard against new access modes not understood
+			//This is to guard against new access modes not understood
 			supported = false
 			reason = errUnknownAccessMode
 		}
@@ -797,6 +841,7 @@ func (s *service) ListSnapshots(
 	if req.SourceVolumeId != "" {
 		ancestorID = req.SourceVolumeId
 	}
+
 	if req.SnapshotId != "" {
 		volumeID = req.SnapshotId
 		// Specifying the SnapshotId is more restrictive than the SourceVolumeId
@@ -807,6 +852,11 @@ func (s *service) ListSnapshots(
 	// Call the common listVolumes code to list snapshots only.
 	// If sourceVolumeID or snapshotID are provided, we list those use cases and do not use cache.
 	source, nextToken, err := s.listVolumes(startToken, maxEntries, false, true, volumeID, ancestorID)
+
+	if err != nil && strings.Contains(err.Error(), "must be a hexadecimal number") {
+		return &csi.ListSnapshotsResponse{}, nil
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -825,7 +875,7 @@ func (s *service) ListSnapshots(
 		Entries:   entries,
 		NextToken: nextToken,
 	}, nil
-	return nil, err
+
 }
 
 // Subroutine to list volumes for both CSI operations ListVolumes and ListSnapshots.
@@ -850,6 +900,7 @@ func (s *service) listVolumes(startToken, maxEntries int, doVols, doSnaps bool, 
 	// Handle exactly one volume or snapshot
 	if volumeID != "" || ancestorID != "" {
 		sioVols, err = s.adminClient.GetVolume("", volumeID, ancestorID, "", false)
+
 		if err != nil {
 			return nil, "", status.Errorf(codes.Internal,
 				"Unable to list volumes ID %s AncestorID %s: %s", volumeID, ancestorID, err.Error())
@@ -1109,6 +1160,7 @@ func (s *service) requireProbe(ctx context.Context) error {
 		if !s.opts.AutoProbe {
 			return status.Error(codes.FailedPrecondition,
 				"Controller Service has not been probed")
+
 		}
 		log.Debug("probing controller service automatically")
 		if err := s.controllerProbe(ctx); err != nil {
@@ -1116,6 +1168,7 @@ func (s *service) requireProbe(ctx context.Context) error {
 				"failed to probe/init plugin: %s", err.Error())
 		}
 	}
+
 	return nil
 }
 
@@ -1141,10 +1194,16 @@ func (s *service) CreateSnapshot(
 		req.Name = name
 	}
 
+	if req.Name == "" {
+
+		return nil, status.Errorf(codes.InvalidArgument, "snapshot name cannot be Nil")
+
+	}
+
 	// Validate snapshot volume
 	id := req.GetSourceVolumeId()
 	if id == "" {
-		return nil, status.Errorf(codes.FailedPrecondition, "volume ID to be snapped is required")
+		return nil, status.Errorf(codes.InvalidArgument, "volume ID to be snapped is required")
 	}
 
 	// Check for idempotent request, i.e. the snapshot has been already created, by looking up the name.
@@ -1209,7 +1268,7 @@ func (s *service) CreateSnapshot(
 	// Create snapshot(s)
 	snapResponse, err := s.system.CreateSnapshotConsistencyGroup(snapParam)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Failed to create snapshot: %s", err.Error())
+		return nil, status.Errorf(codes.AlreadyExists, "Failed to create snapshot: %s", err.Error())
 	}
 
 	// populate response structure
@@ -1257,11 +1316,11 @@ func (s *service) DeleteSnapshot(
 	// Validate snapshot volume
 	id := req.GetSnapshotId()
 	if id == "" {
-		return nil, status.Errorf(codes.FailedPrecondition, "snapshot ID to be deleted is required")
+		return nil, status.Errorf(codes.InvalidArgument, "snapshot ID to be deleted is required")
 	}
 	vol, err := s.getVolByID(id)
 	if err != nil {
-		if strings.Contains(err.Error(), "Could not find the volume") {
+		if strings.Contains(err.Error(), "Could not find the volume") || strings.Contains(err.Error(), "must be a hexadecimal number") {
 			log.Printf("Snapshot %s already deleted\n", id)
 			return &csi.DeleteSnapshotResponse{}, nil
 		}
@@ -1350,4 +1409,24 @@ func (s *service) DeleteSnapshotConsistencyGroup(
 
 	// All good if got here.
 	return &csi.DeleteSnapshotResponse{}, nil
+}
+
+func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "")
+}
+
+func mergeStringMaps(base map[string]string, additional map[string]string) map[string]string {
+	result := make(map[string]string)
+	if base != nil {
+		for k, v := range base {
+			result[k] = v
+		}
+	}
+	if additional != nil {
+		for k, v := range additional {
+			result[k] = v
+		}
+	}
+	return result
+
 }

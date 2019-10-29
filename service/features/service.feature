@@ -25,6 +25,23 @@ Feature: VxFlex OS CSI interface
       And I call Probe
       Then the error contains "unable to login to VxFlexOS Gateway"
 
+
+ Scenario Outline: Probe Call with various errors 
+      Given a VxFlexOS service
+      And I induce error <error>
+      When I invalidate the Probe cache
+      And I call Probe
+      Then the error contains <msg>
+
+Examples:
+| error               |  msg                                             |
+| "NoEndpointError"   |  "missing VxFlexOS Gateway endpoint"             |
+| "NoUserError"       |  "missing VxFlexOS MDM user"                     |
+| "NoPasswordError"   |  "missing VxFlexOS MDM password"                 |
+| "NoSysNameError"    |  "missing VxFlexOS system name"                  |
+| "WrongSysNameError" |  "unable to find matching VxFlexOS system name"  |
+
+
 # This injected error fails on Windows with no SDC but passes on Linux with SDC
      Scenario: Identity Probe call node probe Lsmod error
       Given a VxFlexOS service
@@ -40,11 +57,33 @@ Feature: VxFlex OS CSI interface
       When I call Probe
       Then the possible error contains "unable to get SDC GUID"
 
-     Scenario: Create volume good scenario
+     Scenario Outline: Create volume good scenario
       Given a VxFlexOS service
       When I call Probe
+      And I call CreateVolume <name>
+      Then a valid CreateVolumeResponse is returned
+
+     Examples:
+     | name                                                |
+     | "volume1"                                           |
+     | "thisnameiswaytoolongtopossiblybeunder31characters" |
+
+
+     Scenario: Create volume with admin error
+      Given a VxFlexOS service
+      When I call Probe
+      And I induce error "NoAdminError"
       And I call CreateVolume "volume1"
       Then a valid CreateVolumeResponse is returned
+
+     Scenario: Create Volume with invalid probe cache, no endpoint, and no admin
+      Given a VxFlexOS service
+      When I induce error "NoAdminError"
+      And I induce error "NoEndpointError"
+      And I invalidate the Probe cache
+      And I call CreateVolume "volume1"
+      Then the error contains "failed to probe/init plugin:"
+   
 
      Scenario: Idempotent create volume with duplicate volume name
       Given a VxFlexOS service
@@ -241,6 +280,15 @@ Feature: VxFlex OS CSI interface
       | voltype       | access               | fstype      | errormsg                                                          |
       | "block"       | "single-writer"      | "none"      | "Service has not been probed"                                     |
 
+     Scenario: Call with ValidateVolumeCapabilities with bad vol ID
+      Given a VxFlexOS service
+      When I call Probe
+      And I call CreateVolume "volume1"
+      And a valid CreateVolumeResponse is returned
+      And I induce error "BadVolIDError"
+      And I call ValidateVolumeCapabilities with voltype "block" access "single-writer" fstype "none"
+      Then the error contains "volume not found"
+
      Scenario: Call NodeStageVolume, should get unimplemented
       Given a VxFlexOS service
       And I call Probe
@@ -264,7 +312,7 @@ Feature: VxFlex OS CSI interface
       When I call Probe
       And I call CreateVolume "vol1"
       And a valid CreateVolumeResponse is returned
-      And I call CreateSnapshot ""
+      And I call CreateSnapshot "snap1"
       Then a valid CreateSnapshotResponse is returned
 
      Scenario: Idempotent test of snapshot a single block volume
@@ -278,6 +326,19 @@ Feature: VxFlex OS CSI interface
       Then a valid CreateSnapshotResponse is returned
       And no error was received
 
+    Scenario: Request to create Snapshot with same name and different SourceVolumeID 
+      Given a VxFlexOS service
+      When I call Probe
+      And I call CreateVolume "vol1"
+      And a valid CreateVolumeResponse is returned
+      And I call CreateSnapshot "snap1"
+      And no error was received
+      And I call CreateVolume "A Different Volume"
+      And a valid CreateVolumeResponse is returned
+      And I induce error "WrongVolIDError"
+      And I call CreateSnapshot "snap1"
+      Then the error contains "Failed to create snapshot"
+
      Scenario: Snapshot a single block volume but receive error
       Given a VxFlexOS service
       When I call Probe
@@ -285,7 +346,7 @@ Feature: VxFlex OS CSI interface
       And I call CreateVolume "vol1"
       And a valid CreateVolumeResponse is returned
       And I call CreateSnapshot ""
-      Then the error contains "Failed to create snapshot"
+      Then the error contains "snapshot name cannot be Nil"
 
      Scenario: Call snapshot create with invalid volume
       Given a VxFlexOS service
@@ -336,6 +397,14 @@ Feature: VxFlex OS CSI interface
       And I call DeleteSnapshot
       Then no error was received
 
+    Scenario: Delete a snapshot with bad Vol ID
+      Given a VxFlexOS service
+      And a valid snapshot
+      When I call Probe
+      And I induce error "BadVolIDError"
+      And I call DeleteSnapshot
+      Then no error was received
+      
      Scenario: Delete a snapshot with no probe
       Given a VxFlexOS service
       And a valid snapshot
@@ -450,6 +519,24 @@ Feature: VxFlex OS CSI interface
       And no error was received
       And a valid CreateVolumeResponse is returned
 
+    Scenario: Call ControllerExpandVolume, should get unimplemented
+     Given a VxFlexOS service
+     When I call ControllerExpandVolume
+     Then the error contains "Unimplemented"
+
+    Scenario: Call NodeExpandVolume, should get unimplemented
+     Given a VxFlexOS service
+     When I call NodeExpandVolume
+     Then the error contains "Unimplemented"
+
+    Scenario: Call NodeGetVolumeStats, should get unimplemented
+     Given a VxFlexOS service
+     When I call NodeGetVolumeStats
+     Then the error contains "Unimplemented"
+
+
+
+
 @wip
      Scenario: Test BeforeServe
       Given a VxFlexOS service
@@ -457,4 +544,7 @@ Feature: VxFlex OS CSI interface
       When I call BeforeServe
       # Get different error message on Windows vs. Linux
       Then the error contains "Unable to initialize cert pool from system@@unable to login to VxFlexOS Gateway@@unable to get SDC GUID"
+
+  
+    
       

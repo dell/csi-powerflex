@@ -28,8 +28,8 @@ if [ $sdcfail -ne 0 ]; then echo "YOU MUST INSTALL THE VXFLEXOS SDC ON ALL MINIO
 
 # Variables used for verification
 FEATURE_GATES="VolumeSnapshotDataSource=true KubeletPluginsWatcher=true CSINodeInfo=true CSIDriverRegistry=true BlockVolume=true CSIBlockVolume=true"
-MASTER_PROCS="/usr/bin/kubelet kube-apiserver kube-scheduler kube-controller-manager"
-MINION_PROCS="/usr/bin/kubelet"
+MASTER_PROCS="kubelet kube-apiserver kube-scheduler kube-controller-manager"
+MINION_PROCS="kubelet"
 fail=0
 
 echo Verifying the feature gates.
@@ -43,7 +43,7 @@ do
 		for proc in $MASTER_PROCS
 		do
 		#echo proc $proc
-		count=$(grep $proc .ps.out | grep -c $gate)
+		count=$(grep -e " $proc" -e "/$proc" .ps.out | grep -c $gate)
 		#echo $node $gate $proc $count
 		[ $count -ne "1" ] && { echo "node $node proc $proc gate $gate failed"; fail=1; }
 		done
@@ -60,7 +60,7 @@ do
 		for proc in $MINION_PROCS
 		do
 		#echo proc $proc
-		count=$(grep $proc .ps.out | grep -c $gate)
+		count=$(grep -e " $proc" -e "/$proc" .ps.out | grep -c $gate)
 		#echo $node $gate $proc $count
 		[ $count -ne "1" ] && { echo "node $node proc $proc gate $gate failed"; fail=1; }
 		done
