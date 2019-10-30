@@ -6,11 +6,13 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/dell/gofsutil"
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/dell/gofsutil"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"os/exec"
+	"time"
 )
 
 // Variables set only for unit testing.
@@ -97,24 +99,9 @@ func publishVolume(
 			id, err.Error())
 	}
 
-	// make sure target is created
-	tgtStat, err := os.Stat(target)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return status.Errorf(codes.FailedPrecondition,
-				"publish target: %s not pre-created", target)
-		}
-		return status.Errorf(codes.Internal,
-			"failed to stat target, err: %s", err.Error())
-	}
-
-	// make sure privDir exists and is a directory
-	if _, err := mkdir(privDir); err != nil {
-		return err
-	}
-
 	isBlock := false
 	typeSet := false
+
 	if blockVol := volCap.GetBlock(); blockVol != nil {
 		// Read-only is not supported for BlockVolume. Doing a read-only
 		// bind mount of the device to the target path does not prevent
@@ -124,9 +111,43 @@ func publishVolume(
 			return status.Error(codes.InvalidArgument,
 				"read only not supported for Block Volume")
 		}
+
 		isBlock = true
 		typeSet = true
 	}
+
+	// make sure target is created
+	tgtStat, err := os.Stat(target)
+	if err != nil {
+		if os.IsNotExist(err) {
+			if err != nil {
+
+				if isBlock {
+					_, err = mkfile(target)
+					if err != nil {
+						return status.Error(codes.FailedPrecondition, fmt.Sprintf("Could not create %s: %s", target, err.Error()))
+					}
+				} else {
+					_, err = mkdir(target)
+					if err != nil {
+						return status.Error(codes.FailedPrecondition, fmt.Sprintf("Could not create %s: %s", target, err.Error()))
+					}
+				}
+
+			} else {
+
+				return status.Errorf(codes.Internal,
+					"failed to stat target, err: %s", err.Error())
+			}
+		}
+	}
+	tgtStat, _ = os.Stat(target)
+
+	// make sure privDir exists and is a directory
+	if _, err := mkdir(privDir); err != nil {
+		return err
+	}
+
 	mntVol := volCap.GetMount()
 	if mntVol != nil {
 		typeSet = true
@@ -137,6 +158,7 @@ func publishVolume(
 	}
 
 	// check that target is right type for vol type
+
 	if !(tgtStat.IsDir() == !isBlock) {
 		return status.Errorf(codes.FailedPrecondition,
 			"target: %s wrong type (file vs dir) Access Type", target)
@@ -265,7 +287,7 @@ func publishVolume(
 				// volume already published to target
 				// if mount options look good, do nothing
 				rwo := "rw"
-				if accMode.GetMode() == csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY {
+				if accMode.GetMode() == csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY || accMode.GetMode() == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
 					rwo = "ro"
 				}
 				if !contains(m.Opts, rwo) {
@@ -286,7 +308,7 @@ func publishVolume(
 		mntFlags = make([]string, 0)
 	} else {
 		mntFlags = mntVol.GetMountFlags()
-		if accMode.GetMode() == csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY {
+		if accMode.GetMode() == csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY || accMode.GetMode() == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
 			mntFlags = append(mntFlags, "ro")
 		}
 	}
@@ -307,7 +329,7 @@ func handlePrivFSMount(
 	fs, privTgt string) error {
 
 	// If read-only access mode, we don't allow formatting
-	if accMode.GetMode() == csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY {
+	if accMode.GetMode() == csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY || accMode.GetMode() == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
 		mntFlags = append(mntFlags, "ro")
 		if err := gofsutil.Mount(ctx, sysDevice.FullPath, privTgt, fs, mntFlags...); err != nil {
 			return status.Errorf(codes.Internal,
@@ -481,4 +503,26 @@ func getDevMounts(
 		}
 	}
 	return devMnts, nil
+}
+
+func removeWithRetry(target string) error {
+	var err error
+	for i := 0; i < 3; i++ {
+		err = os.Remove(target)
+		if err != nil && !os.IsNotExist(err) {
+			log.Error("error removing private mount target: " + err.Error())
+			cmd := exec.Command("/usr/bin/rmdir", target)
+			textBytes, err := cmd.CombinedOutput()
+			if err != nil {
+				log.Error("error calling rmdir: " + err.Error())
+			} else {
+				log.Printf("rmdir output: %s", string(textBytes))
+			}
+			time.Sleep(3 * time.Second)
+		} else {
+			err = nil
+			break
+		}
+	}
+	return err
 }

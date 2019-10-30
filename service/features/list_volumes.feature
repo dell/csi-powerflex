@@ -100,6 +100,15 @@ Feature: VxFlex OS CSI interface
 		And I induce error "VolumeInstancesError"
 		And I call ListSnapshots with max_entries "5" and starting_token ""
 		Then the error contains "Unable to list snapshots"
+	
+	 Scenario: List snapshots with induced error badVolID
+                Given a VxFlexOS service
+                And there are 1 valid snapshots of "default" volume
+                When I call Probe
+                And I induce error "BadVolIDError"
+                And I call ListSnapshots for volume "default"
+                Then the error contains "none"  
+
 
 	Scenario: List snapshots two entries at times
 		Given a VxFlexOS service

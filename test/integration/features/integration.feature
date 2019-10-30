@@ -131,6 +131,29 @@ Feature: VxFlex OS CSI interface
     | "block"      | "single-writer"                | "none"     | "none"                                       |
     
 
+
+   
+  Scenario: Create volume with access mode read only many
+   Given a VxFlexOS service
+   And a capability with voltype "mount" access "single-writer" fstype "xfs"
+   And a volume request "multi-reader-test" "8"
+   When I call CreateVolume
+   And there are no errors
+   And when I call PublishVolume "SDC_GUID"
+   And when I call NodePublishVolume "SDC_GUID"
+   And when I call NodeUnpublishVolume "SDC_GUID"
+   And when I call UnpublishVolume "SDC_GUID"
+   And a capability with voltype "mount" access "multi-reader" fstype "xfs"
+   And when I call PublishVolume "SDC_GUID"
+   And when I call NodePublishVolumeWithPoint "SDC_GUID" "temp1" 
+   And when I call NodePublishVolumeWithPoint "SDC_GUID" "temp2" 
+   And when I call NodeUnpublishVolumeWithPoint "SDC_GUID" "temp1"
+   And when I call NodeUnpublishVolumeWithPoint "SDC_GUID" "temp2"
+   And when I call UnpublishVolume "SDC_GUID"
+   And when I call DeleteVolume
+   Then there are no errors
+
+
   Scenario: Create publish, unpublish, and delete basic volume
     Given a VxFlexOS service
     And a basic block volume request "integration5" "8"

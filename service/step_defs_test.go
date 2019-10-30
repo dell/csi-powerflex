@@ -12,10 +12,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dell/gofsutil"
 	"github.com/DATA-DOG/godog"
 	"github.com/DATA-DOG/godog/gherkin"
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/dell/gofsutil"
 	"github.com/dell/goscaleio"
 	types "github.com/dell/goscaleio/types/v1"
 	ptypes "github.com/golang/protobuf/ptypes"
@@ -23,6 +23,7 @@ import (
 )
 
 const (
+	badVolumeID                = "Totally Fake ID"
 	goodVolumeID               = "111-111"
 	goodVolumeName             = "vol1"
 	altVolumeID                = "222-222"
@@ -371,10 +372,16 @@ func (f *feature) iCallCreateVolume(name string) error {
 	req := f.createVolumeRequest
 	req.Name = name
 
+	if stepHandlersErrors.NoAdminError {
+		f.service.adminClient = nil
+		f.service.opts.AutoProbe = true
+	}
+
 	f.createVolumeResponse, f.err = f.service.CreateVolume(*ctx, req)
 	if f.err != nil {
 		log.Printf("CreateVolume called failed: %s\n", f.err.Error())
 	}
+
 	if f.createVolumeResponse != nil {
 		log.Printf("vol id %s\n", f.createVolumeResponse.GetVolume().VolumeId)
 	}
@@ -486,6 +493,22 @@ func (f *feature) iChangeTheStoragePool(storagePoolName string) error {
 func (f *feature) iInduceError(errtype string) error {
 	log.Printf("set induce error %s\n", errtype)
 	switch errtype {
+	case "WrongSysNameError":
+		stepHandlersErrors.WrongSysNameError = true
+	case "NoAdminError":
+		stepHandlersErrors.NoAdminError = true
+	case "NoUserError":
+		stepHandlersErrors.NoUserError = true
+	case "NoPasswordError":
+		stepHandlersErrors.NoPasswordError = true
+	case "NoSysNameError":
+		stepHandlersErrors.NoSysNameError = true
+	case "NoEndpointError":
+		stepHandlersErrors.NoEndpointError = true
+	case "WrongVolIDError":
+		stepHandlersErrors.WrongVolIDError = true
+	case "BadVolIDError":
+		stepHandlersErrors.BadVolIDError = true
 	case "FindVolumeIDError":
 		stepHandlersErrors.FindVolumeIDError = true
 	case "GetVolByIDError":
@@ -591,6 +614,9 @@ func (f *feature) getControllerPublishVolumeRequest(accessType string) *csi.Cont
 	}
 	accessMode := new(csi.VolumeCapability_AccessMode)
 	switch accessType {
+	case "multi-single-writer":
+		accessMode.Mode = csi.VolumeCapability_AccessMode_MULTI_NODE_SINGLE_WRITER
+		break
 	case "single-writer":
 		accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER
 		break
@@ -1230,7 +1256,17 @@ func (f *feature) getNodePublishVolumeRequest() error {
 	if mount != nil {
 		req.TargetPath = datadir
 	}
+
 	f.nodePublishVolumeRequest = req
+	return nil
+}
+
+func (f *feature) iGiveRequestVolumeContext() error {
+
+	volContext := map[string]string{
+		"id2USE": f.nodePublishVolumeRequest.VolumeId}
+
+	f.nodePublishVolumeRequest.VolumeContext = volContext
 	return nil
 }
 
@@ -1309,6 +1345,30 @@ func (f *feature) iCallNodeStageVolume() error {
 	return nil
 }
 
+
+func (f *feature) iCallControllerExpandVolume() error {
+	ctx := new(context.Context)
+	req := new(csi.ControllerExpandVolumeRequest)
+	_, f.err = f.service.ControllerExpandVolume(*ctx, req)
+	return nil
+}
+
+
+func (f *feature) iCallNodeExpandVolume() error {
+	ctx := new(context.Context)
+	req := new(csi.NodeExpandVolumeRequest)
+	 _, f.err = f.service.NodeExpandVolume(*ctx, req)
+	return nil
+}
+
+func (f *feature) iCallNodeGetVolumeStats() error {
+        ctx := new(context.Context)
+        req := new(csi.NodeGetVolumeStatsRequest)
+         _, f.err = f.service.NodeGetVolumeStats(*ctx, req)
+        return nil
+}
+
+
 func (f *feature) iCallNodeUnstageVolume() error {
 	ctx := new(context.Context)
 	req := new(csi.NodeUnstageVolumeRequest)
@@ -1343,6 +1403,11 @@ func (f *feature) iCallCreateSnapshot(snapName string) error {
 		SourceVolumeId: f.volumeIDList[0],
 		Name:           snapName,
 	}
+
+	if stepHandlersErrors.WrongVolIDError {
+		req.SourceVolumeId = f.volumeIDList[1]
+	}
+
 	if f.invalidVolumeID {
 		req.SourceVolumeId = "00000000"
 	} else if f.noVolumeID {
@@ -1359,6 +1424,11 @@ func (f *feature) iCallCreateSnapshot(snapName string) error {
 		}
 		req.Parameters[VolumeIDList] = stringList
 	}
+
+	fmt.Println("snapName is: ", snapName)
+	fmt.Println("ctx: ", *ctx)
+	fmt.Println("req: ", req)
+
 	f.createSnapshotResponse, f.err = f.service.CreateSnapshot(*ctx, req)
 	return nil
 }
@@ -1484,8 +1554,15 @@ func (f *feature) iCallListSnapshotsForVolume(arg1 string) error {
 	if arg1 == "alt" {
 		sourceVolumeID = altVolumeID
 	}
+
 	ctx := new(context.Context)
 	req := &csi.ListSnapshotsRequest{SourceVolumeId: sourceVolumeID}
+
+	if stepHandlersErrors.BadVolIDError {
+		req.SourceVolumeId = "Not at all valid"
+		req.SnapshotId = "111-111"
+	}
+
 	f.listSnapshotsRequest = req
 	log.Printf("Calling ListSnapshots with req=%+v", f.listVolumesRequest)
 	f.listSnapshotsResponse, f.err = f.service.ListSnapshots(*ctx, req)
@@ -1561,8 +1638,24 @@ func (f *feature) theTotalSnapshotsListedIs(arg1 string) error {
 }
 
 func (f *feature) iInvalidateTheProbeCache() error {
-	f.service.adminClient = nil
-	f.service.system = nil
+
+	if stepHandlersErrors.NoEndpointError {
+		f.service.opts.Endpoint = ""
+		f.service.opts.AutoProbe = true
+		return nil
+	} else if stepHandlersErrors.NoUserError {
+		f.service.opts.User = ""
+	} else if stepHandlersErrors.NoPasswordError {
+		f.service.opts.Password = ""
+	} else if stepHandlersErrors.NoSysNameError {
+		f.service.opts.SystemName = ""
+	} else if stepHandlersErrors.WrongSysNameError {
+		f.service.opts.SystemName = "WrongSystemName"
+	} else {
+		f.service.adminClient = nil
+		f.service.system = nil
+	}
+
 	return nil
 }
 
@@ -1654,4 +1747,9 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^I call ListSnapshots for snapshot "([^"]*)"$`, f.iCallListSnapshotsForSnapshot)
 	s.Step(`^the snapshot ID is "([^"]*)"$`, f.theSnapshotIDIs)
 	s.Step(`^I invalidate the Probe cache$`, f.iInvalidateTheProbeCache)
+	s.Step(`^I call ControllerExpandVolume$`, f.iCallControllerExpandVolume)
+	s.Step(`^I call NodeExpandVolume$`, f.iCallNodeExpandVolume)
+	s.Step(`^I call NodeGetVolumeStats$`, f.iCallNodeGetVolumeStats)
+	s.Step(`^I give request volume context$`, f.iGiveRequestVolumeContext)
+
 }

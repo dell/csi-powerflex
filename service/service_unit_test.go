@@ -3,8 +3,8 @@ package service
 import (
 	"testing"
 
-	siotypes "github.com/dell/goscaleio/types/v1"
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
+	siotypes "github.com/dell/goscaleio/types/v1"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -20,6 +20,14 @@ func TestGetVolSize(t *testing.T) {
 				LimitBytes:    0,
 			},
 			sizeKiB: DefaultVolumeSizeKiB,
+		},
+		{
+			// requesting a size less than 1GiB should result in a minimal size
+			cr: &csi.CapacityRange{
+				RequiredBytes: 300 * bytesInKiB,
+				LimitBytes:    0,
+			},
+			sizeKiB: 8 * kiBytesInGiB,
 		},
 		{
 			// not requesting a minimum but setting a limit below

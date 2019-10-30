@@ -11,6 +11,19 @@ Feature: VxFlex OS CSI interface
       Then a valid PublishVolumeResponse is returned
       And the number of SDC mappings is 1
 
+     Scenario Outline: Publish Volume with Wrong Access Types
+      Given a VxFlexOS service
+      And a valid volume
+      And I use AccessType Mount
+      When I call Probe
+      And I call PublishVolume with <access>
+      Then the error contains <msg>
+
+      Examples:
+      | access                | msg                                        |
+      | "multiple-writer"     | "Mount multinode multi-writer not allowed" |
+      | "multi-single-writer" | "Multinode single writer not supported"    |
+            	
      Scenario: Idempotent publish volume with single writer
       Given a VxFlexOS service
       And a valid volume
@@ -131,6 +144,15 @@ Feature: VxFlex OS CSI interface
       And I call PublishVolume with "single-writer"
       Then the error contains "error finding SDC from GUID"
 
+     Scenario: Publish volume with bad vol ID
+      Given a VxFlexOS service
+      And a valid volume
+      And I induce error "BadVolIDError"
+      When I call Probe
+      And I call PublishVolume with "single-writer"
+      Then the error contains "volume not found"
+
+
      Scenario: Publish volume with a map SDC error
       Given a VxFlexOS service
       And a valid volume
@@ -180,6 +202,17 @@ Feature: VxFlex OS CSI interface
       And I call UnpublishVolume
       Then the error contains "Volume ID is required"
 
+      Scenario: Unpublish volume with invalid probe cache
+      Given a VxFlexOS service
+      And a valid volume
+      When I call Probe
+      And I call PublishVolume with "single-writer"
+      And no error was received
+      And the number of SDC mappings is 1
+      And I invalidate the Probe cache
+      And I call UnpublishVolume
+      Then the error contains "Controller Service has not been probed"
+      
      Scenario: Unpublish volume with invalid volume id
       Given a VxFlexOS service
       And a valid volume
