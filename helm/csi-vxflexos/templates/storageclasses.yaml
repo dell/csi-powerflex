@@ -1,0 +1,16 @@
+{{- range .Values.storageClasses }}
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: {{ required "Must provide a storage class name." .name}}
+  annotations:
+    storageclass.beta.kubernetes.io/is-default-class: {{ .isDefault | quote }}
+provisioner: csi-vxflexos
+reclaimPolicy: {{ required "Must provide a storage class reclaim policy." .reclaimPolicy }}
+parameters:
+  storagepool: {{ required "Must provide a VxFlex OS storage pool name." .storagePool }}
+  {{- if .fsType }}
+  FsType: {{ .fsType }}
+  {{- end }}
+{{- end }}

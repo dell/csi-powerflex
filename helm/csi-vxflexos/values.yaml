@@ -6,10 +6,6 @@
 # You must set this for your VxFlex OS installations REST gateway.
 # restGateway: https://123.0.0.1
 
-# "storagePool" defines the VxFlex OS storage pool from which this driver will # provision volumes.
-# You must set this for the primary storage pool to be used
-# storagePool: sp
-
 #"mdmIP" defines the MDM(s) the SDC's should register with on start, comma separated
 # You must set this to the MDM IPs for your VxFlex OS system.
 mdmIP: 192.168.1.1
@@ -35,16 +31,40 @@ enablelistvolumesnapshot: "false"
 
 # The installation process will generate multiple storageclasses based on these parameters.
 # Only the primary storageclass for the driver will be marked default if specified.
-storageClass:
+storageClasses:
   # "storageClass.name" defines the name of the storage class to be defined.
-  name: vxflexos
+  # - name: vxflexos-sc-1
 
-  # "storageClass.isDefault" defines whether the primary storage class should be the # default.
-  isDefault: "true"
+    # "storageClass.isDefault" defines whether the primary storage class should be the # default.
+    # isDefault: "true"
 
-  # "storageClass.reclaimPolicy" defines what will happen when a volume is
-  # removed from the Kubernetes API. Valid values are "Retain" and "Delete".
-  reclaimPolicy: Delete
+    # "storageClass.reclaimPolicy" defines what will happen when a volume is
+    # removed from the Kubernetes API. Valid values are "Retain" and "Delete".
+    # reclaimPolicy: Delete
+
+    # "storagePool" defines the VxFlex OS storage pool from which this driver will # provision volumes.
+    # You must set this for the primary storage pool to be used
+    # storagePool: sp
+
+    # "fsType" defines the filesystem time.  The default is EXT4
+    # fsType: xfs
+
+  # "storageClass.name" defines the name of the storage class to be defined.
+  # - name: vxflex-sc-2
+
+    # "storageClass.isDefault" defines whether the primary storage class should be the # default.
+    # isDefault: "false"
+
+    # "storageClass.reclaimPolicy" defines what will happen when a volume is
+    # removed from the Kubernetes API. Valid values are "Retain" and "Delete".
+    # reclaimPolicy: Delete
+
+    # "storagePool" defines the VxFlex OS storage pool from which this driver will # provision volumes.
+    # You must set this for the primary storage pool to be used
+    # storagePool: nl-sas
+
+    # "fsType" defines the filesystem time.  The default is EXT4
+    # fsType: xfs
 
 # IT IS RECOMMENDED YOU DO NOT CHANGE THE IMAGES TO BE DONLOADED.
 images:
@@ -68,4 +88,3 @@ images:
   # container.
   #registrar: quay.io/k8scsi/driver-registrar:v0.4.2 #for CSI 0.3.0 only (obsolete)
   registrar: quay.io/k8scsi/csi-node-driver-registrar:v1.0.2 #doesn't work with CSI 0.3.0 driver
-
