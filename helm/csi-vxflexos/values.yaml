@@ -22,6 +22,10 @@ controllerCount: 1
 # IT IS RECOMMENDED YOU DO NOT CHANGE THIS.
 vxflexosbinpath: /bin/emc
 
+# Enable snapshot support.  This should be disabled in clusters where the volume snapshot feature gate has not been
+# enabled
+enablesnapshot: "true"
+
 # Enable this to automatically delete all snapshots in a consistency group when a snap in the group is deleted
 enablesnapshotcgdelete: "false"
 
