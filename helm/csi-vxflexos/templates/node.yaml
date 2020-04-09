@@ -70,7 +70,7 @@ spec:
             allowPrivilegeEscalation: true
           image: {{ required "Must provide the VxFlex OS driver container image." .Values.images.driver }}
           imagePullPolicy: Always
-          command: [ "/csi-vxflexos" ]
+          command: [ "/csi-vxflexos.sh" ]
           env:
             - name: CSI_ENDPOINT
               value: unix:///var/lib/kubelet/plugins/vxflexos.emc.dell.com/csi_sock

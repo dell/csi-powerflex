@@ -41,3 +41,11 @@ To run the test:
 	When it checks number of volumes in step 5, it is expecting the same value as when it checked in step 1. 
 	However, if someone else was adding/deleting volumes on the server, while this test was running,
 	then the total number of volumes in steps 1 and 5 aren't gaurenteed to be equal. 
+
+3. should fail when the volume is missing
+
+   Reason: The test: "should fail when the volume is missing" expects NodeUnpublishVolume to return an error when a volume 
+   is not found. The spec is a bit unclear, saying that the method should return an error, but also demanding that the method be 
+   idempotent. Since Kubelet might try forever if the "not found" error is returned, the node.go code was left 
+   unchanged and the test skipped. If we wanted to change the code to pass the test, we would need to stress test all 
+   supported versions of k8s to ensure that kubelet doesn't get stuck. Other then the testing, the actual change should be pretty quick. 

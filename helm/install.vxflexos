@@ -1,5 +1,8 @@
 #/bin/bash
 # Verify the kubernetes installation has the feature gates needed.
+export NS=vxflexos
+source ./common.bash
+
 sh ./verify.kubernetes
 rc=$?
 if [ $rc -ne 0 ] ;
@@ -11,38 +14,39 @@ fi
 
 
 # Make sure the vxflexos-cred has already been established
+echo kubectl get secrets -n vxflexos | grep vxflexos-cred --quiet
 kubectl get secrets -n vxflexos | grep vxflexos-cred --quiet
 if [ $? -ne 0 ];
     then echo "*** YOU MUST PROVIDE VxFlex OS credentials in a Kubernetes secret- see secret.yaml template ***"
     exit 2
 fi
 # Check for required CustomResourceDefinitions
-kubectl get customresourcedefinitions | grep csidrivers --quiet
-if [ $? -ne 0 ];
-    then echo "installing csidriver CRD"; kubectl create -f csidriver.yaml
+if [ $kMinorVersion == "13" ];
+then
+	kubectl get customresourcedefinitions | grep csidrivers --quiet
+	if [ $? -ne 0 ];
+	    then echo "installing csidriver CRD"; kubectl create -f csidriver.yaml
+	fi
+	kubectl get customresourcedefinitions | grep nodeinfo --quiet
+	if [ $? -ne 0 ];
+	    then echo "installing nodeinfo CRD"; kubectl create -f nodeinfo.yaml
+	fi
 fi
-kubectl get customresourcedefinitions | grep nodeinfo --quiet
-if [ $? -ne 0 ];
-    then echo "installing nodeinfo CRD"; kubectl create -f nodeinfo.yaml
-fi
-helm install --values myvalues.yaml --name vxflexos --namespace vxflexos ./csi-vxflexos
 
-running=$(kubectl get pods -n vxflexos | grep "Running" | wc -l)
-target=$(kubectl get pods -n vxflexos | grep "vxflexos"|wc -l)
+echo helm install --values myvalues.yaml --values csi-vxflexos/k8s-${kMajorVersion}.${kMinorVersion}-values.yaml --name vxflexos --namespace vxflexos ./csi-vxflexos
+helm install --values myvalues.yaml --values csi-vxflexos/k8s-${kMajorVersion}.${kMinorVersion}-values.yaml --name vxflexos --namespace vxflexos ./csi-vxflexos
+waitOnRunning
 
-while (($running<$target))
-do
-        running=$(kubectl get pods -n vxflexos | grep "Running" | wc -l)
-	target=$(kubectl get pods -n vxflexos | grep "vxflexos"|wc -l)
-        echo running $running / $target
-        kubectl get pods -n vxflexos
-        sleep 10
-done
 
 echo "CSIDrivers:"
 kubectl get csidrivers
-echo "CSINodeInfos:"
-kubectl get csinodeinfos
+
+if [ $kMinorVersion == "13" ];
+then
+	echo "CSINodeInfos:"
+	kubectl get csinodeinfos
+fi 
+
 echo "StorageClasses:"
 kubectl get storageclass
 kubectl get volumesnapshotclass | grep vxflexos-snapclass --quiet

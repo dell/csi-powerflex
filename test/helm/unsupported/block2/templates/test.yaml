@@ -20,7 +20,6 @@ spec:
           app: vxflextest
       spec:
         serviceAccount: vxflextest
-        hostNetwork: true
         containers:
           - name: test
             image: docker.io/centos:latest
