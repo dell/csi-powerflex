@@ -2,7 +2,7 @@
 
 ## Description
 CSI Driver for VxFlex OS is a Container Storage Interface ([CSI](https://github.com/container-storage-interface/spec))
-driver that provides VxFlex OS support. It supports CSI specification version 1.0.
+driver that provides VxFlex OS support. It supports CSI specification version 1.1.
 
 This project may be compiled as a stand-alone binary using Golang that, when
 run, provides a valid CSI endpoint. This project can also be built
@@ -123,9 +123,10 @@ supported.
 In general, volumes should be formatted with xfs or ext4.
 
 ## Support
-CSI Driver for VxFlexOS is officially supported by Dell EMC. For any CSI driver configuration or set up issues or questions, 
-please utilize the Dell EMC container forum located [here.]( https://www.dell.com/community/Containers/bd-p/Containers)
+The CSI Driver for Dell EMC VxFlex OS image available on Dockerhub is officially supported by Dell EMC.
 
-For any storage issues, please contact Dell EMC support at: https://www.dell.com/support  or 1 (800) 782-4362.
+The source code available on Github is unsupported and provided solely under the terms of the license attached to the source code. For clarity, Dell EMC does not provide support for any source code modifications.
 
-The source code is provided AS IS. Dell EMC is not responsible for any source code modifications.
+For any CSI driver setup, configuration issues, questions or feedback, join the Dell EMC Container community athttps://www.dell.com/community/Containers/bd-p/Containers
+
+For any Dell EMC storage issues, please contact Dell support at: https://www.dell.com/support.
