@@ -1,6 +1,6 @@
 name: 2vols+restore
 version: 1.0.0
-appVersion: 1.0.0
+appVersion: v1
 description: |
   Tests VxFlexOS CSI deployments.
 keywords:

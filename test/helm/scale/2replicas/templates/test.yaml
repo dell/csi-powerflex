@@ -2,7 +2,7 @@ kind: StatefulSet
 apiVersion: apps/v1
 metadata:
     name: vxflextest
-    namespace: test
+    namespace: helmtest-vxflexos
 spec:
     replicas: {{ required "replicas required" .Values.replicas }}
     selector:

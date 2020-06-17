@@ -1,6 +1,6 @@
 #!/bin/sh
 rm -f .volsnapclass.yaml
-kubectl delete volumesnapshotclass vxflexos-cgsnap -n test
+kubectl delete volumesnapshotclass vxflexos-cgsnap -n helmtest-vxflexos
 
 # Collect the list of "Bound" volumes and translate them to VxFlex OS ids
 vols=$( kubectl get pv | grep Bound | awk ' { print $1; }' )
@@ -24,11 +24,11 @@ echo "creating volume snapshot"
 kubectl create -f snapcg.yaml
 sleep 20
 echo "snapshot created:"
-kubectl get volumesnapshot -n test
+kubectl get volumesnapshot -n helmtest-vxflexos
 sleep 60
 echo "deleting volume snapshot"
 kubectl delete -f snapcg.yaml
 sleep 20
 echo "snapshot deleted:"
-kubectl get volumesnapshot -n test
-kubectl delete volumesnapshotclass vxflexos-cgsnap -n test
+kubectl get volumesnapshot -n helmtest-vxflexos
+kubectl delete volumesnapshotclass vxflexos-cgsnap -n helmtest-vxflexos

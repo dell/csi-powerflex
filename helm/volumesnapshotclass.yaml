@@ -3,4 +3,3 @@ kind: VolumeSnapshotClass
 metadata:
   name: vxflexos-snapclass
 snapshotter: csi-vxflexos.dellemc.com
-parameters:

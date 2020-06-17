@@ -2,7 +2,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: block-pvc
-  namespace: test
+  namespace: helmtest-vxflexos
 spec:
   accessModes:
   - ReadWriteOnce

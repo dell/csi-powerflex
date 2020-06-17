@@ -33,8 +33,10 @@ then
 	fi
 fi
 
-echo helm install --values myvalues.yaml --values csi-vxflexos/k8s-${kMajorVersion}.${kMinorVersion}-values.yaml --name vxflexos --namespace vxflexos ./csi-vxflexos
-helm install --values myvalues.yaml --values csi-vxflexos/k8s-${kMajorVersion}.${kMinorVersion}-values.yaml --name vxflexos --namespace vxflexos ./csi-vxflexos
+
+echo helm install --values myvalues.yaml --values csi-vxflexos/k8s-${kMajorVersion}.${kMinorVersion}-values.yaml --namespace vxflexos  vxflexos ./csi-vxflexos
+helm install --values myvalues.yaml --values csi-vxflexos/k8s-${kMajorVersion}.${kMinorVersion}-values.yaml --namespace vxflexos  vxflexos ./csi-vxflexos
+
 waitOnRunning
 
 

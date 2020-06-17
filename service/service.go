@@ -113,8 +113,11 @@ func (s *service) BeforeServe(
 		if s.opts.Password != "" {
 			fields["password"] = "******"
 		}
-
+		
+		//censor user for logging purposes
+                fields["user"] = "******"
 		log.WithFields(fields).Infof("configured %s", Name)
+		fields["user"] =  s.opts.User
 	}()
 
 	// Get the SP's operating mode.
@@ -225,7 +228,7 @@ func (s *service) getVolByID(id string) (*siotypes.Volume, error) {
 
 	// The `GetVolume` API returns a slice of volumes, but when only passing
 	// in a volume ID, the response will be just the one volume
-	vols, err := s.adminClient.GetVolume("", id, "", "", false)
+	vols, err := s.adminClient.GetVolume("", strings.TrimSpace(id), "", "", false)
 	if err != nil {
 		return nil, err
 	}

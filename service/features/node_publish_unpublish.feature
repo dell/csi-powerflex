@@ -181,3 +181,8 @@ Feature: VxFlex OS CSI interface
     | "NodeUnpublishNoTargetPath"             | "target path required"                                      |
     | "GOFSMockUnmountError"                  | "Error unmounting target"                                   |
     | "PrivateDirectoryNotExistForNodePublish"| "none"                                                      |
+
+  Scenario: Get device given invalid path
+    Given a VxFlexOS service
+    When I call GetDevice "INVALIDPATH"
+    Then the error contains "invalid path error"

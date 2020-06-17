@@ -8,4 +8,6 @@ metadata:
     name: vxflexos
 spec:
     attachRequired: true
-    podInfoOnMountVersion: "v1"
+    {{ if eq .Values.kubeversion  "v1.13" }}
+       podInfoOnMountVersion: "v1"
+    {{ end }} 

@@ -2,13 +2,13 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
     name: vxflextest
-    namespace: test
+    namespace: helmtest-vxflexos
 ---
 kind: StatefulSet
 apiVersion: apps/v1
 metadata:
     name: vxflextest
-    namespace: test
+    namespace: helmtest-vxflexos
 spec:
     selector:
         matchLabels:

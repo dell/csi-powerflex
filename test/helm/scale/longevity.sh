@@ -12,7 +12,7 @@ Target=$(expr $Replicas \* 3)
 # This determines the number of volumes per pod
 helmDir=10replicas
 # Namespace to be used
-ns=test
+ns=helmtest-vxflexos
 
 export cont0="vxflexos-controller-0"
 export node1=$(kubectl get pods -o wide -n vxflexos | grep 10.247.102.213 | awk '/vxflexos-node/{print $1;}')

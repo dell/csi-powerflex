@@ -2,7 +2,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: restorepvc
-  namespace: test
+  namespace: helmtest-vxflexos
 spec:
   storageClassName: vxflexos
   dataSource:

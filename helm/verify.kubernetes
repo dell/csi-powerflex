@@ -27,7 +27,12 @@ done
 if [ $sdcfail -ne 0 ]; then echo "YOU MUST INSTALL THE VXFLEXOS SDC ON ALL MINION (WORKER) NODES"; exit 2; fi
 
 # Variables used for verification
-FEATURE_GATES="VolumeSnapshotDataSource=true KubeletPluginsWatcher=true CSINodeInfo=true CSIDriverRegistry=true BlockVolume=true CSIBlockVolume=true"
+if [ "${kubeversion}" == "13" ]; then
+FEATURE_GATES="VolumeSnapshotDataSource CSINodeInfo CSIDriverRegistry CSIBlockVolume"
+else
+FEATURE_GATES="VolumeSnapshotDataSource"
+fi
+
 MASTER_PROCS="kubelet kube-apiserver kube-scheduler kube-controller-manager"
 MINION_PROCS="kubelet"
 fail=0

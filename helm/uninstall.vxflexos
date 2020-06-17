@@ -1,5 +1,6 @@
 #!/bin/bash
-helm delete --purge vxflexos
+
+helm delete -n vxflexos vxflexos 
 sleep 10
 kubectl get pods -n vxflexos
 kubectl get volumesnapshotclass | grep vxflexos-snapclass --quiet

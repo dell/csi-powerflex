@@ -41,6 +41,7 @@ const (
 	// bytesInGiB is the number of bytes in a gibibyte
 	bytesInGiB = kiBytesInGiB * bytesInKiB
 
+	//VolumeIDList is the list of volume IDs
 	VolumeIDList = "VolumeIDList"
 
 	removeModeOnlyMe                    = "ONLY_ME"
@@ -52,8 +53,10 @@ const (
 	errUnknownAccessType                = "unknown access type is not Block or Mount"
 	errUnknownAccessMode                = "access mode cannot be UNKNOWN"
 	errNoMultiNodeWriter                = "multi-node with writer(s) only supported for block access type"
-	TRUE                                = "TRUE"
-	FALSE                               = "FALSE"
+	//TRUE means "true" (comment put in for lint check)
+	TRUE = "TRUE"
+	//FALSE means "false" (comment put in for lint check)
+	FALSE = "FALSE"
 )
 
 var (
@@ -278,6 +281,7 @@ func (s *service) createVolumeFromSnapshot(req *csi.CreateVolumeRequest,
 	// Create a volume response and return it
 	s.clearCache()
 	csiVolume := s.getCSIVolume(dstVol)
+	csiVolume.ContentSource = req.GetVolumeContentSource()
 	copyInterestingParameters(req.GetParameters(), csiVolume.VolumeContext)
 
 	log.Printf("Volume (from snap) %s (%s) storage pool %s",
@@ -1051,42 +1055,42 @@ func (s *service) ControllerGetCapabilities(
 
 	return &csi.ControllerGetCapabilitiesResponse{
 		Capabilities: []*csi.ControllerServiceCapability{
-			&csi.ControllerServiceCapability{
+			{
 				Type: &csi.ControllerServiceCapability_Rpc{
 					Rpc: &csi.ControllerServiceCapability_RPC{
 						Type: csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
 					},
 				},
 			},
-			&csi.ControllerServiceCapability{
+			{
 				Type: &csi.ControllerServiceCapability_Rpc{
 					Rpc: &csi.ControllerServiceCapability_RPC{
 						Type: csi.ControllerServiceCapability_RPC_PUBLISH_UNPUBLISH_VOLUME,
 					},
 				},
 			},
-			&csi.ControllerServiceCapability{
+			{
 				Type: &csi.ControllerServiceCapability_Rpc{
 					Rpc: &csi.ControllerServiceCapability_RPC{
 						Type: csi.ControllerServiceCapability_RPC_LIST_VOLUMES,
 					},
 				},
 			},
-			&csi.ControllerServiceCapability{
+			{
 				Type: &csi.ControllerServiceCapability_Rpc{
 					Rpc: &csi.ControllerServiceCapability_RPC{
 						Type: csi.ControllerServiceCapability_RPC_GET_CAPACITY,
 					},
 				},
 			},
-			&csi.ControllerServiceCapability{
+			{
 				Type: &csi.ControllerServiceCapability_Rpc{
 					Rpc: &csi.ControllerServiceCapability_RPC{
 						Type: csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT,
 					},
 				},
 			},
-			&csi.ControllerServiceCapability{
+			{
 				Type: &csi.ControllerServiceCapability_Rpc{
 					Rpc: &csi.ControllerServiceCapability_RPC{
 						Type: csi.ControllerServiceCapability_RPC_LIST_SNAPSHOTS,

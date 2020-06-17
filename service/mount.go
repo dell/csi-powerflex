@@ -67,7 +67,7 @@ func GetDevice(path string) (*Device, error) {
 // publishVolume handles both Mount and Block access types
 func publishVolume(
 	req *csi.NodePublishVolumeRequest,
-	privDir, device string) error {
+	privDir, device string, reqID string) error {
 
 	id := req.GetVolumeId()
 
@@ -171,11 +171,12 @@ func publishVolume(
 		"id":           id,
 		"volumePath":   sysDevice.FullPath,
 		"device":       sysDevice.RealDev,
+		"CSIRequestID": reqID,
 		"target":       target,
 		"privateMount": privTgt,
 	}
 
-	ctx := context.Background()
+	ctx := context.WithValue(context.Background(), gofsutil.ContextKey("RequestID"), reqID)
 
 	// Check if device is already mounted
 	devMnts, err := getDevMounts(sysDevice)
@@ -328,6 +329,9 @@ func handlePrivFSMount(
 	mntFlags []string,
 	fs, privTgt string) error {
 
+	// Invoke the formats with a No Discard option to reduce formatting time
+	formatCtx := context.WithValue(ctx, gofsutil.ContextKey(gofsutil.NoDiscard), gofsutil.NoDiscard)
+
 	// If read-only access mode, we don't allow formatting
 	if accMode.GetMode() == csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY || accMode.GetMode() == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
 		mntFlags = append(mntFlags, "ro")
@@ -338,7 +342,7 @@ func handlePrivFSMount(
 		}
 		return nil
 	} else if accMode.GetMode() == csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER {
-		if err := gofsutil.FormatAndMount(ctx, sysDevice.FullPath, privTgt, fs, mntFlags...); err != nil {
+		if err := gofsutil.FormatAndMount(formatCtx, sysDevice.FullPath, privTgt, fs, mntFlags...); err != nil {
 			return status.Errorf(codes.Internal,
 				"error performing private mount: %s",
 				err.Error())
@@ -407,7 +411,7 @@ func mkdir(path string) (bool, error) {
 // other than the private mount.
 func unpublishVolume(
 	req *csi.NodeUnpublishVolumeRequest,
-	privDir, device string) error {
+	privDir, device string, reqID string) error {
 
 	ctx := context.Background()
 	id := req.GetVolumeId()
@@ -429,6 +433,13 @@ func unpublishVolume(
 	// Path to mount device to
 	privTgt := getPrivateMountPoint(privDir, id)
 
+	f := log.Fields{
+		"device":       sysDevice.RealDev,
+		"privTgt":      privTgt,
+		"CSIRequestID": reqID,
+		"target":       target,
+	}
+
 	mnts, err := gofsutil.GetMounts(ctx)
 	if err != nil {
 		return status.Errorf(codes.Internal,
@@ -449,6 +460,7 @@ func unpublishVolume(
 	}
 
 	if tgtMnt {
+		log.WithFields(f).Debug(fmt.Sprintf("Unmounting %s", target))
 		if err := gofsutil.Unmount(ctx, target); err != nil {
 			return status.Errorf(codes.Internal,
 				"Error unmounting target: %s", err.Error())
@@ -456,6 +468,7 @@ func unpublishVolume(
 	}
 
 	if privMnt {
+		log.WithFields(f).Debug(fmt.Sprintf("Unmounting %s", privTgt))
 		if err := unmountPrivMount(ctx, sysDevice, privTgt); err != nil {
 			return status.Errorf(codes.Internal,
 				"Error unmounting private mount: %s", err.Error())
