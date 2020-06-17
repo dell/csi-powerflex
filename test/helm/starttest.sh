@@ -3,10 +3,13 @@
     echo "requires test name as argument"
     exit 2
 }
-NS=test
+NS=helmtest-vxflexos
 source ./common.bash
 
-helm install -n ${NS} $1
+RELEASE=`basename "${1}"`
+
+helm install  -n ${NS} "${RELEASE}"  $1
+
 sleep 30
 kubectl describe pods -n ${NS}
 waitOnRunning

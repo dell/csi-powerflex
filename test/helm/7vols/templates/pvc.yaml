@@ -2,7 +2,7 @@ kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
   name: pvol0
-  namespace: test
+  namespace: helmtest-vxflexos
 spec:
   accessModes:
   - ReadWriteOnce
@@ -16,7 +16,7 @@ kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
   name: pvol1
-  namespace: test
+  namespace: helmtest-vxflexos
 spec:
   accessModes:
   - ReadWriteOnce
@@ -30,7 +30,7 @@ kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
   name: pvol2
-  namespace: test
+  namespace: helmtest-vxflexos
 spec:
   accessModes:
   - ReadWriteOnce
@@ -44,7 +44,7 @@ kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
   name: pvol3
-  namespace: test
+  namespace: helmtest-vxflexos
 spec:
   accessModes:
   - ReadWriteOnce
@@ -58,7 +58,7 @@ kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
   name: pvol4
-  namespace: test
+  namespace: helmtest-vxflexos
 spec:
   accessModes:
   - ReadWriteOnce
@@ -72,7 +72,7 @@ kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
   name: pvol5
-  namespace: test
+  namespace: helmtest-vxflexos
 spec:
   accessModes:
   - ReadWriteOnce
@@ -86,7 +86,7 @@ kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
   name: pvol6
-  namespace: test
+  namespace: helmtest-vxflexos
 spec:
   accessModes:
   - ReadWriteOnce

@@ -130,7 +130,7 @@ func startServerX(ctx context.Context, t *testing.T) (*grpc.ClientConn, func()) 
 	clientOpts := []grpc.DialOption{
 		grpc.WithInsecure(),
 		grpc.WithDialer(func(string, time.Duration) (net.Conn, error) {
-			return memconn.Dial("memu","csi-test") 
+			return memconn.Dial("memu", "csi-test")
 		}),
 	}
 

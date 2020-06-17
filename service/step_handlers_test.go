@@ -215,25 +215,23 @@ func handleVolumeInstances(w http.ResponseWriter, r *http.Request) {
 				log.Printf("error encoding json: %s\n", err.Error())
 			}
 			return
-		} else {
-			// good response
-			resp := new(types.VolumeResp)
-			resp.ID = hex.EncodeToString([]byte(req.Name))
-			volumeIDToName[resp.ID] = req.Name
-			volumeNameToID[req.Name] = resp.ID
-			volumeIDToAncestorID[resp.ID] = "null"
-			volumeIDToConsistencyGroupID[resp.ID] = "null"
-			if debug {
-				log.Printf("request name: %s id: %s\n", req.Name, resp.ID)
-			}
-			encoder := json.NewEncoder(w)
-			err = encoder.Encode(resp)
-			if err != nil {
-				log.Printf("error encoding json: %s\n", err.Error())
-			}
-			return
 		}
-		break
+		// good response
+		resp := new(types.VolumeResp)
+		resp.ID = hex.EncodeToString([]byte(req.Name))
+		volumeIDToName[resp.ID] = req.Name
+		volumeNameToID[req.Name] = resp.ID
+		volumeIDToAncestorID[resp.ID] = "null"
+		volumeIDToConsistencyGroupID[resp.ID] = "null"
+		if debug {
+			log.Printf("request name: %s id: %s\n", req.Name, resp.ID)
+		}
+		encoder := json.NewEncoder(w)
+		err = encoder.Encode(resp)
+		if err != nil {
+			log.Printf("error encoding json: %s\n", err.Error())
+		}
+		return
 
 	// Read all the Volumes
 	case http.MethodGet:

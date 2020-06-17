@@ -2,15 +2,15 @@ apiVersion: v1
 kind: PersistentVolume
 metadata:
   name: vol4
-  namespace: test
+  namespace: helmtest-vxflexos
 spec:
   capacity:
     storage: 16Gi
   csi:
-    driver: vxflexos.emc.dell.com
+    driver: csi-vxflexos.dellemc.com
     fsType: xfs
-    volumeHandle: 72cebf0c00000001
+    volumeHandle: 184e2e5300000000
   volumeMode: Filesystem
   accessModes:
   - ReadWriteOnce
-  storageClassName: vxflexos
+  storageClassName: vxflexos  

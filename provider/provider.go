@@ -1,8 +1,8 @@
 package provider
 
 import (
-	"github.com/rexray/gocsi"
 	"github.com/dell/csi-vxflexos/service"
+	"github.com/rexray/gocsi"
 )
 
 // New returns a new Mock Storage Plug-in Provider.
@@ -20,7 +20,6 @@ func New() gocsi.StoragePluginProvider {
 
 			// Enable serial volume access
 			gocsi.EnvVarSerialVolAccess + "=true",
-
 		},
 	}
 }

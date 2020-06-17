@@ -534,8 +534,20 @@ Examples:
      When I call NodeGetVolumeStats
      Then the error contains "Unimplemented"
 
+    Scenario: Call New in service, a new service should return
+     Given a VxFlexOS service
+     When I call NewService
+     Then a new service is returned
 
+    Scenario: Call getVolProvisionType with bad params
+     Given a VxFlexOS service
+     When I call getVolProvisionType with bad params
+     Then the error contains "getVolProvisionType - invalid boolean received"
 
+    Scenario: Call getstoragepool with wrong ID
+     Given a VxFlexOS service
+     When i Call getStoragePoolnameByID "123"
+     Then the error contains "cannot find storage pool"
 
 @wip
      Scenario: Test BeforeServe

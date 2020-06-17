@@ -33,7 +33,7 @@ func (s *service) GetPluginCapabilities(
 	var rep csi.GetPluginCapabilitiesResponse
 	if !strings.EqualFold(s.mode, "node") {
 		rep.Capabilities = []*csi.PluginCapability{
-			&csi.PluginCapability{
+			{
 				Type: &csi.PluginCapability_Service_{
 					Service: &csi.PluginCapability_Service{
 						Type: csi.PluginCapability_Service_CONTROLLER_SERVICE,

@@ -17,7 +17,7 @@ rules:
     verbs: ["get", "list", "watch"]
   - apiGroups: [""]
     resources: ["persistentvolumes"]
-    verbs: ["get", "list", "watch", "create", "delete", "update"]
+    verbs: ["get", "list", "watch", "create", "delete", "update", "patch"]
   - apiGroups: [""]
     resources: ["persistentvolumeclaims"]
     verbs: ["get", "list", "watch", "update"]
@@ -26,7 +26,7 @@ rules:
     verbs: ["get", "list", "watch"]
   - apiGroups: ["storage.k8s.io"]
     resources: ["volumeattachments"]
-    verbs: ["get", "list", "watch", "update"]
+    verbs: ["get", "list", "watch", "update", "patch"]
   - apiGroups: ["storage.k8s.io"]
     resources: ["csinodes"]
     verbs: ["get", "list", "watch", "update"]
@@ -67,11 +67,16 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
 ---
 kind: StatefulSet
-apiVersion: apps/v1beta1
+apiVersion: apps/v1
 metadata:
   name: {{ .Release.Name }}-controller
   namespace: {{ .Release.Namespace }}
 spec:
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-controller
+  updateStrategy: 
+    type: RollingUpdate
   serviceName: {{ .Release.Name }}-controller
   replicas: {{ required "Must provide the number of controller instances to create." .Values.controllerCount }}
   template:

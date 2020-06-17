@@ -20,6 +20,7 @@ import (
 	types "github.com/dell/goscaleio/types/v1"
 	ptypes "github.com/golang/protobuf/ptypes"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc/metadata"
 )
 
 const (
@@ -270,9 +271,9 @@ func (f *feature) theErrorContains(arg1 string) error {
 	if arg1 == "none" {
 		if f.err == nil {
 			return nil
-		} else {
-			return fmt.Errorf("Unexpected error: %s", f.err)
 		}
+		return fmt.Errorf("Unexpected error: %s", f.err)
+
 	}
 	// We expected an error...
 	if f.err == nil {
@@ -422,7 +423,7 @@ func (f *feature) iSpecifyVolumeContentSource() error {
 	return nil
 }
 
-func (f *feature) iSpecifyMULTINODE_WRITER() error {
+func (f *feature) iSpecifyMULTINODEWRITER() error {
 	req := new(csi.CreateVolumeRequest)
 	params := make(map[string]string)
 	params["storagepool"] = "viki_pool_HDD_20181031"
@@ -823,7 +824,7 @@ func (f *feature) aValidUnpublishVolumeResponseIsReturned() error {
 
 func (f *feature) theNumberOfSDCMappingsIs(arg1 int) error {
 	if len(sdcMappings) != arg1 {
-		return errors.New(fmt.Sprintf("expected %d SDC mappings but there were %d\n", arg1, len(sdcMappings)))
+		return fmt.Errorf("expected %d SDC mappings but there were %d", arg1, len(sdcMappings))
 	}
 	return nil
 }
@@ -941,11 +942,12 @@ func parseListVolumesTable(dt *gherkin.DataTable) (int32, string, error) {
 		switch h := v.Value; h {
 		case "max_entries":
 			str := dt.Rows[1].Cells[i].Value
-			if n, err := strconv.Atoi(str); err != nil {
+			n, err := strconv.Atoi(str)
+			if err != nil {
 				return 0, "", fmt.Errorf("expected a valid number for max_entries, got %v", err)
-			} else {
-				maxEntries = int32(n)
 			}
+			maxEntries = int32(n)
+
 		case "starting_token":
 			startingToken = dt.Rows[1].Cells[i].Value
 		default:
@@ -1021,16 +1023,17 @@ func (f *feature) aValidControllerGetCapabilitiesResponseIsReturned() error {
 			case csi.ControllerServiceCapability_RPC_LIST_SNAPSHOTS:
 				count = count + 1
 			default:
-				return errors.New(fmt.Sprintf("received unexpected capability: %v", typex))
+				return fmt.Errorf("received unexpected capability: %v", typex)
 			}
 		}
 		if count != 6 {
 			return errors.New("Did not retrieve all the expected capabilities")
 		}
 		return nil
-	} else {
-		return errors.New("expected ControllerGetCapabilitiesResponse but didn't get one")
 	}
+
+	return errors.New("expected ControllerGetCapabilitiesResponse but didn't get one")
+
 }
 
 func (f *feature) iCallValidateVolumeCapabilitiesWithVoltypeAccessFstype(voltype, access, fstype string) error {
@@ -1276,14 +1279,15 @@ func (f *feature) iMarkRequestReadOnly() error {
 }
 
 func (f *feature) iCallNodePublishVolume(arg1 string) error {
-	ctx := new(context.Context)
+	header := metadata.New(map[string]string{"csi.requestid": "1"})
+	ctx := metadata.NewIncomingContext(context.Background(), header)
 	req := f.nodePublishVolumeRequest
 	if req == nil {
 		_ = f.getNodePublishVolumeRequest()
 		req = f.nodePublishVolumeRequest
 	}
 	fmt.Printf("Calling NodePublishVolume\n")
-	_, err := f.service.NodePublishVolume(*ctx, req)
+	_, err := f.service.NodePublishVolume(ctx, req)
 	if err != nil {
 		fmt.Printf("NodePublishVolume failed: %s\n", err.Error())
 		if f.err == nil {
@@ -1296,12 +1300,13 @@ func (f *feature) iCallNodePublishVolume(arg1 string) error {
 }
 
 func (f *feature) iCallNodeUnpublishVolume(arg1 string) error {
-	ctx := new(context.Context)
+	header := metadata.New(map[string]string{"csi.requestid": "1"})
+	ctx := metadata.NewIncomingContext(context.Background(), header)
 	req := new(csi.NodeUnpublishVolumeRequest)
 	req.VolumeId = f.nodePublishVolumeRequest.VolumeId
 	req.TargetPath = f.nodePublishVolumeRequest.TargetPath
 	fmt.Printf("Calling NodeUnpublishVolume\n")
-	_, err := f.service.NodeUnpublishVolume(*ctx, req)
+	_, err := f.service.NodeUnpublishVolume(ctx, req)
 	if err != nil {
 		fmt.Printf("NodeUnpublishVolume failed: %s\n", err.Error())
 		if f.err == nil {
@@ -1345,7 +1350,6 @@ func (f *feature) iCallNodeStageVolume() error {
 	return nil
 }
 
-
 func (f *feature) iCallControllerExpandVolume() error {
 	ctx := new(context.Context)
 	req := new(csi.ControllerExpandVolumeRequest)
@@ -1353,21 +1357,19 @@ func (f *feature) iCallControllerExpandVolume() error {
 	return nil
 }
 
-
 func (f *feature) iCallNodeExpandVolume() error {
 	ctx := new(context.Context)
 	req := new(csi.NodeExpandVolumeRequest)
-	 _, f.err = f.service.NodeExpandVolume(*ctx, req)
+	_, f.err = f.service.NodeExpandVolume(*ctx, req)
 	return nil
 }
 
 func (f *feature) iCallNodeGetVolumeStats() error {
-        ctx := new(context.Context)
-        req := new(csi.NodeGetVolumeStatsRequest)
-         _, f.err = f.service.NodeGetVolumeStats(*ctx, req)
-        return nil
+	ctx := new(context.Context)
+	req := new(csi.NodeGetVolumeStatsRequest)
+	_, f.err = f.service.NodeGetVolumeStats(*ctx, req)
+	return nil
 }
-
 
 func (f *feature) iCallNodeUnstageVolume() error {
 	ctx := new(context.Context)
@@ -1533,7 +1535,7 @@ func (f *feature) thereAreValidSnapshotsOfVolume(nsnapshots int, volume string) 
 	return nil
 }
 
-func (f *feature) iCallListSnapshotsWithMax_entriesAndStarting_token(maxEntriesString, startingTokenString string) error {
+func (f *feature) iCallListSnapshotsWithMaxentriesAndStartingtoken(maxEntriesString, startingTokenString string) error {
 	maxEntries, err := strconv.Atoi(maxEntriesString)
 	if err != nil {
 		return nil
@@ -1594,13 +1596,13 @@ func (f *feature) theSnapshotIDIs(arg1 string) error {
 	return nil
 }
 
-func (f *feature) aValidListSnapshotsResponseIsReturnedWithListedAndNext_token(listed, nextTokenString string) error {
+func (f *feature) aValidListSnapshotsResponseIsReturnedWithListedAndNexttoken(listed, nextTokenString string) error {
 	if f.err != nil {
 		return f.err
 	}
 	nextToken := f.listSnapshotsResponse.GetNextToken()
 	if nextToken != nextTokenString {
-		return errors.New(fmt.Sprintf("Expected nextToken %s got %s", nextTokenString, nextToken))
+		return fmt.Errorf("Expected nextToken %s got %s", nextTokenString, nextToken)
 	}
 	entries := f.listSnapshotsResponse.GetEntries()
 	expectedEntries, err := strconv.Atoi(listed)
@@ -1608,7 +1610,7 @@ func (f *feature) aValidListSnapshotsResponseIsReturnedWithListedAndNext_token(l
 		return err
 	}
 	if entries == nil || len(entries) != expectedEntries {
-		return errors.New(fmt.Sprintf("Expected %d List SnapshotResponse entries but got %d", expectedEntries, len(entries)))
+		return fmt.Errorf("Expected %d List SnapshotResponse entries but got %d", expectedEntries, len(entries))
 	}
 	for j := 0; j < expectedEntries; j++ {
 		entry := entries[j]
@@ -1632,7 +1634,7 @@ func (f *feature) theTotalSnapshotsListedIs(arg1 string) error {
 		return err
 	}
 	if len(f.listedVolumeIDs) != expectedSnapshots {
-		return errors.New(fmt.Sprintf("expected %d snapshots to be listed but got %d", expectedSnapshots, len(f.listedVolumeIDs)))
+		return fmt.Errorf("expected %d snapshots to be listed but got %d", expectedSnapshots, len(f.listedVolumeIDs))
 	}
 	return nil
 }
@@ -1659,6 +1661,51 @@ func (f *feature) iInvalidateTheProbeCache() error {
 	return nil
 }
 
+func (f *feature) iCallGetDevice(invalidPath string) error {
+	device, err := GetDevice(invalidPath)
+	if device == nil && err != nil {
+		f.err = errors.New("invalid path error")
+	}
+	return nil
+}
+
+func (f *feature) iCallNewService() error {
+	return nil
+}
+
+func (f *feature) aNewServiceIsReturned() error {
+	svc, ok := New().(Service)
+	if !ok || svc == nil {
+		return errors.New("Service New does not return properly")
+	}
+
+	return nil
+}
+
+func (f *feature) iCallGetVolProvisionTypeWithBadParams() error {
+	params := map[string]string{KeyThickProvisioning: "notBoolean"}
+
+	if tp, ok := params[KeyThickProvisioning]; ok {
+		_, err := strconv.ParseBool(tp)
+		if err != nil {
+			f.err = errors.New("getVolProvisionType - invalid boolean received")
+		}
+	}
+
+	f.service.getVolProvisionType(params)
+
+	return nil
+}
+
+func (f *feature) iCallGetStoragePoolnameByID(id string) error {
+	f.service.storagePoolIDToName[id] = ""
+	res := f.service.getStoragePoolNameFromID(id)
+	if res == "" {
+		f.err = errors.New("cannot find storage pool")
+	}
+	return nil
+}
+
 func FeatureContext(s *godog.Suite) {
 	f := &feature{}
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
@@ -1681,7 +1728,7 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^I call CreateVolume "([^"]*)"$`, f.iCallCreateVolume)
 	s.Step(`^a valid CreateVolumeResponse is returned$`, f.aValidCreateVolumeResponseIsReturned)
 	s.Step(`^I specify AccessibilityRequirements$`, f.iSpecifyAccessibilityRequirements)
-	s.Step(`^I specify MULTINODE_WRITER$`, f.iSpecifyMULTINODE_WRITER)
+	s.Step(`^I specify MULTINODE_WRITER$`, f.iSpecifyMULTINODEWRITER)
 	s.Step(`^I specify a BadCapacity$`, f.iSpecifyABadCapacity)
 	s.Step(`^I specify NoStoragePool$`, f.iSpecifyNoStoragePool)
 	s.Step(`^I call CreateVolumeSize "([^"]*)" "(\d+)"$`, f.iCallCreateVolumeSize)
@@ -1740,8 +1787,8 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^the wrong capacity$`, f.theWrongCapacity)
 	s.Step(`^the wrong storage pool$`, f.theWrongStoragePool)
 	s.Step(`^there are (\d+) valid snapshots of "([^"]*)" volume$`, f.thereAreValidSnapshotsOfVolume)
-	s.Step(`^I call ListSnapshots with max_entries "([^"]*)" and starting_token "([^"]*)"$`, f.iCallListSnapshotsWithMax_entriesAndStarting_token)
-	s.Step(`^a valid ListSnapshotsResponse is returned with listed "([^"]*)" and next_token "([^"]*)"$`, f.aValidListSnapshotsResponseIsReturnedWithListedAndNext_token)
+	s.Step(`^I call ListSnapshots with max_entries "([^"]*)" and starting_token "([^"]*)"$`, f.iCallListSnapshotsWithMaxentriesAndStartingtoken)
+	s.Step(`^a valid ListSnapshotsResponse is returned with listed "([^"]*)" and next_token "([^"]*)"$`, f.aValidListSnapshotsResponseIsReturnedWithListedAndNexttoken)
 	s.Step(`^the total snapshots listed is "([^"]*)"$`, f.theTotalSnapshotsListedIs)
 	s.Step(`^I call ListSnapshots for volume "([^"]*)"$`, f.iCallListSnapshotsForVolume)
 	s.Step(`^I call ListSnapshots for snapshot "([^"]*)"$`, f.iCallListSnapshotsForSnapshot)
@@ -1751,5 +1798,9 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^I call NodeExpandVolume$`, f.iCallNodeExpandVolume)
 	s.Step(`^I call NodeGetVolumeStats$`, f.iCallNodeGetVolumeStats)
 	s.Step(`^I give request volume context$`, f.iGiveRequestVolumeContext)
-
+	s.Step(`^I call GetDevice "([^"]*)"$`, f.iCallGetDevice)
+	s.Step(`^I call NewService$`, f.iCallNewService)
+	s.Step(`^a new service is returned$`, f.aNewServiceIsReturned)
+	s.Step(`^I call getVolProvisionType with bad params$`, f.iCallGetVolProvisionTypeWithBadParams)
+	s.Step(`^i Call getStoragePoolnameByID "([^"]*)"$`, f.iCallGetStoragePoolnameByID)
 }

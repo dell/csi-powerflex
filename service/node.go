@@ -13,6 +13,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -45,6 +46,13 @@ func (s *service) NodePublishVolume(
 	req *csi.NodePublishVolumeRequest) (
 	*csi.NodePublishVolumeResponse, error) {
 
+	var reqID string
+	headers, ok := metadata.FromIncomingContext(ctx)
+	if ok {
+		if req, ok := headers["csi.requestid"]; ok && len(req) > 0 {
+			reqID = req[0]
+		}
+	}
 	s.logStatistics()
 	volumeContext := req.GetVolumeContext()
 	if volumeContext != nil {
@@ -74,7 +82,7 @@ func (s *service) NodePublishVolume(
 		return nil, err
 	}
 
-	if err := publishVolume(req, s.privDir, sdcMappedVol.SdcDevice); err != nil {
+	if err := publishVolume(req, s.privDir, sdcMappedVol.SdcDevice, reqID); err != nil {
 		return nil, err
 	}
 
@@ -86,6 +94,14 @@ func (s *service) NodeUnpublishVolume(
 	req *csi.NodeUnpublishVolumeRequest) (
 	*csi.NodeUnpublishVolumeResponse, error) {
 
+	var reqID string
+	headers, ok := metadata.FromIncomingContext(ctx)
+	if ok {
+		if req, ok := headers["csi.requestid"]; ok && len(req) > 0 {
+			reqID = req[0]
+		}
+	}
+
 	s.logStatistics()
 	id := req.GetVolumeId()
 	log.Printf("NodeUnublishVolume id: %s", id)
@@ -96,7 +112,7 @@ func (s *service) NodeUnpublishVolume(
 		return &csi.NodeUnpublishVolumeResponse{}, nil
 	}
 
-	if err := unpublishVolume(req, s.privDir, sdcMappedVol.SdcDevice); err != nil {
+	if err := unpublishVolume(req, s.privDir, sdcMappedVol.SdcDevice, reqID); err != nil {
 		return nil, err
 	}
 
@@ -228,7 +244,6 @@ func (s *service) NodeGetVolumeStats(
 	return nil, status.Error(codes.Unimplemented, "")
 
 }
-
 
 func (s *service) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "")

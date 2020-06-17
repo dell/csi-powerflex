@@ -2,7 +2,7 @@ kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
   name: pvol1
-  namespace: test
+  namespace: helmtest-vxflexos
 spec:
   accessModes:
   - ReadWriteOnce
