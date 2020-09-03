@@ -113,11 +113,11 @@ func (s *service) BeforeServe(
 		if s.opts.Password != "" {
 			fields["password"] = "******"
 		}
-		
+
 		//censor user for logging purposes
-                fields["user"] = "******"
+		fields["user"] = "******"
 		log.WithFields(fields).Infof("configured %s", Name)
-		fields["user"] =  s.opts.User
+		fields["user"] = s.opts.User
 	}()
 
 	// Get the SP's operating mode.
@@ -322,6 +322,7 @@ func (s *service) getCSISnapshot(vol *siotypes.Volume) *csi.Snapshot {
 		SizeBytes:      int64(vol.SizeInKb) * bytesInKiB,
 		SnapshotId:     vol.ID,
 		SourceVolumeId: vol.AncestorVolumeID,
+		ReadyToUse:     true,
 	}
 	// Convert array timestamp to CSI timestamp and add
 	csiTimestamp, err := ptypes.TimestampProto(time.Unix(int64(vol.CreationTime), 0))
