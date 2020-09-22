@@ -13,12 +13,12 @@ Feature: VxFlex OS CSI interface
     Then the error contains <errormsg>
 
     Examples:
-    | voltype      | access                         | fstype     | errormsg                                     |
-    | "mount"      | "single-writer"                | "xfs"      | "none"                                       |
-    | "mount"      | "single-writer"                | "ext4"     | "none"                                       |
-    | "mount"      | "multiple-writer"              | "ext4"     | "Invalid access mode"                        |
-    | "block"      | "single-writer"                | "none"     | "none"                                       |
-    | "block"      | "multiple-writer"              | "none"     | "none"                                       |
+    | voltype      | access                         | fstype     | errormsg                                                          |
+    | "mount"      | "single-writer"                | "xfs"      | "none"                                                            |
+    | "mount"      | "single-writer"                | "ext4"     | "none"                                                            |
+    | "mount"      | "multiple-writer"              | "ext4"     | "Mount volumes do not support AccessMode MULTI_NODE_MULTI_WRITER" |
+    | "block"      | "single-writer"                | "none"     | "none"                                                            |
+    | "block"      | "multiple-writer"              | "none"     | "none"                                                            |
        
   Scenario Outline: Node publish block volumes various induced error use cases from examples
     Given a VxFlexOS service
@@ -32,9 +32,10 @@ Feature: VxFlex OS CSI interface
 
     Examples:
     | error                                   | errormsg                                                   |
+    | "NodePublishBlockTargetNotFile"         | "existing path is a directory"                             |
     | "GOFSMockBindMountError"                | "none"                                                     |
-    | "GOFSMockMountError"                    | "failure bind-mounting block device to private mount"      |
-    | "GOFSMockGetMountsError"                | "could not reliably determine existing mount status"       |
+    | "GOFSMockMountError"                    | "error bind mounting to target path"                       |
+    | "GOFSMockGetMountsError"                | "Could not getDevMounts"                                   |
     | "NoSymlinkForNodePublish"               | "not published to node"                                    |
     # may be different for Windows vs. Linux
     | "NoBlockDevForNodePublish"              | "is not a block device@@not published to node"             |
@@ -42,11 +43,11 @@ Feature: VxFlex OS CSI interface
     # may be different for Windows vs. Linux
     | "PrivateDirectoryNotExistForNodePublish"| "cannot find the path specified@@no such file or directory"|
     | "BlockMkfilePrivateDirectoryNodePublish"| "existing path is not a directory"                         |
-    | "NodePublishNoTargetPath"               | "target path required"                                     |
+    | "NodePublishNoTargetPath"               | "target path required"                            |
     | "NodePublishNoVolumeCapability"         | "volume capability required"                               |
-    | "NodePublishNoAccessMode"               | "volume access mode required"                              |
-    | "NodePublishNoAccessType"               | "volume access type required"                              |
-    | "NodePublishBlockTargetNotFile"         | "wrong type (file vs dir)"                                 |
+    | "NodePublishNoAccessMode"               | "Volume Access Mode is required"                           |
+    | "NodePublishNoAccessType"               | "Volume Access Type is required"                           |
+    | "NodePublishBadTargetPath"              | "cannot find the path specified@@no such file or directory"|
 
   Scenario Outline: Node publish mount volumes various induced error use cases from examples
     Given a VxFlexOS service
@@ -54,28 +55,32 @@ Feature: VxFlex OS CSI interface
     And a capability with voltype "mount" access "single-writer" fstype "xfs"
     And get Node Publish Volume Request
     And I induce error <error>
+    And I induce error <errorb>
     When I call Probe
     When I call NodePublishVolume "SDC_GUID"
     Then the error contains <errormsg>
 
     Examples:
-    | error                                   | errormsg                                                    |
-    | "GOFSMockDevMountsError"                | "none"                                                      |
-    | "GOFSMockMountError"                    | "mount induced error"                                       |
-    | "GOFSMockGetMountsError"                | "could not reliably determine existing mount status"        |
-    | "NoSymlinkForNodePublish"               | "not published to node"                                     |
+    | error                                   | errorb                                | errormsg                                                    |
+    | "GOFSMockDevMountsError"                | "none"                                | "none"                                                      |
+    | "GOFSMockMountError"                    | "none"                                | "mount induced error"                                       |
+    | "GOFSMockGetMountsError"                | "none"                                | "could not reliably determine existing mount status"        |
+    | "NoSymlinkForNodePublish"               | "none"                                | "not published to node"                                     |
     # may be different for Windows vs. Linux
-    | "NoBlockDevForNodePublish"              | "is not a block device@@not published to node"              |
-    | "TargetNotCreatedForNodePublish"        | "none"                                                      |
+    | "NoBlockDevForNodePublish"              | "none"                                | "is not a block device@@not published to node"              |
+    | "TargetNotCreatedForNodePublish"        | "none"                                | "none"                                                      |
     # may be different for Windows vs. Linux
-    | "PrivateDirectoryNotExistForNodePublish"| "cannot find the path specified@@no such file or directory" |
-    | "BlockMkfilePrivateDirectoryNodePublish"| "existing path is not a directory"                          |
-    | "NodePublishNoTargetPath"               | "target path required"                                      |
-    | "NodePublishNoVolumeCapability"         | "volume capability required"                                |
-    | "NodePublishNoAccessMode"               | "volume access mode required"                               |
-    | "NodePublishNoAccessType"               | "volume access type required"                               |
-    | "NodePublishFileTargetNotDir"           | "wrong type (file vs dir)"                                  |
-
+    | "PrivateDirectoryNotExistForNodePublish"| "none"                                | "cannot find the path specified@@no such file or directory" |
+    | "BlockMkfilePrivateDirectoryNodePublish"| "none"                                | "existing path is not a directory"                          |
+    | "NodePublishNoTargetPath"               | "none"                                | "target path required"                                      |
+    | "NodePublishNoVolumeCapability"         | "none"                                | "volume capability required"                                |
+    | "NodePublishNoAccessMode"               | "none"                                | "Volume Access Mode is required"                            |
+    | "NodePublishNoAccessType"               | "none"                                | "Volume Access Type is required"                            |
+    | "NodePublishFileTargetNotDir"           | "none"                                | "existing path is not a directory"                          |
+    | "NodePublishPrivateTargetAlreadyCreated"| "none"                                | "not published to node"                                     |
+    | "NodePublishPrivateTargetAlreadyMounted"| "none"                                | "Mount point already in use by device@@none"                      |
+    | "NodePublishPrivateTargetAlreadyMounted"| "GOFSMockGetMountsError"              | "could not reliably determine existing mount status"        |
+    | "NodePublishBadTargetPath"              | "none"                                | "cannot find the path specified@@no such file or directory"|
 
   Scenario Outline: Node publish various use cases from examples when volume already published
     Given a VxFlexOS service
@@ -83,17 +88,18 @@ Feature: VxFlex OS CSI interface
     And a capability with voltype <voltype> access <access> fstype <fstype>
     When I call Probe
     And I call NodePublishVolume "SDC_GUID"
+    And I induce error "NodePublishPathAltDataDir"
     And I call NodePublishVolume "SDC_GUID"
     Then the error contains <errormsg>
 
     Examples:
-    | voltype      | access                         | fstype     | errormsg                                     |
-    | "block"      | "single-writer"                | "none"     | "access mode conflicts with existing mounts" |
-    | "mount"      | "single-writer"                | "xfs"      | "access mode conflicts with existing mounts" |
-    | "mount"      | "single-writer"                | "ext4"     | "access mode conflicts with existing mounts" |
-    | "mount"      | "multiple-writer"              | "ext4"     | "Invalid access mode"                        |
-# The following line seems like the wrong behavior; shouldn't this be allowed?
-    | "block"      | "multiple-reader"              | "none"     | "access mode conflicts with existing mounts" |
+    | voltype      | access                         | fstype     | errormsg                                                          |
+    | "block"      | "single-writer"                | "none"     | "Access mode conflicts with existing mounts"                      |  
+    | "block"      | "multiple-writer"              | "none"     | "none"                                                            |  
+    | "mount"      | "single-writer"                | "xfs"      | "Access mode conflicts with existing mounts"                      | 
+    | "mount"      | "single-writer"                | "ext4"     | "Access mode conflicts with existing mounts"                      | 
+    | "mount"      | "multiple-writer"              | "ext4"     | "Mount volumes do not support AccessMode MULTI_NODE_MULTI_WRITER" |
+    | "block"      | "multiple-reader"              | "none"     | "none"                                                            |
 
   Scenario Outline: Node publish various use cases from examples when read-only mount volume already published
     Given a VxFlexOS service
@@ -107,15 +113,15 @@ Feature: VxFlex OS CSI interface
     Then the error contains <errormsg>
 
     Examples:
-    | voltype      | access                         | fstype     | errormsg                                     |
-    | "block"      | "multiple-reader"              | "none"     | "read only not supported for Block Volume"   |
-    | "mount"      | "single-reader"                | "none"     | "none"                                       |
-    | "mount"      | "single-reader"                | "xfs"      | "none"                                       |
-    | "mount"      | "multiple-reader"              | "ext4"     | "none"                                       |
-    | "mount"      | "single-writer"                | "ext4"     | "access mode conflicts with existing mounts" |
-    | "mount"      | "multiple-writer"              | "ext4"     | "Invalid access mode"                        |
+    | voltype      | access                         | fstype     | errormsg                                            |
+    | "block"      | "multiple-reader"              | "none"     | "read only not supported for Block Volume"          |
+    | "mount"      | "single-reader"                | "none"     | "none"                                              |
+    | "mount"      | "single-reader"                | "xfs"      | "none"                                              |
+    | "mount"      | "multiple-reader"              | "ext4"     | "none"                                              |
+    | "mount"      | "single-writer"                | "ext4"     | "Access mode conflicts with existing mounts"        |
+    | "mount"      | "multiple-writer"              | "ext4"     | "do not support AccessMode MULTI_NODE_MULTI_WRITER" |
 
-  Scenario Outline: Node publish various use cases from examples when read-only mount volume already published
+  Scenario Outline: Node publish various use cases from examples when read-only mount volume already published and I change the target path
     Given a VxFlexOS service
     And a controller published volume
     And a capability with voltype <voltype> access <access> fstype <fstype>
@@ -128,14 +134,13 @@ Feature: VxFlex OS CSI interface
     Then the error contains <errormsg>
 
     Examples:
-    | voltype      | access                         | fstype     | errormsg                                     |
-    | "mount"      | "single-reader"                | "none"     | "none"                                       |
-    | "mount"      | "single-reader"                | "xfs"      | "none"                                       |
-    | "block"      | "multiple-reader"              | "none"     | "read only not supported for Block Volume"   |
-    | "mount"      | "multiple-reader"              | "ext4"     | "none"                                       |
-    | "mount"      | "single-writer"                | "ext4"     | "access mode conflicts with existing mounts" |
-    | "mount"      | "multiple-writer"              | "ext4"     | "Invalid access mode"                        |
-
+    | voltype      | access                         | fstype     | errormsg                                            |
+    | "mount"      | "single-reader"                | "none"     | "none"                                              |
+    | "mount"      | "single-reader"                | "xfs"      | "none"                                              |
+    | "block"      | "multiple-reader"              | "none"     | "read only not supported for Block Volume"          |
+    | "mount"      | "multiple-reader"              | "ext4"     | "none"                                              |
+    | "mount"      | "single-writer"                | "ext4"     | "Access mode conflicts with existing mounts"        |
+    | "mount"      | "multiple-writer"              | "ext4"     | "do not support AccessMode MULTI_NODE_MULTI_WRITER" |
 
   Scenario: Node publish volume with volume context
     Given a VxFlexOS service
@@ -178,7 +183,7 @@ Feature: VxFlex OS CSI interface
     | error                                   | errormsg                                                    |
     | "NodeUnpublishBadVolume"                | "none"                                                      |
     | "GOFSMockGetMountsError"                | "could not reliably determine existing mount status"        |
-    | "NodeUnpublishNoTargetPath"             | "target path required"                                      |
+    | "NodeUnpublishNoTargetPath"             | "target path argument is required"                                      |
     | "GOFSMockUnmountError"                  | "Error unmounting target"                                   |
     | "PrivateDirectoryNotExistForNodePublish"| "none"                                                      |
 

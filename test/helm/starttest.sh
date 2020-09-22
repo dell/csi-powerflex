@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 [ "$1" = "" ] && {
     echo "requires test name as argument"
     exit 2

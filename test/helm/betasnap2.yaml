@@ -1,0 +1,9 @@
+apiVersion: snapshot.storage.k8s.io/v1beta1
+kind: VolumeSnapshot
+metadata:
+  name: pvol0-snap2
+  namespace: helmtest-vxflexos
+spec:
+  volumeSnapshotClassName: vxflexos-snapclass
+  source:
+    persistentVolumeClaimName: pvol0

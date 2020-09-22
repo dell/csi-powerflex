@@ -32,11 +32,15 @@ const (
 	altNodeID                  = "7E012974-3651-4DCB-9954-25975A3C3CDF"
 	datafile                   = "test/tmp/datafile"
 	datadir                    = "test/tmp/datadir"
+	badtarget                  = "/nonexist/target"
+	altdatadir                 = "test/tmp/altdatadir"
+	altdatafile                = "test/tmp/altdatafile"
 	sdcVolume1                 = "d0f055a700000000"
 	sdcVolume2                 = "d0f055aa00000001"
 	sdcVolume0                 = "0000000000000000"
 	mdmID                      = "0000"
 	nodePublishBlockDevicePath = "test/dev/scinia"
+	nodePublishAltBlockDevPath = "test/dev/scinib"
 	nodePublishSymlinkDir      = "test/dev/disk/by-id"
 	goodSnapID                 = "444-444"
 	altSnapID                  = "555-555"
@@ -48,7 +52,7 @@ type feature struct {
 	service                               *service
 	adminClient                           *goscaleio.Client
 	system                                *goscaleio.System
-	err                                   error // return from the preceeding call
+	err                                   error // return from the preceding call
 	getPluginInfoResponse                 *csi.GetPluginInfoResponse
 	getPluginCapabilitiesResponse         *csi.GetPluginCapabilitiesResponse
 	probeResponse                         *csi.ProbeResponse
@@ -82,6 +86,7 @@ type feature struct {
 	createSnapshotRequest                 *csi.CreateSnapshotRequest
 	volumeIDList                          []string
 	snapshotIndex                         int
+	volumeID                              string
 }
 
 func (f *feature) checkGoRoutines(tag string) {
@@ -145,6 +150,8 @@ func (f *feature) aVxFlexOSService() error {
 	gofsutil.GOFSMock.InduceFormatError = false
 	gofsutil.GOFSMock.InduceGetDiskFormatError = false
 	gofsutil.GOFSMock.InduceGetDiskFormatType = ""
+	gofsutil.GOFSMock.InduceFSTypeError = false
+	gofsutil.GOFSMock.InduceResizeFSError = false
 	gofsutil.GOFSMockMounts = gofsutil.GOFSMockMounts[:0]
 
 	// configure variables in the driver
@@ -196,6 +203,9 @@ Module                  Size  Used by
 vsock_diag             12610  0
 scini                 799210  0
 ip6t_rpfilter          12595  1
+`
+	opts.drvCfgQueryMDM = `
+MDM-ID 14dbbf5617523654 SDC ID d0f33bd700000004 INSTALLATION ID 1c078b073d75512c IPs [0]-1.2.3.4 [1]-1.2.3.5
 `
 	svc.opts = opts
 	f.service = svc
@@ -277,6 +287,12 @@ func (f *feature) theErrorContains(arg1 string) error {
 	}
 	// We expected an error...
 	if f.err == nil {
+		possibleMatches := strings.Split(arg1, "@@")
+		for _, possibleMatch := range possibleMatches {
+			if possibleMatch == "none" {
+				return nil
+			}
+		}
 		return fmt.Errorf("Expected error to contain %s but no error", arg1)
 	}
 	// Allow for multiple possible matches, separated by @@. This was necessary
@@ -315,6 +331,11 @@ func (f *feature) thereIsANodeProbeSdcGUIDError() error {
 	return nil
 }
 
+func (f *feature) thereIsANodeProbeDrvCfgError() error {
+	f.service.opts.drvCfgQueryMDM = ""
+	return nil
+}
+
 func getTypicalCreateVolumeRequest() *csi.CreateVolumeRequest {
 	req := new(csi.CreateVolumeRequest)
 	params := make(map[string]string)
@@ -322,7 +343,7 @@ func getTypicalCreateVolumeRequest() *csi.CreateVolumeRequest {
 	req.Parameters = params
 	req.Name = "volume1"
 	capacityRange := new(csi.CapacityRange)
-	capacityRange.RequiredBytes = 8 * 1024 * 1024 * 1024
+	capacityRange.RequiredBytes = 32 * 1024 * 1024 * 1024
 	req.CapacityRange = capacityRange
 	block := new(csi.VolumeCapability_BlockVolume)
 	capability := new(csi.VolumeCapability)
@@ -345,7 +366,7 @@ func (f *feature) iSpecifyCreateVolumeMountRequest(fstype string) error {
 	req.Parameters = params
 	req.Name = "mount1"
 	capacityRange := new(csi.CapacityRange)
-	capacityRange.RequiredBytes = 8 * 1024 * 1024 * 1024
+	capacityRange.RequiredBytes = 32 * 1024 * 1024 * 1024
 	req.CapacityRange = capacityRange
 	capability := new(csi.VolumeCapability)
 	mountVolume := new(csi.VolumeCapability_MountVolume)
@@ -400,16 +421,24 @@ func (f *feature) aValidCreateVolumeResponseIsReturned() error {
 	return nil
 }
 
-func (f *feature) iSpecifyAccessibilityRequirements() error {
+func (f *feature) iSpecifyAccessibilityRequirementsWithASystemIDOf(requestedSystem string) error {
+	if requestedSystem == "f.service.opt.SystemName" {
+		requestedSystem = f.service.opts.SystemName
+	}
 	req := new(csi.CreateVolumeRequest)
 	params := make(map[string]string)
 	params["storagepool"] = "viki_pool_HDD_20181031"
 	req.Parameters = params
 	req.Name = "accessability"
 	capacityRange := new(csi.CapacityRange)
-	capacityRange.RequiredBytes = 8 * 1024 * 1024 * 1024
+	capacityRange.RequiredBytes = 32 * 1024 * 1024 * 1024
 	req.CapacityRange = capacityRange
 	req.AccessibilityRequirements = new(csi.TopologyRequirement)
+	top := new(csi.Topology)
+	top.Segments = map[string]string{
+		"csi-vxflexos.dellemc.com/" + requestedSystem: "powerflex.dellemc.com",
+	}
+	req.AccessibilityRequirements.Preferred = append(req.AccessibilityRequirements.Preferred, top)
 	f.createVolumeRequest = req
 	return nil
 }
@@ -430,7 +459,7 @@ func (f *feature) iSpecifyMULTINODEWRITER() error {
 	req.Parameters = params
 	req.Name = "multinode_writer"
 	capacityRange := new(csi.CapacityRange)
-	capacityRange.RequiredBytes = 8 * 1024 * 1024 * 1024
+	capacityRange.RequiredBytes = 32 * 1024 * 1024 * 1024
 	req.CapacityRange = capacityRange
 	block := new(csi.VolumeCapability_BlockVolume)
 	capability := new(csi.VolumeCapability)
@@ -450,7 +479,7 @@ func (f *feature) iSpecifyMULTINODEWRITER() error {
 func (f *feature) iSpecifyABadCapacity() error {
 	req := getTypicalCreateVolumeRequest()
 	capacityRange := new(csi.CapacityRange)
-	capacityRange.RequiredBytes = -8 * 1024 * 1024 * 1024
+	capacityRange.RequiredBytes = -32 * 1024 * 1024 * 1024
 	req.CapacityRange = capacityRange
 	req.Name = "bad capacity"
 	f.createVolumeRequest = req
@@ -481,6 +510,7 @@ func (f *feature) iCallCreateVolumeSize(name string, size int64) error {
 	if f.createVolumeResponse != nil {
 		log.Printf("vol id %s\n", f.createVolumeResponse.GetVolume().VolumeId)
 	}
+
 	return nil
 }
 
@@ -534,6 +564,10 @@ func (f *feature) iInduceError(errtype string) error {
 		stepHandlersErrors.RemoveVolumeError = true
 	case "VolumeInstancesError":
 		stepHandlersErrors.VolumeInstancesError = true
+	case "NoVolumeIDError":
+		stepHandlersErrors.NoVolumeIDError = true
+	case "SetVolumeSizeError":
+		stepHandlersErrors.SetVolumeSizeError = true
 	case "NoSymlinkForNodePublish":
 		cmd := exec.Command("rm", "-rf", nodePublishSymlinkDir)
 		_, err := cmd.CombinedOutput()
@@ -567,12 +601,47 @@ func (f *feature) iInduceError(errtype string) error {
 		f.nodePublishVolumeRequest.VolumeCapability.AccessMode = nil
 	case "NodePublishNoAccessType":
 		f.nodePublishVolumeRequest.VolumeCapability.AccessType = nil
+	case "NodePublishPrivateTargetAlreadyCreated":
+		err := os.MkdirAll("features/"+sdcVolume1, 0777)
+		if err != nil {
+			fmt.Printf("Couldn't make: %s\n", datadir+"/"+sdcVolume1)
+		}
+	case "NodePublishPrivateTargetAlreadyMounted":
+		cmd := exec.Command("mknod", nodePublishAltBlockDevPath, "b", "0", "0")
+		_, err := cmd.CombinedOutput()
+		if err != nil {
+			fmt.Printf("Couldn't create block dev: %s\n", nodePublishAltBlockDevPath)
+		}
+		err = os.MkdirAll("features/"+sdcVolume1, 0777)
+		if err != nil {
+			fmt.Printf("Couldn't make: %s\n", datadir+"/"+sdcVolume1)
+		}
+		err = gofsutil.Mount(context.Background(), nodePublishAltBlockDevPath, "features\\"+sdcVolume1, "none")
+		if err != nil {
+			fmt.Printf("Couldn't mount: %s\n", "features\\"+sdcVolume1)
+		}
 	case "NodePublishNoTargetPath":
 		f.nodePublishVolumeRequest.TargetPath = ""
+	case "NodePublishBadTargetPath":
+		f.nodePublishVolumeRequest.TargetPath = badtarget
 	case "NodePublishBlockTargetNotFile":
 		f.nodePublishVolumeRequest.TargetPath = datadir
 	case "NodePublishFileTargetNotDir":
 		f.nodePublishVolumeRequest.TargetPath = datafile
+	case "NodePublishPathAltDataDir":
+		if f.nodePublishVolumeRequest.TargetPath == datadir {
+			err := os.MkdirAll(altdatadir, 0777)
+			if err != nil {
+				fmt.Printf("Couldn't make altdatadir: %s\n", altdatadir)
+			}
+			f.nodePublishVolumeRequest.TargetPath = altdatadir
+		} else {
+			_, err := os.Create(altdatafile)
+			if err != nil {
+				fmt.Printf("Couldn't make datafile: %s\n", altdatafile)
+			}
+			f.nodePublishVolumeRequest.TargetPath = altdatafile
+		}
 	case "GOFSMockBindMountError":
 		gofsutil.GOFSMock.InduceBindMountError = true
 	case "GOFSMockDevMountsError":
@@ -589,10 +658,16 @@ func (f *feature) iInduceError(errtype string) error {
 		gofsutil.GOFSMock.InduceGetDiskFormatType = "unknown-fs"
 	case "GOFSMockFormatError":
 		gofsutil.GOFSMock.InduceFormatError = true
+	case "GOFSInduceFSTypeError":
+		gofsutil.GOFSMock.InduceFSTypeError = true
+	case "GOFSInduceResizeFSError":
+		gofsutil.GOFSMock.InduceResizeFSError = true
 	case "NodeUnpublishNoTargetPath":
 		f.nodePublishVolumeRequest.TargetPath = ""
 	case "NodeUnpublishBadVolume":
 		f.nodePublishVolumeRequest.VolumeId = sdcVolume0
+	case "none":
+		return nil
 	default:
 		return fmt.Errorf("Don't know how to induce error %q", errtype)
 	}
@@ -840,6 +915,7 @@ func (f *feature) aValidNodeGetInfoResponseIsReturned() error {
 	if f.err != nil {
 		return f.err
 	}
+	fmt.Printf("node: %s", f.nodeGetInfoResponse)
 	if f.nodeGetInfoResponse.NodeId == "" {
 		return errors.New("expected NodeGetInfoResponse to contain NodeID but it was null")
 	}
@@ -1022,11 +1098,13 @@ func (f *feature) aValidControllerGetCapabilitiesResponseIsReturned() error {
 				count = count + 1
 			case csi.ControllerServiceCapability_RPC_LIST_SNAPSHOTS:
 				count = count + 1
+			case csi.ControllerServiceCapability_RPC_EXPAND_VOLUME:
+				count = count + 1
 			default:
 				return fmt.Errorf("received unexpected capability: %v", typex)
 			}
 		}
-		if count != 6 {
+		if count != 7 {
 			return errors.New("Did not retrieve all the expected capabilities")
 		}
 		return nil
@@ -1192,9 +1270,9 @@ func (f *feature) aControllerPublishedVolume() error {
 	cmd := exec.Command("rm", "-rf", "features/"+sdcVolume1)
 	_, err = cmd.CombinedOutput()
 	if err != nil {
-		fmt.Printf("error removing private staging directory")
+		fmt.Printf("error removing private staging directory\n")
 	} else {
-		fmt.Printf("removed private staging directory")
+		fmt.Printf("removed private staging directory\n")
 	}
 
 	// Make the block device
@@ -1203,7 +1281,7 @@ func (f *feature) aControllerPublishedVolume() error {
 		cmd := exec.Command("mknod", nodePublishBlockDevicePath, "b", "0", "0")
 		output, err := cmd.CombinedOutput()
 		if err != nil {
-			fmt.Printf("scinia: " + err.Error())
+			fmt.Printf("scinia: %s\n", err.Error())
 		}
 		fmt.Printf("mknod output: %s\n", output)
 
@@ -1213,7 +1291,8 @@ func (f *feature) aControllerPublishedVolume() error {
 		output, err = cmd.CombinedOutput()
 		fmt.Printf("symlink output: %s\n", output)
 		if err != nil {
-			fmt.Printf("link: " + err.Error())
+			fmt.Printf("link: %s\n", err.Error())
+			err = nil
 		}
 	}
 
@@ -1333,6 +1412,8 @@ func (f *feature) iCallBeforeServe() error {
 	stringSlice = append(stringSlice, EnvPassword+"=password")
 	stringSlice = append(stringSlice, EnvSystemName+"=unknown")
 	stringSlice = append(stringSlice, "X_CSI_PRIVATE_MOUNT_DIR=/csi")
+	stringSlice = append(stringSlice, "X_CSI_VXFLEXOS_ENABLESNAPSHOTCGDELETE=true")
+	stringSlice = append(stringSlice, "X_CSI_VXFLEXOS_ENABLELISTVOLUMESNAPSHOTS=true")
 	ctx := context.WithValue(context.Background(), ctxOSEnviron, stringSlice)
 	listener, err := net.Listen("tcp", "127.0.0.1:65000")
 	if err != nil {
@@ -1350,17 +1431,33 @@ func (f *feature) iCallNodeStageVolume() error {
 	return nil
 }
 
-func (f *feature) iCallControllerExpandVolume() error {
-	ctx := new(context.Context)
-	req := new(csi.ControllerExpandVolumeRequest)
-	_, f.err = f.service.ControllerExpandVolume(*ctx, req)
+func (f *feature) iCallControllerExpandVolume(size int64) error {
+	header := metadata.New(map[string]string{"csi.requestid": "1"})
+	ctx := metadata.NewIncomingContext(context.Background(), header)
+	f.volumeID = f.createVolumeResponse.GetVolume().VolumeId
+	req := &csi.ControllerExpandVolumeRequest{
+		VolumeId:      f.volumeID,
+		CapacityRange: &csi.CapacityRange{RequiredBytes: size * bytesInKiB * bytesInKiB * bytesInKiB},
+	}
+	if stepHandlersErrors.NoVolumeIDError {
+		req.VolumeId = ""
+	}
+	_, f.err = f.service.ControllerExpandVolume(ctx, req)
 	return nil
 }
 
-func (f *feature) iCallNodeExpandVolume() error {
-	ctx := new(context.Context)
-	req := new(csi.NodeExpandVolumeRequest)
-	_, f.err = f.service.NodeExpandVolume(*ctx, req)
+func (f *feature) iCallNodeExpandVolume(volPath string) error {
+	header := metadata.New(map[string]string{"csi.requestid": "1"})
+	ctx := metadata.NewIncomingContext(context.Background(), header)
+	f.volumeID = f.createVolumeResponse.Volume.VolumeId
+	req := &csi.NodeExpandVolumeRequest{
+		VolumeId:   sdcVolume1,
+		VolumePath: volPath,
+	}
+	if stepHandlersErrors.NoVolumeIDError {
+		req.VolumeId = ""
+	}
+	_, f.err = f.service.NodeExpandVolume(ctx, req)
 	return nil
 }
 
@@ -1389,10 +1486,27 @@ func (f *feature) aValidNodeGetCapabilitiesResponseIsReturned() error {
 	if f.err != nil {
 		return f.err
 	}
-	if len(f.nodeGetCapabilitiesResponse.Capabilities) > 0 {
-		return errors.New("expected NodeGetCapabilities to return no capabilities")
+	rep := f.nodeGetCapabilitiesResponse
+	if rep != nil {
+		if rep.Capabilities == nil {
+			return errors.New("no capabilities returned in NodeGetCapabilitiesResponse")
+		}
+		count := 0
+		for _, cap := range rep.Capabilities {
+			typex := cap.GetRpc().Type
+			switch typex {
+			case csi.NodeServiceCapability_RPC_EXPAND_VOLUME:
+				count = count + 1
+			default:
+				return fmt.Errorf("received unxexpcted capability: %v", typex)
+			}
+		}
+		if count != 1 {
+			return errors.New("Did not retrieve all the expected capabilities")
+		}
+		return nil
 	}
-	return nil
+	return errors.New("expected NodeGetCapabilitiesResponse but didn't get one")
 }
 
 func (f *feature) iCallCreateSnapshot(snapName string) error {
@@ -1472,7 +1586,7 @@ func (f *feature) aValidSnapshotConsistencyGroup() error {
 	volumeIDToAncestorID[goodSnapID] = goodVolumeID
 	volumeIDToConsistencyGroupID[goodSnapID] = goodVolumeID
 
-	// second snapshot in CG; this looks wierd, but we give same ID to snap
+	// second snapshot in CG; this looks weird, but we give same ID to snap
 	// as it's ancestor so that we can publish the volume
 	volumeIDToName[altSnapID] = "snap5"
 	volumeNameToID["snap5"] = altSnapID
@@ -1661,8 +1775,17 @@ func (f *feature) iInvalidateTheProbeCache() error {
 	return nil
 }
 
-func (f *feature) iCallGetDevice(invalidPath string) error {
-	device, err := GetDevice(invalidPath)
+func (f *feature) iCallEvalsymlink(path string) error {
+
+	d := evalSymlinks(path)
+	if d == path {
+		f.err = errors.New("Could not evaluate symlinks for path")
+	}
+	return nil
+}
+
+func (f *feature) iCallGetDevice(Path string) error {
+	device, err := GetDevice(Path)
 	if device == nil && err != nil {
 		f.err = errors.New("invalid path error")
 	}
@@ -1706,6 +1829,31 @@ func (f *feature) iCallGetStoragePoolnameByID(id string) error {
 	return nil
 }
 
+func (f *feature) iCallNodeGetAllSystems() error {
+	// lookup the system names for a couple of systems
+	// This should not generate an error as systems without names are supported
+	systems := make([]string, 0)
+	systems = append(systems, "14dbbf5617523654")
+	systems = append(systems, "9999999999999999")
+	f.err = f.service.getAllSystems(context.TODO(), systems)
+	return nil
+}
+
+func (f *feature) iDoNotHaveAGatewayConnection() error {
+	f.service.adminClient = nil
+	return nil
+}
+
+func (f *feature) iDoNotHaveAValidGatewayEndpoint() error {
+	f.service.opts.Endpoint = ""
+	return nil
+}
+
+func (f *feature) iDoNotHaveAValidGatewayPassword() error {
+	f.service.opts.Password = ""
+	return nil
+}
+
 func FeatureContext(s *godog.Suite) {
 	f := &feature{}
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
@@ -1725,9 +1873,10 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^the Controller has no connection$`, f.theControllerHasNoConnection)
 	s.Step(`^there is a Node Probe Lsmod error$`, f.thereIsANodeProbeLsmodError)
 	s.Step(`^there is a Node Probe SdcGUID error$`, f.thereIsANodeProbeSdcGUIDError)
+	s.Step(`^there is a Node Probe drvCfg error$`, f.thereIsANodeProbeDrvCfgError)
 	s.Step(`^I call CreateVolume "([^"]*)"$`, f.iCallCreateVolume)
 	s.Step(`^a valid CreateVolumeResponse is returned$`, f.aValidCreateVolumeResponseIsReturned)
-	s.Step(`^I specify AccessibilityRequirements$`, f.iSpecifyAccessibilityRequirements)
+	s.Step(`^I specify AccessibilityRequirements with a SystemID of "([^"]*)"$`, f.iSpecifyAccessibilityRequirementsWithASystemIDOf)
 	s.Step(`^I specify MULTINODE_WRITER$`, f.iSpecifyMULTINODEWRITER)
 	s.Step(`^I specify a BadCapacity$`, f.iSpecifyABadCapacity)
 	s.Step(`^I specify NoStoragePool$`, f.iSpecifyNoStoragePool)
@@ -1794,8 +1943,8 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^I call ListSnapshots for snapshot "([^"]*)"$`, f.iCallListSnapshotsForSnapshot)
 	s.Step(`^the snapshot ID is "([^"]*)"$`, f.theSnapshotIDIs)
 	s.Step(`^I invalidate the Probe cache$`, f.iInvalidateTheProbeCache)
-	s.Step(`^I call ControllerExpandVolume$`, f.iCallControllerExpandVolume)
-	s.Step(`^I call NodeExpandVolume$`, f.iCallNodeExpandVolume)
+	s.Step(`^I call ControllerExpandVolume set to (\d+)$`, f.iCallControllerExpandVolume)
+	s.Step(`^I call NodeExpandVolume with volumePath as "([^"]*)"$`, f.iCallNodeExpandVolume)
 	s.Step(`^I call NodeGetVolumeStats$`, f.iCallNodeGetVolumeStats)
 	s.Step(`^I give request volume context$`, f.iGiveRequestVolumeContext)
 	s.Step(`^I call GetDevice "([^"]*)"$`, f.iCallGetDevice)
@@ -1803,4 +1952,9 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^a new service is returned$`, f.aNewServiceIsReturned)
 	s.Step(`^I call getVolProvisionType with bad params$`, f.iCallGetVolProvisionTypeWithBadParams)
 	s.Step(`^i Call getStoragePoolnameByID "([^"]*)"$`, f.iCallGetStoragePoolnameByID)
+	s.Step(`^I call evalsymlink "([^"]*)"$`, f.iCallEvalsymlink)
+	s.Step(`^I Call nodeGetAllSystems$`, f.iCallNodeGetAllSystems)
+	s.Step(`^I do not have a gateway connection$`, f.iDoNotHaveAGatewayConnection)
+	s.Step(`^I do not have a valid gateway endpoint$`, f.iDoNotHaveAValidGatewayEndpoint)
+	s.Step(`^I do not have a valid gateway password$`, f.iDoNotHaveAValidGatewayPassword)
 }

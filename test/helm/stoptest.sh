@@ -1,4 +1,4 @@
-#/bin/sh
+#!/bin/bash
 helm delete -n helmtest-vxflexos $1 
 sleep 10
 kubectl get pods -n helmtest-vxflexos

@@ -32,6 +32,9 @@ const (
 	thinProvisioned  = "ThinProvisioned"
 	thickProvisioned = "ThickProvisioned"
 	defaultPrivDir   = "/dev/disk/csi-vxflexos"
+
+	// SystemTopologySystemValue is the supported topology key
+	SystemTopologySystemValue string = "csi-vxflexos.dellemc.com"
 )
 
 // Manifest is the SP's manifest.
@@ -62,6 +65,7 @@ type Opts struct {
 	AutoProbe                  bool
 	DisableCerts               bool   // used for unit testing only
 	Lsmod                      string // used for unit testing only
+	drvCfgQueryMDM             string // used for testing only
 	EnableSnapshotCGDelete     bool   // when snapshot deleted, enable deleting of all snaps in the CG of the snapshot
 	EnableListVolumesSnapshots bool   // when listing volumes, include snapshots and volumes
 }
@@ -113,11 +117,8 @@ func (s *service) BeforeServe(
 		if s.opts.Password != "" {
 			fields["password"] = "******"
 		}
-		
-		//censor user for logging purposes
-                fields["user"] = "******"
+
 		log.WithFields(fields).Infof("configured %s", Name)
-		fields["user"] =  s.opts.User
 	}()
 
 	// Get the SP's operating mode.

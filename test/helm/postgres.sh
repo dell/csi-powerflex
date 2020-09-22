@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 DBSQL=/root/dbsamples-0.1/world/world.sql
 helm install -n postgres postgres
 echo "Waiting for pods to come up..."

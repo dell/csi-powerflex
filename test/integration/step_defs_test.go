@@ -33,6 +33,9 @@ type feature struct {
 	snapshotID               string
 	volIDList                []string
 	maxRetryCount            int
+	expandVolumeResponse     *csi.ControllerExpandVolumeResponse
+	nodeExpandVolumeRequest  *csi.NodeExpandVolumeRequest
+	nodeExpandVolumeResponse *csi.NodeExpandVolumeResponse
 }
 
 func (f *feature) addError(err error) {
@@ -50,6 +53,8 @@ func (f *feature) aVxFlexOSService() error {
 	f.snapshotID = ""
 	f.volIDList = f.volIDList[:0]
 	f.maxRetryCount = MaxRetries
+	f.expandVolumeResponse = nil
+	f.nodeExpandVolumeResponse = nil
 	return nil
 }
 
@@ -342,15 +347,19 @@ func (f *feature) getNodePublishVolumeRequest() *csi.NodePublishVolumeRequest {
 }
 
 func (f *feature) whenICallNodePublishVolumeWithPoint(arg1 string, arg2 string) error {
-	_, err := os.Stat(arg2)
-	if err != nil && os.IsNotExist(err) {
-		err = os.Mkdir(arg2, 0777)
-		if err != nil {
-			return err
-		}
+	block := f.capability.GetBlock()
+	if block != nil {
+	} else {
+		_, err := os.Stat(arg2)
+		if err != nil && os.IsNotExist(err) {
+			err = os.Mkdir(arg2, 0777)
+			if err != nil {
+				return err
+			}
 
+		}
 	}
-	err = f.nodePublishVolume(f.volID, arg2)
+	err := f.nodePublishVolume(f.volID, arg2)
 	if err != nil {
 		fmt.Printf("NodePublishVolume failed: %s\n", err.Error())
 		f.addError(err)
@@ -405,7 +414,6 @@ func (f *feature) whenICallNodeUnpublishVolume(arg1 string) error {
 }
 
 func (f *feature) whenICallNodeUnpublishVolumeWithPoint(arg1, arg2 string) error {
-
 	err := f.nodeUnpublishVolume(f.volID, arg2)
 	if err != nil {
 		fmt.Printf("NodeUnpublishVolume failed: %s\n", err.Error())
@@ -918,6 +926,111 @@ func (f *feature) whenIDeleteVolumesInParallel(nVols int) error {
 	return nil
 }
 
+// Writes a fixed pattern of block data (0x57 bytes) in 1 MB chunks to raw block mounted at /tmp/datafile.
+// Used to make sure the data has changed when taking a snapshot
+func (f *feature) iWriteBlockData() error {
+	buf := make([]byte, 1024*1024)
+	for i := 0; i < 1024*1024; i++ {
+		buf[i] = 0x57
+	}
+	fp, err := os.OpenFile("/tmp/datafile", os.O_RDWR, 0666)
+	if err != nil {
+		return nil
+	}
+	var nrecords int
+	for err == nil {
+		var n int
+		n, err = fp.Write(buf)
+		if n == len(buf) {
+			nrecords++
+		}
+		if (nrecords % 256) == 0 {
+			fmt.Printf("%d records\r", nrecords)
+		}
+	}
+	fp.Close()
+	fmt.Printf("\rWrote %d MB\n", nrecords)
+	return nil
+
+}
+
+func (f *feature) whenICallExpandVolumeTo(size int64) error {
+
+	err := f.controllerExpandVolume(f.volID, size)
+	if err != nil {
+		fmt.Printf("ControllerExpandVolume %s:\n", err.Error())
+		f.addError(err)
+	} else {
+		fmt.Printf("ControllerExpandVolume completed successfully\n")
+	}
+	time.Sleep(SleepTime)
+	return nil
+}
+
+func (f *feature) controllerExpandVolume(volID string, size int64) error {
+
+	const bytesInKiB = 1024
+	var resp *csi.ControllerExpandVolumeResponse
+	var err error
+	req := &csi.ControllerExpandVolumeRequest{
+		VolumeId:      volID,
+		CapacityRange: &csi.CapacityRange{RequiredBytes: size * bytesInKiB * bytesInKiB * bytesInKiB},
+	}
+	ctx := context.Background()
+	client := csi.NewControllerClient(grpcClient)
+	for i := 0; i < f.maxRetryCount; i++ {
+		resp, err = client.ControllerExpandVolume(ctx, req)
+		if err == nil {
+			break
+		}
+		fmt.Printf("Controller ExpandVolume retry: %s\n", err.Error())
+		time.Sleep(RetrySleepTime)
+	}
+	f.expandVolumeResponse = resp
+	return err
+}
+
+func (f *feature) whenICallNodeExpandVolume() error {
+
+	nodePublishReq := f.nodePublishVolumeRequest
+	if nodePublishReq == nil {
+		err := fmt.Errorf("Volume is not stage, nodePublishVolumeRequest not found")
+		return err
+	}
+	err := f.nodeExpandVolume(f.volID, nodePublishReq.TargetPath)
+	if err != nil {
+		fmt.Printf("NodeExpandVolume %s:\n", err.Error())
+		f.addError(err)
+	} else {
+		fmt.Printf("NodeExpandVolume completed successfully\n")
+	}
+	time.Sleep(SleepTime)
+	return nil
+
+}
+
+func (f *feature) nodeExpandVolume(volID, volPath string) error {
+	var resp *csi.NodeExpandVolumeResponse
+	var err error
+	req := &csi.NodeExpandVolumeRequest{
+		VolumeId:   volID,
+		VolumePath: volPath,
+	}
+	ctx := context.Background()
+	client := csi.NewNodeClient(grpcClient)
+	// Retry loop to deal with API being overwhelmed
+	for i := 0; i < f.maxRetryCount; i++ {
+		resp, err = client.NodeExpandVolume(ctx, req)
+		if err == nil {
+			break
+		}
+		fmt.Printf("Node ExpandVolume retry: %s\n", err.Error())
+		time.Sleep(RetrySleepTime)
+	}
+	f.nodeExpandVolumeResponse = resp
+	return err
+}
+
 func FeatureContext(s *godog.Suite) {
 	f := &feature{}
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
@@ -956,4 +1069,7 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^I node unpublish (\d+) volumes in parallel$`, f.iNodeUnpublishVolumesInParallel)
 	s.Step(`^I unpublish (\d+) volumes in parallel$`, f.iUnpublishVolumesInParallel)
 	s.Step(`^when I delete (\d+) volumes in parallel$`, f.whenIDeleteVolumesInParallel)
+	s.Step(`^I write block data$`, f.iWriteBlockData)
+	s.Step(`^when I call ExpandVolume to "([^"]*)"$`, f.whenICallExpandVolumeTo)
+	s.Step(`^when I call NodeExpandVolume$`, f.whenICallNodeExpandVolume)
 }
