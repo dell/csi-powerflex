@@ -56,6 +56,7 @@ func main() {
 	} else if strings.EqualFold("ver", format) {
 		format = "ver"
 	} else {
+		/* #nosec G304 */
 		if fileExists(format) {
 			buf, err := ioutil.ReadFile(format)
 			if err != nil {
@@ -76,6 +77,7 @@ func main() {
 			os.Exit(1)
 		}
 		w = fout
+		/* #nosec G307 */
 		defer fout.Close()
 	}
 
@@ -163,6 +165,7 @@ func main() {
 }
 
 func doExec(cmd string, args ...string) ([]byte, error) {
+	/* #nosec G204 */
 	c := exec.Command(cmd, args...)
 	c.Stderr = os.Stderr
 	return c.Output()

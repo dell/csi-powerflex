@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 force=no
 if [ "$1" == "--force" ];
 then

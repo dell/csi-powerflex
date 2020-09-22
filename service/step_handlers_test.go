@@ -40,6 +40,8 @@ var (
 		NoSysNameError                bool
 		NoAdminError                  bool
 		WrongSysNameError             bool
+		NoVolumeIDError               bool
+		SetVolumeSizeError            bool
 	}
 )
 
@@ -82,6 +84,8 @@ func getHandler() http.Handler {
 	stepHandlersErrors.NoSysNameError = false
 	stepHandlersErrors.NoAdminError = false
 	stepHandlersErrors.WrongSysNameError = false
+	stepHandlersErrors.NoVolumeIDError = false
+	stepHandlersErrors.SetVolumeSizeError = false
 
 	sdcMappings = sdcMappings[:0]
 	sdcMappingsID = ""
@@ -104,6 +108,13 @@ func getRouter() http.Handler {
 
 // handleLogin implements GET /api/login
 func handleLogin(w http.ResponseWriter, r *http.Request) {
+	u, p, ok := r.BasicAuth()
+	if !ok || len(strings.TrimSpace(u)) < 1 || len(strings.TrimSpace(p)) < 1 {
+		w.Header().Set("WWW-Authenticate", "Basic realm=Restricted")
+		w.WriteHeader(http.StatusUnauthorized)
+		returnJSONFile("features", "authorization_failure.json", w, nil)
+		return
+	}
 	if testControllerHasNoConnection {
 		w.WriteHeader(http.StatusRequestTimeout)
 		return
@@ -345,6 +356,11 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 		if name != "" {
 			volumeNameToID[name] = ""
 		}
+	case "setVolumeSize":
+		if stepHandlersErrors.SetVolumeSizeError {
+			writeError(w, "induced error", http.StatusRequestTimeout, codes.Internal)
+			return
+		}
 	}
 }
 
@@ -406,6 +422,10 @@ func handleInstances(w http.ResponseWriter, r *http.Request) {
 
 	if stepHandlersErrors.GetVolByIDError {
 		writeError(w, "induced error", http.StatusRequestTimeout, codes.Internal)
+		return
+	}
+	if stepHandlersErrors.NoVolumeIDError {
+		writeError(w, "Volume ID is required", http.StatusRequestTimeout, codes.InvalidArgument)
 		return
 	}
 

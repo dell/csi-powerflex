@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 NS=helmtest-vxflexos
 source ./common.bash
 
@@ -11,11 +11,11 @@ kubectl exec -n ${NS} vxflextest-0 -- ls -l /data0
 kubectl exec -n ${NS} vxflextest-0 -- sync
 kubectl exec -n ${NS} vxflextest-0 -- sync
 echo "creating snap1 of pvol0"
-kubectl create -f snap1.yaml
+kubectl create -f betasnap1.yaml
 sleep 10
 kubectl get volumesnapshot -n ${NS}
 echo "updating container to add a volume sourced from snapshot"
-helm upgrade -n helmtest-vxflexos 2vols  2vols+restore
+helm upgrade -n helmtest-vxflexos 2vols 2vols+restore
 echo "waiting for container to upgrade/stabalize"
 sleep 20
 waitOnRunning

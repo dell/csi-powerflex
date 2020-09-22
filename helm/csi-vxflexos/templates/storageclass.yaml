@@ -6,5 +6,12 @@ metadata:
     storageclass.beta.kubernetes.io/is-default-class: {{ .Values.storageClass.isDefault | quote }}
 provisioner: csi-vxflexos.dellemc.com
 reclaimPolicy: {{ required "Must provide a storage class reclaim policy." .Values.storageClass.reclaimPolicy }}
+allowVolumeExpansion: true
 parameters:
   storagepool: {{ required "Must provide a VxFlex OS storage pool name." .Values.storagePool }}
+volumeBindingMode: WaitForFirstConsumer
+allowedTopologies:
+- matchLabelExpressions:
+  - key: csi-vxflexos.dellemc.com/{{ required "Must provide the VxFlex OS system Name." .Values.systemName }}
+    values:
+    - csi-vxflexos.dellemc.com

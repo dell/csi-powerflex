@@ -1,12 +1,24 @@
-# CSI Driver for VxFlex OS
+# CSI Driver for PowerFlex (Formerly VxFlex OS)
+
+[![Go Report Card](https://goreportcard.com/badge/github.com/dell/csi-vxflexos)](https://goreportcard.com/report/github.com/dell/csi-vxflexos)
+[![License](https://img.shields.io/github/license/dell/csi-vxflexos)](https://github.com/dell/csi-vxflexos/blob/master/LICENSE)
+[![Docker](https://img.shields.io/docker/pulls/dellemc/csi-vxflexos.svg?logo=docker)](https://hub.docker.com/r/dellemc/csi-vxflexos)
+[![Last Release](https://img.shields.io/github/v/release/dell/csi-vxflexos?label=latest&style=flat-square)](https://github.com/dell/csi-vxflexos/releases)
 
 ## Description
-CSI Driver for VxFlex OS is a Container Storage Interface ([CSI](https://github.com/container-storage-interface/spec))
-driver that provides VxFlex OS support. It supports CSI specification version 1.1.
+CSI Driver for PowerFlex is a Container Storage Interface ([CSI](https://github.com/container-storage-interface/spec))
+driver that provides PowerFlex support. It supports CSI specification version 1.1.
 
 This project may be compiled as a stand-alone binary using Golang that, when
 run, provides a valid CSI endpoint. This project can also be built
 as a Golang plug-in in order to extend the functionality of other programs.
+
+## Support
+The CSI Driver for Dell EMC PowerFlex image, which is the built driver code, is available on Dockerhub and is officially supported by Dell EMC.  
+
+The source code for CSI Driver for Dell EMC PowerFlex available on Github is unsupported and provided solely under the terms of the license attached to the source code. For clarity, Dell EMC does not provide support for any source code modifications.  
+
+For any CSI driver issues, questions or feedback, join the [Dell EMC Container community](https://www.dell.com/community/Containers/bd-p/Containers).
 
 ## Building
 
@@ -20,24 +32,20 @@ To run unit tests, execute `make unit-test`.
 To build a docker image, execute `make docker`.
 
 You can run an integration test on a Linux system by populating the file `env.sh`
-with values for your VxFlex OS system and then run "make integration-test".
+with values for your PowerFlex system and then run "make integration-test".
 
 ## Runtime Dependencies
 The Node portion of the driver can be run on any node that is configured as a
-VxFlex OS SDC. This means that the `scini` kernel module must be loaded. Also,
+PowerFlex SDC. This means that the `scini` kernel module must be loaded. Also,
 if the `X_CSI_VXFLEXOS_SDCGUID` environment variable is not set, the driver will
 try to query the SDC GUID by executing the binary
 `/opt/emc/scaleio/sdc/bin/drv_cfg`. If that binary is not present, the Node
 Service cannot be run.
 
 ## Installation
+Installation in a Kubernetes cluster should be done using the scripts within the `dell-csi-helm-installer` directory. 
 
-Installation in Kubernetes should be done using the `install.vxflexos` script
-and accompanying Helm chart in the helm directory. For more information, please refer 
-to the `CSI Driver for VxFlex OS Product Guide` and `CSI Driver for VxFlex OS Release Notes`.
-The driver will be started in Kubernetes as a result of executing the installation
-script.
-
+For more information, consult the [README.md](dell-csi-helm-installer/README.md)
 
 ## Using driver
 
@@ -121,12 +129,3 @@ This means that giving a workload read-only access to a block device is not
 supported.
 
 In general, volumes should be formatted with xfs or ext4.
-
-## Support
-The CSI Driver for Dell EMC VxFlex OS image available on Dockerhub is officially supported by Dell EMC.
-
-The source code available on Github is unsupported and provided solely under the terms of the license attached to the source code. For clarity, Dell EMC does not provide support for any source code modifications.
-
-For any CSI driver setup, configuration issues, questions or feedback, join the Dell EMC Container community athttps://www.dell.com/community/Containers/bd-p/Containers
-
-For any Dell EMC storage issues, please contact Dell support at: https://www.dell.com/support.

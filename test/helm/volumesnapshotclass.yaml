@@ -1,8 +1,5 @@
-apiVersion: snapshot.storage.k8s.io/v1alpha1
+apiVersion: snapshot.storage.k8s.io/v1beta1
 kind: VolumeSnapshotClass
 metadata:
-  name: vxflexos-cgsnap
-  namespace: helmtest-vxflexos
-snapshotter: csi-vxflexos.dellemc.com
-parameters:
-  VolumeIDList: "__VOLUME_ID_LIST__"
+  name: vxflexos-snapclass
+driver: csi-vxflexos.dellemc.com

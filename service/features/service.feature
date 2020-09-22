@@ -17,7 +17,6 @@ Feature: VxFlex OS CSI interface
       When I call Probe
       Then a valid ProbeResponse is returned
 
-@wip
      Scenario: Identity Probe call no controller connection
       Given a VxFlexOS service
       And the Controller has no connection
@@ -56,6 +55,12 @@ Examples:
       And there is a Node Probe SdcGUID error
       When I call Probe
       Then the possible error contains "unable to get SDC GUID"
+
+     Scenario: Identity Probe call node probe drvCfg error
+      Given a VxFlexOS service
+      And there is a Node Probe drvCfg error
+      When I call Probe
+      Then the possible error contains "unable to get System Name via config or drv_cfg binary"
 
      Scenario Outline: Create volume good scenario
       Given a VxFlexOS service
@@ -139,12 +144,19 @@ Examples:
       And I call CreateVolume "volume4" 
       Then the error contains "Couldn't find storage pool"
 
-     Scenario: Create volume with Accessibility Requirements
+     Scenario Outline: Create volume with Accessibility Requirements
       Given a VxFlexOS service
       When I call Probe
-      And I specify AccessibilityRequirements
+      And I specify AccessibilityRequirements with a SystemID of <sysID>
       And I call CreateVolume "accessibility"
-      Then the error contains "AccessibilityRequirements is not currently supported"
+      Then the error contains <errormsg>
+
+      Examples:
+      | sysID                        | errormsg                      |
+      | "f.service.opt.SystemName"   | "none"                        |
+      | ""                           | "unknown to this controller"  |
+      | "Unknown"                    | "unknown to this controller"  |
+      | "badSystem"                  | "unknown to this controller"  |
 
      Scenario: Create volume with VolumeContentSource
       Given a VxFlexOS service
@@ -301,6 +313,7 @@ Examples:
       When I call NodeUnstageVolume
       Then the error contains "Unimplemented"
 
+
      Scenario: Call NodeGetCapabilities should return a valid response
       Given a VxFlexOS service
       And I call Probe
@@ -337,7 +350,7 @@ Examples:
       And a valid CreateVolumeResponse is returned
       And I induce error "WrongVolIDError"
       And I call CreateSnapshot "snap1"
-      Then the error contains "Failed to create snapshot"
+      Then the error contains "Failed to create snapshot" 
 
      Scenario: Snapshot a single block volume but receive error
       Given a VxFlexOS service
@@ -507,6 +520,7 @@ Examples:
       When I call Probe
       And I call Create Volume from Snapshot
       Then the error contains "Failed to create snapshot"
+      
 
      Scenario: Idempotent create a volume from a snapshot
       Given a VxFlexOS service
@@ -519,15 +533,49 @@ Examples:
       And no error was received
       And a valid CreateVolumeResponse is returned
 
-    Scenario: Call ControllerExpandVolume, should get unimplemented
-     Given a VxFlexOS service
-     When I call ControllerExpandVolume
-     Then the error contains "Unimplemented"
 
-    Scenario: Call NodeExpandVolume, should get unimplemented
+    Scenario Outline: Call ControllerExpandVolume
      Given a VxFlexOS service
-     When I call NodeExpandVolume
-     Then the error contains "Unimplemented"
+     And I call Probe
+     And I call CreateVolumeSize "volume10" "32"
+     And a valid CreateVolumeResponse is returned
+     And I induce error <error>
+     Then I call ControllerExpandVolume set to <GB> 
+     And the error contains <errmsg>
+     And I call ControllerExpandVolume set to <GB> 
+     Then the error contains <errmsg>
+     
+     Examples:
+     | error    | GB | errmsg  |
+     | "none"   | 32 | "none"                                         |
+     | "SetVolumeSizeError" | 64 | "induced error" |
+     | "none"   | 16  | "none"                        |
+     | "NoVolumeIDError" | 64 | "Volume ID is required" |
+     | "none"   | 64 | "none"                                         |
+     | "GetVolByIDError" | 64 | "induced error" |
+
+    Scenario Outline: Call NodeExpandVolume
+     Given a VxFlexOS service
+     And I call Probe
+     And I call CreateVolumeSize "volume4" "32"
+     And a controller published volume
+     And a capability with voltype "mount" access "single-writer" fstype "xfs"
+     And get Node Publish Volume Request
+     And I call NodePublishVolume "SDC_GUID"
+     And no error was received
+     And I induce error <error>
+     When I call NodeExpandVolume with volumePath as <volPath>
+     Then the error contains <errormsg>
+
+     Examples:
+     | error              | volPath            | errormsg                  |
+     | "none"             | ""                 | "Volume path required"    |
+     | "none"             | "test/tmp/datadir" | "none"                    |
+     | "GOFSInduceFSTypeError"  | "test/tmp/datadir" | "Failed to fetch filesystem"  |
+     | "GOFSInduceResizeFSError" | "test/tmp/datadir" | "Failed to resize device" |
+     | "NoVolumeIDError" | "test/tmp/datadir" | "Volume ID is required" |
+     | "none" | "not/a/path/1234"  | "Could not stat volume path" |
+     | "none" | "test/tmp/datafile" | "none" |
 
     Scenario: Call NodeGetVolumeStats, should get unimplemented
      Given a VxFlexOS service
@@ -549,7 +597,6 @@ Examples:
      When i Call getStoragePoolnameByID "123"
      Then the error contains "cannot find storage pool"
 
-@wip
      Scenario: Test BeforeServe
       Given a VxFlexOS service
       And I invalidate the Probe cache
@@ -557,6 +604,26 @@ Examples:
       # Get different error message on Windows vs. Linux
       Then the error contains "Unable to initialize cert pool from system@@unable to login to VxFlexOS Gateway@@unable to get SDC GUID"
 
-  
-    
-      
+    Scenario: Call Node getAllSystems
+     Given a VxFlexOS service
+     And I do not have a gateway connection
+     When I Call nodeGetAllSystems
+
+    Scenario: Call Node getAllSystems
+     Given a VxFlexOS service
+     And I do not have a gateway connection
+     And I do not have a valid gateway endpoint
+     When I Call nodeGetAllSystems
+     Then the error contains "Unable to create ScaleIO client"
+
+    Scenario: Call Node getAllSystems
+     Given a VxFlexOS service
+     And I do not have a gateway connection
+     And I do not have a valid gateway password
+     When I Call nodeGetAllSystems
+     Then the error contains "Unable to create ScaleIO client"
+
+    Scenario: Call evalsymlinks
+     Given a VxFlexOS service
+     When I call evalsymlink "invalidpath"
+     Then the error contains "Could not evaluate symlinks for path" 

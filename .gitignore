@@ -1,1 +1,10 @@
-csi-scaleio
+
+/csi-vxflexos
+helm/.ps.out
+service/c.out
+service/test/
+test/integration/c.linux.out
+test/integration/stderr
+semver.mk
+goscaleio/
+gofsutil/

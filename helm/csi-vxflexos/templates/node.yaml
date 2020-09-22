@@ -90,11 +90,16 @@ spec:
                 secretKeyRef:
                   name: {{ .Release.Name }}-creds
                   key: password
+            - name: X_CSI_VXFLEXOS_ENDPOINT
+              value: {{ required "Must provide a VxFlex OS REST API gateway HTTPS endpoint." .Values.restGateway }}
+            - name: X_CSI_VXFLEXOS_INSECURE
+              value: "true"
           volumeMounts:
             - name: driver-path
               mountPath: /var/lib/kubelet/plugins/vxflexos.emc.dell.com
             - name: volumedevices-path
               mountPath: /var/lib/kubelet/plugins/kubernetes.io/csi/volumeDevices
+              mountPropagation: "Bidirectional"
             - name: pods-path
               mountPath: /var/lib/kubelet/pods
               mountPropagation: "Bidirectional"

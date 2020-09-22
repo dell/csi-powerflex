@@ -9,6 +9,7 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
@@ -80,10 +81,32 @@ func (s *service) CreateVolume(
 		return nil, err
 	}
 
-	// AccessibleTopology not currently supported
+	// validate AccessibleTopology
 	accessibility := req.GetAccessibilityRequirements()
-	if accessibility != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "Volume AccessibilityRequirements is not currently supported")
+	requestedSystem := ""
+
+	if accessibility != nil && len(accessibility.GetPreferred()) > 0 {
+
+		segments := accessibility.GetPreferred()[0].GetSegments()
+		for key := range segments {
+			if strings.HasPrefix(key, Name) {
+				tokens := strings.Split(key, "/")
+				constraint := ""
+				if len(tokens) > 1 {
+					constraint = tokens[1]
+				}
+				log.Printf("Found topology constraint: VxFlex OS system: %s", constraint)
+				if constraint == s.system.System.ID {
+					requestedSystem = s.system.System.ID
+				}
+			}
+		}
+
+		// validate that the system name required matches the systemname that we know about
+		if len(segments) > 0 && requestedSystem == "" {
+			return nil, status.Errorf(codes.InvalidArgument,
+				"Requested System %s is unknown to this controller which is managing System %s", requestedSystem, s.system.System.ID)
+		}
 	}
 
 	params := req.GetParameters()
@@ -251,6 +274,8 @@ func (s *service) createVolumeFromSnapshot(req *csi.CreateVolumeRequest,
 		if vol.Name == name && vol.StoragePoolID == srcVol.StoragePoolID {
 			log.Printf("Requested volume %s already exists", name)
 			csiVolume := s.getCSIVolume(vol)
+			csiVolume.ContentSource = req.GetVolumeContentSource()
+			copyInterestingParameters(req.GetParameters(), csiVolume.VolumeContext)
 			log.Printf("Requested volume (from snap) already exists %s (%s) storage pool %s",
 				csiVolume.VolumeContext["Name"], csiVolume.VolumeId, csiVolume.VolumeContext["StoragePoolName"])
 			return &csi.CreateVolumeResponse{Volume: csiVolume}, nil
@@ -1097,6 +1122,13 @@ func (s *service) ControllerGetCapabilities(
 					},
 				},
 			},
+			{
+				Type: &csi.ControllerServiceCapability_Rpc{
+					Rpc: &csi.ControllerServiceCapability_RPC{
+						Type: csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
+					},
+				},
+			},
 		},
 	}, nil
 }
@@ -1416,7 +1448,79 @@ func (s *service) DeleteSnapshotConsistencyGroup(
 }
 
 func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "")
+
+	var reqID string
+	var err error
+	headers, ok := metadata.FromIncomingContext(ctx)
+	if ok {
+		if req, ok := headers["csi.requestid"]; ok && len(req) > 0 {
+			reqID = req[0]
+		}
+	}
+
+	if err := s.requireProbe(ctx); err != nil {
+		return nil, err
+	}
+
+	volID := req.GetVolumeId()
+	if volID == "" {
+		return nil, status.Error(codes.InvalidArgument,
+			"Volume ID is required")
+	}
+
+	vol, err := s.getVolByID(volID)
+	if err != nil {
+		if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
+			return nil, status.Error(codes.NotFound, "volume not found")
+		}
+		return nil, status.Errorf(codes.Internal, "failure to load volume: %s", err.Error())
+	}
+
+	volName := vol.Name
+	cr := req.GetCapacityRange()
+	log.Printf("cr:%d", cr)
+	requestedSize, err := validateVolSize(cr)
+	if err != nil {
+		return nil, err
+	}
+	log.Printf("req.size:%d", requestedSize)
+	fields := map[string]interface{}{
+		"RequestID":     reqID,
+		"VolumeName":    volName,
+		"RequestedSize": requestedSize,
+	}
+	log.WithFields(fields).Info("Executing ExpandVolume with following fields")
+	allocatedSize := int64(vol.SizeInKb)
+	log.Printf("allocatedsize:%d", allocatedSize)
+
+	if requestedSize < allocatedSize {
+		return &csi.ControllerExpandVolumeResponse{}, nil
+	}
+
+	if requestedSize == allocatedSize {
+		log.Infof("Idempotent call detected for volume (%s) with requested size (%d) SizeInKb and allocated size (%d) SizeInKb",
+			volName, requestedSize, allocatedSize)
+		return &csi.ControllerExpandVolumeResponse{
+			CapacityBytes:         requestedSize * bytesInKiB,
+			NodeExpansionRequired: true}, nil
+	}
+
+	reqSize := requestedSize / kiBytesInGiB
+	tgtVol := goscaleio.NewVolume(s.adminClient)
+	tgtVol.Volume = vol
+	err = tgtVol.SetVolumeSize(strconv.Itoa(int(reqSize)))
+	if err != nil {
+		log.Errorf("Failed to execute ExpandVolume() with error (%s)", err.Error())
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	//return the response with NodeExpansionRequired = true, so that CO could call
+	// NodeExpandVolume subsequently
+	csiResp := &csi.ControllerExpandVolumeResponse{
+		CapacityBytes:         requestedSize * bytesInKiB,
+		NodeExpansionRequired: true,
+	}
+	return csiResp, nil
 }
 
 func mergeStringMaps(base map[string]string, additional map[string]string) map[string]string {
