@@ -13,7 +13,7 @@ require (
 	github.com/DATA-DOG/godog v0.7.13
 	github.com/akutz/memconn v0.1.0
 	github.com/container-storage-interface/spec v1.1.0
-	github.com/dell/gofsutil v1.3.0
+	github.com/dell/gofsutil v1.4.0
 	github.com/dell/goscaleio v1.2.0
 	github.com/gogo/protobuf v1.2.0 // indirect
 	github.com/golang/protobuf v1.3.1

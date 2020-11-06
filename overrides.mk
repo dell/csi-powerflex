@@ -3,7 +3,7 @@
 #
 
 # DEFAULT values
-DEFAULT_BASEIMAGE="registry.access.redhat.com/ubi7/ubi"
+DEFAULT_BASEIMAGE="registry.access.redhat.com/ubi8:8.2"
 DEFAULT_GOVERSION="1.13.12"
 DEFAULT_REGISTRY="sample_registry"
 DEFAULT_IMAGENAME="csi-vxflexos"
