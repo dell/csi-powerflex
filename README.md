@@ -20,6 +20,9 @@ The source code for CSI Driver for Dell EMC PowerFlex available on Github is uns
 
 For any CSI driver issues, questions or feedback, join the [Dell EMC Container community](https://www.dell.com/community/Containers/bd-p/Containers).
 
+## Patches  
+Patch notes for the CSI Driver for Dell EMC PowerFlex are described in [patch-notes.md](patch-notes.md) 
+
 ## Building
 
 This project is a Go module (see golang.org Module information for explanation).

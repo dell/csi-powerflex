@@ -20,16 +20,19 @@ FROM $BASEIMAGE AS driver
 RUN yum update -y && \
     yum install -y \
         e4fsprogs \
+        kmod \ 
         libaio \
         libuuid \
         numactl \
         xfsprogs && \
-    yum clean all
+    yum clean all && \
+    rpm -e  --nodeps sqlite-libs 
 ENTRYPOINT ["/csi-vxflexos.sh"]
 # copy in the driver
 COPY --from=builder /go/src/csi-vxflexos /
 COPY "csi-vxflexos.sh" /
 RUN chmod +x /csi-vxflexos.sh
+
 
 # stage to run gosec
 FROM builder as gosec
@@ -52,7 +55,11 @@ RUN curl https://raw.githubusercontent.com/aquasecurity/trivy/master/contrib/ins
 # will break image build if anything found
 FROM driver as virusscan
 # run trivy and clean up all traces after
-RUN yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm && \
+RUN curl -o sqlite.rpm  http://mirror.centos.org/centos/8/BaseOS/x86_64/os/Packages/sqlite-libs-3.26.0-6.el8.x86_64.rpm && \
+    rpm -iv  sqlite.rpm && \
+    cd /etc/pki/ca-trust/source/anchors && curl -o dell.crt http://pki.dell.com/linux/dellca2018-bundle.crt && \
+    curl -o emc.crt http://aia.dell.com/int/root/emcroot.crt && update-ca-trust && cd / && \ 
+    yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm && \
     yum install -y clamav clamav-update && \
     freshclam && \
     clamscan -r -i --exclude-dir=/sys / && \
@@ -60,8 +67,7 @@ RUN yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.n
 
 # final stage
 # simple stage to use the driver image as the resultant image 
-FROM driver as final
-
+FROM driver as final 
 LABEL vendor="Dell Inc." \
       name="csi-powerflex" \
       summary="CSI Driver for Dell EMC PowerFlex" \
@@ -69,3 +75,5 @@ LABEL vendor="Dell Inc." \
       version="1.2.0" \
       license="Apache-2.0"
 COPY ./licenses /licenses
+
+
