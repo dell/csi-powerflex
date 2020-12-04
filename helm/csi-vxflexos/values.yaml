@@ -21,8 +21,8 @@ storagePool: sp
 # This should be an list of MDM IP addresses or hostnames
 # You must set this to the MDM IPs for your VxFlex OS system.
 mdmIP:
-  - 192.168.1.11
-  - 192.168.1.12
+  - 0.0.0.0
+  - 0.0.0.0
 
 # "volumeNamePrefix" defines a string prepended to each volume created.
 volumeNamePrefix: k8s
