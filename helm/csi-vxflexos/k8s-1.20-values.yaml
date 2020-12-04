@@ -1,6 +1,6 @@
 ---
-# IT IS RECOMMENDED YOU DO NOT CHANGE THE IMAGES TO BE USED.
-kubeversion: "v1.18"
+# IT IS RECOMMENDED YOU DO NOT CHANGE THE IMAGES TO BE DOWNLOADED.
+kubeversion: "v1.20"
 
 images:
   # "images.attacher" defines the container images used for the csi attacher

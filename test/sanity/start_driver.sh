@@ -1,6 +1,6 @@
-s will run coverage analysis using the integration testing.
-# The env.sh must point to a valid Unisphere deployment and the iscsi packages must be installed
-# on this system. This will make real calls to  Unisphere
+#!/bin/bash 
+# The env.sh must point to a valid PowerFlex deployment and the iscsi packages must be installed
+# on this system. This will make real calls to PowerFlex
 
 rm -f unix_sock
 . ../../env.sh

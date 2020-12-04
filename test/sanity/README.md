@@ -1,19 +1,20 @@
-# Sanity Script Test
+# Kubernetes Sanity Script Test
 
 This test runs the Kubernetes sanity test at https://github.com/kubernetes-csi/csi-test.
-The version  was v2.2.0
+The version was v3.1.0
 
 To run the test:
 
-	1. "go get github.com/kubernetes-csi/csi-test"
-	2. "cd [path to csi-sanity]"
-	3. "make clean install"
-	4. Make sure env.sh(in csi-vxflexos) is up to date
-	5. edit secrets.yaml and volParams.yaml to have the correct storage pool parameter 
-	6. Build CSI-vxflexos ("make clean build" in top level of directory)
-	7.Run start_driver.sh 
-	8.Open up another window and bring it to csi-vxflexos/test/sanity
-	9.Use run.sh to run the tests once
+	1. run `git clone https://github.com/kubernetes-csi/csi-test.git`
+	2. Check out tag v3.1.0
+	3. Cd to csi-test/cmd/csi-sanity
+	4. run `make clean install`
+	5. Make sure env.sh(in csi-vxflexos) is up to date
+	6. Cd to csi-vxflexos/test/sanity and edit secrets.yaml and volParams.yaml to have the correct storage pool parameter 
+	7. Build csi-vxflexos ("make clean build" in csi-vxflexos)
+	8. Run start_driver.sh 
+	9. Open up another window and bring it to csi-vxflexos/test/sanity
+	10. Use run.sh to run the tests once
 		Use debug_help.sh to run an sh file x amount of times
 			debug_help.sh run.sh 100 30 runs run.sh 100 times, with thirty second breaks inbetween each run
 			This is useful for catching non-consitent errors. A 30 second wait time is a good idea when running 

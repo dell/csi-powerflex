@@ -1,47 +1,115 @@
+---
 # "systemName" defines the name of the VxFlex OS system from which volumes will
-# be provisioned. This must either be set to the VxFlex OS system name or system ID.
-# systemName: systemname
+# be provisioned. This must be set to the VxFlex OS system name or system ID.
+systemName: systemname
 
-# "restGateway" defines the VxFlex OS REST API endpoint, with full URL, typically leveraging HTTPS.
+# "defaultFsType" is used to set the default FS type which will be used
+# for mount volumes if FsType is not specified in the storage class
+defaultFsType: ext4
+
+# "restGateway" defines the VxFlex OS REST API endpoint, with full URL.
+# Typically this leverages HTTPS.
 # You must set this for your VxFlex OS installations REST gateway.
-# restGateway: https://123.0.0.1
+restGateway: https://123.0.0.1
 
-# "storagePool" defines the VxFlex OS storage pool from which this driver will # provision volumes.
+# "storagePool" defines the VxFlex OS storage pool from which this driver will
+# provision volumes.
 # You must set this for the primary storage pool to be used
-# storagePool: sp
+storagePool: sp
 
-#"mdmIP" defines the MDM(s) the SDC's should register with on start, comma separated
+# "mdmIP" defines the MDM(s) the SDC's should register with on start
+# This should be an list of MDM IP addresses or hostnames
 # You must set this to the MDM IPs for your VxFlex OS system.
-mdmIP: 192.168.1.1
+mdmIP:
+  - 192.168.1.11
+  - 192.168.1.12
 
-# "volumeNamePrefix" defines a string prepended to each volume created by the CSI driver.
+# "volumeNamePrefix" defines a string prepended to each volume created.
 volumeNamePrefix: k8s
 
 # "controllerCount" defines the number of VxFlex controller nodes to deploy to
 # the Kubernetes release
-controllerCount: 1
+controllerCount: 2
 
-# Where is the drv_cfg binary on the host?  
-# By default, /bin/emc, but might be /var/vcap/packages/vxflexos_kernel on PKS
-# IT IS RECOMMENDED YOU DO NOT CHANGE THIS.
-vxflexosbinpath: /bin/emc
-
-# Enable this to automatically delete all snapshots in a consistency group when a snap in the group is deleted
+# Enable this to automatically delete all snapshots in a consistency group
+# when a snap in the group is deleted
 enablesnapshotcgdelete: "false"
 
-# Enable list volume operation to include snapshots (since creating a volume from a snap actually results in a new snap)
-# It is recommend this be false unless Kubernetes needs this for some reason.
+# Enable list volume operation to include snapshots (since creating a volume
+# from a snap actually results in a new snap)
+# It is recommend this be false unless instructed otherwise.
 enablelistvolumesnapshot: "false"
 
-# The installation process will generate multiple storageclasses based on these parameters.
-# Only the primary storageclass for the driver will be marked default if specified.
+# Storage Class details
+# storageclasses will be created based on these parameters.
+# Only the primary storageclass will be marked default if specified.
 storageClass:
-  # "storageClass.name" defines the name of the storage class to be defined.
+  # "name" defines the name of the storage class to be defined.
   name: vxflexos
 
-  # "storageClass.isDefault" defines whether the primary storage class should be the # default.
+  # "isDefault" defines whether the storage class should be the default.
   isDefault: "true"
 
-  # "storageClass.reclaimPolicy" defines what will happen when a volume is
+  # "reclaimPolicy" defines what will happen when a volume is
   # removed from the Kubernetes API. Valid values are "Retain" and "Delete".
   reclaimPolicy: Delete
+
+# "controller" allows to configure controller specific parameters
+controller:
+  
+  #"controller.nodeSelector" defines what nodes would be selected for pods of controller deployment
+  # Leave as blank to use all nodes
+  nodeSelector:
+  #   node-role.kubernetes.io/master: ""
+
+  # "controller.tolerations" defines tolerations that would be applied to controller deployment
+  # Leave as blank to install controller on worker nodes
+  tolerations:
+  # - key: "node-role.kubernetes.io/master"
+  #   operator: "Exists"
+  #   effect: "NoSchedule"
+# monitoring pod details
+# These options control the running of the monitoring container
+# This container gather diagnostic information in case of failure
+monitor:
+  # enabled allows the usage of te monitoring pod to be disabled
+  enabled: false
+
+  # hostNetwork determines if the monitor pod should run on the host network or not
+  hostNetwork: true
+
+  # hostPID determines if the monitor pod should run in the host namespace
+  hostPID: true
+
+# The below values apply to RedHat CoreOS only
+#
+# The VxFlex OS SDC may need to pull a new module that is known to work
+# with newer Linux kernels. The default location of this mirror os at
+# ftp.emc.com. The VxFlex OS documentation has instructions for methods
+# to mirror this repository to a local location if necssary
+sdcKernelMirror:
+  # URL of the ftp mirror containing sdc kernel modules.
+  # Only ftp locations are allowed.
+  # A blank string signifies the default mirror, which is "ftp://ftp.emc.com".
+  repoUrl: ""
+
+# use sdc-repo-secret.yaml to setup
+# Userid for the kernel module mirror site
+# Password for the kernel module mirror site
+
+# Podmon is an optional feature under development and tech preview.
+# Enable this feature only after contact support for additional information
+podmon:
+  enabled: false
+  image: 
+  #controller:
+  #  args:
+  #    - "-csisock=unix:/var/run/csi/csi.sock"
+  #    - "-labelvalue=csi-vxflexos"
+  #    - "-mode=controller"
+  #node:
+  #  args:
+  #    - "-csisock=unix:/var/lib/kubelet/plugins/vxflexos.emc.dell.com/csi_sock"
+  #    - "-labelvalue=csi-vxflexos"
+  #    - "-mode=node"
+  #    - "-leaderelection=false"

@@ -1100,11 +1100,13 @@ func (f *feature) aValidControllerGetCapabilitiesResponseIsReturned() error {
 				count = count + 1
 			case csi.ControllerServiceCapability_RPC_EXPAND_VOLUME:
 				count = count + 1
+			case csi.ControllerServiceCapability_RPC_CLONE_VOLUME:
+				count = count + 1
 			default:
 				return fmt.Errorf("received unexpected capability: %v", typex)
 			}
 		}
-		if count != 7 {
+		if count != 8 {
 			return errors.New("Did not retrieve all the expected capabilities")
 		}
 		return nil
@@ -1112,6 +1114,30 @@ func (f *feature) aValidControllerGetCapabilitiesResponseIsReturned() error {
 
 	return errors.New("expected ControllerGetCapabilitiesResponse but didn't get one")
 
+}
+
+func (f *feature) iCallCloneVolume() error {
+	ctx := new(context.Context)
+	req := getTypicalCreateVolumeRequest()
+	req.Name = "clone"
+
+	if f.wrongCapacity {
+		req.CapacityRange.RequiredBytes = 64 * 1024 * 1024 * 1024
+	}
+
+	if f.wrongStoragePool {
+		req.Parameters["storagepool"] = "bad storage pool"
+	}
+
+	source := &csi.VolumeContentSource_VolumeSource{VolumeId: goodVolumeID}
+	req.VolumeContentSource = new(csi.VolumeContentSource)
+	req.VolumeContentSource.Type = &csi.VolumeContentSource_Volume{Volume: source}
+	f.createVolumeResponse, f.err = f.service.CreateVolume(*ctx, req)
+	if f.err != nil {
+		fmt.Printf("Error on CreateVolume from volume: %s\n", f.err.Error())
+	}
+
+	return nil
 }
 
 func (f *feature) iCallValidateVolumeCapabilitiesWithVoltypeAccessFstype(voltype, access, fstype string) error {
@@ -1957,4 +1983,5 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^I do not have a gateway connection$`, f.iDoNotHaveAGatewayConnection)
 	s.Step(`^I do not have a valid gateway endpoint$`, f.iDoNotHaveAValidGatewayEndpoint)
 	s.Step(`^I do not have a valid gateway password$`, f.iDoNotHaveAValidGatewayPassword)
+	s.Step(`^I call Clone volume$`, f.iCallCloneVolume)
 }

@@ -83,6 +83,9 @@ func (s *service) CreateVolume(
 
 	// validate AccessibleTopology
 	accessibility := req.GetAccessibilityRequirements()
+	if accessibility == nil {
+		log.Printf("Received CreateVolume request without accessibility keys")
+	}
 	requestedSystem := ""
 
 	if accessibility != nil && len(accessibility.GetPreferred()) > 0 {
@@ -96,7 +99,7 @@ func (s *service) CreateVolume(
 					constraint = tokens[1]
 				}
 				log.Printf("Found topology constraint: VxFlex OS system: %s", constraint)
-				if constraint == s.system.System.ID {
+				if constraint == s.system.System.ID || constraint == s.system.System.Name {
 					requestedSystem = s.system.System.ID
 				}
 			}
@@ -134,15 +137,14 @@ func (s *service) CreateVolume(
 		req.Name = name
 	}
 
-	// Volume content source support Snapshots only
 	contentSource := req.GetVolumeContentSource()
-	var snapshotSource *csi.VolumeContentSource_SnapshotSource
 	if contentSource != nil {
 		volumeSource := contentSource.GetVolume()
 		if volumeSource != nil {
-			return nil, status.Error(codes.InvalidArgument, "Volume as a VolumeContentSource is not supported (i.e. clone)")
+			log.Printf("volume %s specified as volume content source", volumeSource.VolumeId)
+			return s.Clone(req, volumeSource, name, sizeInKiB, sp)
 		}
-		snapshotSource = contentSource.GetSnapshot()
+		snapshotSource := contentSource.GetSnapshot()
 		if snapshotSource != nil {
 			log.Printf("snapshot %s specified as volume content source", snapshotSource.SnapshotId)
 			return s.createVolumeFromSnapshot(req, snapshotSource, name, sizeInKiB, sp)
@@ -1129,6 +1131,13 @@ func (s *service) ControllerGetCapabilities(
 					},
 				},
 			},
+			{
+				Type: &csi.ControllerServiceCapability_Rpc{
+					Rpc: &csi.ControllerServiceCapability_RPC{
+						Type: csi.ControllerServiceCapability_RPC_CLONE_VOLUME,
+					},
+				},
+			},
 		},
 	}, nil
 }
@@ -1536,5 +1545,79 @@ func mergeStringMaps(base map[string]string, additional map[string]string) map[s
 		}
 	}
 	return result
+
+}
+
+func (s *service) Clone(req *csi.CreateVolumeRequest,
+	volumeSource *csi.VolumeContentSource_VolumeSource, name string, sizeInKbytes int64, storagePool string) (*csi.CreateVolumeResponse, error) {
+
+	// Look up the source volume
+	srcVol, err := s.getVolByID(volumeSource.VolumeId)
+	if err != nil {
+		return nil, status.Errorf(codes.NotFound, "Volume not found: %s", volumeSource.VolumeId)
+	}
+
+	// Validate the size is the same
+	if int64(srcVol.SizeInKb) != sizeInKbytes {
+		return nil, status.Errorf(codes.InvalidArgument,
+			"Volume %s has incompatible size %d kbytes with requested %d kbytes",
+			volumeSource.VolumeId, srcVol.SizeInKb, sizeInKbytes)
+	}
+
+	// Validate the storage pool is the same
+	volStoragePool := s.getStoragePoolNameFromID(srcVol.StoragePoolID)
+	if volStoragePool != storagePool {
+		return nil, status.Errorf(codes.InvalidArgument,
+			"Volume storage pool %s is different from the requested storage pool %s", volStoragePool, storagePool)
+	}
+
+	// Check for idempotent request
+	existingVols, err := s.adminClient.GetVolume("", "", "", name, false)
+	for _, vol := range existingVols {
+		if vol.Name == name && vol.StoragePoolID == srcVol.StoragePoolID {
+			log.Printf("Requested volume %s already exists", name)
+			csiVolume := s.getCSIVolume(vol)
+			csiVolume.ContentSource = req.GetVolumeContentSource()
+			copyInterestingParameters(req.GetParameters(), csiVolume.VolumeContext)
+			log.Printf("Requested volume (from clone) already exists %s (%s) storage pool %s",
+				csiVolume.VolumeContext["Name"], csiVolume.VolumeId, csiVolume.VolumeContext["StoragePoolName"])
+			return &csi.CreateVolumeResponse{Volume: csiVolume}, nil
+
+		}
+	}
+
+	// Snapshot the source volumes
+	snapshotDefs := make([]*siotypes.SnapshotDef, 0)
+	snapDef := &siotypes.SnapshotDef{VolumeID: volumeSource.VolumeId, SnapshotName: name}
+	snapshotDefs = append(snapshotDefs, snapDef)
+	snapParam := &siotypes.SnapshotVolumesParam{SnapshotDefs: snapshotDefs}
+
+	// Create snapshot
+	snapResponse, err := s.system.CreateSnapshotConsistencyGroup(snapParam)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Failed to call CreateSnapshotConsistencyGroup to clone volume: %s", err.Error())
+	}
+
+	if len(snapResponse.VolumeIDList) != 1 {
+		return nil, status.Errorf(codes.Internal, "Expected volume ID to be returned but it was not")
+	}
+
+	// Restrieve created destination volume
+	destID := snapResponse.VolumeIDList[0]
+	destVol, err := s.getVolByID(destID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not retrieve created volume: %s", destID)
+	}
+
+	// Create a volume response and return it
+	s.clearCache()
+	csiVolume := s.getCSIVolume(destVol)
+	csiVolume.ContentSource = req.GetVolumeContentSource()
+	copyInterestingParameters(req.GetParameters(), csiVolume.VolumeContext)
+
+	log.Printf("Volume (from volume clone) %s (%s) storage pool %s",
+		csiVolume.VolumeContext["Name"], csiVolume.VolumeId, csiVolume.VolumeContext["storagePoolName"])
+
+	return &csi.CreateVolumeResponse{Volume: csiVolume}, nil
 
 }

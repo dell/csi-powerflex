@@ -8,6 +8,7 @@ DEFAULT_GOVERSION="1.13.12"
 DEFAULT_REGISTRY="sample_registry"
 DEFAULT_IMAGENAME="csi-vxflexos"
 DEFAULT_BUILDSTAGE="final"
+DEFAULT_IMAGETAG=""
 
 # set the BASEIMAGE if needed
 ifeq ($(BASEIMAGE),)
@@ -27,6 +28,11 @@ endif
 # set the IMAGENAME if needed
 ifeq ($(IMAGENAME),)
 export IMAGENAME="$(DEFAULT_IMAGENAME)"
+endif
+
+#set the IMAGETAG if needed
+ifneq ($(DEFAULT_IMAGETAG), "") 
+export IMAGETAG="$(DEFAULT_IMAGETAG)"
 endif
 
 # set the BUILDSTAGE if needed

@@ -11,4 +11,4 @@ else
     fi
     [ -e $socket_file ] && rm $socket_file
 fi
-exec "/csi-vxflexos"
+exec "/csi-vxflexos"  "$@"

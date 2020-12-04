@@ -1,8 +1,5 @@
 #!/bin/sh
 
-#unisphere: https://10.247.73.217:8443
-unisphere: https://10.247.73.133:8443
-
 # This should be like https://111.222.333.444
 export X_CSI_VXFLEXOS_ENDPOINT=""
 export X_CSI_VXFLEXOS_USER=""

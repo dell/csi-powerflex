@@ -9,6 +9,9 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: {{ .Release.Name }}-controller
 rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "watch", "list", "delete", "update", "create"]
   - apiGroups: [""]
     resources: ["events"]
     verbs: ["list", "watch", "create", "update", "patch"]
@@ -29,13 +32,27 @@ rules:
     verbs: ["get", "list", "watch"]
   - apiGroups: ["storage.k8s.io"]
     resources: ["volumeattachments"]
+{{ if .Values.podmon.enabled }}
+    verbs: ["get", "list", "watch", "update", "patch", "delete"]
+{{ else }}
     verbs: ["get", "list", "watch", "update", "patch"]
+{{ end }}
   - apiGroups: ["storage.k8s.io"]
     resources: ["csinodes"]
     verbs: ["get", "list", "watch", "update"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["volumeattachments/status"]
+    verbs: ["patch"]
   - apiGroups: ["csi.storage.k8s.io"]
     resources: ["csinodeinfos"]
     verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+{{ if .Values.podmon.enabled }}
+    verbs: ["get", "list", "watch", "update", "delete"]
+{{ else }}
+    verbs: ["get", "list", "watch"]
+{{ end }}
 # below for snapshotter
   - apiGroups: [""]
     resources: ["secrets"]
@@ -69,7 +86,7 @@ roleRef:
   name: {{ .Release.Name }}-controller
   apiGroup: rbac.authorization.k8s.io
 ---
-kind: StatefulSet
+kind: Deployment
 apiVersion: apps/v1
 metadata:
   name: {{ .Release.Name }}-controller
@@ -77,21 +94,52 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app: {{ .Release.Name }}-controller
-  serviceName: {{ .Release.Name }}-controller
+      name: {{ .Release.Name }}-controller
   replicas: {{ required "Must provide the number of controller instances to create." .Values.controllerCount }}
   template:
     metadata:
       labels:
-        app: {{ .Release.Name }}-controller
+        name: {{ .Release.Name }}-controller
     spec:
-      serviceAccount: {{ .Release.Name }}-controller
+      affinity:
+        nodeSelector:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: name
+                operator: In
+                values:
+                - {{ .Release.Name }}-controller
+            topologyKey: kubernetes.io/hostname        
+      serviceAccountName: {{ .Release.Name }}-controller
+      {{ if .Values.controller.nodeSelector }}
+      nodeSelector:
+      {{- toYaml .Values.controller.nodeSelector | nindent 8 }}
+      {{ end }}
+      {{ if .Values.controller.tolerations }}
+      tolerations: 
+      {{- toYaml .Values.controller.tolerations | nindent 6 }}
+      {{ end }}
       containers:
+{{ if .Values.podmon.enabled }}
+        - name: podmon
+          imagePullPolicy: Always
+          image: {{ required "Must provide the podmon container image." .Values.podmon.image }}
+          args:
+            {{- toYaml .Values.podmon.controller.args | nindent 12 }}
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /var/run/csi
+            - name: usr-bin
+              mountPath: /usr-bin
+{{ end }}
         - name: attacher
           image: {{ required "Must provide the CSI attacher container image." .Values.images.attacher }}
           args:
             - "--csi-address=$(ADDRESS)"
             - "--v=5"
+            - "--leader-election=true"
           env:
             - name: ADDRESS
               value: /var/run/csi/csi.sock
@@ -102,15 +150,13 @@ spec:
           image: {{ required "Must provide the CSI provisioner container image." .Values.images.provisioner }}
           args:
             - "--csi-address=$(ADDRESS)"
+            - "--feature-gates=Topology=true"
             - "--volume-name-prefix={{ required "Must provide a value to prefix to driver created volume names" .Values.volumeNamePrefix }}"
             - "--volume-name-uuid-length=10"
-            {{- if eq .Values.kubeversion  "v1.13" }}
-            - "--connection-timeout=300s"
-            - "--provisioner=csi-vxflexos.dellemc.com"
-            {{- else }}
+            - "--leader-election=true"
             - "--timeout=120s"
-            {{- end}}
             - "--v=5"
+            - "--default-fstype={{ .Values.defaultFsType | default "ext4" }}"
           env:
             - name: ADDRESS
               value: /var/run/csi/csi.sock
@@ -118,12 +164,12 @@ spec:
             - name: socket-dir
               mountPath: /var/run/csi
         - name: snapshotter
-          #image: quay.io/k8scsi/csi-snapshotter:v1.0.0
           image: {{ required "Must provide the CSI snapshotter container image." .Values.images.snapshotter }}
           args:
             - "--csi-address=$(ADDRESS)"
             - "--timeout=120s"
             - "--v=5"
+            - "--leader-election=true"
           env:
             - name: ADDRESS
               value: /var/run/csi/csi.sock
@@ -136,6 +182,7 @@ spec:
           args:
             - "--csi-address=$(ADDRESS)"
             - "--v=5"
+            - "--leader-election=true"
           env:
             - name: ADDRESS
               value: /var/run/csi/csi.sock
@@ -146,6 +193,8 @@ spec:
           image: {{ required "Must provide the VxFlex OS driver container image." .Values.images.driver }}
           imagePullPolicy: Always
           command: [ "/csi-vxflexos.sh" ]
+          args:
+            - "--leader-election"
           env:
             - name: CSI_ENDPOINT
               value: /var/run/csi/csi.sock
@@ -179,3 +228,9 @@ spec:
       volumes:
         - name: socket-dir
           emptyDir:
+{{ if .Values.podmon.enabled }}
+        - name: usr-bin
+          hostPath:
+            path: /usr/bin
+            type: Directory
+{{ end }}

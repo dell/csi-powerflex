@@ -40,7 +40,7 @@ Feature: VxFlex OS CSI interface
     And when I call DeleteVolume
     Then there are no errors
 
-@long
+  @long
   Scenario Outline: Create volume, create snapshot, delete snapshot, delete volume for multiple sizes
     Given a VxFlexOS service
     And a capability with voltype "block" access "single-writer" fstype "xfs"
@@ -63,11 +63,11 @@ Feature: VxFlex OS CSI interface
     And there are no errors
 
     Examples:
-    | size  |
-    | "8"   |
-    | "16"  |
-    | "32"  |
-    | "64"  |
+      | size |
+      | "8"  |
+      | "16" |
+      | "32" |
+      | "64" |
 
   Scenario: Create volume, create snapshot, create volume from snapshot, delete original volume, delete new volume
     Given a VxFlexOS service
@@ -91,6 +91,22 @@ Feature: VxFlex OS CSI interface
     And there are no errors
     And I call ListVolume
 
+  Scenario: Craete volume, clone volume, delete original volume, delete new volume
+    Given a VxFlexOS service
+    And a basic block volume request "integration1" "8"
+    When I call CreateVolume
+    And I call CloneVolume
+    And there are no errors
+    And I call ListVolume
+    And a valid ListVolumeResponse is returned
+    And I call ListSnapshot
+    And a valid ListSnapshotResponse is returned
+    And when I call DeleteVolume
+    And there are no errors
+    And when I call DeleteAllVolumes
+    And there are no errors
+    And I call ListVolume
+
   Scenario: Create volume, create snapshot, create many volumes from snap, delete original volume, delete new volumes
     Given a VxFlexOS service
     And a basic block volume request "integration1" "8"
@@ -103,7 +119,17 @@ Feature: VxFlex OS CSI interface
     And I call DeleteSnapshot
     And when I call DeleteVolume
     And when I call DeleteAllVolumes
-    
+
+  Scenario: Craete volume, clone volume, clone many volumes, delete original volume, delete new volumes
+    Given a VxFlexOS service
+    And a basic block volume request "integration1" "8"
+    When I call CreateVolume
+    And I call CloneVolume
+    And there are no errors
+    And I call CloneManyVolumes
+    Then the error message should contain "There are too many snapshots in the VTree"
+    And when I call DeleteVolume
+    And when I call DeleteAllVolumes
 
   Scenario: Create volume, idempotent create snapshot, delete volume
     Given a VxFlexOS service
@@ -135,7 +161,6 @@ Feature: VxFlex OS CSI interface
     And when I call DeleteAllVolumes
     And there are no errors
 
-@xwip
   Scenario Outline: Create publish, node-publish, node-unpublish, unpublish, and delete basic volume
     Given a VxFlexOS service
     And a capability with voltype <voltype> access <access> fstype <fstype>
@@ -152,55 +177,55 @@ Feature: VxFlex OS CSI interface
     Then the error message should contain <errormsg>
 
     Examples:
-    | voltype      | access                         | fstype     | errormsg                                     |
-    | "mount"      | "single-writer"                | "xfs"      | "none"                                       |
-    | "mount"      | "single-writer"                | "ext4"     | "none"                                       |
-    | "mount"      | "multi-writer"                 | "ext4"     | "multi-writer not allowed"                   |
-    | "block"      | "single-writer"                | "none"     | "none"                                       |
-    | "block"      | "multi-writer"                 | "none"     | "none"                                       |
-    | "block"      | "single-writer"                | "none"     | "none"                                       |
+      | voltype | access          | fstype | errormsg                   |
+      | "mount" | "single-writer" | "xfs"  | "none"                     |
+      | "mount" | "single-writer" | "ext4" | "none"                     |
+      | "mount" | "multi-writer"  | "ext4" | "multi-writer not allowed" |
+      | "block" | "single-writer" | "none" | "none"                     |
+      | "block" | "multi-writer"  | "none" | "none"                     |
+      | "block" | "single-writer" | "none" | "none"                     |
 
   Scenario: Create volume with access mode read only many
-   Given a VxFlexOS service
-   And a capability with voltype "mount" access "single-writer" fstype "xfs"
-   And a volume request "multi-reader-test" "8"
-   When I call CreateVolume
-   And there are no errors
-   And when I call PublishVolume "SDC_GUID"
-   And when I call NodePublishVolume "SDC_GUID"
-   And when I call NodeUnpublishVolume "SDC_GUID"
-   And when I call UnpublishVolume "SDC_GUID"
-   And a capability with voltype "mount" access "multi-reader" fstype "xfs"
-   And when I call PublishVolume "SDC_GUID"
-   And when I call NodePublishVolumeWithPoint "SDC_GUID" "temp1" 
-   And when I call NodePublishVolumeWithPoint "SDC_GUID" "temp2" 
-   And when I call NodeUnpublishVolumeWithPoint "SDC_GUID" "temp1"
-   And when I call NodeUnpublishVolumeWithPoint "SDC_GUID" "temp2"
-   And when I call UnpublishVolume "SDC_GUID"
-   And when I call DeleteVolume
-   Then there are no errors
+    Given a VxFlexOS service
+    And a capability with voltype "mount" access "single-writer" fstype "xfs"
+    And a volume request "multi-reader-test" "8"
+    When I call CreateVolume
+    And there are no errors
+    And when I call PublishVolume "SDC_GUID"
+    And when I call NodePublishVolume "SDC_GUID"
+    And when I call NodeUnpublishVolume "SDC_GUID"
+    And when I call UnpublishVolume "SDC_GUID"
+    And a capability with voltype "mount" access "multi-reader" fstype "xfs"
+    And when I call PublishVolume "SDC_GUID"
+    And when I call NodePublishVolumeWithPoint "SDC_GUID" "temp1"
+    And when I call NodePublishVolumeWithPoint "SDC_GUID" "temp2"
+    And when I call NodeUnpublishVolumeWithPoint "SDC_GUID" "temp1"
+    And when I call NodeUnpublishVolumeWithPoint "SDC_GUID" "temp2"
+    And when I call UnpublishVolume "SDC_GUID"
+    And when I call DeleteVolume
+    Then there are no errors
 
   Scenario: Create block volume with access mode read write many
-   Given a VxFlexOS service
-   And a capability with voltype "block" access "multi-writer" fstype ""
-   And a volume request "block-multi-writer-test" "8"
-   When I call CreateVolume
-   And there are no errors
-   And when I call PublishVolume "SDC_GUID"
-   And when I call PublishVolume "ALT_GUID"
-   And when I call NodePublishVolumeWithPoint "SDC_GUID" "/tmp/tempdev1" 
-   And there are no errors
-   And when I call NodePublishVolumeWithPoint "SDC_GUID" "/tmp/tempdev2" 
-   And there are no errors
-   And when I call NodePublishVolume "ALT_GUID"
-   And there are no errors
-   And when I call NodeUnpublishVolume "ALT_GUID"
-   And when I call NodeUnpublishVolumeWithPoint "SDC_GUID" "/tmp/tempdev1"
-   And when I call NodeUnpublishVolumeWithPoint "SDC_GUID" "/tmp/tempdev2"
-   And when I call UnpublishVolume "SDC_GUID"
-   And when I call UnpublishVolume "ALT_GUID"
-   And when I call DeleteVolume
-   Then there are no errors
+    Given a VxFlexOS service
+    And a capability with voltype "block" access "multi-writer" fstype ""
+    And a volume request "block-multi-writer-test" "8"
+    When I call CreateVolume
+    And there are no errors
+    And when I call PublishVolume "SDC_GUID"
+    And when I call PublishVolume "ALT_GUID"
+    And when I call NodePublishVolumeWithPoint "SDC_GUID" "/tmp/tempdev1"
+    And there are no errors
+    And when I call NodePublishVolumeWithPoint "SDC_GUID" "/tmp/tempdev2"
+    And there are no errors
+    And when I call NodePublishVolume "ALT_GUID"
+    And there are no errors
+    And when I call NodeUnpublishVolume "ALT_GUID"
+    And when I call NodeUnpublishVolumeWithPoint "SDC_GUID" "/tmp/tempdev1"
+    And when I call NodeUnpublishVolumeWithPoint "SDC_GUID" "/tmp/tempdev2"
+    And when I call UnpublishVolume "SDC_GUID"
+    And when I call UnpublishVolume "ALT_GUID"
+    And when I call DeleteVolume
+    Then there are no errors
 
   Scenario: Create publish, unpublish, and delete basic volume
     Given a VxFlexOS service
@@ -263,10 +288,10 @@ Feature: VxFlex OS CSI interface
     Then there are no errors
 
     Examples:
-    | numberOfVolumes |
-    | 1               |
-    | 2               |
-    | 5               |
+      | numberOfVolumes |
+      | 1               |
+      | 2               |
+      | 5               |
 
   Scenario Outline: Idempotent create volumes, publish, node publish, node unpublish, unpublish, delete volumes in parallel
     Given a VxFlexOS service
@@ -294,14 +319,11 @@ Feature: VxFlex OS CSI interface
     And there are no errors
     And when I delete <numberOfVolumes> volumes in parallel
     Then there are no errors
-    
+
     Examples:
-
-    | numberOfVolumes |
-    | 1               |
-    | 10              |
-
-    
+      | numberOfVolumes |
+      | 1               |
+      | 10              |
 
   Scenario: Expand Volume Mount
     Given a VxFlexOS service
@@ -324,8 +346,7 @@ Feature: VxFlex OS CSI interface
     And when I call UnpublishVolume "SDC_GUID"
     And there are no errors
     And when I call DeleteVolume
-    Then there are no errors 
-
+    Then there are no errors
 
   Scenario: Expand Volume Block
     Given a VxFlexOS service
@@ -348,9 +369,4 @@ Feature: VxFlex OS CSI interface
     And when I call UnpublishVolume "SDC_GUID"
     And there are no errors
     And when I call DeleteVolume
-    Then there are no errors 
-
-    | numberOfVolumes  |
-    | 1                |
-    | 10               |
-    | 20               |
+    Then there are no errors

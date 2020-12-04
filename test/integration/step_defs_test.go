@@ -4,14 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/DATA-DOG/godog"
-	csi "github.com/container-storage-interface/spec/lib/go/csi"
-	ptypes "github.com/golang/protobuf/ptypes"
 	"os"
 	"os/exec"
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/DATA-DOG/godog"
+	csi "github.com/container-storage-interface/spec/lib/go/csi"
+	ptypes "github.com/golang/protobuf/ptypes"
 )
 
 const (
@@ -64,6 +65,7 @@ func (f *feature) aBasicBlockVolumeRequest(name string, size int64) error {
 	params["storagepool"] = os.Getenv("STORAGE_POOL")
 	params["thickprovisioning"] = "false"
 	req.Parameters = params
+	makeAUniqueName(&name)
 	req.Name = name
 	capacityRange := new(csi.CapacityRange)
 	capacityRange.RequiredBytes = size * 1024 * 1024 * 1024
@@ -193,6 +195,7 @@ func (f *feature) getMountVolumeRequest(name string) *csi.CreateVolumeRequest {
 	params := make(map[string]string)
 	params["storagepool"] = os.Getenv("STORAGE_POOL")
 	req.Parameters = params
+	makeAUniqueName(&name)
 	req.Name = name
 	capacityRange := new(csi.CapacityRange)
 	capacityRange.RequiredBytes = 8 * 1024 * 1024 * 1024
@@ -315,6 +318,7 @@ func (f *feature) aVolumeRequest(name string, size int64) error {
 	params["storagepool"] = os.Getenv("STORAGE_POOL")
 	params["thickprovisioning"] = "true"
 	req.Parameters = params
+	makeAUniqueName(&name)
 	req.Name = name
 	capacityRange := new(csi.CapacityRange)
 	capacityRange.RequiredBytes = size * 1024 * 1024 * 1024
@@ -566,6 +570,18 @@ func (f *feature) iCallCreateVolumeFromSnapshot() error {
 	return nil
 }
 
+func (f *feature) iCallCloneVolume() error {
+	req := f.createVolumeRequest
+	req.Name = "cloneVol-" + req.Name
+	source := &csi.VolumeContentSource_VolumeSource{VolumeId: f.volID}
+	req.VolumeContentSource = new(csi.VolumeContentSource)
+	req.VolumeContentSource.Type = &csi.VolumeContentSource_Volume{Volume: source}
+	fmt.Printf("Calling Clone Volume\n")
+	_ = f.createAVolume(req, "single CloneVolume")
+	time.Sleep(SleepTime)
+	return nil
+}
+
 func (f *feature) createAVolume(req *csi.CreateVolumeRequest, voltype string) error {
 	ctx := context.Background()
 	client := csi.NewControllerClient(grpcClient)
@@ -585,11 +601,29 @@ func (f *feature) iCallCreateManyVolumesFromSnapshot() error {
 	for i := 1; i <= 130; i++ {
 		req := f.createVolumeRequest
 		req.Name = fmt.Sprintf("volFromSnap%d", i)
+		makeAUniqueName(&req.Name)
 		source := &csi.VolumeContentSource_SnapshotSource{SnapshotId: f.snapshotID}
 		req.VolumeContentSource = new(csi.VolumeContentSource)
 		req.VolumeContentSource.Type = &csi.VolumeContentSource_Snapshot{Snapshot: source}
 		fmt.Printf("Calling CreateVolume with snapshot source")
 		err := f.createAVolume(req, "single CreateVolume from Snap")
+		if err != nil {
+			fmt.Printf("Error on the %d th volume: %s\n", i, err.Error())
+			break
+		}
+	}
+	return nil
+}
+
+func (f *feature) iCallCloneManyVolumes() error {
+	for i := 1; i <= 130; i++ {
+		req := f.createVolumeRequest
+		req.Name = fmt.Sprintf("cloneVol%d", i)
+		source := &csi.VolumeContentSource_VolumeSource{VolumeId: f.volID}
+		req.VolumeContentSource = new(csi.VolumeContentSource)
+		req.VolumeContentSource.Type = &csi.VolumeContentSource_Volume{Volume: source}
+		fmt.Printf("Calling Clone Volume\n")
+		err := f.createAVolume(req, "single CloneVolume")
 		if err != nil {
 			fmt.Printf("Error on the %d th volume: %s\n", i, err.Error())
 			break
@@ -1031,6 +1065,27 @@ func (f *feature) nodeExpandVolume(volID, volPath string) error {
 	return err
 }
 
+//add given suffix to name or use time as suffix and set to max of 30 characters
+func makeAUniqueName(name *string) {
+	if name == nil {
+		temp := "tmp"
+		name = &temp
+	}
+	var suffix = os.Getenv("VOL_NAME_SUFFIX")
+	if len(suffix) == 0 {
+		now := time.Now()
+		suffix = fmt.Sprintf("%02d%02d%02d", now.Hour(), now.Minute(), now.Second())
+		*name += "_" + suffix
+	} else {
+		*name += "_" + suffix
+	}
+	tmp := *name
+	if len(tmp) > 30 {
+		*name = tmp[len(tmp)-30:]
+	}
+	return
+}
+
 func FeatureContext(s *godog.Suite) {
 	f := &feature{}
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
@@ -1072,4 +1127,6 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^I write block data$`, f.iWriteBlockData)
 	s.Step(`^when I call ExpandVolume to "([^"]*)"$`, f.whenICallExpandVolumeTo)
 	s.Step(`^when I call NodeExpandVolume$`, f.whenICallNodeExpandVolume)
+	s.Step(`^I call CloneVolume$`, f.iCallCloneVolume)
+	s.Step(`^I call CloneManyVolumes$`, f.iCallCloneManyVolumes)
 }
