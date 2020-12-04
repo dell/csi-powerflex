@@ -3,6 +3,7 @@ kind: StorageClass
 metadata:
   name: {{ required "Must provide a storage class name." .Values.storageClass.name}}-xfs
   annotations:
+    "helm.sh/resource-policy": keep
 provisioner: csi-vxflexos.dellemc.com
 reclaimPolicy: {{ required "Must provide a storage class reclaim policy." .Values.storageClass.reclaimPolicy }}
 allowVolumeExpansion: true

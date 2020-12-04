@@ -30,7 +30,18 @@ rules:
   - apiGroups: ["storage.k8s.io"]
     resources: ["volumeattachments"]
     verbs: ["get", "list", "watch", "update"]
-
+  - apiGroups: ["security.openshift.io"]
+    resourceNames: ["privileged"]
+    resources: ["securitycontextconstraints"]
+    verbs: ["use"]
+{{ if .Values.podmon.enabled }}
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "update", "delete"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "watch", "list", "delete", "update", "create"]
+{{ end }}
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
@@ -61,13 +72,45 @@ spec:
     spec:
       serviceAccount: {{ .Release.Name }}-node
       hostNetwork: true
+      {{ if and .Values.monitor.enabled .Values.monitor.hostPID }}
+      hostPID: true
+      {{ else }}
+      hostPID: false
+      {{ end }}
       containers:  
-        - name: driver
+{{ if .Values.podmon.enabled }}
+        - name: podmon
           securityContext:
             privileged: true
             capabilities:
               add: ["SYS_ADMIN"]
             allowPrivilegeEscalation: true
+          imagePullPolicy: Always
+          image: {{ required "Must provide the podmon container image." .Values.podmon.image }}
+          args:
+            {{- toYaml .Values.podmon.node.args | nindent 12 }}
+          env:
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: spec.nodeName
+            - name: X_CSI_PRIVATE_MOUNT_DIR
+              value: "/var/lib/kubelet/plugins/vxflexos.emc.dell.com/disks"
+          volumeMounts:
+            - name: kubelet-pods
+              mountPath: /var/lib/kubelet/pods
+            - name: driver-path
+              mountPath: /var/lib/kubelet/plugins/vxflexos.emc.dell.com
+            - name: usr-bin
+              mountPath: /usr-bin
+{{ end }}
+        - name: driver
+          securityContext:
+            privileged: true
+            allowPrivilegeEscalation: true
+            capabilities:
+              add: ["SYS_ADMIN"]
           image: {{ required "Must provide the VxFlex OS driver container image." .Values.images.driver }}
           imagePullPolicy: Always
           command: [ "/csi-vxflexos.sh" ]
@@ -107,16 +150,11 @@ spec:
               mountPath: /dev
             - name: scaleio-path-opt
               mountPath: /opt/emc/scaleio/sdc/bin
-            - name: scaleio-path-bin
-              mountPath: /bin/emc
         - name: registrar
           image: {{ required "Must provide the CSI node registrar container image." .Values.images.registrar }}
           args:
             - "--v=5"
             - "--csi-address=$(ADDRESS)"
-            #- --mode=node-register
-            #- --driver-requires-attachment=true
-            #- --pod-info-mount-version=v1
             - --kubelet-registration-path=/var/lib/kubelet/plugins/vxflexos.emc.dell.com/csi_sock
           env:
             - name: ADDRESS
@@ -131,6 +169,98 @@ spec:
               mountPath: /registration
             - name: driver-path
               mountPath: /csi
+        {{ if eq .Values.monitor.enabled true }}
+        - name: sdc-monitor
+          securityContext:
+            privileged: true
+          image: {{ required "Must provide the PowerFlex SDC container image." .Values.images.powerflexSdc }}
+          imagePullPolicy: Always
+          env:
+            {{ if eq .Values.monitor.hostPID true }}
+            - name: HOST_PID
+              value: "1"
+            {{ else }}
+            - name: HOST_PID
+              value: "0"
+            {{ end }}
+            - name: HOST_NET
+              value: "1"
+            - name: NODENAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: MDM
+              value: {{ join "," .Values.mdmIP }}
+            - name: MODE
+              value: "monitoring"
+            - name: REPO_ADDRESS
+              value: {{ .Values.sdcKernelMirror.repoUrl }}
+            - name: REPO_USER
+              valueFrom:
+                secretKeyRef:
+                  name: sdc-repo-creds
+                  key: username
+            - name: REPO_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sdc-repo-creds
+                  key: password
+            - name: HOST_DRV_CFG_PATH
+              value: /opt/emc/scaleio/sdc/bin
+          volumeMounts:
+            - name: dev
+              mountPath: /dev
+            - name: os-release
+              mountPath: /host-os-release
+            - name: sdc-storage
+              mountPath: /storage
+            - name: udev-d
+              mountPath: /rules.d
+            - name: scaleio-path-opt
+              mountPath: /host_drv_cfg_path
+        {{ end }}
+      initContainers:  
+        - name: sdc
+          securityContext:
+            privileged: true
+          image: {{ required "Must provide the PowerFlex SDC container image." .Values.images.powerflexSdc }}
+          imagePullPolicy: Always
+          env:
+            - name: NODENAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: MODE
+              value: "config"
+            - name: MDM
+              value: {{ join "," .Values.mdmIP }}
+            - name: REPO_ADDRESS
+              value: {{ .Values.sdcKernelMirror.repoUrl }}
+            - name: REPO_USER
+              valueFrom:
+                secretKeyRef:
+                  name: sdc-repo-creds
+                  key: username
+            - name: REPO_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sdc-repo-creds
+                  key: password
+            - name: HOST_DRV_CFG_PATH
+              value: /opt/emc/scaleio/sdc/bin
+          volumeMounts:
+            - name: dev
+              mountPath: /dev
+            - name: os-release
+              mountPath: /host-os-release
+            - name: sdc-storage
+              mountPath: /storage 
+            - name: udev-d
+              mountPath: /rules.d 
+            - name: scaleio-path-opt
+              mountPath: /host_drv_cfg_path 
+            - name: sdc-config
+              mountPath: /config
       volumes:
         - name: registration-dir
           hostPath:
@@ -155,8 +285,30 @@ spec:
         - name: scaleio-path-opt
           hostPath:
             path: /opt/emc/scaleio/sdc/bin
-            type: Directory
-        - name: scaleio-path-bin
+            type: DirectoryOrCreate
+        - name: sdc-storage
           hostPath:
-            path: {{ required "Location of drv_cfg binary" .Values.vxflexosbinpath }}
+            path: /var/emc-scaleio
+            type: DirectoryOrCreate
+        - name: udev-d
+          hostPath:
+            path: /etc/udev/rules.d
             type: Directory
+        - name: os-release
+          hostPath:
+            path: /etc/os-release
+            type: File
+        - name: sdc-config
+          hostPath:
+            path: /var/sio-config
+            type: DirectoryOrCreate
+{{ if .Values.podmon.enabled }}
+        - name: usr-bin
+          hostPath:
+            path: /usr/bin
+            type: Directory
+        - name: kubelet-pods
+          hostPath:
+            path: /var/lib/kubelet/pods
+            type: Directory
+{{ end }}

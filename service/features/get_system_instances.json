@@ -102,7 +102,7 @@
         "id": "0873f5bd5c3dd9a1",
         "port": 9011
       },
-      "slaves": [
+      "worker": [
         {
           "versionInfo": "R2_6.0.0",
           "managementIPs": [

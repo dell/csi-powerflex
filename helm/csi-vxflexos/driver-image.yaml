@@ -1,4 +1,9 @@
-# IT IS RECOMMENDED YOU DO NOT CHANGE THE IMAGES TO BE DOWNLOADED.
+---
+# IT IS RECOMMENDED YOU DO NOT CHANGE THE IMAGES TO BE USED.
 images:
-  # "images.driver" defines the container images used for the driver container.
-  driver: dellemc/csi-vxflexos:v1.2.1
+  # "driver" defines the container image, used for the driver container. 
+  driver: dellemc/csi-vxflexos:v1.3.0.000R
+
+
+  # "powerflexSdc" defines the SDC image, used for RedHat CoreOS only.
+  powerflexSdc: dellemc/sdc:3.5.1.1

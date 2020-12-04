@@ -4,6 +4,12 @@ package main
 
 import (
 	"context"
+	"flag"
+	"fmt"
+	"os"
+	"strings"
+
+	"github.com/dell/csi-vxflexos/k8sutils"
 	"github.com/dell/csi-vxflexos/provider"
 	"github.com/dell/csi-vxflexos/service"
 	"github.com/rexray/gocsi"
@@ -11,12 +17,29 @@ import (
 
 // main is ignored when this package is built as a go plug-in
 func main() {
-	gocsi.Run(
-		context.Background(),
-		service.Name,
-		"A VxFlex OS Container Storage Interface (CSI) Plugin",
-		usage,
-		provider.New())
+
+	enableLeaderElection := flag.Bool("leader-election", false, "boolean to enable leader election")
+	leaderElectionNamespace := flag.String("leader-election-namespace", "", "namespace where leader election lease will be created")
+	kubeconfig := flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
+	flag.Parse()
+	run := func(ctx context.Context) {
+		gocsi.Run(ctx, service.Name, "A PowerFlex Container Storage Interface (CSI) Plugin",
+			usage, provider.New())
+	}
+	if !*enableLeaderElection {
+		run(context.Background())
+	} else {
+		driverName := strings.Replace(service.Name, ".", "-", -1)
+		lockName := fmt.Sprintf("driver-%s", driverName)
+		k8sclientset, err := k8sutils.CreateKubeClientSet(*kubeconfig)
+		if err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "failed to initialize leader election: %v", err)
+			os.Exit(1)
+		}
+		// Attempt to become leader and start the driver
+		k8sutils.LeaderElection(k8sclientset, lockName, *leaderElectionNamespace, run)
+	}
+
 }
 
 const usage = `    X_CSI_VXFLEXOS_ENDPOINT

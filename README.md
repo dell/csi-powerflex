@@ -13,15 +13,14 @@ This project may be compiled as a stand-alone binary using Golang that, when
 run, provides a valid CSI endpoint. This project can also be built
 as a Golang plug-in in order to extend the functionality of other programs.
 
+For Documentation, please go to [Dell CSI Driver Documentation](https://dell.github.io/storage-plugin-docs/).
+
 ## Support
 The CSI Driver for Dell EMC PowerFlex image, which is the built driver code, is available on Dockerhub and is officially supported by Dell EMC.  
 
 The source code for CSI Driver for Dell EMC PowerFlex available on Github is unsupported and provided solely under the terms of the license attached to the source code. For clarity, Dell EMC does not provide support for any source code modifications.  
 
 For any CSI driver issues, questions or feedback, join the [Dell EMC Container community](https://www.dell.com/community/Containers/bd-p/Containers).
-
-## Patches  
-Patch notes for the CSI Driver for Dell EMC PowerFlex are described in [patch-notes.md](patch-notes.md) 
 
 ## Building
 
@@ -32,7 +31,7 @@ To build the source, execute `make clean build`.
 
 To run unit tests, execute `make unit-test`.
 
-To build a docker image, execute `make docker`.
+To build a docker image, edit Dockerfile. Replace RPM_FILE_LINK with SDC rpm file download link and replace RPM_FILE_NAME with downloaded file name. Then execute `make docker`.
 
 You can run an integration test on a Linux system by populating the file `env.sh`
 with values for your PowerFlex system and then run "make integration-test".

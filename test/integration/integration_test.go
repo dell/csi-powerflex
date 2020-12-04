@@ -3,6 +3,11 @@ package integration_test
 import (
 	"context"
 	"fmt"
+	"net"
+	"os"
+	"testing"
+	"time"
+
 	"github.com/DATA-DOG/godog"
 	"github.com/akutz/memconn"
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
@@ -10,10 +15,6 @@ import (
 	"github.com/rexray/gocsi/utils"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
-	"net"
-	"os"
-	"testing"
-	"time"
 )
 
 const (
@@ -55,7 +56,7 @@ func TestMain(m *testing.M) {
 	}, godog.Options{
 		Format: "pretty",
 		Paths:  []string{"features"},
-		//Tags: "wip",
+		// Tags:   "wip",
 	})
 	if st := m.Run(); st > exitVal {
 		exitVal = st
