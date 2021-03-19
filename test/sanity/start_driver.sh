@@ -1,10 +1,9 @@
 #!/bin/bash 
-# The env.sh must point to a valid PowerFlex deployment and the iscsi packages must be installed
-# on this system. This will make real calls to PowerFlex
+# The config.json should have connection data for a valid PowerFlex deployment set as "isDefault": true, and
+# the iscsi packages must be installed on this system. This will make real calls to PowerFlex
 
 rm -f unix_sock
 . ../../env.sh
-echo ENDPOINT $X_CSI_VXFLEXOS_ENDPOINT
 echo "Starting the csi-vxflexos driver. You should wait until the node setup is complete before running tests."
-../../csi-vxflexos
+../../csi-vxflexos --array-config=../../config.json
 

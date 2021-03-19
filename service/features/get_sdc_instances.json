@@ -4,7 +4,7 @@
     "perfProfile": "Default",
     "sdcApproved": true,
     "osType": "Linux",
-    "mdmConnectionState": "Disconnected",
+    "mdmConnectionState": "Connected",
     "memoryAllocationFailure": null,
     "socketAllocationFailure": null,
     "softwareVersionInfo": null,

@@ -1,0 +1,10 @@
+[
+    {
+        "endpoint": "",
+        "username": "admin",
+        "password": "password",
+        "insecure": true,
+        "isDefault": true,
+        "systemID": "123"
+    }
+]

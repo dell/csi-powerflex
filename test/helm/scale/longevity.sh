@@ -15,8 +15,8 @@ helmDir=10replicas
 ns=helmtest-vxflexos
 
 export cont0="vxflexos-controller-0"
-export node1=$(kubectl get pods -o wide -n vxflexos | grep 10.247.102.213 | awk '/vxflexos-node/{print $1;}')
-export node2=$(kubectl get pods -o wide -n vxflexos | grep 10.247.102.215 | awk '/vxflexos-node/{print $1;}')
+export node1=$(kubectl get pods -o wide -n vxflexos | grep 10.0.0.1 | awk '/vxflexos-node/{print $1;}')
+export node2=$(kubectl get pods -o wide -n vxflexos | grep 10.0.0.1 | awk '/vxflexos-node/{print $1;}')
 
 # Replias is the number of replicas for each pool
 if [ "$1" = "" ]; then echo "arg: replicas"; exit 2; fi

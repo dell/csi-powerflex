@@ -4,14 +4,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"strings"
 	"syscall"
 	"time"
 
-	"github.com/DATA-DOG/godog"
+	"encoding/json"
+	"path/filepath"
+
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/cucumber/godog"
+	//csiext "github.com/dell/csi-vxflexos/csiextensions/podmon_csi"
+	csiext "../../dell-csi-extensions/podmon"
 	ptypes "github.com/golang/protobuf/ptypes"
 )
 
@@ -19,10 +25,22 @@ const (
 	MaxRetries     = 10
 	RetrySleepTime = 10 * time.Second
 	SleepTime      = 100 * time.Millisecond
+	Pool1          = "pool1"
 )
+
+// ArrayConnectionData contains data required to connect to array
+type ArrayConnectionData struct {
+	SystemID  string `json:"systemID"`
+	Username  string `json:"username"`
+	Password  string `json:"password"`
+	Endpoint  string `json:"endpoint"`
+	Insecure  bool   `json:"insecure,omitempty"`
+	IsDefault bool   `json:"isDefault,omitempty"`
+}
 
 type feature struct {
 	errs                     []error
+	anotherSystemID          string
 	createVolumeRequest      *csi.CreateVolumeRequest
 	publishVolumeRequest     *csi.ControllerPublishVolumeRequest
 	nodePublishVolumeRequest *csi.NodePublishVolumeRequest
@@ -37,6 +55,82 @@ type feature struct {
 	expandVolumeResponse     *csi.ControllerExpandVolumeResponse
 	nodeExpandVolumeRequest  *csi.NodeExpandVolumeRequest
 	nodeExpandVolumeResponse *csi.NodeExpandVolumeResponse
+	arrays                   map[string]*ArrayConnectionData
+}
+
+// there is no way to call service.go methods from here
+// hence copy same method over there , this is used to get all arrays and pick different
+// systemID to test with see  method iSetAnotherSystemId
+func (f *feature) getArrayConfig() (map[string]*ArrayConnectionData, error) {
+	arrays := make(map[string]*ArrayConnectionData)
+
+	if _, err := os.Stat(configFile); os.IsNotExist(err) {
+		return nil, fmt.Errorf(fmt.Sprintf("File %s does not exist", configFile))
+	}
+
+	config, err := ioutil.ReadFile(filepath.Clean(configFile))
+	if err != nil {
+		return nil, fmt.Errorf(fmt.Sprintf("File %s errors: %v", configFile, err))
+	}
+
+	if string(config) != "" {
+		jsonCreds := make([]ArrayConnectionData, 0)
+		err := json.Unmarshal(config, &jsonCreds)
+		if err != nil {
+			return nil, fmt.Errorf(fmt.Sprintf("Unable to parse the credentials: %v", err))
+		}
+
+		if len(jsonCreds) == 0 {
+			return nil, fmt.Errorf("no arrays are provided in configFile %s", configFile)
+		}
+
+		noOfDefaultArray := 0
+		for i, c := range jsonCreds {
+			systemID := c.SystemID
+			if _, ok := arrays[systemID]; ok {
+				return nil, fmt.Errorf(fmt.Sprintf("duplicate system ID %s found at index %d", systemID, i))
+			}
+			if systemID == "" {
+				return nil, fmt.Errorf(fmt.Sprintf("invalid value for system name at index %d", i))
+			}
+			if c.Username == "" {
+				return nil, fmt.Errorf(fmt.Sprintf("invalid value for Username at index %d", i))
+			}
+			if c.Password == "" {
+				return nil, fmt.Errorf(fmt.Sprintf("invalid value for Password at index %d", i))
+			}
+			if c.Endpoint == "" {
+				return nil, fmt.Errorf(fmt.Sprintf("invalid value for Endpoint at index %d", i))
+			}
+
+			fields := map[string]interface{}{
+				"endpoint":  c.Endpoint,
+				"user":      c.Username,
+				"password":  "********",
+				"insecure":  c.Insecure,
+				"isDefault": c.IsDefault,
+				"systemID":  c.SystemID,
+			}
+
+			fmt.Printf("array found  %s %#v\n", c.SystemID, fields)
+
+			if c.IsDefault {
+				noOfDefaultArray++
+			}
+
+			if noOfDefaultArray > 1 {
+				return nil, fmt.Errorf("'isDefault' parameter presents more than once in storage array list")
+			}
+
+			// copy in the arrayConnectionData to arrays
+			copy := ArrayConnectionData{}
+			copy = c
+			arrays[c.SystemID] = &copy
+		}
+	} else {
+		return nil, fmt.Errorf("arrays details are not provided in configFile %s", configFile)
+	}
+	return arrays, nil
 }
 
 func (f *feature) addError(err error) {
@@ -56,14 +150,18 @@ func (f *feature) aVxFlexOSService() error {
 	f.maxRetryCount = MaxRetries
 	f.expandVolumeResponse = nil
 	f.nodeExpandVolumeResponse = nil
+	f.anotherSystemID = ""
 	return nil
 }
 
 func (f *feature) aBasicBlockVolumeRequest(name string, size int64) error {
 	req := new(csi.CreateVolumeRequest)
 	params := make(map[string]string)
-	params["storagepool"] = os.Getenv("STORAGE_POOL")
+	params["storagepool"] = Pool1
 	params["thickprovisioning"] = "false"
+	if len(f.anotherSystemID) > 0 {
+		params["systemID"] = f.anotherSystemID
+	}
 	req.Parameters = params
 	makeAUniqueName(&name)
 	req.Name = name
@@ -193,7 +291,10 @@ func (f *feature) aMountVolumeRequest(name string) error {
 func (f *feature) getMountVolumeRequest(name string) *csi.CreateVolumeRequest {
 	req := new(csi.CreateVolumeRequest)
 	params := make(map[string]string)
-	params["storagepool"] = os.Getenv("STORAGE_POOL")
+	params["storagepool"] = Pool1
+	if len(f.anotherSystemID) > 0 {
+		params["systemID"] = f.anotherSystemID
+	}
 	req.Parameters = params
 	makeAUniqueName(&name)
 	req.Name = name
@@ -315,8 +416,11 @@ func (f *feature) aCapabilityWithVoltypeAccessFstype(voltype, access, fstype str
 func (f *feature) aVolumeRequest(name string, size int64) error {
 	req := new(csi.CreateVolumeRequest)
 	params := make(map[string]string)
-	params["storagepool"] = os.Getenv("STORAGE_POOL")
+	params["storagepool"] = Pool1
 	params["thickprovisioning"] = "true"
+	if len(f.anotherSystemID) > 0 {
+		params["systemID"] = f.anotherSystemID
+	}
 	req.Parameters = params
 	makeAUniqueName(&name)
 	req.Name = name
@@ -384,6 +488,22 @@ func (f *feature) whenICallNodePublishVolume(arg1 string) error {
 	}
 	time.Sleep(SleepTime)
 	return nil
+}
+
+func (f *feature) iCallEthemeralNodePublishVolume(id, size string) error {
+	req := f.getNodePublishVolumeRequest()
+	req.VolumeId = id
+	f.volID = req.VolumeId
+	req.VolumeContext = map[string]string{"csi.storage.k8s.io/ephemeral": "true", "volumeName": "int-ephemeral-vol", "size": size, "storagepool": "pool1"}
+
+	ctx := context.Background()
+	client := csi.NewNodeClient(grpcClient)
+	_, err := client.NodePublishVolume(ctx, req)
+	if err != nil {
+		f.addError(err)
+	}
+	return nil
+
 }
 
 func (f *feature) nodePublishVolume(id string, path string) error {
@@ -538,6 +658,7 @@ func (f *feature) iCallCreateSnapshotConsistencyGroup() error {
 	req.Parameters["VolumeIDList"] = volumeIDList
 	resp, err := client.CreateSnapshot(ctx, req)
 	if err != nil {
+		fmt.Printf("oops")
 		fmt.Printf("CreateSnapshot returned error: %s\n", err.Error())
 		f.addError(err)
 	} else {
@@ -657,7 +778,7 @@ func (f *feature) aValidListVolumeResponseIsReturned() error {
 			capacity := vol.CapacityBytes
 			name := vol.VolumeContext["Name"]
 			creation := vol.VolumeContext["CreationTime"]
-			fmt.Printf("Volume ID: %s Name: %s Capacity: %d CreationTime: %s\n", id, name, capacity, creation)
+			fmt.Sprintf("Volume ID: %s Name: %s Capacity: %d CreationTime: %s\n", id, name, capacity, creation)
 		}
 	}
 	return nil
@@ -690,6 +811,33 @@ func (f *feature) aValidListSnapshotResponseIsReturned() error {
 	return nil
 }
 
+func (f *feature) iSetAnotherSystemId(systemType string) error {
+
+	if f.arrays == nil {
+		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
+		var err error
+		f.arrays, err = f.getArrayConfig()
+		if err != nil {
+			return errors.New("Get multi array config failed " + err.Error())
+		}
+	}
+	for _, a := range f.arrays {
+		if systemType == "altSystem" && !a.IsDefault {
+			f.anotherSystemID = a.SystemID
+			break
+		}
+		if systemType == "defaultSystem" && a.IsDefault {
+			f.anotherSystemID = a.SystemID
+			break
+		}
+	}
+	fmt.Printf("array selected for %s is %s\n", systemType, f.anotherSystemID)
+	if f.anotherSystemID == "" {
+		return errors.New("Failed to get  multi array config for " + systemType)
+	}
+	return nil
+}
+
 func (f *feature) iCreateVolumesInParallel(nVols int) error {
 	idchan := make(chan string, nVols)
 	errchan := make(chan error, nVols)
@@ -697,11 +845,16 @@ func (f *feature) iCreateVolumesInParallel(nVols int) error {
 	// Send requests
 	for i := 0; i < nVols; i++ {
 		name := fmt.Sprintf("scale%d", i)
-		go func(name string, idchan chan string, errchan chan error) {
+		go func(name string, i int, idchan chan string, errchan chan error) {
 			var resp *csi.CreateVolumeResponse
 			var err error
 			req := f.getMountVolumeRequest(name)
 			if req != nil {
+				if i%2 == 0 {
+					fmt.Printf("DEBUG change system %d\n", i)
+					req.Parameters["systemID"] = ""
+					// "1235e15806d1ec0f"
+				}
 				resp, err = f.createVolume(req)
 				if resp != nil {
 					idchan <- resp.GetVolume().VolumeId
@@ -710,7 +863,7 @@ func (f *feature) iCreateVolumesInParallel(nVols int) error {
 				}
 			}
 			errchan <- err
-		}(name, idchan, errchan)
+		}(name, i, idchan, errchan)
 	}
 	// Wait on complete, collecting ids and errors
 	nerrors := 0
@@ -988,6 +1141,100 @@ func (f *feature) iWriteBlockData() error {
 
 }
 
+// Writes a fixed pattern of block data (0x57 bytes) in 1 MB chunks to raw block mounted at /tmp/datafile.
+// Used to make sure the data has changed when taking a snapshot
+func (f *feature) iReadWriteToVolume(folder string) error {
+	buf := make([]byte, 1024)
+	for i := 0; i < 1024; i++ {
+		buf[i] = 0x57
+	}
+	// /tmp/podmondev1
+	fmt.Printf("Read/Write block data wait..")
+	err := f.iCallValidateVolumeHostConnectivity()
+	if err == nil {
+		fmt.Printf("Newly created Volume No IO expected \n")
+	}
+	// allow mount to stabilize
+	time.Sleep(6 * time.Second)
+	path := fmt.Sprintf("%s/%s", folder, "file")
+	fp, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0755)
+	if err != nil {
+		files, err1 := ioutil.ReadDir(path)
+		if err1 != nil {
+			fmt.Printf("Write block read dir  %s", err1.Error())
+		}
+		for _, file := range files {
+			fmt.Println(file.Name())
+		}
+		fmt.Printf("Write block data %s", err.Error())
+		return nil
+	}
+	var nrecords int
+	for err == nil {
+		var n int
+		n, err = fp.Write(buf)
+		if err != nil {
+			fmt.Printf("Error write %s \n", err.Error())
+		}
+		if n == len(buf) {
+			nrecords++
+		}
+		fmt.Printf("Write %d records\r", nrecords)
+		if nrecords > 255 {
+			break
+		}
+	}
+	fmt.Printf("Write done %d \n", nrecords)
+	fp.Close()
+	// do read
+	fp1, err := os.Open(path)
+	buf = make([]byte, 1024)
+	n, err := fp1.Read(buf)
+	fmt.Printf("Read records %d  \r", n)
+	if err != nil {
+		fmt.Printf("Error %s \n", err.Error())
+	}
+	fp1.Close()
+	fmt.Printf("Read done %d \n", nrecords)
+	return nil
+
+}
+
+func (f *feature) iCallValidateVolumeHostConnectivity() error {
+
+	ctx := context.Background()
+	pclient := csiext.NewPodmonClient(grpcClient)
+
+	sdcID := os.Getenv("SDC_GUID")
+	sdcGUID := strings.ToUpper(sdcID)
+	csiNodeID := sdcGUID
+
+	volIDs := make([]string, 0)
+	volIDs = append(volIDs, f.volID)
+
+	req := &csiext.ValidateVolumeHostConnectivityRequest{
+		NodeId:    csiNodeID,
+		VolumeIds: volIDs,
+	}
+	connect, err := pclient.ValidateVolumeHostConnectivity(ctx, req)
+	if err != nil {
+		return fmt.Errorf("Error calling host connectivity %s", err.Error())
+	}
+
+	fmt.Printf("Volume %s IosInProgress=%t\n", f.volID, connect.IosInProgress)
+	//connect = nil
+	//req = nil
+	//pclient = nil
+	f.errs = make([]error, 0)
+	if connect.IosInProgress {
+		return nil
+	} else {
+		err = fmt.Errorf("Unexpected error IO to volume: %t", connect.IosInProgress)
+		f.addError(err)
+		return nil
+	}
+}
+
 func (f *feature) whenICallExpandVolumeTo(size int64) error {
 
 	err := f.controllerExpandVolume(f.volID, size)
@@ -1120,13 +1367,17 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^a valid ListSnapshotResponse is returned$`, f.aValidListSnapshotResponseIsReturned)
 	s.Step(`^I create (\d+) volumes in parallel$`, f.iCreateVolumesInParallel)
 	s.Step(`^I publish (\d+) volumes in parallel$`, f.iPublishVolumesInParallel)
+	s.Step(`^I set another systemId "([^"]*)"$`, f.iSetAnotherSystemId)
 	s.Step(`^I node publish (\d+) volumes in parallel$`, f.iNodePublishVolumesInParallel)
 	s.Step(`^I node unpublish (\d+) volumes in parallel$`, f.iNodeUnpublishVolumesInParallel)
 	s.Step(`^I unpublish (\d+) volumes in parallel$`, f.iUnpublishVolumesInParallel)
 	s.Step(`^when I delete (\d+) volumes in parallel$`, f.whenIDeleteVolumesInParallel)
 	s.Step(`^I write block data$`, f.iWriteBlockData)
+	s.Step(`^I read write data to volume "([^"]*)"$`, f.iReadWriteToVolume)
+	s.Step(`^when I call Validate Volume Host connectivity$`, f.iCallValidateVolumeHostConnectivity)
 	s.Step(`^when I call ExpandVolume to "([^"]*)"$`, f.whenICallExpandVolumeTo)
 	s.Step(`^when I call NodeExpandVolume$`, f.whenICallNodeExpandVolume)
 	s.Step(`^I call CloneVolume$`, f.iCallCloneVolume)
 	s.Step(`^I call CloneManyVolumes$`, f.iCallCloneManyVolumes)
+	s.Step(`^I call EthemeralNodePublishVolume with ID "([^"]*)" and size "([^"]*)"$`, f.iCallEthemeralNodePublishVolume)
 }

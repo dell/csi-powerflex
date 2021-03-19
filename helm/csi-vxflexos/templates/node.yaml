@@ -71,6 +71,7 @@ spec:
         app: {{ .Release.Name }}-node
     spec:
       serviceAccount: {{ .Release.Name }}-node
+      dnsPolicy: ClusterFirstWithHostNet
       hostNetwork: true
       {{ if and .Values.monitor.enabled .Values.monitor.hostPID }}
       hostPID: true
@@ -97,6 +98,18 @@ spec:
                   fieldPath: spec.nodeName
             - name: X_CSI_PRIVATE_MOUNT_DIR
               value: "/var/lib/kubelet/plugins/vxflexos.emc.dell.com/disks"
+            - name: MY_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: MY_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: MY_POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
           volumeMounts:
             - name: kubelet-pods
               mountPath: /var/lib/kubelet/pods
@@ -114,6 +127,8 @@ spec:
           image: {{ required "Must provide the VxFlex OS driver container image." .Values.images.driver }}
           imagePullPolicy: Always
           command: [ "/csi-vxflexos.sh" ]
+          args:
+            - "--array-config=/vxflexos-config/config"
           env:
             - name: CSI_ENDPOINT
               value: unix:///var/lib/kubelet/plugins/vxflexos.emc.dell.com/csi_sock
@@ -123,20 +138,8 @@ spec:
               value: "true"
             - name: X_CSI_PRIVATE_MOUNT_DIR
               value: "/var/lib/kubelet/plugins/vxflexos.emc.dell.com/disks"
-            - name: X_CSI_VXFLEXOS_USER
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Release.Name }}-creds
-                  key: username
-            - name: X_CSI_VXFLEXOS_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Release.Name }}-creds
-                  key: password
-            - name: X_CSI_VXFLEXOS_ENDPOINT
-              value: {{ required "Must provide a VxFlex OS REST API gateway HTTPS endpoint." .Values.restGateway }}
-            - name: X_CSI_VXFLEXOS_INSECURE
-              value: "true"
+            - name: X_CSI_ALLOW_RWO_MULTI_POD_ACCESS
+              value: "{{ required "Must provide a true/false string to allow RWO multi pod access." .Values.allowRWOMultiPodAccess }}"
           volumeMounts:
             - name: driver-path
               mountPath: /var/lib/kubelet/plugins/vxflexos.emc.dell.com
@@ -148,8 +151,8 @@ spec:
               mountPropagation: "Bidirectional"
             - name: dev
               mountPath: /dev
-            - name: scaleio-path-opt
-              mountPath: /opt/emc/scaleio/sdc/bin
+            - name: vxflexos-config
+              mountPath: /vxflexos-config
         - name: registrar
           image: {{ required "Must provide the CSI node registrar container image." .Values.images.registrar }}
           args:
@@ -190,23 +193,12 @@ spec:
                 fieldRef:
                   fieldPath: spec.nodeName
             - name: MDM
-              value: {{ join "," .Values.mdmIP }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-config
+                  key: MDM
             - name: MODE
               value: "monitoring"
-            - name: REPO_ADDRESS
-              value: {{ .Values.sdcKernelMirror.repoUrl }}
-            - name: REPO_USER
-              valueFrom:
-                secretKeyRef:
-                  name: sdc-repo-creds
-                  key: username
-            - name: REPO_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: sdc-repo-creds
-                  key: password
-            - name: HOST_DRV_CFG_PATH
-              value: /opt/emc/scaleio/sdc/bin
           volumeMounts:
             - name: dev
               mountPath: /dev
@@ -216,8 +208,6 @@ spec:
               mountPath: /storage
             - name: udev-d
               mountPath: /rules.d
-            - name: scaleio-path-opt
-              mountPath: /host_drv_cfg_path
         {{ end }}
       initContainers:  
         - name: sdc
@@ -233,19 +223,10 @@ spec:
             - name: MODE
               value: "config"
             - name: MDM
-              value: {{ join "," .Values.mdmIP }}
-            - name: REPO_ADDRESS
-              value: {{ .Values.sdcKernelMirror.repoUrl }}
-            - name: REPO_USER
               valueFrom:
                 secretKeyRef:
-                  name: sdc-repo-creds
-                  key: username
-            - name: REPO_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: sdc-repo-creds
-                  key: password
+                  name: {{ .Release.Name }}-config
+                  key: MDM
             - name: HOST_DRV_CFG_PATH
               value: /opt/emc/scaleio/sdc/bin
           volumeMounts:
@@ -256,11 +237,9 @@ spec:
             - name: sdc-storage
               mountPath: /storage 
             - name: udev-d
-              mountPath: /rules.d 
+              mountPath: /rules.d
             - name: scaleio-path-opt
               mountPath: /host_drv_cfg_path 
-            - name: sdc-config
-              mountPath: /config
       volumes:
         - name: registration-dir
           hostPath:
@@ -298,10 +277,9 @@ spec:
           hostPath:
             path: /etc/os-release
             type: File
-        - name: sdc-config
-          hostPath:
-            path: /var/sio-config
-            type: DirectoryOrCreate
+        - name: vxflexos-config
+          secret:
+            secretName: {{ .Release.Name }}-config
 {{ if .Values.podmon.enabled }}
         - name: usr-bin
           hostPath:

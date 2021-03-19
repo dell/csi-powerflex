@@ -68,5 +68,5 @@ Feature: VxFlex OS CSI interface
     And a valid volume
     When I invalidate the Probe cache
     And I call DeleteVolume with "single-writer"
-    Then the error contains "Controller Service has not been probed"
+    Then the error contains "System @@ has not been probed"
 

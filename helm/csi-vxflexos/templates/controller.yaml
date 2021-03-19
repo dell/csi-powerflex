@@ -17,7 +17,11 @@ rules:
     verbs: ["list", "watch", "create", "update", "patch"]
   - apiGroups: [""]
     resources: ["nodes"]
+{{ if .Values.podmon.enabled }}
+    verbs: ["get", "list", "watch", "patch"]
+{{ else }}
     verbs: ["get", "list", "watch"]
+{{ end }}
   - apiGroups: [""]
     resources: ["persistentvolumes"]
     verbs: ["get", "list", "watch", "create", "delete", "update", "patch"]
@@ -128,11 +132,22 @@ spec:
           image: {{ required "Must provide the podmon container image." .Values.podmon.image }}
           args:
             {{- toYaml .Values.podmon.controller.args | nindent 12 }}
+          env:
+            - name: MY_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: MY_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: MY_POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
           volumeMounts:
             - name: socket-dir
               mountPath: /var/run/csi
-            - name: usr-bin
-              mountPath: /usr-bin
 {{ end }}
         - name: attacher
           image: {{ required "Must provide the CSI attacher container image." .Values.images.attacher }}
@@ -157,6 +172,7 @@ spec:
             - "--timeout=120s"
             - "--v=5"
             - "--default-fstype={{ .Values.defaultFsType | default "ext4" }}"
+            - "--extra-create-metadata"
           env:
             - name: ADDRESS
               value: /var/run/csi/csi.sock
@@ -195,6 +211,7 @@ spec:
           command: [ "/csi-vxflexos.sh" ]
           args:
             - "--leader-election"
+            - "--array-config=/vxflexos-config/config"
           env:
             - name: CSI_ENDPOINT
               value: /var/run/csi/csi.sock
@@ -202,22 +219,6 @@ spec:
               value: controller
             - name: X_CSI_DEBUG
               value: "true"
-            - name: X_CSI_VXFLEXOS_ENDPOINT
-              value: {{ required "Must provide a VxFlex OS REST API gateway HTTPS endpoint." .Values.restGateway }}
-            - name: X_CSI_VXFLEXOS_USER
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Release.Name }}-creds
-                  key: username
-            - name: X_CSI_VXFLEXOS_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Release.Name }}-creds
-                  key: password
-            - name: X_CSI_VXFLEXOS_INSECURE
-              value: "true"
-            - name: X_CSI_VXFLEXOS_SYSTEMNAME
-              value: {{ required "A VxFlex OS system name must be provided" .Values.systemName }}
             - name: X_CSI_VXFLEXOS_ENABLESNAPSHOTCGDELETE
               value: "{{ required "Enable this to allow deletion of all snaps in CG" .Values.enablesnapshotcgdelete }}"
             - name: X_CSI_VXFLEXOS_ENABLELISTVOLUMESNAPSHOT
@@ -225,12 +226,11 @@ spec:
           volumeMounts:
             - name: socket-dir
               mountPath: /var/run/csi
+            - name: vxflexos-config
+              mountPath: /vxflexos-config
       volumes:
         - name: socket-dir
           emptyDir:
-{{ if .Values.podmon.enabled }}
-        - name: usr-bin
-          hostPath:
-            path: /usr/bin
-            type: Directory
-{{ end }}
+        - name: vxflexos-config
+          secret:
+            secretName: {{ .Release.Name }}-config

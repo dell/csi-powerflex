@@ -2,8 +2,9 @@ package service
 
 import (
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"strings"
+
+	log "github.com/sirupsen/logrus"
 
 	"golang.org/x/net/context"
 
@@ -66,9 +67,9 @@ func (s *service) Probe(
 
 	log.Debug("Probe called")
 	if !strings.EqualFold(s.mode, "node") {
-		log.Debug("controllerProbe")
-		if err := s.controllerProbe(ctx); err != nil {
-			log.Printf("error in controllerProbe: %s", err.Error())
+		log.Debug("systemProbe")
+		if err := s.systemProbeAll(ctx); err != nil {
+			log.Printf("error in systemProbeAll: %s", err.Error())
 			return nil, err
 		}
 	}

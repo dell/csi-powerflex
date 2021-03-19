@@ -16,11 +16,11 @@
   "links": [
     {
       "rel": "self",
-      "href": "/api/instances/Volume::72ce476b00000002"
+      "href": "/api/instances/Volume::706f646d6f6e31"
     },
     {
       "rel": "/api/Volume/relationship/Statistics",
-      "href": "/api/instances/Volume::72ce476b00000002/relationships/Statistics"
+      "href": "/api/instances/Volume::706f646d6f6e31/relationships/Statistics"
     },
     {
       "rel": "/api/parent/relationship/vtreeId",

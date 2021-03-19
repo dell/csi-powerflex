@@ -1,11 +1,8 @@
 #!/bin/sh
 source ../../env.sh
 rm -rf unix_sock
-nonhttp=$(echo $X_CSI_VXFLEXOS_ENDPOINT | sed 's/https:/http:/')
-echo "testing http validation with URL: " $nonhttp
-export X_CSI_VXFLEXOS_ENDPOINT=$nonhttp
 
-../../csi-vxflexos 2>stderr 
+../../csi-vxflexos --array-config="wrong_config.json" 2>stderr 
 grep "Unauthorized" stderr
 rc=$?
 echo rc $rc

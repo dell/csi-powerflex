@@ -3,9 +3,10 @@ This directory contains various test helm charts and test scripts:
 Helm charts:
 2replicas  Creates 2 filesystem mounts like 2vols but with Replicas = 2
 2vols	Creates 2 filesystem mounts
-2vols+restore	Upgraded version of 2vols that also mounts a volume created from snap
-7vols	Creates 7 filesystem mounts
-10vols	Creates 10 filesystem mounts
+2vols+restore	Upgraded version of 2vols that also mounts a volume created from snap  
+2vols-multi-array Creates 2 volumes, each on a different array. You must fill in 2vols-multi-array/templates/pvc1.yaml first  
+7vols	Creates 7 filesystem mounts  
+10vols	Creates 10 filesystem mounts  
 block1  Create a block volume using a pvc (NOT WORKING)
 block2  Create a block volume using a pvc+pv+existing volume (NOT WORKING)
 

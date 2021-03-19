@@ -1,0 +1,14 @@
+{
+  "userDataReadBwc": {
+    "numSeconds": 1,
+    "totalWeightInKb": 1,
+    "numOccured": 1
+  },
+  "userDataWriteBwc": {
+    "numSeconds": 2,
+    "totalWeightInKb": 2,
+    "numOccured": 2
+  },
+  "mappedSdcIds":  ["9E56672F-2F4B-4A42-BFF4-88B6846FBFDA"],
+  "numOfMappedSdcs": 1
+}

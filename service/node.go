@@ -17,15 +17,14 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-)
-
-const (
-	drvCfg = "/opt/emc/scaleio/sdc/bin/drv_cfg"
+	"io/ioutil"
 )
 
 var (
-	getMappedVolMaxRetry = 30
-	connectedSystemID    = make([]string, 0)
+	// slice of the connected PowerFlex systems
+	connectedSystemID             = make([]string, 0)
+	publishGetMappedVolMaxRetry   = 30
+	unpublishGetMappedVolMaxRetry = 5
 )
 
 func (s *service) NodeStageVolume(
@@ -65,10 +64,36 @@ func (s *service) NodePublishVolume(
 		}
 	}
 
-	id := req.GetVolumeId()
-	log.Printf("NodePublishVolume id: %s", id)
+	var ephemeralVolume bool
+	ephemeral, ok := req.VolumeContext["csi.storage.k8s.io/ephemeral"]
+	if ok {
+		ephemeralVolume = strings.ToLower(ephemeral) == "true"
+	}
+	if ephemeralVolume {
+		resp, err := s.ephemeralNodePublish(ctx, req)
+		if err != nil {
+			log.Errorf("ephemeralNodePublish returned error: %v", err)
+		}
+		return resp, err
+	}
 
-	sdcMappedVol, err := s.getSDCMappedVol(id)
+	csiVolID := req.GetVolumeId()
+	if csiVolID == "" {
+		return nil, status.Error(codes.InvalidArgument,
+			"volume ID is required")
+	}
+
+	volID := getVolumeIDFromCsiVolumeID(csiVolID)
+	log.Printf("NodePublishVolume id: %s", volID)
+	//ensure no ambiguity if legacy vol
+	err := s.checkVolumesMap(csiVolID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal,
+			"checkVolumesMap for id: %s failed : %s", csiVolID, err.Error())
+
+	}
+
+	sdcMappedVol, err := s.getSDCMappedVol(volID, publishGetMappedVolMaxRetry)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
@@ -78,6 +103,7 @@ func (s *service) NodePublishVolume(
 	}
 
 	return &csi.NodePublishVolumeResponse{}, nil
+
 }
 
 func (s *service) NodeUnpublishVolume(
@@ -99,13 +125,68 @@ func (s *service) NodeUnpublishVolume(
 	}
 
 	s.logStatistics()
-	id := req.GetVolumeId()
-	log.Printf("NodeUnublishVolume id: %s", id)
 
-	sdcMappedVol, err := s.getSDCMappedVol(id)
+	csiVolID := req.GetVolumeId()
+	if csiVolID == "" {
+		return nil, status.Error(codes.InvalidArgument,
+			"volume ID is required")
+	}
+
+	var ephemeralVolume bool
+	//For ephemeral volumes, kubernetes gives us an internal ID, so we need to use the lockfile to find the Powerflex ID this is mapped to.
+	lockFile := ephemeralStagingMountPath + csiVolID + "/id"
+	if s.fileExist(lockFile) {
+		ephemeralVolume = true
+		//while a file is being read from, it's a file determined by volID and is written by the driver
+		/* #nosec G304 */
+		idFromFile, err := ioutil.ReadFile(lockFile)
+		if err != nil && os.IsNotExist(err) {
+			log.Errorf("NodeUnpublish with ephemeral volume. Was unable to read lockfile: %v", err)
+			return nil, status.Error(codes.Internal, "NodeUnpublish with ephemeral volume. Was unable to read lockfile")
+		}
+		//Convert volume id from []byte to string format
+		csiVolID = string(idFromFile)
+		log.Infof("Read volume ID: %s from lockfile: %s ", csiVolID, lockFile)
+
+	}
+
+	volID := getVolumeIDFromCsiVolumeID(csiVolID)
+
+	log.Printf("NodeUnublishVolume id: %s", volID)
+	//ensure no ambiguity if legacy vol
+	err := s.checkVolumesMap(csiVolID)
 	if err != nil {
+		return nil, status.Errorf(codes.Internal,
+			"checkVolumesMap for id: %s failed : %s", csiVolID, err.Error())
+
+	}
+
+	sdcMappedVol, err := s.getSDCMappedVol(volID, unpublishGetMappedVolMaxRetry)
+
+	log.Infof("Err from getSDCMappedVol is: %v", err)
+
+	if err != nil {
+		log.Infof("Err from getSDCMappedVol is: %s", err.Error())
 		// fix k8s 19 bug: ControllerUnpublishVolume is called before NodeUnpublishVolume
-		_ = gofsutil.Unmount(ctx, targetPath)
+		// cleanup target from pod
+		if err := gofsutil.Unmount(ctx, targetPath); err != nil {
+			log.Errorf("cleanup target mount: %s", err.Error())
+		}
+
+		if err := removeWithRetry(targetPath); err != nil {
+			log.Errorf("cleanup target path: %s", err.Error())
+		}
+		// dont cleanup pvtMount in case it is in use elsewhere on the node
+
+		if ephemeralVolume {
+			log.Info("Detected ephemeral")
+			err := s.ephemeralNodeUnpublish(ctx, req)
+			if err != nil {
+				log.Errorf("ephemeralNodeUnpublish returned error: %s", err.Error())
+				return nil, err
+			}
+
+		}
 
 		// Idempotent need to return ok if not published
 		return &csi.NodeUnpublishVolumeResponse{}, nil
@@ -115,21 +196,26 @@ func (s *service) NodeUnpublishVolume(
 		return nil, err
 	}
 
-	_ = gofsutil.Unmount(ctx, targetPath)
+	if ephemeralVolume {
+		log.Info("Detected ephemeral")
+		err := s.ephemeralNodeUnpublish(ctx, req)
+		if err != nil {
+			log.Errorf("ephemeralNodeUnpublish returned error: %v", err)
+			return nil, err
+		}
 
-	if err := removeWithRetry(targetPath); err != nil {
-		log.Errorf("Unable to remove target path: %v", err)
 	}
 
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
-func (s *service) getSDCMappedVol(volumeID string) (*goscaleio.SdcMappedVolume, error) {
+// Get sdc mapped volume from the given volume ID
+func (s *service) getSDCMappedVol(volumeID string, maxRetry int) (*goscaleio.SdcMappedVolume, error) {
 	// If not found immediately, give a little time for controller to
 	// communicate with SDC that it has volume
 	var sdcMappedVol *goscaleio.SdcMappedVolume
 	var err error
-	for i := 0; i < getMappedVolMaxRetry; i++ {
+	for i := 0; i < maxRetry; i++ {
 		sdcMappedVol, err = getMappedVol(volumeID)
 		if sdcMappedVol != nil {
 			break
@@ -154,6 +240,9 @@ func getMappedVol(id string) (*goscaleio.SdcMappedVolume, error) {
 			err.Error())
 	}
 	var sdcMappedVol *goscaleio.SdcMappedVolume
+	if len(localVols) == 0 {
+		log.Printf("Length of localVols (goscaleio.GetLocalVolumeMap()) is 0 \n")
+	}
 	for _, v := range localVols {
 		if v.VolumeID == id {
 			sdcMappedVol = v
@@ -167,58 +256,42 @@ func getMappedVol(id string) (*goscaleio.SdcMappedVolume, error) {
 	return sdcMappedVol, nil
 }
 
-func (s *service) getAllSystems(ctx context.Context, systems []string) error {
-	// Create our ScaleIO API client, if needed
-	if s.adminClient == nil {
-		// create a new client
-		c, err := goscaleio.NewClientWithArgs(
-			s.opts.Endpoint, "", s.opts.Insecure, !s.opts.DisableCerts)
-		if err != nil {
-			e := fmt.Errorf("Unable to create ScaleIO client: %s", err.Error())
-			log.Error(e)
-			return e
-		}
-		// authenticate to this client
-		_, err = c.Authenticate(&goscaleio.ConfigConnect{
-			Endpoint: s.opts.Endpoint,
-			Username: s.opts.User,
-			Password: s.opts.Password,
-		})
-		if err != nil {
-			e := fmt.Errorf("Unable to create ScaleIO client: %s", err.Error())
-			log.Error(e)
-			return e
-		}
-		// success! Save the client for later use
-		s.adminClient = c
-	}
-
-	// get the systemNames for all of the systemIDs in connectedSystemID
-	if s.adminClient != nil {
-		connectedSystemName := make([]string, 0)
-		for _, i := range systems {
-			sys, err := s.adminClient.FindSystem(i, i, "")
+// getDefaultSystemName gets the system name for the default system and append it to connectedSystemID variable
+func (s *service) getDefaultSystemName(ctx context.Context, systems []string) error {
+	for _, system := range systems {
+		array := s.opts.arrays[system]
+		if array != nil && array.IsDefault {
+			// makes sure it has ScleIO API client
+			err := s.systemProbe(ctx, array)
+			if err != nil {
+				// Could not probe system. Log a message and return
+				e := fmt.Errorf("Unable to probe system with ID: %s. Error is %v", array.SystemID, err)
+				log.Error(e)
+				return e
+			}
+			adminClient := s.adminClients[array.SystemID]
+			sys, err := adminClient.FindSystem(array.SystemID, array.SystemID, "")
 			if err != nil {
 				// could not find the name for this system. Log a message and keep going
-				e := fmt.Errorf("Unable to find VxFlex OS system name matching system ID: %s. Error is %v", i, err)
+				e := fmt.Errorf("Unable to find VxFlex OS system name matching system ID: %s. Error is %v", array.SystemID, err)
 				log.Error(e)
 			} else {
 				if sys.System == nil || sys.System.Name == "" {
 					// system does not have a name, this is fine
-					log.Printf("Found system without a name, system ID: %s", i)
+					log.Printf("Found system without a name, system ID: %s", array.SystemID)
 				} else {
 					log.Printf("Found system Name: %s", sys.System.Name)
-					connectedSystemName = append(connectedSystemName, sys.System.Name)
+					connectedSystemID = append(connectedSystemID, sys.System.Name)
 				}
 			}
-		}
-		for _, n := range connectedSystemName {
-			connectedSystemID = append(connectedSystemID, n)
+			break
 		}
 	}
 	return nil
 }
 
+// nodeProbe fetchs the SDC GUID by drv_cfg and the systemIDs/names by getDefaultSystemName method.
+// It also makes sure private directory(privDir) is created
 func (s *service) nodeProbe(ctx context.Context) error {
 
 	// make sure the kernel module is loaded
@@ -229,33 +302,31 @@ func (s *service) nodeProbe(ctx context.Context) error {
 
 	// fetch the SDC GUID
 	if s.opts.SdcGUID == "" {
-		// try to get GUID using `drv_cfg` binary
-		if _, err := os.Stat(drvCfg); os.IsNotExist(err) {
-			return status.Error(codes.FailedPrecondition,
-				"unable to get SDC GUID via config or drv_cfg binary")
-		}
+		// try to query the SDC GUID
+		guid, err := goscaleio.DrvCfgQueryGUID()
 
-		out, err := exec.Command(drvCfg, "--query_guid").CombinedOutput()
 		if err != nil {
-			return status.Errorf(codes.FailedPrecondition,
-				"error getting SDC GUID: %s", err.Error())
+			return status.Error(codes.FailedPrecondition,
+				"unable to get SDC GUID via config or automatically")
 		}
 
-		s.opts.SdcGUID = strings.TrimSpace(string(out))
+		s.opts.SdcGUID = guid
 		log.WithField("guid", s.opts.SdcGUID).Info("set SDC GUID")
 	}
 
 	// fetch the systemIDs
 	var err error
-	connectedSystemID, err = getSystemsKnownToSDC(s.opts)
-	if err != nil {
-		return status.Errorf(codes.FailedPrecondition, "%s", err)
+	if len(connectedSystemID) == 0 {
+		connectedSystemID, err = getSystemsKnownToSDC(s.opts)
+		if err != nil {
+			return status.Errorf(codes.FailedPrecondition, "%s", err)
+		}
 	}
 
 	// get all the system names and IDs.
 	// ignore the errors here as all the information is supplementary
 	/* #nosec G104 */
-	s.getAllSystems(ctx, connectedSystemID)
+	s.getDefaultSystemName(ctx, connectedSystemID)
 
 	// make sure privDir is pre-created
 	if _, err := mkdir(s.privDir); err != nil {
@@ -265,22 +336,6 @@ func (s *service) nodeProbe(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-// getStringInBetween returns empty string if no start or end string found
-func getStringInBetween(str string, start string, end string) (result string) {
-	s := strings.Index(str, start)
-	if s == -1 {
-		return
-	}
-	s += len(start)
-	e := strings.Index(str[s:], end)
-	if e == -1 {
-		return
-	}
-
-	contents := str[s : s+e]
-	return strings.TrimSpace(contents)
 }
 
 func kmodLoaded(opts Opts) bool {
@@ -312,37 +367,16 @@ func kmodLoaded(opts Opts) bool {
 }
 
 func getSystemsKnownToSDC(opts Opts) ([]string, error) {
-	var out []byte
-	var err error
 	systems := make([]string, 0)
 
-	// fetch the systemIDs
-	if opts.drvCfgQueryMDM == "" {
-		// try to get system name using `drv_cfg` binary
-		if _, err := os.Stat(drvCfg); os.IsNotExist(err) {
-			return systems, status.Error(codes.FailedPrecondition,
-				"unable to get System Name via config or drv_cfg binary")
-		}
-
-		out, err = exec.Command(drvCfg, "--query_mdms").CombinedOutput()
-		if err != nil {
-			return systems, status.Errorf(codes.FailedPrecondition,
-				"error getting System ID: %s", err.Error())
-		}
-	} else {
-		out = []byte(opts.drvCfgQueryMDM)
+	discoveredSystems, err := goscaleio.DrvCfgQuerySystems()
+	if err != nil {
+		return systems, err
 	}
 
-	r := bytes.NewReader(out)
-	s := bufio.NewScanner(r)
-
-	for s.Scan() {
-		// the System ID is the field titled "Installation ID"
-		sysID := getStringInBetween(s.Text(), "MDM-ID", "SDC")
-		if sysID != "" {
-			systems = append(systems, sysID)
-			log.WithField("ID", sysID).Info("Found connected system")
-		}
+	for _, s := range *discoveredSystems {
+		systems = append(systems, s.SystemID)
+		log.WithField("ID", s.SystemID).Info("Found connected system")
 	}
 
 	return systems, nil
@@ -376,7 +410,7 @@ func (s *service) NodeGetInfo(
 	req *csi.NodeGetInfoRequest) (
 	*csi.NodeGetInfoResponse, error) {
 
-	// Get the Node ID
+	// Fetch SDC GUID
 	if s.opts.SdcGUID == "" {
 		if !s.opts.AutoProbe {
 			return nil, status.Error(codes.FailedPrecondition,
@@ -388,7 +422,7 @@ func (s *service) NodeGetInfo(
 		}
 	}
 
-	// Get the Node ID
+	// Fetch Node ID
 	if len(connectedSystemID) == 0 {
 		if !s.opts.AutoProbe {
 			return nil, status.Error(codes.FailedPrecondition,
@@ -457,13 +491,27 @@ func (s *service) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolum
 		return &csi.NodeExpandVolumeResponse{}, nil
 	}
 
-	volID := req.GetVolumeId()
-	if volID == "" {
+	csiVolID := req.GetVolumeId()
+	if csiVolID == "" {
 		return nil, status.Error(codes.InvalidArgument,
-			"Volume ID is required")
+			"volume ID is required")
+	}
+	//ensure no ambiguity if legacy vol
+	err = s.checkVolumesMap(csiVolID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal,
+			"checkVolumesMap for id: %s failed : %s", csiVolID, err.Error())
+
 	}
 
-	sdcMappedVolume, err := s.getSDCMappedVol(volID)
+	volID := getVolumeIDFromCsiVolumeID(csiVolID)
+
+	if volID == "" {
+		return nil, status.Error(codes.InvalidArgument,
+			"volume ID is required")
+	}
+
+	sdcMappedVolume, err := s.getSDCMappedVol(volID, publishGetMappedVolMaxRetry)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
@@ -477,7 +525,7 @@ func (s *service) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolum
 	f := log.Fields{
 		"CSIRequestID": reqID,
 		"DevicePath":   devicePath,
-		"VolumeID":     volID,
+		"VolumeID":     csiVolID,
 		"VolumePath":   volumePath,
 		"Size":         size,
 	}

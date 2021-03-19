@@ -1,0 +1,67 @@
+kind: StatefulSet
+apiVersion: apps/v1
+metadata:
+    name: vxflexos-1-containers
+    namespace: default
+spec:
+    serviceName: vxflexos-1-containers
+    replicas: 1
+    selector:
+        matchLabels:
+          app: vxflexos-1-containers
+    template:
+      metadata:
+        labels:
+          app: vxflexos-1-containers
+      spec:
+        containers:
+          - name: container1
+            image: docker.io/centos:latest
+            imagePullPolicy: IfNotPresent
+            command: [ "/bin/sleep", "3600" ]
+            volumeMounts:
+              - mountPath: "/data0"
+                name: pvolx1
+          - name: container2
+            image: docker.io/centos:latest
+            imagePullPolicy: IfNotPresent
+            command: [ "/bin/sleep", "3600" ]
+            volumeMounts:
+              - mountPath: "/data0"
+                name: pvolx1
+          - name: container3
+            image: docker.io/centos:latest
+            imagePullPolicy: IfNotPresent
+            command: [ "/bin/sleep", "3600" ]
+            volumeMounts:
+              - mountPath: "/data1"
+                name: pvolx1
+        volumes:
+          - name: pvolx1
+            persistentVolumeClaim:
+              claimName: pvolx1-vxflexos
+        affinity:
+          podAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - vxflexos-1-containers
+              topologyKey: "kubernetes.io/hostname"
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pvolx1-vxflexos
+  namespace: default
+spec:
+  accessModes:
+  - ReadWriteOnce
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 8Gi
+  storageClassName: vxflexos-xfs
+

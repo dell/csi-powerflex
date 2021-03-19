@@ -24,6 +24,15 @@ var (
 		FindVolumeIDError             bool
 		GetVolByIDError               bool
 		GetStoragePoolsError          bool
+		PodmonFindSdcError            bool
+		PodmonVolumeStatisticsError   bool
+		PodmonNoNodeIDError           bool
+		PodmonNoSystemError           bool
+		PodmonNoVolumeNoNodeIDError   bool
+		PodmonControllerProbeError    bool
+		PodmonNodeProbeError          bool
+		PodmonVolumeError             bool
+		GetSystemSdcError             bool
 		GetSdcInstancesError          bool
 		MapSdcError                   bool
 		RemoveMappedSdcError          bool
@@ -34,6 +43,7 @@ var (
 		VolumeInstancesError          bool
 		BadVolIDError                 bool
 		WrongVolIDError               bool
+		WrongSystemError              bool
 		NoEndpointError               bool
 		NoUserError                   bool
 		NoPasswordError               bool
@@ -42,6 +52,9 @@ var (
 		WrongSysNameError             bool
 		NoVolumeIDError               bool
 		SetVolumeSizeError            bool
+		systemNameMatchingError       bool
+		LegacyVolumeConflictError     bool
+		VolumeIDTooShortError         bool
 	}
 )
 
@@ -49,6 +62,7 @@ var (
 // This allows unit testing with a Scale IO but still provides some coverage in the goscaleio library.
 var scaleioRouter http.Handler
 var testControllerHasNoConnection bool
+var count int
 
 // getFileHandler returns an http.Handler that
 func getHandler() http.Handler {
@@ -69,15 +83,25 @@ func getHandler() http.Handler {
 	stepHandlersErrors.GetVolByIDError = false
 	stepHandlersErrors.SIOGatewayVolumeNotFoundError = false
 	stepHandlersErrors.GetStoragePoolsError = false
+	stepHandlersErrors.PodmonFindSdcError = false
+	stepHandlersErrors.PodmonVolumeStatisticsError = false
+	stepHandlersErrors.PodmonNoVolumeNoNodeIDError = false
+	stepHandlersErrors.PodmonNoNodeIDError = false
+	stepHandlersErrors.PodmonNoSystemError = false
+	stepHandlersErrors.PodmonControllerProbeError = false
+	stepHandlersErrors.PodmonNodeProbeError = false
+	stepHandlersErrors.PodmonVolumeError = false
 	stepHandlersErrors.GetSdcInstancesError = false
 	stepHandlersErrors.MapSdcError = false
 	stepHandlersErrors.RemoveMappedSdcError = false
 	stepHandlersErrors.GetStatisticsError = false
+	stepHandlersErrors.GetSystemSdcError = false
 	stepHandlersErrors.CreateSnapshotError = false
 	stepHandlersErrors.RemoveVolumeError = false
 	stepHandlersErrors.VolumeInstancesError = false
 	stepHandlersErrors.BadVolIDError = false
 	stepHandlersErrors.WrongVolIDError = false
+	stepHandlersErrors.WrongSystemError = false
 	stepHandlersErrors.NoEndpointError = false
 	stepHandlersErrors.NoUserError = false
 	stepHandlersErrors.NoPasswordError = false
@@ -86,7 +110,8 @@ func getHandler() http.Handler {
 	stepHandlersErrors.WrongSysNameError = false
 	stepHandlersErrors.NoVolumeIDError = false
 	stepHandlersErrors.SetVolumeSizeError = false
-
+	stepHandlersErrors.LegacyVolumeConflictError = false
+	stepHandlersErrors.VolumeIDTooShortError = false
 	sdcMappings = sdcMappings[:0]
 	sdcMappingsID = ""
 	return handler
@@ -103,7 +128,27 @@ func getRouter() http.Handler {
 	scaleioRouter.HandleFunc("/api/types/System/instances", handleSystemInstances)
 	scaleioRouter.HandleFunc("/api/types/Volume/instances", handleVolumeInstances)
 	scaleioRouter.HandleFunc("/api/types/StoragePool/instances", handleStoragePoolInstances)
+	scaleioRouter.HandleFunc("{Volume}/relationship/Statistics", handleVolumeStatistics)
+	scaleioRouter.HandleFunc("/api/Volume/relationship/Statistics", handleVolumeStatistics)
+	scaleioRouter.HandleFunc("{SdcGuid}/relationships/Sdc", handleSystemSdc)
 	return scaleioRouter
+}
+
+// handle implements GET /api/types/StoragePool/instances
+func handleVolumeStatistics(w http.ResponseWriter, r *http.Request) {
+	if stepHandlersErrors.PodmonVolumeStatisticsError {
+		writeError(w, "induced error", http.StatusRequestTimeout, codes.Internal)
+		return
+	}
+	returnJSONFile("features", "get_volume_statistics.json", w, nil)
+}
+
+func handleSystemSdc(w http.ResponseWriter, r *http.Request) {
+	if stepHandlersErrors.GetSystemSdcError {
+		writeError(w, "induced error", http.StatusRequestTimeout, codes.Internal)
+		return
+	}
+	returnJSONFile("features", "get_sdc_instances.json", w, nil)
 }
 
 // handleLogin implements GET /api/login
@@ -133,7 +178,24 @@ func handleVersion(w http.ResponseWriter, r *http.Request) {
 
 // handleSystemInstances implements GET /api/types/System/instances
 func handleSystemInstances(w http.ResponseWriter, r *http.Request) {
-	returnJSONFile("features", "get_system_instances.json", w, nil)
+	if stepHandlersErrors.PodmonNodeProbeError {
+		writeError(w, "PodmonNodeProbeError", http.StatusRequestTimeout, codes.Internal)
+		return
+	}
+	if stepHandlersErrors.PodmonControllerProbeError {
+		writeError(w, "PodmonControllerProbeError", http.StatusRequestTimeout, codes.Internal)
+		return
+	}
+	if stepHandlersErrors.systemNameMatchingError {
+		count++
+	}
+	if count == 2 {
+		fmt.Printf("DEBUG send bad system\n")
+		returnJSONFile("features", "bad_system.json", w, nil)
+		count = 0
+	} else {
+		returnJSONFile("features", "get_system_instances.json", w, nil)
+	}
 }
 
 // handleStoragePoolInstances implements GET /api/types/StoragePool/instances
@@ -242,8 +304,9 @@ func handleVolumeInstances(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("error encoding json: %s\n", err.Error())
 		}
-		return
 
+		log.Printf("end make volumes")
+		break
 	// Read all the Volumes
 	case http.MethodGet:
 		instances := make([]*types.Volume, 0)
@@ -293,6 +356,7 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 		if req.SdcID == "d0f055a700000000" {
 			sdcMappings = append(sdcMappings, types.MappedSdcInfo{SdcID: req.SdcID, SdcIP: "10.247.102.218"})
 		}
+		fmt.Printf("SdcID: %s\n", req.SdcID)
 		if req.SdcID == "d0f055aa00000001" {
 			sdcMappings = append(sdcMappings, types.MappedSdcInfo{SdcID: req.SdcID, SdcIP: "10.247.102.151"})
 		}
@@ -307,7 +371,6 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("error decoding json: %s\n", err.Error())
 		}
-		fmt.Printf("SdcID: %s\n", req.SdcID)
 		for i, val := range sdcMappings {
 			if val.SdcID == req.SdcID {
 				copy(sdcMappings[i:], sdcMappings[i+1:])
@@ -327,13 +390,24 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 		for _, snapParam := range req.SnapshotDefs {
 			// For now3, only a single snapshot ID is supported
 
-			id := "72cee42500000003"
+			id := "9999"
+			if snapParam.SnapshotName == "clone" {
+				id = "72cee42500000003"
+			}
+			if snapParam.SnapshotName == "invalid-clone" {
+				writeError(w, "inducedError Volume not found", http.StatusRequestTimeout, codes.Internal)
+				return
+			}
 
 			if stepHandlersErrors.WrongVolIDError {
 				id = "72cee42500000002"
 			}
+			if stepHandlersErrors.FindVolumeIDError {
+				id = "72cee42500000002"
+				writeError(w, "inducedError Volume not found", http.StatusRequestTimeout, codes.Internal)
+				return
+			}
 
-			fmt.Println("Id is ", id)
 			volumeIDToName[id] = snapParam.SnapshotName
 			volumeNameToID[snapParam.SnapshotName] = id
 			volumeIDToAncestorID[id] = snapParam.VolumeID
@@ -393,6 +467,15 @@ func handleRelationships(w http.ResponseWriter, r *http.Request) {
 	case "Sdc":
 		if stepHandlersErrors.GetSdcInstancesError {
 			writeError(w, "induced error", http.StatusRequestTimeout, codes.Internal)
+		} else if stepHandlersErrors.PodmonFindSdcError {
+			writeError(w, "PodmonFindSdcError", http.StatusRequestTimeout, codes.Internal)
+		} else if stepHandlersErrors.PodmonNoSystemError {
+			writeError(w, "PodmonNoSystemError", http.StatusRequestTimeout, codes.Internal)
+		} else if stepHandlersErrors.PodmonControllerProbeError {
+			writeError(w, "PodmonControllerProbeError", http.StatusRequestTimeout, codes.Internal)
+			return
+		} else if stepHandlersErrors.PodmonNodeProbeError {
+			writeError(w, "PodmonNodeProbeError", http.StatusRequestTimeout, codes.Internal)
 			return
 		}
 		returnJSONFile("features", "get_sdc_instances.json", w, nil)
@@ -405,6 +488,12 @@ func handleRelationships(w http.ResponseWriter, r *http.Request) {
 			returnJSONFile("features", "get_system_statistics.json", w, nil)
 		} else if from == "StoragePool" {
 			returnJSONFile("features", "get_storage_pool_statistics.json", w, nil)
+		} else if from == "Volume" {
+			if stepHandlersErrors.PodmonVolumeStatisticsError {
+				writeError(w, "PodmonVolumeStatisticsError", http.StatusRequestTimeout, codes.Internal)
+				return
+			}
+			returnJSONFile("features", "get_volume_statistics.json", w, nil)
 		} else {
 			writeError(w, "Unsupported relationship from type", http.StatusRequestTimeout, codes.Internal)
 		}
@@ -425,7 +514,7 @@ func handleInstances(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if stepHandlersErrors.NoVolumeIDError {
-		writeError(w, "Volume ID is required", http.StatusRequestTimeout, codes.InvalidArgument)
+		writeError(w, "volume ID is required", http.StatusRequestTimeout, codes.InvalidArgument)
 		return
 	}
 
@@ -443,8 +532,9 @@ func handleInstances(w http.ResponseWriter, r *http.Request) {
 	}
 	switch objType {
 	case "Volume":
-		if volumeIDToName[id] != "" {
+		if id != "9999" {
 			log.Printf("Found id %s for %s\n", id, objType)
+			log.Printf("Found name = %s\n", volumeIDToName[id])
 			replacementMap := make(map[string]string)
 			replacementMap["__ID__"] = id
 			replacementMap["__NAME__"] = volumeIDToName[id]
@@ -453,7 +543,7 @@ func handleInstances(w http.ResponseWriter, r *http.Request) {
 			replacementMap["__CONSISTENCY_GROUP_ID__"] = volumeIDToConsistencyGroupID[id]
 			returnJSONFile("features", "volume.json.template", w, replacementMap)
 		} else {
-			log.Printf("Didn't find id %s for %s\n", id, objType)
+			log.Printf("Did not find id %s for %s\n", id, objType)
 			writeError(w, "volume not found: "+id, http.StatusNotFound, codes.NotFound)
 		}
 	}
@@ -478,13 +568,11 @@ func extractIDFromStruct(id string) string {
 
 // Retrieve a volume by name
 func handleQueryVolumeIDByKey(w http.ResponseWriter, r *http.Request) {
-	log.Printf("FindVolumeIDError: %v\n", stepHandlersErrors.FindVolumeIDError)
 	if stepHandlersErrors.FindVolumeIDError {
 		writeError(w, "induced error", http.StatusRequestTimeout, codes.Internal)
 		return
 	}
 
-	log.Printf("called handleQueryVolumeIDByKey")
 	req := new(types.VolumeQeryIdByKeyParam)
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(&req)
@@ -502,7 +590,8 @@ func handleQueryVolumeIDByKey(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		log.Printf("did not find volume %s\n", req.Name)
-		writeError(w, fmt.Sprintf("volume %s not found", req.Name), http.StatusNotFound, codes.NotFound)
+		volumeNameToID[req.Name] = ""
+		writeError(w, fmt.Sprintf("Volume not found %s", req.Name), http.StatusNotFound, codes.NotFound)
 	}
 }
 

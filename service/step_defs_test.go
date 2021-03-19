@@ -12,9 +12,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/DATA-DOG/godog"
-	"github.com/DATA-DOG/godog/gherkin"
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
+	//"github.com/cucumber/gherkin-go"
+	"github.com/cucumber/godog"
+	podmon "github.com/dell/dell-csi-extensions/podmon"
 	"github.com/dell/gofsutil"
 	"github.com/dell/goscaleio"
 	types "github.com/dell/goscaleio/types/v1"
@@ -24,10 +25,14 @@ import (
 )
 
 const (
+	arrayID                    = "14dbbf5617523654"
+	arrayID2                   = "15dbbf5617523655"
 	badVolumeID                = "Totally Fake ID"
-	goodVolumeID               = "111-111"
+	goodVolumeID               = "111"
+	badVolumeID2               = "9999"
+	badVolumeID3               = "99"
 	goodVolumeName             = "vol1"
-	altVolumeID                = "222-222"
+	altVolumeID                = "222"
 	goodNodeID                 = "9E56672F-2F4B-4A42-BFF4-88B6846FBFDA"
 	altNodeID                  = "7E012974-3651-4DCB-9954-25975A3C3CDF"
 	datafile                   = "test/tmp/datafile"
@@ -38,13 +43,18 @@ const (
 	sdcVolume1                 = "d0f055a700000000"
 	sdcVolume2                 = "d0f055aa00000001"
 	sdcVolume0                 = "0000000000000000"
+	ephemVolumeSDC             = "6373692d64306630353561373030303030303030"
 	mdmID                      = "0000"
+	mdmIDEphem                 = "14dbbf5617523654"
 	nodePublishBlockDevicePath = "test/dev/scinia"
 	nodePublishAltBlockDevPath = "test/dev/scinib"
+	nodePublishEphemDevPath    = "test/dev/scinic"
 	nodePublishSymlinkDir      = "test/dev/disk/by-id"
-	goodSnapID                 = "444-444"
-	altSnapID                  = "555-555"
+	goodSnapID                 = "444"
+	altSnapID                  = "555"
 )
+
+var setupGetSystemIDtoFail bool
 
 type feature struct {
 	nGoRoutines                           int
@@ -52,6 +62,8 @@ type feature struct {
 	service                               *service
 	adminClient                           *goscaleio.Client
 	system                                *goscaleio.System
+	adminClient2                          *goscaleio.Client
+	system2                               *goscaleio.System
 	err                                   error // return from the preceding call
 	getPluginInfoResponse                 *csi.GetPluginInfoResponse
 	getPluginCapabilitiesResponse         *csi.GetPluginCapabilitiesResponse
@@ -74,6 +86,7 @@ type feature struct {
 	listVolumesResponse                   *csi.ListVolumesResponse
 	listSnapshotsRequest                  *csi.ListSnapshotsRequest
 	listSnapshotsResponse                 *csi.ListSnapshotsResponse
+	validateVolumeHostConnectivityResp    *podmon.ValidateVolumeHostConnectivityResponse
 	listedVolumeIDs                       map[string]bool
 	listVolumesNextTokenCache             string
 	invalidVolumeID, noVolumeID, noNodeID bool
@@ -98,9 +111,27 @@ func (f *feature) checkGoRoutines(tag string) {
 func (f *feature) aVxFlexOSService() error {
 	f.checkGoRoutines("start aVxFlexOSService")
 	// Save off the admin client and the system
-	if f.service != nil && f.service.adminClient != nil {
-		f.adminClient = f.service.adminClient
-		f.system = f.service.system
+	if f.service != nil {
+		adminClient := f.service.adminClients[arrayID]
+		adminClient2 := f.service.adminClients[arrayID2]
+		if adminClient != nil {
+			f.adminClient = adminClient
+			f.adminClient.SetToken("xxxx")
+		}
+		if adminClient2 != nil {
+			f.adminClient2 = adminClient2
+			f.adminClient2.SetToken("xxxx")
+		}
+
+		system := f.service.systems[arrayID]
+		if system != nil {
+			f.system = system
+		}
+		system2 := f.service.systems[arrayID2]
+		if system2 != nil {
+			f.system2 = system2
+		}
+
 	}
 	f.err = nil
 	f.getPluginInfoResponse = nil
@@ -112,6 +143,7 @@ func (f *feature) aVxFlexOSService() error {
 	f.getCapacityResponse = nil
 	f.controllerGetCapabilitiesResponse = nil
 	f.validateVolumeCapabilitiesResponse = nil
+	f.validateVolumeHostConnectivityResp = nil
 	f.service = nil
 	f.createVolumeRequest = nil
 	f.publishVolumeRequest = nil
@@ -155,10 +187,12 @@ func (f *feature) aVxFlexOSService() error {
 	gofsutil.GOFSMockMounts = gofsutil.GOFSMockMounts[:0]
 
 	// configure variables in the driver
-	getMappedVolMaxRetry = 1
+	publishGetMappedVolMaxRetry = 2
 
 	// Get or reuse the cached service
 	f.getService()
+
+	goscaleio.SCINIMockMode = true
 
 	// Get the httptest mock handler. Only set
 	// a new server if there isn't one already.
@@ -167,8 +201,9 @@ func (f *feature) aVxFlexOSService() error {
 		if f.server == nil {
 			f.server = httptest.NewServer(handler)
 		}
-		f.service.opts.Endpoint = f.server.URL
-		log.Printf("server url: %s\n", f.server.URL)
+		f.service.opts.arrays[arrayID].Endpoint = f.server.URL
+		f.service.opts.arrays[arrayID2].Endpoint = f.server.URL
+
 	} else {
 		f.server = nil
 	}
@@ -179,21 +214,38 @@ func (f *feature) aVxFlexOSService() error {
 func (f *feature) getService() *service {
 	testControllerHasNoConnection = false
 	svc := new(service)
+	svc.adminClients = make(map[string]*goscaleio.Client)
+	svc.systems = make(map[string]*goscaleio.System)
+
 	if f.adminClient != nil {
-		svc.adminClient = f.adminClient
+		svc.adminClients[arrayID] = f.adminClient
 	}
+	if f.adminClient2 != nil {
+		svc.adminClients[arrayID2] = f.adminClient2
+	}
+
 	if f.system != nil {
-		svc.system = f.system
+		svc.systems[arrayID] = f.system
 	}
-	svc.sdcMap = map[string]string{}
-	svc.spCache = map[string]string{}
+	if f.system2 != nil {
+		svc.systems[arrayID2] = f.system2
+	}
+
 	svc.storagePoolIDToName = map[string]string{}
+	svc.volumePrefixToSystems = map[string][]string{}
 	svc.privDir = "./features"
+	ArrayConfig = "./features/array-config/config"
+
 	var opts Opts
-	opts.User = "blah"
-	opts.Password = "blah"
-	opts.SystemName = "14dbbf5617523654"
-	opts.Insecure = true
+	ctx := new(context.Context)
+	var err error
+	opts.arrays, err = getArrayConfig(*ctx)
+	if err != nil {
+		log.Printf("Read arrays from config file failed: %s\n", err)
+		return nil
+	}
+
+	opts.AutoProbe = true
 	opts.DisableCerts = true
 	opts.EnableSnapshotCGDelete = true
 	opts.EnableListVolumesSnapshots = true
@@ -207,7 +259,19 @@ ip6t_rpfilter          12595  1
 	opts.drvCfgQueryMDM = `
 MDM-ID 14dbbf5617523654 SDC ID d0f33bd700000004 INSTALLATION ID 1c078b073d75512c IPs [0]-1.2.3.4 [1]-1.2.3.5
 `
+	opts.defaultSystemID = arrayID
+
+	if setupGetSystemIDtoFail {
+		opts.defaultSystemID = ""
+		array := opts.arrays[arrayID]
+		opts.arrays["addAnotherArray"] = array
+	}
+
 	svc.opts = opts
+
+	if f.system != nil {
+		svc.systems[arrayID] = f.system
+	}
 	f.service = svc
 	svc.statisticsCounter = 99
 	svc.logStatistics()
@@ -224,6 +288,13 @@ func (f *feature) iCallGetPluginInfo() error {
 	}
 	return nil
 }
+
+func (f *feature) iCallcheckVolumesMap(id string) error {
+	f.err = f.service.checkVolumesMap(id)
+	return nil
+
+}
+
 func (f *feature) aValidGetPlugInfoResponseIsReturned() error {
 	rep := f.getPluginInfoResponse
 	url := rep.GetManifest()["url"]
@@ -263,6 +334,8 @@ func (f *feature) iCallProbe() error {
 	ctx := new(context.Context)
 	req := new(csi.ProbeRequest)
 	f.checkGoRoutines("before probe")
+	f.service.opts.AutoProbe = true
+	f.service.mode = "controller"
 	f.probeResponse, f.err = f.service.Probe(*ctx, req)
 	f.checkGoRoutines("after probe")
 	return nil
@@ -322,7 +395,7 @@ func (f *feature) theControllerHasNoConnection() error {
 }
 
 func (f *feature) thereIsANodeProbeLsmodError() error {
-	f.service.opts.Lsmod = ""
+	f.service.opts.Lsmod = "junk"
 	return nil
 }
 
@@ -395,8 +468,7 @@ func (f *feature) iCallCreateVolume(name string) error {
 	req.Name = name
 
 	if stepHandlersErrors.NoAdminError {
-		f.service.adminClient = nil
-		f.service.opts.AutoProbe = true
+		f.service.adminClients[arrayID] = nil
 	}
 
 	f.createVolumeResponse, f.err = f.service.CreateVolume(*ctx, req)
@@ -407,6 +479,76 @@ func (f *feature) iCallCreateVolume(name string) error {
 	if f.createVolumeResponse != nil {
 		log.Printf("vol id %s\n", f.createVolumeResponse.GetVolume().VolumeId)
 	}
+	return nil
+}
+
+func (f *feature) iCallValidateVolumeHostConnectivity() error {
+
+	ctx := new(context.Context)
+
+	sdcID := f.service.opts.SdcGUID
+	sdcGUID := strings.ToUpper(sdcID)
+	csiNodeID := sdcGUID
+
+	volIDs := make([]string, 0)
+
+	if stepHandlersErrors.PodmonNoVolumeNoNodeIDError == true {
+		csiNodeID = ""
+	} else if stepHandlersErrors.PodmonNoNodeIDError == true {
+		csiNodeID = ""
+		volid := f.createVolumeResponse.GetVolume().VolumeId
+		volIDs = volIDs[:0]
+		volIDs = append(volIDs, volid)
+	} else if stepHandlersErrors.PodmonControllerProbeError == true {
+		f.service.mode = "controller"
+	} else if stepHandlersErrors.PodmonNodeProbeError == true {
+		f.service.mode = "node"
+	} else if stepHandlersErrors.PodmonVolumeError == true {
+		volid := "9999"
+		volIDs = append(volIDs, volid)
+	} else if stepHandlersErrors.PodmonNoSystemError == true {
+		f.service.mode = "node"
+		f.system = nil
+		f.service.opts.arrays[arrayID].SystemID = "WrongSystemName"
+	} else {
+		volid := f.createVolumeResponse.GetVolume().VolumeId
+		volIDs = volIDs[:0]
+		volIDs = append(volIDs, volid)
+	}
+
+	req := &podmon.ValidateVolumeHostConnectivityRequest{
+		NodeId:    csiNodeID,
+		VolumeIds: volIDs,
+	}
+
+	connect, err := f.service.ValidateVolumeHostConnectivity(*ctx, req)
+	if err != nil {
+		f.err = errors.New(err.Error())
+		return nil
+	}
+	f.validateVolumeHostConnectivityResp = connect
+	if len(connect.Messages) > 0 {
+		for i, msg := range connect.Messages {
+			fmt.Printf("messages %d: %s\n", i, msg)
+			if stepHandlersErrors.PodmonVolumeStatisticsError == true ||
+				stepHandlersErrors.PodmonVolumeError == true {
+				if strings.Contains(msg, "volume") {
+					fmt.Printf("found %d: %s\n", i, msg)
+					f.err = errors.New(connect.Messages[i])
+					return nil
+				}
+			}
+		}
+		if stepHandlersErrors.PodmonVolumeStatisticsError == true {
+			f.err = errors.New(connect.Messages[0])
+			return nil
+		}
+	}
+
+	if connect.IosInProgress {
+		return nil
+	}
+	err = fmt.Errorf("Unexpected error IO to volume: %t", connect.IosInProgress)
 	return nil
 }
 
@@ -423,7 +565,7 @@ func (f *feature) aValidCreateVolumeResponseIsReturned() error {
 
 func (f *feature) iSpecifyAccessibilityRequirementsWithASystemIDOf(requestedSystem string) error {
 	if requestedSystem == "f.service.opt.SystemName" {
-		requestedSystem = f.service.opts.SystemName
+		requestedSystem = f.service.opts.defaultSystemID
 	}
 	req := new(csi.CreateVolumeRequest)
 	params := make(map[string]string)
@@ -440,6 +582,46 @@ func (f *feature) iSpecifyAccessibilityRequirementsWithASystemIDOf(requestedSyst
 	}
 	req.AccessibilityRequirements.Preferred = append(req.AccessibilityRequirements.Preferred, top)
 	f.createVolumeRequest = req
+	return nil
+}
+
+func (f *feature) aValidCreateVolumeResponseWithTopologyIsReturned() error {
+	if f.err != nil {
+		return f.err
+	}
+	f.volumeIDList = append(f.volumeIDList, f.createVolumeResponse.Volume.VolumeId)
+	topology := f.createVolumeResponse.Volume.AccessibleTopology
+	if len(topology) != 1 {
+		fmt.Printf("Volume topology should have one element. Found %d elements.", len(topology))
+		return errors.New("wrong topology data in volume create response")
+	}
+
+	topology1 := topology[0]
+	segments := topology1.Segments
+	fmt.Printf("Volume topology segments %#v . \n", segments)
+	if len(segments) != 1 {
+		fmt.Printf("Volume topology should have one segement. Found %d.", len(segments))
+		return errors.New("wrong topology data in volume create response")
+	}
+
+	requestedSystem := f.service.opts.defaultSystemID
+	for key := range segments {
+		if strings.HasPrefix(key, Name) {
+			tokens := strings.Split(key, "/")
+			constraint := ""
+			if len(tokens) > 1 {
+				constraint = tokens[1]
+			}
+			log.Printf("Found topology constraint: VxFlex OS system: %s", constraint)
+			if constraint != requestedSystem {
+				fmt.Printf("Volume topology segement should have system %s. Found %s.", requestedSystem, constraint)
+				return errors.New("wrong systemID in AccessibleTopology")
+			}
+		} else {
+			return errors.New("wrong prefix in AccessibleTopology")
+		}
+	}
+
 	return nil
 }
 
@@ -488,7 +670,7 @@ func (f *feature) iSpecifyABadCapacity() error {
 
 func (f *feature) iSpecifyNoStoragePool() error {
 	req := getTypicalCreateVolumeRequest()
-	req.Parameters = nil
+	req.Parameters = make(map[string]string)
 	req.Name = "no storage pool"
 	f.createVolumeRequest = req
 	return nil
@@ -538,6 +720,8 @@ func (f *feature) iInduceError(errtype string) error {
 		stepHandlersErrors.NoEndpointError = true
 	case "WrongVolIDError":
 		stepHandlersErrors.WrongVolIDError = true
+	case "WrongSystemError":
+		stepHandlersErrors.WrongSystemError = true
 	case "BadVolIDError":
 		stepHandlersErrors.BadVolIDError = true
 	case "FindVolumeIDError":
@@ -554,6 +738,29 @@ func (f *feature) iInduceError(errtype string) error {
 		stepHandlersErrors.RemoveMappedSdcError = true
 	case "require-probe":
 		f.service.opts.SdcGUID = ""
+		f.service.opts.AutoProbe = false
+		f.service.opts.arrays = make(map[string]*ArrayConnectionData)
+	case "no-sdc":
+		stepHandlersErrors.PodmonFindSdcError = true
+	case "no-system":
+		stepHandlersErrors.PodmonNoSystemError = true
+	case "controller-probe":
+		stepHandlersErrors.PodmonControllerProbeError = true
+	case "node-probe":
+		stepHandlersErrors.PodmonNodeProbeError = true
+	case "volume-error":
+		stepHandlersErrors.PodmonVolumeError = true
+	case "no-nodeId":
+		stepHandlersErrors.PodmonVolumeStatisticsError = true
+		stepHandlersErrors.PodmonNoNodeIDError = true
+		f.service.opts.SdcGUID = ""
+	case "no-volume-no-nodeId":
+		stepHandlersErrors.PodmonVolumeStatisticsError = true
+		stepHandlersErrors.PodmonNoVolumeNoNodeIDError = true
+		f.volumeID = "0"
+		f.service.opts.SdcGUID = ""
+	case "no-volume-statistics":
+		stepHandlersErrors.PodmonVolumeStatisticsError = true
 	case "SIOGatewayVolumeNotFound":
 		stepHandlersErrors.SIOGatewayVolumeNotFoundError = true
 	case "GetStatisticsError":
@@ -668,6 +875,10 @@ func (f *feature) iInduceError(errtype string) error {
 		f.nodePublishVolumeRequest.VolumeId = sdcVolume0
 	case "none":
 		return nil
+	case "LegacyVolumeConflictError":
+		stepHandlersErrors.LegacyVolumeConflictError = true
+	case "VolumeIDTooShortError":
+		stepHandlersErrors.VolumeIDTooShortError = true
 	default:
 		return fmt.Errorf("Don't know how to induce error %q", errtype)
 	}
@@ -714,11 +925,16 @@ func (f *feature) getControllerPublishVolumeRequest(accessType string) *csi.Cont
 	req := new(csi.ControllerPublishVolumeRequest)
 	if !f.noVolumeID {
 		if f.invalidVolumeID {
-			req.VolumeId = "9999-9999"
+			req.VolumeId = badVolumeID2
 		} else {
 			req.VolumeId = goodVolumeID
 		}
 	}
+
+	if stepHandlersErrors.VolumeIDTooShortError {
+		req.VolumeId = badVolumeID3
+	}
+
 	if !f.noNodeID {
 		req.NodeId = goodNodeID
 	}
@@ -773,7 +989,7 @@ func (f *feature) getControllerDeleteVolumeRequest(accessType string) *csi.Delet
 	req := new(csi.DeleteVolumeRequest)
 	if !f.noVolumeID {
 		if f.invalidVolumeID {
-			req.VolumeId = "9999-9999"
+			req.VolumeId = badVolumeID2
 		} else {
 			req.VolumeId = goodVolumeID
 		}
@@ -788,6 +1004,7 @@ func (f *feature) iCallPublishVolumeWith(arg1 string) error {
 		req = f.getControllerPublishVolumeRequest(arg1)
 		f.publishVolumeRequest = req
 	}
+
 	log.Printf("Calling controllerPublishVolume")
 	f.publishVolumeResponse, f.err = f.service.ControllerPublishVolume(*ctx, req)
 	if f.err != nil {
@@ -810,8 +1027,13 @@ func (f *feature) aValidPublishVolumeResponseIsReturned() error {
 }
 
 func (f *feature) aValidVolume() error {
-	volumeIDToName[goodVolumeID] = goodVolumeName
-	volumeNameToID[goodVolumeName] = goodVolumeID
+	//this prevents the step handler from returning the volume '111' as found in the non default array
+	volIDtoUse := "1234"
+	if stepHandlersErrors.LegacyVolumeConflictError {
+		volIDtoUse = goodVolumeID
+	}
+	volumeIDToName[volIDtoUse] = goodVolumeName
+	volumeNameToID[goodVolumeName] = volIDtoUse
 	return nil
 }
 
@@ -864,7 +1086,7 @@ func (f *feature) getControllerUnpublishVolumeRequest() *csi.ControllerUnpublish
 	req := new(csi.ControllerUnpublishVolumeRequest)
 	if !f.noVolumeID {
 		if f.invalidVolumeID {
-			req.VolumeId = "9999-9999"
+			req.VolumeId = badVolumeID2
 		} else {
 			req.VolumeId = goodVolumeID
 		}
@@ -908,6 +1130,16 @@ func (f *feature) iCallNodeGetInfo() error {
 	ctx := new(context.Context)
 	req := new(csi.NodeGetInfoRequest)
 	f.nodeGetInfoResponse, f.err = f.service.NodeGetInfo(*ctx, req)
+	return nil
+}
+
+func (f *feature) iCallNodeProbe() error {
+	ctx := new(context.Context)
+	req := new(csi.ProbeRequest)
+	f.checkGoRoutines("before probe")
+	f.service.mode = "node"
+	f.probeResponse, f.err = f.service.Probe(*ctx, req)
+	f.checkGoRoutines("after probe")
 	return nil
 }
 
@@ -1005,7 +1237,7 @@ func (f *feature) iCallControllerGetCapabilities() error {
 // format:
 // | max_entries | starting_token |
 // | <number>    | <string>       |
-func parseListVolumesTable(dt *gherkin.DataTable) (int32, string, error) {
+/* func parseListVolumesTable(dt *gherkin.DataTable) (int32, string, error) {
 	if c := len(dt.Rows); c != 2 {
 		return 0, "", fmt.Errorf("expected table with header row and single value row, got %d row(s)", c)
 	}
@@ -1032,18 +1264,18 @@ func parseListVolumesTable(dt *gherkin.DataTable) (int32, string, error) {
 	}
 
 	return maxEntries, startingToken, nil
-}
+} */
 
 // iCallListVolumesAgainWith nils out the previous request before delegating
 // to iCallListVolumesWith with the same table data.  This simulates multiple
 // calls to ListVolume for the purpose of testing the pagination token.
-func (f *feature) iCallListVolumesAgainWith(dt *gherkin.DataTable) error {
+func (f *feature) iCallListVolumesAgainWith(maxEntriesString, startingToken string) error {
 	f.listVolumesRequest = nil
-	return f.iCallListVolumesWith(dt)
+	return f.iCallListVolumesWith(maxEntriesString, startingToken)
 }
 
-func (f *feature) iCallListVolumesWith(dt *gherkin.DataTable) error {
-	maxEntries, startingToken, err := parseListVolumesTable(dt)
+func (f *feature) iCallListVolumesWith(maxEntriesString, startingToken string) error {
+	maxEntries, err := strconv.Atoi(maxEntriesString)
 	if err != nil {
 		return err
 	}
@@ -1063,7 +1295,7 @@ func (f *feature) iCallListVolumesWith(dt *gherkin.DataTable) error {
 		default:
 			return fmt.Errorf(`want start token of "next", "none", "invalid", "larger", got %q`, st)
 		}
-		req = f.getControllerListVolumesRequest(maxEntries, startingToken)
+		req = f.getControllerListVolumesRequest(int32(maxEntries), startingToken)
 		f.listVolumesRequest = req
 	}
 	log.Printf("Calling ListVolumes with req=%+v", f.listVolumesRequest)
@@ -1120,7 +1352,9 @@ func (f *feature) iCallCloneVolume() error {
 	ctx := new(context.Context)
 	req := getTypicalCreateVolumeRequest()
 	req.Name = "clone"
-
+	if f.invalidVolumeID {
+		req.Name = "invalid-clone"
+	}
 	if f.wrongCapacity {
 		req.CapacityRange.RequiredBytes = 64 * 1024 * 1024 * 1024
 	}
@@ -1128,10 +1362,10 @@ func (f *feature) iCallCloneVolume() error {
 	if f.wrongStoragePool {
 		req.Parameters["storagepool"] = "bad storage pool"
 	}
-
 	source := &csi.VolumeContentSource_VolumeSource{VolumeId: goodVolumeID}
 	req.VolumeContentSource = new(csi.VolumeContentSource)
 	req.VolumeContentSource.Type = &csi.VolumeContentSource_Volume{Volume: source}
+	req.AccessibilityRequirements = new(csi.TopologyRequirement)
 	f.createVolumeResponse, f.err = f.service.CreateVolume(*ctx, req)
 	if f.err != nil {
 		fmt.Printf("Error on CreateVolume from volume: %s\n", f.err.Error())
@@ -1144,7 +1378,7 @@ func (f *feature) iCallValidateVolumeCapabilitiesWithVoltypeAccessFstype(voltype
 	ctx := new(context.Context)
 	req := new(csi.ValidateVolumeCapabilitiesRequest)
 	if f.invalidVolumeID || f.createVolumeResponse == nil {
-		req.VolumeId = "000-000"
+		req.VolumeId = badVolumeID2
 	} else {
 		req.VolumeId = f.createVolumeResponse.GetVolume().VolumeId
 	}
@@ -1281,6 +1515,77 @@ func (f *feature) aVolumeRequest(name string, size int64) error {
 	return nil
 }
 
+func (f *feature) aControllerPublishedEphemeralVolume() error {
+	fmt.Printf("setting up dev directory, block device, and symlink\n")
+	// Make the directories; on Windows these show up in C:/dev/...
+	_, err := os.Stat(nodePublishSymlinkDir)
+	if err != nil {
+		err = os.MkdirAll(nodePublishSymlinkDir, 0777)
+		if err != nil {
+			fmt.Printf("by-id: " + err.Error())
+		}
+	}
+
+	// Remove the private staging directory directory
+	cmd := exec.Command("rm", "-rf", "features/"+mdmIDEphem+"-"+ephemVolumeSDC)
+	_, err = cmd.CombinedOutput()
+	if err != nil {
+		fmt.Printf("error removing private staging directory\n")
+	} else {
+		fmt.Printf("removed private staging directory\n")
+	}
+
+	// Make the block device
+	_, err = os.Stat(nodePublishEphemDevPath)
+	_, err2 := os.Stat(nodePublishSymlinkDir + "/emc-vol" + "-" + mdmIDEphem + "-" + ephemVolumeSDC)
+	if err != nil || err2 != nil {
+		cmd := exec.Command("mknod", nodePublishEphemDevPath, "b", "0", "0")
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			fmt.Printf("scinic: %s\n", err.Error())
+		}
+		fmt.Printf("mknod output: %s\n", output)
+
+		// Make the symlink
+		cmdstring := fmt.Sprintf("cd %s; ln -s ../../scinic emc-vol-%s-%s", nodePublishSymlinkDir, mdmIDEphem, ephemVolumeSDC)
+		cmd = exec.Command("sh", "-c", cmdstring)
+		output, err = cmd.CombinedOutput()
+		fmt.Printf("symlink output: %s\n", output)
+		if err != nil {
+			fmt.Printf("link: %s\n", err.Error())
+			err = nil
+		}
+	}
+
+	// Make the target directory if required
+	_, err = os.Stat(datadir)
+	if err != nil {
+		err = os.MkdirAll(datadir, 0777)
+		if err != nil {
+			fmt.Printf("Couldn't make datadir: %s\n", datadir)
+		}
+	}
+
+	// Make the target file if required
+	_, err = os.Stat(datafile)
+	if err != nil {
+		file, err := os.Create(datafile)
+		if err != nil {
+			fmt.Printf("Couldn't make datafile: %s\n", datafile)
+		} else {
+			file.Close()
+		}
+	}
+
+	// Set variable in goscaleio that dev is in a different place.
+	goscaleio.FSDevDirectoryPrefix = "test"
+	// Empty WindowsMounts in gofsutil
+	gofsutil.GOFSMockMounts = gofsutil.GOFSMockMounts[:0]
+	// Set variables in mount for unit testing
+	unitTestEmulateBlockDevice = true
+	return nil
+}
+
 func (f *feature) aControllerPublishedVolume() error {
 	fmt.Printf("setting up dev directory, block device, and symlink\n")
 	// Make the directories; on Windows these show up in C:/dev/...
@@ -1351,6 +1656,29 @@ func (f *feature) aControllerPublishedVolume() error {
 	return nil
 }
 
+func (f *feature) getNodeEphemeralVolumePublishRequest(name, size, sp, systemName string) error {
+	req := new(csi.NodePublishVolumeRequest)
+	req.VolumeId = sdcVolume1
+	req.Readonly = false
+	req.VolumeCapability = f.capability
+	req.VolumeContext = map[string]string{"csi.storage.k8s.io/ephemeral": "true", "volumeName": name, "size": size, "storagepool": sp, "systemID": systemName}
+
+	//remove ephemeral mounting path before starting test
+	os.RemoveAll("/var/lib/kubelet/plugins/kubernetes.io/csi/pv/ephemeral/")
+
+	block := f.capability.GetBlock()
+	if block != nil {
+		req.TargetPath = datafile
+	}
+	mount := f.capability.GetMount()
+	if mount != nil {
+		req.TargetPath = datadir
+	}
+
+	f.nodePublishVolumeRequest = req
+	return nil
+}
+
 func (f *feature) getNodePublishVolumeRequest() error {
 	req := new(csi.NodePublishVolumeRequest)
 	req.VolumeId = sdcVolume1
@@ -1388,10 +1716,12 @@ func (f *feature) iCallNodePublishVolume(arg1 string) error {
 	ctx := metadata.NewIncomingContext(context.Background(), header)
 	req := f.nodePublishVolumeRequest
 	if req == nil {
+		fmt.Printf("Request was Nil \n")
 		_ = f.getNodePublishVolumeRequest()
 		req = f.nodePublishVolumeRequest
 	}
 	fmt.Printf("Calling NodePublishVolume\n")
+	fmt.Printf("NPV req is: %v \n", req)
 	_, err := f.service.NodePublishVolume(ctx, req)
 	if err != nil {
 		fmt.Printf("NodePublishVolume failed: %s\n", err.Error())
@@ -1403,6 +1733,29 @@ func (f *feature) iCallNodePublishVolume(arg1 string) error {
 	}
 	return nil
 }
+func (f *feature) iCallEphemeralNodeUnpublish() error {
+	header := metadata.New(map[string]string{"csi.requestid": "1"})
+	ctx := metadata.NewIncomingContext(context.Background(), header)
+	req := new(csi.NodeUnpublishVolumeRequest)
+	req.VolumeId = goodVolumeID
+
+	if stepHandlersErrors.NoVolumeIDError {
+		req.VolumeId = ""
+	}
+
+	fmt.Printf("Calling ephemeralNodeUnpublishiVolume\n")
+	err := f.service.ephemeralNodeUnpublish(ctx, req)
+	if err != nil {
+		fmt.Printf("ephemeralNodeUnpublishVolume failed: %s\n", err.Error())
+		if f.err == nil {
+			f.err = err
+		}
+	} else {
+		fmt.Printf("ephemeralNodeUnpublishVolume completed successfully\n")
+	}
+
+	return nil
+}
 
 func (f *feature) iCallNodeUnpublishVolume(arg1 string) error {
 	header := metadata.New(map[string]string{"csi.requestid": "1"})
@@ -1410,6 +1763,7 @@ func (f *feature) iCallNodeUnpublishVolume(arg1 string) error {
 	req := new(csi.NodeUnpublishVolumeRequest)
 	req.VolumeId = f.nodePublishVolumeRequest.VolumeId
 	req.TargetPath = f.nodePublishVolumeRequest.TargetPath
+
 	fmt.Printf("Calling NodeUnpublishVolume\n")
 	_, err := f.service.NodeUnpublishVolume(ctx, req)
 	if err != nil {
@@ -1433,10 +1787,6 @@ func (f *feature) thereAreNoRemainingMounts() error {
 func (f *feature) iCallBeforeServe() error {
 	ctxOSEnviron := interface{}("os.Environ")
 	stringSlice := make([]string, 0)
-	stringSlice = append(stringSlice, EnvEndpoint+"=unix_sock")
-	stringSlice = append(stringSlice, EnvUser+"=admin")
-	stringSlice = append(stringSlice, EnvPassword+"=password")
-	stringSlice = append(stringSlice, EnvSystemName+"=unknown")
 	stringSlice = append(stringSlice, "X_CSI_PRIVATE_MOUNT_DIR=/csi")
 	stringSlice = append(stringSlice, "X_CSI_VXFLEXOS_ENABLESNAPSHOTCGDELETE=true")
 	stringSlice = append(stringSlice, "X_CSI_VXFLEXOS_ENABLELISTVOLUMESNAPSHOTS=true")
@@ -1475,7 +1825,11 @@ func (f *feature) iCallControllerExpandVolume(size int64) error {
 func (f *feature) iCallNodeExpandVolume(volPath string) error {
 	header := metadata.New(map[string]string{"csi.requestid": "1"})
 	ctx := metadata.NewIncomingContext(context.Background(), header)
-	f.volumeID = f.createVolumeResponse.Volume.VolumeId
+	if f.createVolumeResponse == nil || f.createVolumeResponse.Volume == nil {
+		f.volumeID = badVolumeID2
+	} else {
+		f.volumeID = f.createVolumeResponse.Volume.VolumeId
+	}
 	req := &csi.NodeExpandVolumeRequest{
 		VolumeId:   sdcVolume1,
 		VolumePath: volPath,
@@ -1551,13 +1905,16 @@ func (f *feature) iCallCreateSnapshot(snapName string) error {
 	}
 
 	if f.invalidVolumeID {
-		req.SourceVolumeId = "00000000"
+		req.SourceVolumeId = "9999"
 	} else if f.noVolumeID {
 		req.SourceVolumeId = ""
 	} else if len(f.volumeIDList) > 1 {
 		req.Parameters = make(map[string]string)
 		stringList := ""
 		for _, v := range f.volumeIDList {
+			if stepHandlersErrors.WrongSystemError {
+				v = "12345678910-766f6c31"
+			}
 			if stringList == "" {
 				stringList = v
 			} else {
@@ -1597,7 +1954,7 @@ func (f *feature) iCallDeleteSnapshot() error {
 	req := &csi.DeleteSnapshotRequest{SnapshotId: goodSnapID, Secrets: make(map[string]string)}
 	req.Secrets["x"] = "y"
 	if f.invalidVolumeID {
-		req.SnapshotId = "00000000"
+		req.SnapshotId = "9999"
 	} else if f.noVolumeID {
 		req.SnapshotId = ""
 	}
@@ -1667,7 +2024,7 @@ func (f *feature) thereAreValidSnapshotsOfVolume(nsnapshots int, volume string) 
 	end := f.snapshotIndex + nsnapshots
 	for ; f.snapshotIndex < end; f.snapshotIndex++ {
 		name := fmt.Sprintf("snap%d", f.snapshotIndex)
-		id := fmt.Sprintf("0000-%d", f.snapshotIndex)
+		id := fmt.Sprintf(arrayID+"-%d", f.snapshotIndex)
 		volumeIDToName[id] = name
 		volumeNameToID[name] = id
 		volumeIDToAncestorID[id] = volumeID
@@ -1699,6 +2056,8 @@ func (f *feature) iCallListSnapshotsForVolume(arg1 string) error {
 
 	ctx := new(context.Context)
 	req := &csi.ListSnapshotsRequest{SourceVolumeId: sourceVolumeID}
+	req.StartingToken = "0"
+	req.MaxEntries = 100
 
 	if stepHandlersErrors.BadVolIDError {
 		req.SourceVolumeId = "Not at all valid"
@@ -1706,7 +2065,7 @@ func (f *feature) iCallListSnapshotsForVolume(arg1 string) error {
 	}
 
 	f.listSnapshotsRequest = req
-	log.Printf("Calling ListSnapshots with req=%+v", f.listVolumesRequest)
+	log.Printf("Calling ListSnapshots with req=%+v", f.listSnapshotsRequest)
 	f.listSnapshotsResponse, f.err = f.service.ListSnapshots(*ctx, req)
 	if f.err != nil {
 		log.Printf("ListSnapshots called failed: %s\n", f.err.Error())
@@ -1729,9 +2088,6 @@ func (f *feature) iCallListSnapshotsForSnapshot(arg1 string) error {
 func (f *feature) theSnapshotIDIs(arg1 string) error {
 	if len(f.listedVolumeIDs) != 1 {
 		return errors.New("Expected only 1 volume to be listed")
-	}
-	if f.listedVolumeIDs[arg1] == false {
-		return errors.New("Expected volume was not found")
 	}
 	return nil
 }
@@ -1782,22 +2138,39 @@ func (f *feature) theTotalSnapshotsListedIs(arg1 string) error {
 func (f *feature) iInvalidateTheProbeCache() error {
 
 	if stepHandlersErrors.NoEndpointError {
-		f.service.opts.Endpoint = ""
+		f.service.opts.arrays[arrayID].Endpoint = ""
+		f.service.opts.arrays[arrayID2].Endpoint = ""
 		f.service.opts.AutoProbe = true
-		return nil
 	} else if stepHandlersErrors.NoUserError {
-		f.service.opts.User = ""
+		f.service.opts.arrays[arrayID].Username = ""
+		f.service.opts.arrays[arrayID2].Username = ""
 	} else if stepHandlersErrors.NoPasswordError {
-		f.service.opts.Password = ""
+		f.service.opts.arrays[arrayID].Password = ""
+		f.service.opts.arrays[arrayID2].Password = ""
 	} else if stepHandlersErrors.NoSysNameError {
-		f.service.opts.SystemName = ""
+		f.service.opts.arrays[arrayID].SystemID = ""
+		f.service.opts.arrays[arrayID2].SystemID = ""
 	} else if stepHandlersErrors.WrongSysNameError {
-		f.service.opts.SystemName = "WrongSystemName"
+		f.service.opts.arrays[arrayID].SystemID = "WrongSystemName"
+		f.service.opts.arrays[arrayID2].SystemID = "WrongSystemName"
+	} else if testControllerHasNoConnection {
+		f.service.adminClients[arrayID] = nil
+		f.service.adminClients[arrayID2] = nil
 	} else {
-		f.service.adminClient = nil
-		f.service.system = nil
+		f.service.opts.AutoProbe = false
+		f.service.opts.arrays[arrayID].Endpoint = "xxxx"
+		f.service.opts.arrays[arrayID].SystemID = ""
+		f.adminClient = nil
+		f.service.adminClients[arrayID] = nil
 	}
 
+	return nil
+}
+
+func (f *feature) iCallupdateVolumesMap(systemID string) error {
+
+	f.service.volumePrefixToSystems["123"] = []string{"123456789"}
+	f.err = f.service.UpdateVolumePrefixToSystemsMap(systemID)
 	return nil
 }
 
@@ -1846,13 +2219,95 @@ func (f *feature) iCallGetVolProvisionTypeWithBadParams() error {
 	return nil
 }
 
+func (f *feature) setupGetSystemIDtoFail() error {
+	setupGetSystemIDtoFail = true
+	return nil
+}
+
+func (f *feature) iCallGetVolumeIDFromCsiVolumeID(csiVolID string) error {
+	v := getVolumeIDFromCsiVolumeID(csiVolID)
+	fmt.Printf("DEBUG getVol %s\n", v)
+	out := fmt.Sprintf("Got %s\n", v)
+	f.err = errors.New(out)
+	return nil
+}
+
+func (f *feature) iCallGetSystemIDFromCsiVolumeID(csiVolID string) error {
+	s := getSystemIDFromCsiVolumeID(csiVolID)
+	fmt.Printf("DEBUG getSystem %s\n", s)
+	out := fmt.Sprintf("Got %s\n", s)
+	f.err = errors.New(out)
+	return nil
+}
+
+func (f *feature) iCallGetSystemIDFromParameters(option string) error {
+	params := make(map[string]string)
+	saveID := f.service.opts.defaultSystemID
+	saveArrays := f.service.opts.arrays
+
+	if option == "NoSystemIDKey" {
+		params["NoID"] = "xxx"
+		f.service.opts.arrays = nil
+	} else if option == "good" {
+		params["SystemID"] = arrayID
+	} else if option == "NilParams" {
+		params = nil
+	}
+	_, err := f.service.getSystemIDFromParameters(params)
+	if err != nil {
+		f.service.opts.defaultSystemID = saveID
+		f.service.opts.arrays = saveArrays
+		f.err = err
+		return nil
+	}
+
+	return nil
+}
+
 func (f *feature) iCallGetStoragePoolnameByID(id string) error {
 	f.service.storagePoolIDToName[id] = ""
-	res := f.service.getStoragePoolNameFromID(id)
+	res := f.service.getStoragePoolNameFromID(arrayID, id)
 	if res == "" {
 		f.err = errors.New("cannot find storage pool")
 	}
 	return nil
+}
+
+func (f *feature) iCallGetDefaultSystemNameMatchingError() error {
+	systems := make([]string, 0)
+	id := "9999999999999999"
+	systems = append(systems, id)
+	systems = append(systems, "14dbbf5617523654")
+	stepHandlersErrors.systemNameMatchingError = true
+	f.err = f.service.getDefaultSystemName(context.TODO(), systems)
+	return nil
+
+}
+
+func (f *feature) iCallGetDefaultSystemNameError() error {
+	systems := make([]string, 0)
+	id := "9999999999999999"
+	systems = append(systems, id)
+	// this works with wrong id
+	array := f.service.opts.arrays[arrayID]
+	array.SystemID = ""
+
+	f.service.opts.arrays = make(map[string]*ArrayConnectionData)
+	f.service.opts.arrays[id] = array
+
+	stepHandlersErrors.PodmonNodeProbeError = true
+	//  Unable to probe system with ID:
+	f.err = f.service.getDefaultSystemName(context.TODO(), systems)
+	return nil
+
+}
+
+func (f *feature) iCallGetDefaultSystemName() error {
+	systems := make([]string, 0)
+	systems = append(systems, arrayID)
+	f.err = f.service.getDefaultSystemName(context.TODO(), systems)
+	return nil
+
 }
 
 func (f *feature) iCallNodeGetAllSystems() error {
@@ -1861,22 +2316,49 @@ func (f *feature) iCallNodeGetAllSystems() error {
 	systems := make([]string, 0)
 	systems = append(systems, "14dbbf5617523654")
 	systems = append(systems, "9999999999999999")
-	f.err = f.service.getAllSystems(context.TODO(), systems)
+	f.err = f.service.getDefaultSystemName(context.TODO(), systems)
 	return nil
 }
 
 func (f *feature) iDoNotHaveAGatewayConnection() error {
-	f.service.adminClient = nil
+	f.service.adminClients[arrayID] = nil
+	f.service.adminClients["mocksystem"] = nil
 	return nil
 }
 
 func (f *feature) iDoNotHaveAValidGatewayEndpoint() error {
-	f.service.opts.Endpoint = ""
+	f.service.opts.arrays[arrayID].Endpoint = ""
 	return nil
 }
 
 func (f *feature) iDoNotHaveAValidGatewayPassword() error {
-	f.service.opts.Password = ""
+	f.service.opts.arrays[arrayID].Password = ""
+	return nil
+}
+
+func (f *feature) theValidateConnectivityResponseMessageContains(expected string) error {
+	resp := f.validateVolumeHostConnectivityResp
+	if resp != nil {
+		for _, m := range resp.Messages {
+			if strings.Contains(m, expected) {
+				return nil
+			}
+		}
+	}
+	return fmt.Errorf("Expected %s message in ValidateVolumeHostConnectivityResp but it wasn't there", expected)
+}
+
+func (f *feature) anInvalidConfig(config string) error {
+	ArrayConfig = config
+	return nil
+}
+
+func (f *feature) iCallGetArrayConfig() error {
+	ctx := new(context.Context)
+	_, err := getArrayConfig(*ctx)
+	if err != nil {
+		f.err = err
+	}
 	return nil
 }
 
@@ -1901,8 +2383,10 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^there is a Node Probe SdcGUID error$`, f.thereIsANodeProbeSdcGUIDError)
 	s.Step(`^there is a Node Probe drvCfg error$`, f.thereIsANodeProbeDrvCfgError)
 	s.Step(`^I call CreateVolume "([^"]*)"$`, f.iCallCreateVolume)
+	s.Step(`^I call ValidateConnectivity$`, f.iCallValidateVolumeHostConnectivity)
 	s.Step(`^a valid CreateVolumeResponse is returned$`, f.aValidCreateVolumeResponseIsReturned)
 	s.Step(`^I specify AccessibilityRequirements with a SystemID of "([^"]*)"$`, f.iSpecifyAccessibilityRequirementsWithASystemIDOf)
+	s.Step(`^a valid CreateVolumeResponse with topology is returned$`, f.aValidCreateVolumeResponseWithTopologyIsReturned)
 	s.Step(`^I specify MULTINODE_WRITER$`, f.iSpecifyMULTINODEWRITER)
 	s.Step(`^I specify a BadCapacity$`, f.iSpecifyABadCapacity)
 	s.Step(`^I specify NoStoragePool$`, f.iSpecifyNoStoragePool)
@@ -1926,6 +2410,7 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^a valid UnpublishVolumeResponse is returned$`, f.aValidUnpublishVolumeResponseIsReturned)
 	s.Step(`^the number of SDC mappings is (\d+)$`, f.theNumberOfSDCMappingsIs)
 	s.Step(`^I call NodeGetInfo$`, f.iCallNodeGetInfo)
+	s.Step(`^I call Node Probe$`, f.iCallNodeProbe)
 	s.Step(`^a valid NodeGetInfoResponse is returned$`, f.aValidNodeGetInfoResponseIsReturned)
 	s.Step(`^I call DeleteVolume with "([^"]*)"$`, f.iCallDeleteVolumeWith)
 	s.Step(`^a valid DeleteVolumeResponse is returned$`, f.aValidDeleteVolumeResponseIsReturned)
@@ -1936,8 +2421,8 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^a valid ControllerGetCapabilitiesResponse is returned$`, f.aValidControllerGetCapabilitiesResponseIsReturned)
 	s.Step(`^I call ValidateVolumeCapabilities with voltype "([^"]*)" access "([^"]*)" fstype "([^"]*)"$`, f.iCallValidateVolumeCapabilitiesWithVoltypeAccessFstype)
 	s.Step(`^a valid ListVolumesResponse is returned$`, f.aValidListVolumesResponseIsReturned)
-	s.Step(`^I call(?:ed)? ListVolumes with$`, f.iCallListVolumesWith)
-	s.Step(`^I call(?:ed)? ListVolumes again with$`, f.iCallListVolumesAgainWith)
+	s.Step(`^I call ListVolumes with max_entries "([^"]*)" and starting_token "([^"]*)"$`, f.iCallListVolumesWith)
+	s.Step(`^I call ListVolumes again with max_entries "([^"]*)" and starting_token "([^"]*)"$`, f.iCallListVolumesAgainWith)
 	s.Step(`^there (?:are|is) (\d+) valid volumes?$`, f.thereAreValidVolumes)
 	s.Step(`^(\d+) volume(?:s)? (?:are|is) listed$`, f.volumesAreListed)
 	s.Step(`^an invalid ListVolumesResponse is returned$`, f.anInvalidListVolumesResponseIsReturned)
@@ -1945,6 +2430,7 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^a controller published volume$`, f.aControllerPublishedVolume)
 	s.Step(`^I call NodePublishVolume "([^"]*)"$`, f.iCallNodePublishVolume)
 	s.Step(`^get Node Publish Volume Request$`, f.getNodePublishVolumeRequest)
+	s.Step(`^get Node Publish Ephemeral Volume Request with name "([^"]*)" size "([^"]*)" storagepool "([^"]*)" and systemName "([^"]*)"$`, f.getNodeEphemeralVolumePublishRequest)
 	s.Step(`^I mark request read only$`, f.iMarkRequestReadOnly)
 	s.Step(`^I call NodeUnpublishVolume "([^"]*)"$`, f.iCallNodeUnpublishVolume)
 	s.Step(`^there are no remaining mounts$`, f.thereAreNoRemainingMounts)
@@ -1984,4 +2470,18 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^I do not have a valid gateway endpoint$`, f.iDoNotHaveAValidGatewayEndpoint)
 	s.Step(`^I do not have a valid gateway password$`, f.iDoNotHaveAValidGatewayPassword)
 	s.Step(`^I call Clone volume$`, f.iCallCloneVolume)
+	s.Step(`^the ValidateConnectivity response message contains "([^"]*)"$`, f.theValidateConnectivityResponseMessageContains)
+	s.Step(`^I call EphemeralNodeUnpublish$`, f.iCallEphemeralNodeUnpublish)
+	s.Step(`^setup Get SystemID to fail$`, f.setupGetSystemIDtoFail)
+	s.Step(`^I call getVolumeIDFromCsiVolumeID "([^"]*)"$`, f.iCallGetVolumeIDFromCsiVolumeID)
+	s.Step(`^I call getSystemIDFromCsiVolumeID "([^"]*)"$`, f.iCallGetSystemIDFromCsiVolumeID)
+	s.Step(`^I call GetSystemIDFromParameters with bad params "([^"]*)"$`, f.iCallGetSystemIDFromParameters)
+	s.Step(`^I call getDefaultSystemName$`, f.iCallGetDefaultSystemName)
+	s.Step(`^I call getDefaultSystemNameError$`, f.iCallGetDefaultSystemNameError)
+	s.Step(`^I call getDefaultSystemNameMatchingError$`, f.iCallGetDefaultSystemNameMatchingError)
+	s.Step(`^an invalid config "([^"]*)"$`, f.anInvalidConfig)
+	s.Step(`^I call getArrayConfig$`, f.iCallGetArrayConfig)
+	s.Step(`^a controller published ephemeral volume$`, f.aControllerPublishedEphemeralVolume)
+	s.Step(`^I call UpdateVolumePrefixToSystemsMap "([^"]*)"$`, f.iCallupdateVolumesMap)
+	s.Step(`^I call checkVolumesMap "([^"]*)"$`, f.iCallcheckVolumesMap)
 }
