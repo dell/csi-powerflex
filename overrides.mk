@@ -3,8 +3,8 @@
 #
 
 # DEFAULT values
-DEFAULT_BASEIMAGE="registry.access.redhat.com/ubi8:8.2"
-DEFAULT_GOVERSION="1.13.12"
+DEFAULT_BASEIMAGE="registry.access.redhat.com/ubi8/ubi-minimal:8.3"
+DEFAULT_GOVERSION="1.15.6"
 DEFAULT_REGISTRY="sample_registry"
 DEFAULT_IMAGENAME="csi-vxflexos"
 DEFAULT_BUILDSTAGE="final"

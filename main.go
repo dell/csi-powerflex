@@ -12,16 +12,24 @@ import (
 	"github.com/dell/csi-vxflexos/k8sutils"
 	"github.com/dell/csi-vxflexos/provider"
 	"github.com/dell/csi-vxflexos/service"
-	"github.com/rexray/gocsi"
+	"github.com/dell/gocsi"
 )
 
 // main is ignored when this package is built as a go plug-in
 func main() {
 
+	arrayConfig := flag.String("array-config", "", "json file with array(s) configuration")
 	enableLeaderElection := flag.Bool("leader-election", false, "boolean to enable leader election")
 	leaderElectionNamespace := flag.String("leader-election-namespace", "", "namespace where leader election lease will be created")
 	kubeconfig := flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
 	flag.Parse()
+
+	if *arrayConfig == "" {
+		fmt.Fprintf(os.Stderr, "array-config argument is mandatory")
+		os.Exit(1)
+	}
+	service.ArrayConfig = *arrayConfig
+
 	run := func(ctx context.Context) {
 		gocsi.Run(ctx, service.Name, "A PowerFlex Container Storage Interface (CSI) Plugin",
 			usage, provider.New())
@@ -42,36 +50,7 @@ func main() {
 
 }
 
-const usage = `    X_CSI_VXFLEXOS_ENDPOINT
-        Specifies the HTTP endpoint for the VXFLEXOS gateway. This parameter is
-        required when running the Controller service.
-
-        The default value is empty.
-
-    X_CSI_VXFLEXOS_USER
-        Specifies the user name when authenticating to the VXFLEXOS Gateway.
-
-        The default value is admin.
-
-    X_CSI_VXFLEXOS_PASSWORD
-        Specifies the password of the user defined by X_CSI_VXFLEXOS_USER to use
-        when authenticating to the VXFLEXOS Gateway. This parameter is required
-        when running the Controller service.
-
-        The default value is empty.
-
-    X_CSI_VXFLEXOS_INSECURE
-        Specifies that the VXFLEXOS Gateway's hostname and certificate chain
-	should not be verified.
-
-        The default value is false.
-
-    X_CSI_VXFLEXOS_SYSTEMNAME
-        Specifies the name of the VXFLEXOS system to interact with.
-
-        The default value is default.
-
-    X_CSI_VXFLEXOS_SDCGUID
+const usage = `    X_CSI_VXFLEXOS_SDCGUID
         Specifies the GUID of the SDC. This is only used by the Node Service,
         and removes a need for calling an external binary to retrieve the GUID.
         If not set, the external binary will be invoked.

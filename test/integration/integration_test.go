@@ -1,28 +1,64 @@
 package integration_test
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/DATA-DOG/godog"
 	"github.com/akutz/memconn"
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/cucumber/godog"
 	"github.com/dell/csi-vxflexos/provider"
-	"github.com/rexray/gocsi/utils"
+	"github.com/dell/csi-vxflexos/service"
+	"github.com/dell/gocsi/utils"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 )
 
 const (
-	datafile = "/tmp/datafile"
-	datadir  = "/tmp/datadir"
+	datafile   = "/tmp/datafile"
+	datadir    = "/tmp/datadir"
+	configFile = "../../config.json"
 )
 
 var grpcClient *grpc.ClientConn
+
+func init() {
+	/* load array config and give proper errors if not ok*/
+	if _, err := os.Stat(configFile); err == nil {
+		if _, err := ioutil.ReadFile(configFile); err != nil {
+			err = fmt.Errorf("DEBUG integration pre requisites missing %s with multi array configuration file ", configFile)
+			panic(err)
+		}
+		f, err := os.Open(configFile)
+		r := bufio.NewReader(f)
+		mdms := make([]string, 0)
+		line, isPrefix, err := r.ReadLine()
+		for err == nil && !isPrefix {
+			line, isPrefix, err = r.ReadLine()
+			if strings.Contains(string(line), "127.0.0.1") {
+				err := fmt.Errorf("Integration test pre-requisite powerflex array endpoint %s is not ok, setup ../../config.json \n", string(line))
+				panic(err)
+			}
+			if strings.Contains(string(line), "mdm") {
+				mdms = append(mdms, string(line))
+			}
+		}
+		if len(mdms) < 1 {
+			err := fmt.Errorf("Integration Test pre-requisite config file ../../config.json  must have mdm key set with working ip %#v", mdms)
+			panic(err)
+		}
+	} else if os.IsNotExist(err) {
+		err := fmt.Errorf("Integration Test pre-requisite needs  a valid config.json located here :  %s\"", err)
+		panic(err)
+	}
+}
 
 func TestMain(m *testing.M) {
 	var stop func()
@@ -56,7 +92,7 @@ func TestMain(m *testing.M) {
 	}, godog.Options{
 		Format: "pretty",
 		Paths:  []string{"features"},
-		// Tags:   "wip",
+		//Tags:   "wip",
 	})
 	if st := m.Run(); st > exitVal {
 		exitVal = st
@@ -80,6 +116,7 @@ func TestIdentityGetPluginInfo(t *testing.T) {
 
 func startServer(ctx context.Context) (*grpc.ClientConn, func()) {
 	// Create a new SP instance and serve it with a piped connection.
+	service.ArrayConfig = configFile
 	sp := provider.New()
 	lis, err := utils.GetCSIEndpointListener()
 	if err != nil {

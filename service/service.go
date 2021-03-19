@@ -2,8 +2,13 @@ package service
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"io/ioutil"
 	"net"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -11,12 +16,14 @@ import (
 	"time"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
+	podmon "github.com/dell/dell-csi-extensions/podmon"
+	"github.com/dell/gocsi"
+	csictx "github.com/dell/gocsi/context"
 	sio "github.com/dell/goscaleio"
 	siotypes "github.com/dell/goscaleio/types/v1"
 	ptypes "github.com/golang/protobuf/ptypes"
-	"github.com/rexray/gocsi"
-	csictx "github.com/rexray/gocsi/context"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
 
 	"github.com/dell/csi-vxflexos/core"
 )
@@ -37,6 +44,19 @@ const (
 	SystemTopologySystemValue string = "csi-vxflexos.dellemc.com"
 )
 
+// ArrayConfig is file name with array connection data
+var ArrayConfig string
+
+// ArrayConnectionData contains data required to connect to array
+type ArrayConnectionData struct {
+	SystemID  string `json:"systemID"`
+	Username  string `json:"username"`
+	Password  string `json:"password"`
+	Endpoint  string `json:"endpoint"`
+	Insecure  bool   `json:"insecure,omitempty"`
+	IsDefault bool   `json:"isDefault,omitempty"`
+}
+
 // Manifest is the SP's manifest.
 var Manifest = map[string]string{
 	"url":    "http://github.com/dell/csi-vxflexos",
@@ -51,16 +71,15 @@ type Service interface {
 	csi.IdentityServer
 	csi.NodeServer
 	BeforeServe(context.Context, *gocsi.StoragePlugin, net.Listener) error
+	RegisterAdditionalServers(server *grpc.Server)
 }
 
 // Opts defines service configuration options.
 type Opts struct {
-	Endpoint                   string
-	User                       string
-	Password                   string
-	SystemName                 string
+	// map from system name to ArrayConnectionData
+	arrays                     map[string]*ArrayConnectionData
+	defaultSystemID            string // ID of default system
 	SdcGUID                    string
-	Insecure                   bool
 	Thick                      bool
 	AutoProbe                  bool
 	DisableCerts               bool   // used for unit testing only
@@ -68,32 +87,32 @@ type Opts struct {
 	drvCfgQueryMDM             string // used for testing only
 	EnableSnapshotCGDelete     bool   // when snapshot deleted, enable deleting of all snaps in the CG of the snapshot
 	EnableListVolumesSnapshots bool   // when listing volumes, include snapshots and volumes
+	AllowRWOMultiPodAccess     bool   // allow multiple pods to access a RWO volume on the same node
 }
 
 type service struct {
 	opts                Opts
+	adminClients        map[string]*sio.Client
+	systems             map[string]*sio.System
 	mode                string
-	adminClient         *sio.Client
-	system              *sio.System
 	volCache            []*siotypes.Volume
 	volCacheRWL         sync.RWMutex
+	volCacheSystemID    string // systemID for cached volumes
 	snapCache           []*siotypes.Volume
 	snapCacheRWL        sync.RWMutex
-	sdcMap              map[string]string
-	sdcMapRWL           sync.RWMutex
-	spCache             map[string]string
-	spCacheRWL          sync.RWMutex
+	snapCacheSystemID   string // systemID for cached snapshots
 	privDir             string
 	storagePoolIDToName map[string]string
 	statisticsCounter   int
+	//maps the first 24 bits of a volume ID to the volume's systemID
+	volumePrefixToSystems map[string][]string
 }
 
 // New returns a new Service.
 func New() Service {
 	return &service{
-		sdcMap:              map[string]string{},
-		spCache:             map[string]string{},
-		storagePoolIDToName: map[string]string{},
+		storagePoolIDToName:   map[string]string{},
+		volumePrefixToSystems: map[string][]string{},
 	}
 }
 
@@ -102,20 +121,12 @@ func (s *service) BeforeServe(
 
 	defer func() {
 		fields := map[string]interface{}{
-			"endpoint":       s.opts.Endpoint,
-			"user":           s.opts.User,
-			"password":       "",
-			"systemname":     s.opts.SystemName,
-			"sdcGUID":        s.opts.SdcGUID,
-			"insecure":       s.opts.Insecure,
-			"thickprovision": s.opts.Thick,
-			"privatedir":     s.privDir,
-			"autoprobe":      s.opts.AutoProbe,
-			"mode":           s.mode,
-		}
-
-		if s.opts.Password != "" {
-			fields["password"] = "******"
+			"sdcGUID":                s.opts.SdcGUID,
+			"thickprovision":         s.opts.Thick,
+			"privatedir":             s.privDir,
+			"autoprobe":              s.opts.AutoProbe,
+			"mode":                   s.mode,
+			"allowRWOMultiPodAccess": s.opts.AllowRWOMultiPodAccess,
 		}
 
 		log.WithFields(fields).Infof("configured %s", Name)
@@ -126,21 +137,14 @@ func (s *service) BeforeServe(
 
 	opts := Opts{}
 
-	if ep, ok := csictx.LookupEnv(ctx, EnvEndpoint); ok {
-		opts.Endpoint = ep
+	var err error
+
+	// Process configuration file and initialize system clients
+	opts.arrays, err = getArrayConfig(ctx)
+	if err != nil {
+		return err
 	}
-	if user, ok := csictx.LookupEnv(ctx, EnvUser); ok {
-		opts.User = user
-	}
-	if opts.User == "" {
-		opts.User = "admin"
-	}
-	if pw, ok := csictx.LookupEnv(ctx, EnvPassword); ok {
-		opts.Password = pw
-	}
-	if name, ok := csictx.LookupEnv(ctx, EnvSystemName); ok {
-		opts.SystemName = name
-	}
+
 	if guid, ok := csictx.LookupEnv(ctx, EnvSDCGUID); ok {
 		opts.SdcGUID = guid
 	}
@@ -155,6 +159,12 @@ func (s *service) BeforeServe(
 	if listVolumesSnapshots, ok := csictx.LookupEnv(ctx, "X_CSI_VXFLEXOS_ENABLELISTVOLUMESNAPSHOTS"); ok {
 		if listVolumesSnapshots == "true" {
 			opts.EnableListVolumesSnapshots = true
+		}
+	}
+	if allowRWOMultiPodAccess, ok := csictx.LookupEnv(ctx, EnvAllowRWOMultiPodAccess); ok {
+		if allowRWOMultiPodAccess == "true" {
+			opts.AllowRWOMultiPodAccess = true
+			mountAllowRWOMultiPodAccess = true
 		}
 	}
 	if s.privDir == "" {
@@ -176,16 +186,17 @@ func (s *service) BeforeServe(
 		return false
 	}
 
-	opts.Insecure = pb(EnvInsecure)
 	opts.Thick = pb(EnvThick)
 	opts.AutoProbe = pb(EnvAutoProbe)
 
 	s.opts = opts
+	s.adminClients = make(map[string]*sio.Client)
+	s.systems = make(map[string]*sio.System)
 
 	if _, ok := csictx.LookupEnv(ctx, "X_CSI_VXFLEXOS_NO_PROBE_ON_START"); !ok {
 		// Do a controller probe
 		if !strings.EqualFold(s.mode, "node") {
-			if err := s.controllerProbe(ctx); err != nil {
+			if err := s.systemProbeAll(ctx); err != nil {
 				return err
 			}
 		}
@@ -199,6 +210,12 @@ func (s *service) BeforeServe(
 	}
 
 	return nil
+}
+
+// RegisterAdditionalServers registers any additional grpc services that use the CSI socket.
+func (s *service) RegisterAdditionalServers(server *grpc.Server) {
+	log.Info("Registering additional GRPC servers")
+	podmon.RegisterPodmonServer(server, s)
 }
 
 // getVolProvisionType returns a string indicating thin or thick provisioning
@@ -225,80 +242,53 @@ func (s *service) getVolProvisionType(params map[string]string) string {
 	return volType
 }
 
-func (s *service) getVolByID(id string) (*siotypes.Volume, error) {
+// getVolByID returns the PowerFlex volume from the given Powerflex volume ID
+func (s *service) getVolByID(id string, systemID string) (*siotypes.Volume, error) {
 
+	adminClient := s.adminClients[systemID]
+	if adminClient == nil {
+		return nil, fmt.Errorf("can't find adminClient by id %s", systemID)
+	}
 	// The `GetVolume` API returns a slice of volumes, but when only passing
 	// in a volume ID, the response will be just the one volume
-	vols, err := s.adminClient.GetVolume("", strings.TrimSpace(id), "", "", false)
+	vols, err := adminClient.GetVolume("", strings.TrimSpace(id), "", "", false)
 	if err != nil {
 		return nil, err
 	}
 	return vols[0], nil
 }
 
-func (s *service) getSDCID(sdcGUID string) (string, error) {
+// getSDCID returns SDC ID from the given sdc GUID and system ID.
+func (s *service) getSDCID(sdcGUID string, systemID string) (string, error) {
 	sdcGUID = strings.ToUpper(sdcGUID)
 
-	// check if ID is already in cache
-	f := func() string {
-		s.sdcMapRWL.RLock()
-		defer s.sdcMapRWL.RUnlock()
-
-		if id, ok := s.sdcMap[sdcGUID]; ok {
-			return id
-		}
-		return ""
-	}
-	if id := f(); id != "" {
-		return id, nil
-	}
-
 	// Need to translate sdcGUID to sdcID
-	id, err := s.system.FindSdc("SdcGuid", sdcGUID)
+	id, err := s.systems[systemID].FindSdc("SdcGuid", sdcGUID)
 	if err != nil {
 		return "", fmt.Errorf("error finding SDC from GUID: %s, err: %s",
 			sdcGUID, err.Error())
 	}
 
-	s.sdcMapRWL.Lock()
-	defer s.sdcMapRWL.Unlock()
-
-	s.sdcMap[sdcGUID] = id.Sdc.ID
-
 	return id.Sdc.ID, nil
 }
 
-func (s *service) getStoragePoolID(name string) (string, error) {
-	// check if ID is already in cache
-	f := func() string {
-		s.spCacheRWL.RLock()
-		defer s.spCacheRWL.RUnlock()
-
-		if id, ok := s.spCache[name]; ok {
-			return id
-		}
-		return ""
-	}
-	if id := f(); id != "" {
-		return id, nil
-	}
+// getStoragePoolID returns pool ID from the given name and system ID.
+func (s *service) getStoragePoolID(name string, systemID string) (string, error) {
 
 	// Need to lookup ID from the gateway
-	pool, err := s.adminClient.FindStoragePool("", name, "")
+	pool, err := s.adminClients[systemID].FindStoragePool("", name, "")
 	if err != nil {
 		return "", err
 	}
 
-	s.spCacheRWL.Lock()
-	defer s.spCacheRWL.Unlock()
-	s.spCache[name] = pool.ID
-
 	return pool.ID, nil
 }
 
-func (s *service) getCSIVolume(vol *siotypes.Volume) *csi.Volume {
+// getCSIVolume converts the given siotypes.Volume to a CSI volume
+func (s *service) getCSIVolume(vol *siotypes.Volume, systemID string) *csi.Volume {
+
 	// Get storage pool name; add to cache of ID to Name if not present
-	storagePoolName := s.getStoragePoolNameFromID(vol.StoragePoolID)
+	storagePoolName := s.getStoragePoolNameFromID(systemID, vol.StoragePoolID)
 
 	// Make the additional volume attributes
 	attributes := map[string]string{
@@ -307,9 +297,9 @@ func (s *service) getCSIVolume(vol *siotypes.Volume) *csi.Volume {
 		"StoragePoolName": storagePoolName,
 		"CreationTime":    time.Unix(int64(vol.CreationTime), 0).String(),
 	}
-
+	dash := "-"
 	vi := &csi.Volume{
-		VolumeId:      vol.ID,
+		VolumeId:      systemID + dash + vol.ID,
 		CapacityBytes: int64(vol.SizeInKb * bytesInKiB),
 		VolumeContext: attributes,
 	}
@@ -318,10 +308,11 @@ func (s *service) getCSIVolume(vol *siotypes.Volume) *csi.Volume {
 }
 
 // Convert an SIO Volume into a CSI Snapshot object suitable for return.
-func (s *service) getCSISnapshot(vol *siotypes.Volume) *csi.Snapshot {
+func (s *service) getCSISnapshot(vol *siotypes.Volume, systemID string) *csi.Snapshot {
+	dash := "-"
 	snapshot := &csi.Snapshot{
 		SizeBytes:      int64(vol.SizeInKb) * bytesInKiB,
-		SnapshotId:     vol.ID,
+		SnapshotId:     systemID + dash + vol.ID,
 		SourceVolumeId: vol.AncestorVolumeID,
 		ReadyToUse:     true,
 	}
@@ -336,15 +327,17 @@ func (s *service) getCSISnapshot(vol *siotypes.Volume) *csi.Snapshot {
 	return snapshot
 }
 
-func (s *service) getStoragePoolNameFromID(id string) string {
+// Returns storage pool name from the given storage pool ID and system ID
+func (s *service) getStoragePoolNameFromID(systemID string, id string) string {
 	storagePoolName := s.storagePoolIDToName[id]
 	if storagePoolName == "" {
-		pool, err := s.adminClient.FindStoragePool(id, "", "")
+		adminClient := s.adminClients[systemID]
+		pool, err := adminClient.FindStoragePool(id, "", "")
 		if err == nil {
 			storagePoolName = pool.Name
 			s.storagePoolIDToName[id] = pool.Name
 		} else {
-			log.Printf("Could not found StoragePool: %s", id)
+			log.Printf("Could not found StoragePool: %s on system %s", id, systemID)
 		}
 	}
 	return storagePoolName
@@ -364,4 +357,213 @@ func (s *service) logStatistics() {
 		}
 		log.WithFields(fields).Infof("resource statistics counter: %d", s.statisticsCounter)
 	}
+}
+
+func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error) {
+	arrays := make(map[string]*ArrayConnectionData)
+
+	if _, err := os.Stat(ArrayConfig); os.IsNotExist(err) {
+		return nil, fmt.Errorf(fmt.Sprintf("File %s does not exist", ArrayConfig))
+	}
+
+	config, err := ioutil.ReadFile(filepath.Clean(ArrayConfig))
+	if err != nil {
+		return nil, fmt.Errorf(fmt.Sprintf("File %s errors: %v", ArrayConfig, err))
+	}
+
+	if string(config) != "" {
+		jsonCreds := make([]ArrayConnectionData, 0)
+		err := json.Unmarshal(config, &jsonCreds)
+		if err != nil {
+			return nil, fmt.Errorf(fmt.Sprintf("Unable to parse the credentials: %v", err))
+		}
+
+		if len(jsonCreds) == 0 {
+			return nil, fmt.Errorf("no arrays are provided in vxflexos-creds secret")
+		}
+
+		noOfDefaultArray := 0
+		for i, c := range jsonCreds {
+			systemID := c.SystemID
+			if _, ok := arrays[systemID]; ok {
+				return nil, fmt.Errorf(fmt.Sprintf("duplicate system ID %s found at index %d", systemID, i))
+			}
+			if systemID == "" {
+				return nil, fmt.Errorf(fmt.Sprintf("invalid value for system name at index %d", i))
+			}
+			if c.Username == "" {
+				return nil, fmt.Errorf(fmt.Sprintf("invalid value for Username at index %d", i))
+			}
+			if c.Password == "" {
+				return nil, fmt.Errorf(fmt.Sprintf("invalid value for Password at index %d", i))
+			}
+			if c.Endpoint == "" {
+				return nil, fmt.Errorf(fmt.Sprintf("invalid value for Endpoint at index %d", i))
+			}
+
+			fields := map[string]interface{}{
+				"endpoint":  c.Endpoint,
+				"user":      c.Username,
+				"password":  "********",
+				"insecure":  c.Insecure,
+				"isDefault": c.IsDefault,
+				"systemID":  c.SystemID,
+			}
+
+			log.WithFields(fields).Infof("configured %s", c.SystemID)
+
+			if c.IsDefault {
+				noOfDefaultArray++
+			}
+
+			if noOfDefaultArray > 1 {
+				return nil, fmt.Errorf("'isDefault' parameter presents more than once in storage array list")
+			}
+
+			// copy in the arrayConnectionData to arrays
+			copy := ArrayConnectionData{}
+			copy = c
+			arrays[c.SystemID] = &copy
+		}
+	} else {
+		return nil, fmt.Errorf("arrays details are not provided in vxflexos-creds secret")
+	}
+
+	return arrays, nil
+}
+
+// getVolumeIDFromCsiVolumeId returns PowerFlex volume ID from CSI volume ID
+func getVolumeIDFromCsiVolumeID(csiVolID string) string {
+	if csiVolID == "" {
+		return ""
+	}
+
+	tokens := strings.Split(csiVolID, "-")
+	if len(tokens) == 1 {
+		// Only one token found, which means volume created using csi powerflex from v1.0 to v1.3
+		return tokens[0]
+	} else if len(tokens) == 2 {
+		return tokens[1]
+	}
+
+	return ""
+}
+
+// getSystemIDFromCsiVolumeId returns PowerFlex volume ID from CSI volume ID
+func getSystemIDFromCsiVolumeID(csiVolID string) string {
+	tokens := strings.Split(csiVolID, "-")
+	if len(tokens) == 2 {
+		return tokens[0]
+	}
+
+	// There is only volume ID in csi volume ID
+	return ""
+}
+
+//this function updates volumePrefixToSystems, a map of volume ID prefixes -> system IDs
+//this is needed for checkSystemVolumes, a function that verifies that any legacy vol ID
+//is found on the default system, only
+func (s *service) UpdateVolumePrefixToSystemsMap(systemID string) error {
+	//get one vol from system
+	vols, _, err := s.listVolumes(systemID, 0, 1, true, false, "", "")
+
+	if err != nil {
+
+		log.WithError(err).Errorf("failed to list vols for array %s : %s ", systemID, err.Error())
+		return fmt.Errorf("failed to list vols for array %s : %s ", systemID, err.Error())
+
+	}
+
+	if len(vols) == 0 {
+		//if system has no volumes, then there can't be a legacy vol on it
+		fmt.Printf("systemID: %s  has no volumes, not adding to volumePrefixToSystems map. \n", systemID)
+		return nil
+
+	}
+	volID := vols[0].ID
+
+	fmt.Printf("vol id in UpdateVolumePrefixToSystemsMap is: %s  from systemID: %s \n", volID, systemID)
+
+	// use first 24 bit from volume id as a key and system id as a value, and add this entry to the map
+
+	key := s.calcKeyForMap(volID)
+
+	if _, ok := s.volumePrefixToSystems[key]; ok {
+
+		//if key found:
+		//make sure systemID isn't already added for the specific key
+		if contains(s.volumePrefixToSystems[key], systemID) {
+			fmt.Printf("volumePrefixToSystems: systemID: %s  already added for key %s. Not adding for key again. \n", systemID, key)
+			return nil
+		}
+		//systemID has not been added to key before, add it
+		fmt.Printf("volumePrefixToSystems: Adding systemID %s to key %s \n", systemID, key)
+		s.volumePrefixToSystems[key] = append(s.volumePrefixToSystems[key], systemID)
+
+	} else {
+		//if key not found:
+		fmt.Printf("volumePrefixToSystems: adding new key, value pair: key %s, systemID: %s \n", key, systemID)
+		s.volumePrefixToSystems[key] = []string{systemID}
+	}
+
+	return nil
+
+}
+
+func (s *service) checkVolumesMap(volumeID string) error {
+
+	systemID := getSystemIDFromCsiVolumeID(volumeID)
+
+	//ID is legacy, so we  ensure it's only found on default system
+	if systemID == "" {
+
+		fmt.Printf("volume id in checkVolumesMap is: %s \n", volumeID)
+		fmt.Printf("volume %s ,assumed to be on default system. \n", volumeID)
+
+		if len(volumeID) < 3 {
+			err := errors.New("vol ID too short")
+			log.WithError(err).Errorf("volume id %s is shorter than 3 chars, returning error", volumeID)
+			return fmt.Errorf("volume id %s is shorter than 3 chars, returning error", volumeID)
+		}
+
+		key := s.calcKeyForMap(volumeID)
+
+		if _, ok := s.volumePrefixToSystems[key]; ok {
+
+			//key found, make sure vol isn't on non-default system
+			//For each systemID in s.volumePrefixToSystems[key], read all volumes from the system
+			for _, systemID := range s.volumePrefixToSystems[key] {
+				vols, _, err := s.listVolumes(systemID, 0, 0, true, false, "", "")
+				if err != nil {
+					log.WithError(err).Errorf("failed to list vols for array %s : %s ", systemID, err.Error())
+					return fmt.Errorf("failed to list vols for array %s : %s ", systemID, err.Error())
+				}
+				for _, vol := range vols {
+					if vol.ID == volumeID {
+						//legacy volume found on non-default system, this is an error
+						log.WithError(err).Errorf("Found volume id %s on non-default system %s. Expecting this volume id only on default system.  Aborting operation ", volumeID, systemID)
+						return fmt.Errorf("Found volume id %s on non-default system %s. Expecting this volume id only on default system.  Aborting operation ", volumeID, systemID)
+					}
+				}
+			}
+
+		}
+
+		//volume was not found on a non default system.
+		log.Infof("checkVolumesMap returns OK")
+		return nil
+	}
+
+	//volume was not legacy
+	fmt.Printf("Volume ID: %s contains system ID: %s. checkVolumesMap passed  \n", volumeID, systemID)
+	return nil
+
+}
+
+//needs to get first 24 bits of VOlID, this is equivalent to first 3 bytes
+func (s *service) calcKeyForMap(volumeID string) string {
+	bytes := []byte(volumeID)
+	key := string(bytes[0:3])
+	return key
+
 }

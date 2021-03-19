@@ -1,0 +1,10 @@
+[
+    {
+        "endpoint": "http://127.0.0.1",
+        "username": "",
+        "password": "Password123",
+        "insecure": true,
+        "isDefault": true,
+        "systemID": "123"
+    }
+]

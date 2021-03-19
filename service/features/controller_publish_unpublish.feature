@@ -11,6 +11,29 @@ Feature: VxFlex OS CSI interface
     Then a valid PublishVolumeResponse is returned
     And the number of SDC mappings is 1
 
+  Scenario: Publish legacy volume that is on non default array 
+    Given a VxFlexOS service
+    And I induce error "LegacyVolumeConflictError"
+    And a valid volume
+    When I call Probe
+    And I call PublishVolume with "single-writer"
+    Then the error contains "Expecting this volume id only on default system.  Aborting operation"
+  
+  Scenario: Publish volume but ID is too short to get first 24 bits
+   Given a VxFlexOS service
+    And a valid volume
+    When I call Probe
+    And I induce error "VolumeIDTooShortError"
+    And I call PublishVolume with "single-writer"
+    Then the error contains "is shorter than 3 chars, returning error"
+
+  Scenario: Calling probe twice, so UpdateVolumePrefixToSystemsMap gets a key,value already added
+    Given a VxFlexOS service
+    And a valid volume
+    When I call Probe
+    And I call Probe
+    Then the error contains "none"
+ 
   Scenario Outline: Publish Volume with Wrong Access Types
     Given a VxFlexOS service
     And a valid volume
@@ -95,6 +118,7 @@ Feature: VxFlex OS CSI interface
   Scenario: Publish volume with an invalid volumeID
     Given a VxFlexOS service
     When I call Probe
+    And an invalid volume
     And I call PublishVolume with "single-writer"
     Then the error contains "volume not found"
 
@@ -134,7 +158,7 @@ Feature: VxFlex OS CSI interface
     And a valid volume
     When I invalidate the Probe cache
     And I call PublishVolume with "single-writer"
-    Then the error contains "Controller Service has not been probed"
+    Then the error contains "System @@ has not been probed"
 
   Scenario: Publish volume with getSDCID error
     Given a VxFlexOS service
@@ -200,7 +224,7 @@ Feature: VxFlex OS CSI interface
     And no error was received
     And no volume
     And I call UnpublishVolume
-    Then the error contains "Volume ID is required"
+    Then the error contains "volume ID is required"
 
   Scenario: Unpublish volume with invalid probe cache
     Given a VxFlexOS service
@@ -211,7 +235,7 @@ Feature: VxFlex OS CSI interface
     And the number of SDC mappings is 1
     And I invalidate the Probe cache
     And I call UnpublishVolume
-    Then the error contains "Controller Service has not been probed"
+    Then the error contains "System @@ has not been probed"
 
   Scenario: Unpublish volume with invalid volume id
     Given a VxFlexOS service

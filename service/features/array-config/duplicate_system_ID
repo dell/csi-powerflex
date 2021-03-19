@@ -1,0 +1,19 @@
+[
+    {
+        "username": "admin",
+        "password": "password",
+        "systemID": "DUPLICATE",
+        "endpoint": "https://107.0.0.1",
+        "insecure": true,
+        "isDefault": true,
+        "mdm": "10.0.0.1"
+    },
+    {
+        "username": "admin",
+        "password": "password",
+        "systemID": "DUPLICATE",
+        "endpoint": "https://107.0.0.1",
+        "insecure": true,
+        "mdm": "10.0.0.1"
+    }
+]

@@ -3,13 +3,12 @@ Feature: VxFlex OS CSI interface
   I want to test list service methods
   So that they are known to work
 
+  @wip
   Scenario: Test list volumes allowing an unlimited number of volumes
     Given a VxFlex OS service
     And there are 5 valid volumes
     When I call Probe
-    And I call ListVolumes with
-      | max_entries | starting_token |
-      | 0           | none           |
+    And I call ListVolumes with max_entries "0" and starting_token "none"
     Then a valid ListVolumesResponse is returned
     And 5 volumes are listed
 
@@ -17,9 +16,7 @@ Feature: VxFlex OS CSI interface
     Given a VxFlex OS service
     And there are 5 valid volumes
     When I call Probe
-    And I call ListVolumes with
-      | max_entries | starting_token |
-      | 1           | none           |
+    And I call ListVolumes with max_entries "1" and starting_token "none"
     Then a valid ListVolumesResponse is returned
     And 1 volume is listed
 
@@ -27,12 +24,8 @@ Feature: VxFlex OS CSI interface
     Given a VxFlex OS service
     And there are 5 valid volumes
     When I call Probe
-    And I call ListVolumes with
-      | max_entries | starting_token |
-      | 2           | none           |
-    And I call ListVolumes again with
-      | max_entries | starting_token |
-      | 3           | next           |
+    And I call ListVolumes with max_entries "2" and starting_token "none"
+    And I call ListVolumes again with max_entries "3" and starting_token "next"
     Then a valid ListVolumesResponse is returned
     And 3 volumes are listed
 
@@ -40,9 +33,7 @@ Feature: VxFlex OS CSI interface
     Given a VxFlex OS service
     And a valid volume
     When I call Probe
-    And I call ListVolumes with
-      | max_entries | starting_token |
-      | 1           | invalid        |
+    And I call ListVolumes with max_entries "1" and starting_token "invalid"
     Then an invalid ListVolumesResponse is returned
 
   Scenario: Test list volumes with induced volume instances error
@@ -50,27 +41,21 @@ Feature: VxFlex OS CSI interface
     And a valid volume
     And I induce error "VolumeInstancesError"
     When I call Probe
-    And I call ListVolumes with
-      | max_entries | starting_token |
-      | 1           | none           |
+    And I call ListVolumes with max_entries "1" and starting_token "none"
     Then the error contains "Unable to list volumes"
 
   Scenario: Test list volumes with no probe
     Given a VxFlex OS service
     And a valid volume
     And I invalidate the Probe cache
-    And I call ListVolumes with
-      | max_entries | starting_token |
-      | 1           | none           |
+    And I call ListVolumes with max_entries "1" and starting_token "none"
     Then the error contains "has not been probed"
 
   Scenario: Test list volumes with an starting token greater than volume count
     Given a VxFlex OS service
     And a valid volume
     When I call Probe
-    And I call ListVolumes with
-      | max_entries | starting_token |
-      | 1           | larger         |
+    And I call ListVolumes with max_entries "1" and starting_token "larger"
     Then an invalid ListVolumesResponse is returned
 
   Scenario: List snapshots

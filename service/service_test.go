@@ -7,7 +7,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/DATA-DOG/godog"
+	"github.com/cucumber/godog"
 )
 
 func TestMain(m *testing.M) {
@@ -21,7 +21,7 @@ func TestMain(m *testing.M) {
 	}, godog.Options{
 		Format: "pretty",
 		Paths:  []string{"features"},
-		// Tags:   "wip",
+		//	Tags:   "wip",
 	})
 	fmt.Printf("godog finished\n")
 

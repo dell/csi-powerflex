@@ -1,0 +1,32 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: vxflexos2
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "false"
+provisioner: csi-vxflexos.dellemc.com
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+parameters:
+  storagepool: <STORAGE_POOL>   #Insert Storage pool.
+  systemID: <SYSTEM_ID>          #Insert System ID
+volumeBindingMode: WaitForFirstConsumer
+allowedTopologies:
+- matchLabelExpressions:
+  - key: csi-vxflexos.dellemc.com/<SYSTEM_ID>   #Insert System ID
+    values:
+    - csi-vxflexos.dellemc.com
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pvol1
+  namespace: helmtest-vxflexos
+spec:
+  accessModes:
+  - ReadWriteOnce
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 8Gi
+  storageClassName: vxflexos2

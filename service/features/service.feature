@@ -3,10 +3,74 @@ Feature: VxFlex OS CSI interface
   I want to test service methods
   So that they are known to work
 
+  Scenario: Call checkVolumesMap when volumes cannot be listed
+     Given a VxFlexOS service
+     And a valid volume
+     And I call Probe
+     And I induce error "VolumeInstancesError"
+     And I call checkVolumesMap "123"
+     Then the error contains "failed to list vols for array"
+
+  Scenario Outline: Test calls to updateVolumesMap with system already present
+    Given a VxFlexOS service
+    And a valid volume
+    When I call Probe
+    And I call UpdateVolumePrefixToSystemsMap <systemName>
+    Then the error contains <errorMsg>
+
+  Examples:
+      | systemName          | errorMsg       |
+      | "14dbbf5617523654"  | "none"         |
+      | "15dbbf5617523655"  | "none"         |
+
   Scenario: Identity GetPluginInfo good call
     Given a VxFlexOS service
     When I call GetPluginInfo
     Then a valid GetPlugInfoResponse is returned
+
+  Scenario Outline: multi array getSystemIDFromParameters good and with errors
+    Given setup Get SystemID to fail
+    Given a VxFlexOS service
+    And I call GetSystemIDFromParameters with bad params <option>
+    Then the error contains <errormsg>
+    Examples:
+      | option          | errormsg                 |
+      | "good"          | "none"                   |
+      | "NilParams"     | "params map is nil"      |
+      | "NoSystemIDkey" | "No system ID is found " |
+
+  Scenario Outline: multi array getVolumeIDFromCsiVolumeID good and with errors
+    Given a VxFlexOS service
+    And I call getVolumeIDFromCsiVolumeID <csiVolID>
+    Then the error contains <errormsg>
+    Examples:
+      | csiVolID        | errormsg        |
+      | "good"          | "good"          |
+      | "NilParams"     | "NilParams"     |
+      | "NoSystemIDkey" | "NoSystemIDkey" |
+
+  Scenario Outline: multi array getVolumeIDFromCsiVolumeID good and with errors
+    Given a VxFlexOS service
+    And I call getVolumeIDFromCsiVolumeID <csiVolID>
+    Then the error contains <errormsg>
+    Examples:
+      | csiVolID | errormsg |
+      | "a"      | ""       |
+      | "a-b"    | "b"      |
+      | "a:b"    | "a:b"    |
+      | "a:b"    | "a:b"    |
+      | ""       | ""       |
+
+  Scenario Outline: multi array getSystemIDFromCsiVolumeID good and with errors
+    Given a VxFlexOS service
+    And I call getSystemIDFromCsiVolumeID <csiVolID>
+    Then the error contains <errormsg>
+    Examples:
+      | csiVolID | errormsg |
+      | "a"      | ""       |
+      | "a-b"    | "a"      |
+      | "a:b"    | ""       |
+
   Scenario: Identity GetPluginCapabilitiles good call
     Given a VxFlexOS service
     When I call GetPluginCapabilities
@@ -17,13 +81,13 @@ Feature: VxFlex OS CSI interface
     When I call Probe
     Then a valid ProbeResponse is returned
 
+  
   Scenario: Identity Probe call no controller connection
     Given a VxFlexOS service
     And the Controller has no connection
     When I invalidate the Probe cache
     And I call Probe
     Then the error contains "unable to login to VxFlexOS Gateway"
-
 
   Scenario Outline: Probe Call with various errors
     Given a VxFlexOS service
@@ -46,20 +110,20 @@ Feature: VxFlex OS CSI interface
     Given a VxFlexOS service
     And there is a Node Probe Lsmod error
     When I invalidate the Probe cache
-    And I call Probe
+    And I call Node Probe
     Then the possible error contains "scini kernel module not loaded"
 
   # This injected error fails on Windows with no SDC but passes on Linux with SDC
   Scenario: Identity Probe call node probe SdcGUID error
     Given a VxFlexOS service
     And there is a Node Probe SdcGUID error
-    When I call Probe
+    When I call Node Probe
     Then the possible error contains "unable to get SDC GUID"
 
   Scenario: Identity Probe call node probe drvCfg error
     Given a VxFlexOS service
     And there is a Node Probe drvCfg error
-    When I call Probe
+    When I call Node Probe
     Then the possible error contains "unable to get System Name via config or drv_cfg binary"
 
   Scenario Outline: Create volume good scenario
@@ -87,8 +151,7 @@ Feature: VxFlex OS CSI interface
     And I induce error "NoEndpointError"
     And I invalidate the Probe cache
     And I call CreateVolume "volume1"
-    Then the error contains "failed to probe/init plugin:"
-
+    Then the error contains "No system ID is found in parameters or as default"
 
   Scenario: Idempotent create volume with duplicate volume name
     Given a VxFlexOS service
@@ -152,11 +215,21 @@ Feature: VxFlex OS CSI interface
     Then the error contains <errormsg>
 
     Examples:
-      | sysID                      | errormsg                     |
-      | "f.service.opt.SystemName" | "none"                       |
-      | ""                         | "unknown to this controller" |
-      | "Unknown"                  | "unknown to this controller" |
-      | "badSystem"                | "unknown to this controller" |
+      | sysID                      | errormsg                               |
+      | "f.service.opt.SystemName" | "none"                                 |
+      | ""                         | "is not accessible based on Preferred" |
+      | "Unknown"                  | "is not accessible based on Preferred" |
+      | "badSystem"                | "is not accessible based on Preferred" |
+
+  Scenario Outline: Create volume with Accessibility Requirements
+    Given a VxFlexOS service
+    When I call Probe
+    And I specify AccessibilityRequirements with a SystemID of <sysID>
+    And I call CreateVolume "accessibility"
+    Then a valid CreateVolumeResponse with topology is returned
+    Examples:
+      | sysID                   |
+      | "f.service.opt.SystemName" |
 
   Scenario: Create volume with AccessMode_MULTINODE_WRITER
     Given a VxFlexOS service
@@ -215,7 +288,6 @@ Feature: VxFlex OS CSI interface
     Given a VxFlexOS service
     When I call Probe
     And I call GetCapacity with storage pool ""
-    Then a valid GetCapacityResponse is returned
 
   Scenario: Call GetCapacity with valid Storage Pool Name
     Given a VxFlexOS service
@@ -227,7 +299,7 @@ Feature: VxFlex OS CSI interface
     Given a VxFlexOS service
     When I invalidate the Probe cache
     And I call GetCapacity with storage pool ""
-    Then the error contains "Controller Service has not been probed"
+    Then the error contains "System @@ has not been probed"
 
   Scenario: Call GetCapacity with invalid Storage Pool name
     Given a VxFlexOS service
@@ -282,8 +354,8 @@ Feature: VxFlex OS CSI interface
     Then the error contains <errormsg>
 
     Examples:
-      | voltype | access          | fstype | errormsg                      |
-      | "block" | "single-writer" | "none" | "Service has not been probed" |
+      | voltype | access          | fstype | errormsg                                                              |
+      | "block" | "single-writer" | "none" | "systemID is not found in the request and there is no default system" |
 
   Scenario: Call with ValidateVolumeCapabilities with bad vol ID
     Given a VxFlexOS service
@@ -373,7 +445,7 @@ Feature: VxFlex OS CSI interface
     And an invalid volume
     When I invalidate the Probe cache
     And I call CreateSnapshot "snap1"
-    Then the error contains "Controller Service has not been probed"
+    Then the error contains "systemID is not found in the request and there is no default system"
 
   Scenario: Snapshot a block volume consistency group
     Given a VxFlexOS service
@@ -386,6 +458,21 @@ Feature: VxFlex OS CSI interface
     And a valid CreateVolumeResponse is returned
     And I call CreateSnapshot "snap1"
     Then a valid CreateSnapshotResponse is returned
+ 
+  Scenario: Snapshot a block volume consistency group with wrong system
+  Given a VxFlexOS service
+  When I call Probe
+   And I call CreateVolume "vol1"
+   And a valid CreateVolumeResponse is returned
+   And I call CreateVolume "vol2"
+   And a valid CreateVolumeResponse is returned
+   And I call CreateVolume "vol3"
+   And a valid CreateVolumeResponse is returned
+   And I induce error "WrongSystemError"
+   And I call CreateSnapshot "snap1"
+   Then the error contains "Consistency group needs to be on the same system"
+
+
 
   Scenario: Delete a snapshot
     Given a VxFlexOS service
@@ -416,7 +503,7 @@ Feature: VxFlex OS CSI interface
     And a valid snapshot
     When I invalidate the Probe cache
     And I call DeleteSnapshot
-    Then the error contains "Controller Service has not been probed"
+    Then the error contains "systemID is not found in the request and there is no default system"
 
   Scenario: Delete a snapshot with invalid volume
     Given a VxFlexOS service
@@ -543,7 +630,7 @@ Feature: VxFlex OS CSI interface
       | "none"               | 32 | "none"                  |
       | "SetVolumeSizeError" | 64 | "induced error"         |
       | "none"               | 16 | "none"                  |
-      | "NoVolumeIDError"    | 64 | "Volume ID is required" |
+      | "NoVolumeIDError"    | 64 | "volume ID is required" |
       | "none"               | 64 | "none"                  |
       | "GetVolByIDError"    | 64 | "induced error"         |
 
@@ -566,7 +653,7 @@ Feature: VxFlex OS CSI interface
       | "none"                    | "test/tmp/datadir"  | "none"                       |
       | "GOFSInduceFSTypeError"   | "test/tmp/datadir"  | "Failed to fetch filesystem" |
       | "GOFSInduceResizeFSError" | "test/tmp/datadir"  | "Failed to resize device"    |
-      | "NoVolumeIDError"         | "test/tmp/datadir"  | "Volume ID is required"      |
+      | "NoVolumeIDError"         | "test/tmp/datadir"  | "volume ID is required"      |
       | "none"                    | "not/a/path/1234"   | "Could not stat volume path" |
       | "none"                    | "test/tmp/datafile" | "none"                       |
 
@@ -574,6 +661,21 @@ Feature: VxFlex OS CSI interface
     Given a VxFlexOS service
     When I call NodeGetVolumeStats
     Then the error contains "Unimplemented"
+
+  Scenario: Call getDefaultSystemNameMatchingError, should get error in log but no error returned
+    Given a VxFlexOS service
+    When I call getDefaultSystemNameMatchingError
+    Then no error was received
+
+  Scenario: Call getDefaultSystemName, should get error Unable to probe system with ID
+    Given a VxFlexOS service
+    When I call getDefaultSystemNameError
+    Then the error contains "Unable to probe system with ID"
+
+  Scenario: Call getDefaultSystemName, should get Found system Name: mocksystem
+    Given a VxFlexOS service
+    When I call getDefaultSystemName
+    Then no error was received
 
   Scenario: Call New in service, a new service should return
     Given a VxFlexOS service
@@ -590,31 +692,25 @@ Feature: VxFlex OS CSI interface
     When i Call getStoragePoolnameByID "123"
     Then the error contains "cannot find storage pool"
 
-  Scenario: Test BeforeServe
-    Given a VxFlexOS service
-    And I invalidate the Probe cache
-    When I call BeforeServe
-    # Get different error message on Windows vs. Linux
-    Then the error contains "Unable to initialize cert pool from system@@unable to login to VxFlexOS Gateway@@unable to get SDC GUID"
 
   Scenario: Call Node getAllSystems
     Given a VxFlexOS service
-    And I do not have a gateway connection
     When I Call nodeGetAllSystems
+    Then no error was received
 
   Scenario: Call Node getAllSystems
     Given a VxFlexOS service
     And I do not have a gateway connection
     And I do not have a valid gateway endpoint
     When I Call nodeGetAllSystems
-    Then the error contains "Unable to create ScaleIO client"
+    Then the error contains "missing VxFlexOS Gateway endpoint"
 
   Scenario: Call Node getAllSystems
     Given a VxFlexOS service
     And I do not have a gateway connection
     And I do not have a valid gateway password
     When I Call nodeGetAllSystems
-    Then the error contains "Unable to create ScaleIO client"
+    Then the error contains "missing VxFlexOS MDM password"
 
   Scenario: Call evalsymlinks
     Given a VxFlexOS service
@@ -637,6 +733,13 @@ Feature: VxFlex OS CSI interface
     And I call Clone volume
     Then the error contains "incompatible size"
 
+  Scenario: Clone a volume with invalid volume
+    Given a VxFlexOS service
+    And an invalid volume
+    When I call Probe
+    And I call Clone volume
+    Then the error contains "Volume not found"
+
   Scenario: Clone a volume with wrong storage pool
     Given a VxFlexOS service
     And a valid volume
@@ -645,13 +748,6 @@ Feature: VxFlex OS CSI interface
     And I call Clone volume
     Then the error contains "different from the requested storage pool"
 
-  Scenario: Clone a volume with invalid volume
-    Given a VxFlexOS service
-    And an invalid volume
-    When I call Probe
-    And I call Clone volume
-    Then the error contains "Volume not found"
-
   Scenario: Clone a volume with induced volume not found
     Given a VxFlexOS service
     And a valid volume
@@ -659,3 +755,29 @@ Feature: VxFlex OS CSI interface
     When I call Probe
     And I call Clone volume
     Then the error contains "Failed to call CreateSnapshotConsistencyGroup to clone volume"
+
+  Scenario: Test BeforeServe must run last
+    Given a VxFlexOS service
+    And I invalidate the Probe cache
+    When I call BeforeServe
+    # Get different error message on Windows vs. Linux
+    Then the error contains "unable to login to VxFlexOS Gateway"
+
+  Scenario: Test getArrayConfig with invalid config file
+    Given an invalid config <configPath>
+    When I call getArrayConfig
+    Then the error contains <errorMsg> 
+    Examples:
+      | configPath                                  | errorMsg                                                              |
+      | "features/array-config/DO_NOT_EXIST"        | "does not exist"                                                      |
+      | "features/array-config/unable_to_parse"     | "Unable to parse the credentials"                                     |
+      | "features/array-config/zero_length"         | "no arrays are provided in vxflexos-creds secret"                     |
+      | "features/array-config/duplicate_system_ID" | "duplicate system ID"                                                 |
+      | "features/array-config/invalid_system_name" | "invalid value for system name"                                       |
+      | "features/array-config/invalid_username"    | "invalid value for Username"                                          |
+      | "features/array-config/invalid_password"    | "invalid value for Password"                                          |
+      | "features/array-config/invalid_endpoint"    | "invalid value for Endpoint"                                          |
+      | "features/array-config/two_default_array"   | "'isDefault' parameter presents more than once in storage array list" |
+      | "features/array-config/empty"               | "arrays details are not provided in vxflexos-creds secret"            |
+
+

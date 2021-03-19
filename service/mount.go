@@ -19,6 +19,9 @@ import (
 // Variables set only for unit testing.
 var unitTestEmulateBlockDevice bool
 
+// Variables populdated from the environment
+var mountAllowRWOMultiPodAccess bool
+
 // Device is a struct for holding details about a block device
 type Device struct {
 	FullPath string
@@ -134,6 +137,7 @@ func publishVolume(
 		"target":       target,
 		"privateMount": privTgt,
 	}
+	log.WithFields(f).Debugf("fields")
 
 	ctx := context.WithValue(context.Background(), gofsutil.ContextKey("RequestID"), reqID)
 
@@ -147,7 +151,7 @@ func publishVolume(
 
 	if len(devMnts) == 0 {
 		// Device isn't mounted anywhere, do the private mount
-		log.WithFields(f).Debug("attempting mount to private area")
+		log.WithFields(f).Printf("attempting mount to private area")
 
 		// Make sure private mount point exists
 		created, err := mkdir(privTgt)
@@ -158,7 +162,7 @@ func publishVolume(
 		}
 		alreadyMounted := false
 		if !created {
-			log.WithFields(f).Debug("private mount target already exists")
+			log.WithFields(f).Printf("private mount target already exists")
 
 			// The place where our device is supposed to be mounted
 			// already exists, but we also know that our device is not mounted anywhere
@@ -212,25 +216,27 @@ func publishVolume(
 			if m.Path == target {
 				log.Printf("mount %#v already mounted to requested target %s", m, target)
 			} else if m.Path == privTgt {
+				log.WithFields(f).Printf("mount Path %s Source %s Device %s Opts %v", m.Path, m.Source, m.Device, m.Opts)
 				mounted = true
 				rwo := multiAccessFlag
 				if ro {
 					rwo = "ro"
 				}
 				if rwo == "" || contains(m.Opts, rwo) {
-					log.WithFields(f).Debug("private mount already in place")
+					log.WithFields(f).Printf("private mount already in place")
 				} else {
 					log.WithFields(f).Printf("mount %#v rwo %s", m, rwo)
 					return status.Error(codes.InvalidArgument,
 						"Access mode conflicts with existing mounts")
 				}
 			} else if singleAccessMode(accMode) {
-				return status.Error(codes.FailedPrecondition, "Access mode conflicts with existing mounts")
+				return status.Error(codes.FailedPrecondition,
+					fmt.Sprintf("Access mode conflicts with existing mounts for privTgt %s", privTgt))
 			}
 		}
 		if !mounted {
 			return status.Error(codes.Internal,
-				"Device already in use and mounted elsewhere")
+				fmt.Sprintf("Device already in use and mounted elsewhere for privTgt %s", privTgt))
 		}
 	}
 
@@ -263,7 +269,6 @@ func publishVolume(
 				return nil
 			}
 		}
-
 	}
 
 	// Recheck that target is created. k8s has this awful habit of deleting the target if it times out the request.
@@ -345,7 +350,7 @@ func contains(list []string, item string) bool {
 func mkfile(path string) (bool, error) {
 	st, err := os.Stat(path)
 	if os.IsNotExist(err) {
-		/* #nosec G302 */
+		/* #nosec G302 G304 */
 		file, err := os.OpenFile(path, os.O_CREATE, 0755)
 		if err != nil {
 			log.WithField("dir", path).WithError(
@@ -438,14 +443,23 @@ func unpublishVolume(
 			} else if m.Path == target {
 				tgtMnt = true
 			}
+			if !privMnt {
+				log.Printf("found some other device matching private mount %s , %#v do manual cleanup if needed \n", privTgt, m)
+			}
 		}
 	}
+
+	log.Printf("Cleanup flags tgtMnt=%t  privMnt=%t\n", tgtMnt, privMnt)
 
 	if tgtMnt {
 		log.WithFields(f).Debug(fmt.Sprintf("Unmounting %s", target))
 		if err := gofsutil.Unmount(ctx, target); err != nil {
 			return status.Errorf(codes.Internal,
 				"Error unmounting target: %s", err.Error())
+		}
+		if err := removeWithRetry(target); err != nil {
+			return status.Errorf(codes.Internal,
+				"Error remove target folder: %s", err.Error())
 		}
 	}
 
@@ -594,7 +608,13 @@ func validateVolumeCapability(volCap *csi.VolumeCapability, readOnly bool) (bool
 		case csi.VolumeCapability_AccessMode_UNKNOWN:
 			return false, mntVol, accMode, "", status.Error(codes.InvalidArgument, "Unknown Access Mode")
 		case csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER:
+			if mountAllowRWOMultiPodAccess {
+				multiAccessFlag = "rw"
+			}
 		case csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY:
+			if mountAllowRWOMultiPodAccess {
+				multiAccessFlag = "ro"
+			}
 		case csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY:
 			multiAccessFlag = "ro"
 		case csi.VolumeCapability_AccessMode_MULTI_NODE_SINGLE_WRITER:
@@ -611,6 +631,10 @@ func validateVolumeCapability(volCap *csi.VolumeCapability, readOnly bool) (bool
 
 // singleAccessMode returns true if only a single access is allowed SINGLE_NODE_WRITER or SINGLE_NODE_READER_ONLY
 func singleAccessMode(accMode *csi.VolumeCapability_AccessMode) bool {
+	if mountAllowRWOMultiPodAccess {
+		// User specifically asks for multi-pod access on same nodes
+		return false
+	}
 	switch accMode.GetMode() {
 	case csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER:
 		return true

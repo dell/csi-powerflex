@@ -1,0 +1,18 @@
+[
+    {
+        "username": "admin",
+        "password": "password",
+        "systemID": "system_name",
+        "endpoint": "https://127.0.0.1",
+        "insecure": true,
+        "isDefault": true
+    },
+    {
+        "username": "admin",
+        "password": "password",
+        "systemID": "system_name",
+        "endpoint": "https://127.0.0.1",
+        "insecure": true
+    }
+]
+

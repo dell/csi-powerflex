@@ -3,6 +3,30 @@ Feature: VxFlex OS CSI interface
   I want to run a system test
   So that I know the service functions correctly.
 
+//@wip
+  Scenario Outline: Create publish, node-publish, node-unpublish, unpublish, and delete basic volume
+    Given a VxFlexOS service
+    And a capability with voltype <voltype> access <access> fstype <fstype>
+    And a volume request "podmon1" "8"
+    When I call CreateVolume
+    And there are no errors
+    And when I call PublishVolume "SDC_GUID"
+    And when I call NodePublishVolumeWithPoint "SDC_GUID" "/tmp/podmondev1"
+    And there are no errors
+    And I read write data to volume "/tmp/podmondev1"
+    And when I call Validate Volume Host connectivity
+    Then there are no errors
+    And when I call NodeUnpublishVolumeWithPoint "SDC_GUID" "/tmp/podmondev1"
+    And when I call NodeUnpublishVolume "SDC_GUID"
+    And when I call UnpublishVolume "SDC_GUID"
+    And there are no errors
+    And when I call DeleteVolume
+    Then there are no errors
+    Examples:
+      | voltype | access          | fstype | errormsg                   |
+      | "mount" | "single-writer" | "xfs"  | "none"                     |
+
+
   Scenario: Create and delete basic volume
     Given a VxFlexOS service
     And a basic block volume request "integration1" "8"
@@ -71,6 +95,7 @@ Feature: VxFlex OS CSI interface
 
   Scenario: Create volume, create snapshot, create volume from snapshot, delete original volume, delete new volume
     Given a VxFlexOS service
+    And I set another systemId <id>
     And a basic block volume request "integration1" "8"
     When I call CreateVolume
     And I call CreateSnapshot
@@ -90,9 +115,14 @@ Feature: VxFlex OS CSI interface
     And when I call DeleteAllVolumes
     And there are no errors
     And I call ListVolume
+    Examples:
+      | id                 |
+      | "altSystem"        |
+      | "defaultSystem"    |
 
   Scenario: Craete volume, clone volume, delete original volume, delete new volume
     Given a VxFlexOS service
+    And I set another systemId <id>
     And a basic block volume request "integration1" "8"
     When I call CreateVolume
     And I call CloneVolume
@@ -106,6 +136,10 @@ Feature: VxFlex OS CSI interface
     And when I call DeleteAllVolumes
     And there are no errors
     And I call ListVolume
+    Examples:
+      | id                 |
+      | "altSystem"        |
+      | "defaultSystem"    |
 
   Scenario: Create volume, create snapshot, create many volumes from snap, delete original volume, delete new volumes
     Given a VxFlexOS service
@@ -272,8 +306,10 @@ Feature: VxFlex OS CSI interface
     And when I call DeleteVolume
     Then there are no errors
 
+  @wip
   Scenario Outline: Scalability test to create volumes, publish, node publish, node unpublish, unpublish, delete volumes in parallel
     Given a VxFlexOS service
+    And I set another systemId <id>
     When I create <numberOfVolumes> volumes in parallel
     And there are no errors
     And I publish <numberOfVolumes> volumes in parallel
@@ -286,12 +322,10 @@ Feature: VxFlex OS CSI interface
     And there are no errors
     And when I delete <numberOfVolumes> volumes in parallel
     Then there are no errors
-
     Examples:
-      | numberOfVolumes |
-      | 1               |
-      | 2               |
-      | 5               |
+      | id               | numberOfVolumes |
+      | "altSystem"      |  5              |
+      | "defaultSystem"  |  5              |
 
   Scenario Outline: Idempotent create volumes, publish, node publish, node unpublish, unpublish, delete volumes in parallel
     Given a VxFlexOS service
@@ -370,3 +404,20 @@ Feature: VxFlex OS CSI interface
     And there are no errors
     And when I call DeleteVolume
     Then there are no errors
+
+
+  Scenario Outline: Publish and Unpublish Ephemeral Volume
+    Given a VxFlexOS service
+    And a capability with voltype "mount" access <access> fstype <fstype>
+    And I call EthemeralNodePublishVolume with ID <id> and size <size>
+    And when I call NodeUnpublishVolume "SDC_GUID"
+    Then the error message should contain <errormsg>
+
+Examples:
+  |  id           | size      |  access         | fstype | errormsg                                             | 
+  | "123456789"   | "8Gi"     |"single-writer"  | "xfs"  | "none"                                               | 
+  | "123456789"   | "8Gi"     |"single-writer"  | "ext4" | "none"                                               |
+  | "123456789"   | "8Gi"     | "multi-writer"  | "ext4" | "inline ephemeral controller publish failed"         | 
+  | ""            | "8Gi"     | "single-writer" | "ext4" | "InvalidArgument desc = required: VolumeID"          |
+  | "123456789"   | "8Gi"     | "single-writer" | "ext1" | "inline ephemeral node publish failed"               |
+  | "123456789"   | " Gi"     |"single-writer"  | "ext4" | "inline ephemeral parse size failed"                 |
