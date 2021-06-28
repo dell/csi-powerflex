@@ -3,7 +3,6 @@ Feature: VxFlex OS CSI interface
   I want to run a system test
   So that I know the service functions correctly.
 
-//@wip
   Scenario Outline: Create publish, node-publish, node-unpublish, unpublish, and delete basic volume
     Given a VxFlexOS service
     And a capability with voltype <voltype> access <access> fstype <fstype>
@@ -93,16 +92,32 @@ Feature: VxFlex OS CSI interface
       | "32" |
       | "64" |
 
+  @wip
   Scenario: Create volume, create snapshot, create volume from snapshot, delete original volume, delete new volume
     Given a VxFlexOS service
-    And I set another systemId <id>
+    And I set another systemID "altSystem"
+    And a basic block volume request "ss1" "8"
+    When I call CreateVolume
+    And I call CreateSnapshot
+    And there are no errors
+    And I call ListSnapshot
+    And expect Error ListSnapshotResponse 
+    And I call DeleteSnapshot
+    And there are no errors
+    And when I call DeleteVolume
+    And there are no errors
+
+
+  Scenario: Create volume, create snapshot, create volume from snapshot, delete original volume, delete new volume
+    Given a VxFlexOS service
+    And I set another systemID <id>
     And a basic block volume request "integration1" "8"
     When I call CreateVolume
     And I call CreateSnapshot
     And there are no errors
     And I call ListVolume
     And a valid ListVolumeResponse is returned
-    And I call ListSnapshot
+    And I call ListSnapshot For Snap
     And a valid ListSnapshotResponse is returned
     And I call CreateVolumeFromSnapshot
     Then there are no errors
@@ -122,7 +137,7 @@ Feature: VxFlex OS CSI interface
 
   Scenario: Craete volume, clone volume, delete original volume, delete new volume
     Given a VxFlexOS service
-    And I set another systemId <id>
+    And I set another systemID <id>
     And a basic block volume request "integration1" "8"
     When I call CreateVolume
     And I call CloneVolume
@@ -173,6 +188,8 @@ Feature: VxFlex OS CSI interface
     And there are no errors
     And I call CreateSnapshot
     And there are no errors
+    And I call ListSnapshot
+    And a valid ListSnapshotResponse is returned
     And I call DeleteSnapshot
     And there are no errors
     And I call DeleteSnapshot
@@ -180,7 +197,8 @@ Feature: VxFlex OS CSI interface
     And when I call DeleteVolume
     Then there are no errors
 
-  Scenario: Create multiple volumes, create snapshot of consistency group, delete volumes
+   
+   Scenario: Create multiple volumes, create snapshot of consistency group, delete volumes
     Given a VxFlexOS service
     And a basic block volume request "integration1" "8"
     When I call CreateVolume
@@ -306,10 +324,9 @@ Feature: VxFlex OS CSI interface
     And when I call DeleteVolume
     Then there are no errors
 
-  @wip
   Scenario Outline: Scalability test to create volumes, publish, node publish, node unpublish, unpublish, delete volumes in parallel
     Given a VxFlexOS service
-    And I set another systemId <id>
+    And I set another systemID <id>
     When I create <numberOfVolumes> volumes in parallel
     And there are no errors
     And I publish <numberOfVolumes> volumes in parallel
@@ -421,3 +438,84 @@ Examples:
   | ""            | "8Gi"     | "single-writer" | "ext4" | "InvalidArgument desc = required: VolumeID"          |
   | "123456789"   | "8Gi"     | "single-writer" | "ext1" | "inline ephemeral node publish failed"               |
   | "123456789"   | " Gi"     |"single-writer"  | "ext4" | "inline ephemeral parse size failed"                 |
+ 
+Scenario: Call CreateVolumeGroupSnapshot
+  Given a VxFlexOS service
+  And a basic block volume request "integration1" "8"
+  When I call CreateVolume
+  And a basic block volume request "integration2" "8"
+  And I call CreateVolume
+  And a basic block volume request "integration3" "8"
+  And I call CreateVolume
+  When I call CreateVolumeGroupSnapshot
+  And I call DeleteVGS
+  And when I call DeleteAllVolumes
+  Then the error message should contain "none"
+
+Scenario: Call CreateVolumeGroupSnapshot idempotent 
+  Given a VxFlexOS service
+  And a basic block volume request "integration1" "8"
+  When I call CreateVolume
+  And a basic block volume request "integration2" "8"
+  And I call CreateVolume
+  And a basic block volume request "integration3" "8"
+  And I call CreateVolume
+  When I call CreateVolumeGroupSnapshot
+  When I call CreateVolumeGroupSnapshot
+  And I call DeleteVGS
+  And when I call DeleteAllVolumes
+  Then the error message should contain "none"
+
+Scenario: Call CreateVolumeGroupSnapshot idempotent; criteria 1 fails
+  Given a VxFlexOS service
+  And a basic block volume request "integration1" "8"
+  When I call CreateVolume
+  And a basic block volume request "integration2" "8"
+  And I call CreateVolume
+  And a basic block volume request "integration3" "8"
+  And I call CreateVolume
+  When I call CreateVolumeGroupSnapshot
+  And a basic block volume request "integration4" "8"
+  And I call CreateVolume
+  When I call CreateVolumeGroupSnapshot
+  And I call DeleteVGS
+  And when I call DeleteAllVolumes
+  Then the error message should contain "Some snapshots exist on array, while others need to be created"
+
+#X_CSI_VXFLEXOS_ENABLESNAPSHOTCGDELETE must be set to "false" in env.sh for this test
+#Scenario: Call CreateVolumeGroupSnapshot idempotent; criteria 2 fails
+# Given a VxFlexOS service
+#  And a basic block volume request "integration1" "8"
+#  When I call CreateVolume
+# And a basic block volume request "integration2" "8"
+# And I call CreateVolume
+#  And a basic block volume request "integration3" "8"
+#  And I call CreateVolume
+#  When I call CreateVolumeGroupSnapshot
+#  And I call split VolumeGroupSnapshot
+#  When I call CreateVolumeGroupSnapshot
+#  And I call DeleteVGS
+#  And when I call DeleteAllVolumes
+#  Then the error message should contain "Idempotent snapshots belong to different consistency groups on array"
+
+
+Scenario: Call CreateVolumeGroupSnapshot idempotent; criteria 3 fails
+  Given a VxFlexOS service
+  And a basic block volume request "integration1" "8"
+  When I call CreateVolume
+  And a basic block volume request "integration2" "8"
+  And I call CreateVolume
+  And a basic block volume request "integration3" "8"
+  And I call CreateVolume
+  When I call CreateVolumeGroupSnapshot
+  And remove a volume from VolumeGroupSnapshotRequest 
+  When I call CreateVolumeGroupSnapshot
+  And I call DeleteVGS
+  And when I call DeleteAllVolumes
+  Then the error message should contain "contains more snapshots"
+
+
+Scenario: Call DeleteVolumeGroupSnapshot
+   Given a VxFlexOS service
+   When I call DeleteVolumeGroupSnapshot 
+   Then the error message should contain "DeleteVolumeGroupSnapshot not implemented"

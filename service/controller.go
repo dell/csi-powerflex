@@ -17,7 +17,7 @@ import (
 	"github.com/dell/goscaleio"
 	siotypes "github.com/dell/goscaleio/types/v1"
 	ptypes "github.com/golang/protobuf/ptypes"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -29,8 +29,12 @@ const (
 	// create parameters map
 	KeySystemID = "systemID"
 
-	// DefaultVolumeSizeKiB is default volume sgolang/protobuf/blob/master/ptypesize to create on a scaleIO
-	// cluster when no size is given, expressed in KiB
+	// KeyMkfsFormatOption is the key used to get the file system option from the
+	// volume create parameters map
+	KeyMkfsFormatOption = "mkfsFormatOption"
+
+	// DefaultVolumeSizeKiB is default volume sgolang/protobuf/blob/master/ptypesize
+	// to create on a scaleIO cluster when no size is given, expressed in KiB
 	DefaultVolumeSizeKiB = 16 * kiBytesInGiB
 
 	// VolSizeMultipleGiB is the volume size that VxFlexOS creates volumes as
@@ -81,7 +85,7 @@ const (
 )
 
 var (
-	interestingParameters = [...]string{0: "FsType"}
+	interestingParameters = [...]string{0: "FsType", 1: KeyMkfsFormatOption}
 )
 
 func (s *service) CreateVolume(
@@ -111,7 +115,7 @@ func (s *service) CreateVolume(
 	// validate AccessibleTopology
 	accessibility := req.GetAccessibilityRequirements()
 	if accessibility == nil {
-		log.Printf("Received CreateVolume request without accessibility keys")
+		Log.Printf("Received CreateVolume request without accessibility keys")
 	}
 
 	var volumeTopology []*csi.Topology
@@ -139,12 +143,12 @@ func (s *service) CreateVolume(
 				if len(tokens) > 1 {
 					constraint = tokens[1]
 				}
-				log.Printf("Found topology constraint: VxFlex OS system: %s", constraint)
+				Log.Printf("Found topology constraint: VxFlex OS system: %s", constraint)
 				if constraint == sID || constraint == sName {
 					requestedSystem = sID
 					// segment matches system ID/Name where volume will be created
 					systemSegments[key] = segments[key]
-					log.Printf("Added accessible topology segment for volume: %s, segment: %s = %s", req.GetName(),
+					Log.Printf("Added accessible topology segment for volume: %s, segment: %s = %s", req.GetName(),
 						key, systemSegments[key])
 				}
 			}
@@ -160,7 +164,7 @@ func (s *service) CreateVolume(
 			volumeTopology = append(volumeTopology, &csi.Topology{
 				Segments: systemSegments,
 			})
-			log.Printf("Accessible topology for volume: %s, segments: %#v", req.GetName(), systemSegments)
+			Log.Printf("Accessible topology for volume: %s, segments: %#v", req.GetName(), systemSegments)
 		}
 	}
 
@@ -183,7 +187,7 @@ func (s *service) CreateVolume(
 
 	if len(name) > 31 {
 		name = name[0:31]
-		log.Printf("Requested name %s longer than 31 character max, truncated to %s\n", req.Name, name)
+		Log.Printf("Requested name %s longer than 31 character max, truncated to %s\n", req.Name, name)
 		req.Name = name
 	}
 
@@ -191,12 +195,12 @@ func (s *service) CreateVolume(
 	if contentSource != nil {
 		volumeSource := contentSource.GetVolume()
 		if volumeSource != nil {
-			log.Printf("volume %s specified as volume content source", volumeSource.VolumeId)
+			Log.Printf("volume %s specified as volume content source", volumeSource.VolumeId)
 			return s.Clone(req, volumeSource, name, sizeInKiB, sp)
 		}
 		snapshotSource := contentSource.GetSnapshot()
 		if snapshotSource != nil {
-			log.Printf("snapshot %s specified as volume content source", snapshotSource.SnapshotId)
+			Log.Printf("snapshot %s specified as volume content source", snapshotSource.SnapshotId)
 			return s.createVolumeFromSnapshot(req, snapshotSource, name, sizeInKiB, sp)
 		}
 	}
@@ -213,7 +217,7 @@ func (s *service) CreateVolume(
 		HeaderPersistentVolumeClaimNamespace: params[CSIPersistentVolumeClaimNamespace],
 	}
 
-	log.WithFields(fields).Info("creating volume")
+	Log.WithFields(fields).Info("creating volume")
 
 	volumeParam := &siotypes.VolumeParam{
 		Name:           name,
@@ -231,14 +235,14 @@ func (s *service) CreateVolume(
 		t.MetaData().Set(HeaderCSIPluginIdentifier, Name)
 		t.MetaData().Set(HeaderSystemIdentifier, systemID)
 	} else {
-		log.Println("warning: goscaleio.VolumeParam: no MetaData method exists, consider updating goscaleio library.")
+		Log.Println("warning: goscaleio.VolumeParam: no MetaData method exists, consider updating goscaleio library.")
 	}
 
 	createResp, err := s.adminClients[systemID].CreateVolume(volumeParam, sp)
 	if err != nil {
 		// handle case where volume already exists
 		if !strings.EqualFold(err.Error(), sioGatewayVolumeNameInUse) {
-			log.Printf("error creating volume: %s pool %s error: %s", name, sp, err.Error())
+			Log.Printf("error creating volume: %s pool %s error: %s", name, sp, err.Error())
 			return nil, status.Errorf(codes.Internal,
 				"error when creating volume %s storagepool %s: %s", name, sp, err.Error())
 		}
@@ -282,7 +286,7 @@ func (s *service) CreateVolume(
 	}
 	copyInterestingParameters(req.GetParameters(), vi.VolumeContext)
 
-	log.Printf("volume %s (%s) created %s\n", vi.VolumeContext["Name"], vi.VolumeId, vi.VolumeContext["CreationTime"])
+	Log.Printf("volume %s (%s) created %s\n", vi.VolumeContext["Name"], vi.VolumeId, vi.VolumeContext["CreationTime"])
 
 	csiResp := &csi.CreateVolumeResponse{
 		Volume: vi,
@@ -341,7 +345,7 @@ func (s *service) getSystemIDFromParameters(params map[string]string) (string, e
 		}
 	}
 
-	log.Printf("getSystemIDFromParameters got system %s", systemID)
+	Log.Printf("getSystemIDFromParameters got system %s", systemID)
 	return systemID, nil
 }
 
@@ -389,13 +393,20 @@ func (s *service) createVolumeFromSnapshot(req *csi.CreateVolumeRequest,
 
 	// Check for idempotent request
 	existingVols, err := adminClient.GetVolume("", "", "", name, false)
+	noVolErrString1 := "Error: problem finding volume: Volume not found"
+	noVolErrString2 := "Error: problem finding volume: Could not find the volume"
+	if (err != nil) && !(strings.Contains(err.Error(), noVolErrString1) || strings.Contains(err.Error(), noVolErrString2)) {
+		Log.Printf("[createVolumeFromSnapshot] Idempotency check: GetVolume returned error: %s", err.Error())
+		return nil, status.Errorf(codes.Internal, "Failed to create vol from snap -- GetVolume returned unexpected error: %s", err.Error())
+	}
+
 	for _, vol := range existingVols {
 		if vol.Name == name && vol.StoragePoolID == srcVol.StoragePoolID {
-			log.Printf("Requested volume %s already exists", name)
+			Log.Printf("Requested volume %s already exists", name)
 			csiVolume := s.getCSIVolume(vol, systemID)
 			csiVolume.ContentSource = req.GetVolumeContentSource()
 			copyInterestingParameters(req.GetParameters(), csiVolume.VolumeContext)
-			log.Printf("Requested volume (from snap) already exists %s (%s) storage pool %s",
+			Log.Printf("Requested volume (from snap) already exists %s (%s) storage pool %s",
 				csiVolume.VolumeContext["Name"], csiVolume.VolumeId, csiVolume.VolumeContext["StoragePoolName"])
 			return &csi.CreateVolumeResponse{Volume: csiVolume}, nil
 		}
@@ -428,7 +439,7 @@ func (s *service) createVolumeFromSnapshot(req *csi.CreateVolumeRequest,
 	csiVolume.ContentSource = req.GetVolumeContentSource()
 	copyInterestingParameters(req.GetParameters(), csiVolume.VolumeContext)
 
-	log.Printf("Volume (from snap) %s (%s) storage pool %s",
+	Log.Printf("Volume (from snap) %s (%s) storage pool %s",
 		csiVolume.VolumeContext["Name"], csiVolume.VolumeId, csiVolume.VolumeContext["StoragePoolName"])
 	return &csi.CreateVolumeResponse{Volume: csiVolume}, nil
 }
@@ -534,17 +545,17 @@ func (s *service) DeleteVolume(
 
 	if err != nil {
 		if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) {
-			log.WithFields(log.Fields{"id": csiVolID}).Debug("volume is already deleted", csiVolID)
+			Log.WithFields(logrus.Fields{"id": csiVolID}).Debug("volume is already deleted", csiVolID)
 			return &csi.DeleteVolumeResponse{}, nil
 		}
 		if strings.Contains(err.Error(), sioVolumeRemovalOperationInProgress) {
-			log.WithFields(log.Fields{"id": csiVolID}).Debug("volume is currently being deleted", csiVolID)
+			Log.WithFields(logrus.Fields{"id": csiVolID}).Debug("volume is currently being deleted", csiVolID)
 			return &csi.DeleteVolumeResponse{}, nil
 		}
 
 		if strings.Contains(err.Error(), "must be a hexadecimal number") {
 
-			log.WithFields(log.Fields{"id": csiVolID}).Debug("volume id must be a hexadecimal number", csiVolID)
+			Log.WithFields(logrus.Fields{"id": csiVolID}).Debug("volume id must be a hexadecimal number", csiVolID)
 			return &csi.DeleteVolumeResponse{}, nil
 
 		}
@@ -560,7 +571,7 @@ func (s *service) DeleteVolume(
 			"volume in use by %s", vol.MappedSdcInfo[0].SdcID)
 	}
 
-	log.WithFields(log.Fields{"name": vol.Name, "id": csiVolID}).Info("Deleting volume")
+	Log.WithFields(logrus.Fields{"name": vol.Name, "id": csiVolID}).Info("Deleting volume")
 	tgtVol := goscaleio.NewVolume(s.adminClients[systemID])
 	tgtVol.Volume = vol
 	err = tgtVol.RemoveVolume(removeModeOnlyMe)
@@ -594,9 +605,9 @@ func (s *service) ControllerPublishVolume(
 
 	volumeContext := req.GetVolumeContext()
 	if volumeContext != nil {
-		log.Printf("VolumeContext:")
+		Log.Printf("VolumeContext:")
 		for key, value := range volumeContext {
-			log.Printf("    [%s]=%s", key, value)
+			Log.Printf("    [%s]=%s", key, value)
 		}
 	}
 
@@ -682,7 +693,7 @@ func (s *service) ControllerPublishVolume(
 			if sdc.SdcID == sdcID {
 				// TODO check if published volume is compatible with this request
 				// volume already mapped
-				log.Debug("volume already mapped")
+				Log.Debug("volume already mapped")
 				return &csi.ControllerPublishVolumeResponse{}, nil
 			}
 		}
@@ -849,7 +860,7 @@ func (s *service) ControllerUnpublishVolume(
 	}
 
 	if !mappedToNode {
-		log.Debug("volume already unpublished")
+		Log.Debug("volume already unpublished")
 		return &csi.ControllerUnpublishVolumeResponse{}, nil
 	}
 	adminClient := s.adminClients[systemID]
@@ -1014,12 +1025,12 @@ func (s *service) ListVolumes(
 	systemID := s.opts.defaultSystemID
 	if systemID != "" {
 		if err := s.requireProbe(ctx, systemID); err != nil {
-			log.Printf("Could not probe system: %s", systemID)
+			Log.Printf("Could not probe system: %s", systemID)
 			return nil, err
 		}
 	} else {
 		// Default system is not set: not supported
-		log.Printf("Default system is not set")
+		Log.Printf("Default system is not set")
 		return nil, status.Error(codes.InvalidArgument, "There is no default system in controller to list volumes.")
 	}
 
@@ -1106,7 +1117,7 @@ func (s *service) ListSnapshots(
 	// Use systemID from csiSourceID if available, otherwise default systemID is used
 	systemID := s.opts.defaultSystemID
 	if csiSourceID != "" {
-		systemID := getSystemIDFromCsiVolumeID(csiSourceID)
+		systemID = getSystemIDFromCsiVolumeID(csiSourceID)
 		if systemID == "" {
 			// use default system
 			systemID = s.opts.defaultSystemID
@@ -1121,7 +1132,7 @@ func (s *service) ListSnapshots(
 	}
 
 	if err := s.requireProbe(ctx, systemID); err != nil {
-		log.Printf("Could not probe system: %s", systemID)
+		Log.Printf("Could not probe system: %s", systemID)
 		return nil, err
 	}
 
@@ -1194,7 +1205,7 @@ func (s *service) listVolumes(systemID string, startToken int, maxEntries int, d
 	if doVols {
 		// Get the volumes from the cache if we can.
 		if startToken != 0 && len(s.volCache) > 0 {
-			log.Printf("volume cache hit: %d volumes", len(s.volCache))
+			Log.Printf("volume cache hit: %d volumes", len(s.volCache))
 			func() {
 				s.volCacheRWL.Lock()
 				defer s.volCacheRWL.Unlock()
@@ -1230,7 +1241,7 @@ func (s *service) listVolumes(systemID string, startToken int, maxEntries int, d
 	// Process snapshots.
 	if doSnaps {
 		if startToken != 0 && len(s.snapCache) > 0 {
-			log.Printf("snap cache hit: %d snapshots", len(s.snapCache))
+			Log.Printf("snap cache hit: %d snapshots", len(s.snapCache))
 			func() {
 				s.snapCacheRWL.Lock()
 				defer s.snapCacheRWL.Unlock()
@@ -1298,7 +1309,7 @@ func (s *service) listVolumes(systemID string, startToken int, maxEntries int, d
 // Gets capacity of a given storage system. When storage pool name is provided, gets capcity of this storage pool only.
 func (s *service) getSystemCapacity(ctx context.Context, systemID string, spName ...string) (int64, error) {
 
-	log.Infof("Get capacity for system: %s, pool %s", systemID, spName)
+	Log.Infof("Get capacity for system: %s, pool %s", systemID, spName)
 
 	if err := s.requireProbe(ctx, systemID); err != nil {
 		return 0, err
@@ -1472,7 +1483,7 @@ func (s *service) ControllerGetCapabilities(
 // the failed system name
 func (s *service) systemProbeAll(ctx context.Context) error {
 	// probe all arrays
-	log.Infof("Probing all arrays. Number of arrays: %d", len(s.opts.arrays))
+	Log.Infof("Probing all arrays. Number of arrays: %d", len(s.opts.arrays))
 	allArrayFail := true
 	errMap := make(map[string]error)
 
@@ -1480,11 +1491,11 @@ func (s *service) systemProbeAll(ctx context.Context) error {
 		err := s.systemProbe(ctx, array)
 		systemID := array.SystemID
 		if err == nil {
-			log.Infof("array %s probe successfully", systemID)
+			Log.Infof("array %s probe successfully", systemID)
 			allArrayFail = false
 		} else {
 			errMap[systemID] = err
-			log.Errorf("array %s probe failed: %v", array.SystemID, err)
+			Log.Errorf("array %s probe failed: %v", array.SystemID, err)
 		}
 	}
 
@@ -1521,7 +1532,8 @@ func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) e
 
 	// Create ScaleIO API client if needed
 	if s.adminClients[systemID] == nil {
-		c, err := goscaleio.NewClientWithArgs(array.Endpoint, "", array.Insecure, !s.opts.DisableCerts)
+		insecure := array.SkipCertificateValidation || array.Insecure
+		c, err := goscaleio.NewClientWithArgs(array.Endpoint, "", insecure, !s.opts.DisableCerts)
 		if err != nil {
 			return status.Errorf(codes.FailedPrecondition,
 				"unable to create ScaleIO client: %s", err.Error())
@@ -1555,9 +1567,9 @@ func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) e
 	}
 
 	if array.IsDefault == true {
-		log.Infof("default array is set to array ID: %s", systemID)
+		Log.Infof("default array is set to array ID: %s", systemID)
 		s.opts.defaultSystemID = systemID
-		fmt.Printf("%s is the default array, skipping VolumePrefixToSystems map update. \n", systemID)
+		Log.Printf("%s is the default array, skipping VolumePrefixToSystems map update. \n", systemID)
 	} else {
 		err := s.UpdateVolumePrefixToSystemsMap(systemID)
 		if err != nil {
@@ -1573,7 +1585,7 @@ func (s *service) requireProbe(ctx context.Context, systemID string) error {
 			return status.Errorf(codes.FailedPrecondition,
 				"System %s has not been probed", systemID)
 		}
-		log.Debug("probing controller service automatically")
+		Log.Debugf("probing system %s automatically", systemID)
 		array, ok := s.opts.arrays[systemID]
 		if ok {
 			if err := s.systemProbe(ctx, array); err != nil {
@@ -1582,7 +1594,7 @@ func (s *service) requireProbe(ctx context.Context, systemID string) error {
 			}
 		} else {
 			return status.Errorf(codes.InvalidArgument,
-				"system %s is not configured in the controller", systemID)
+				"system %s is not configured in the driver", systemID)
 		}
 	}
 
@@ -1633,7 +1645,7 @@ func (s *service) CreateSnapshot(
 		name := req.Name
 		name = strings.Replace(name, "snapshot-", "sn-", 1)
 		name = name[0:31]
-		log.Printf("Requested name %s longer than 31 character max, truncated to %s\n", req.Name, name)
+		Log.Printf("Requested name %s longer than 31 character max, truncated to %s\n", req.Name, name)
 		req.Name = name
 	}
 
@@ -1643,16 +1655,26 @@ func (s *service) CreateSnapshot(
 
 	// Check for idempotent request, i.e. the snapshot has been already created, by looking up the name.
 	existingVols, err := s.adminClients[systemID].GetVolume("", "", "", req.Name, false)
+	noVolErrString1 := "Error: problem finding volume: Volume not found"
+	noVolErrString2 := "Error: problem finding volume: Could not find the volume"
+	if (err != nil) && !(strings.Contains(err.Error(), noVolErrString1) || strings.Contains(err.Error(), noVolErrString2)) {
+		Log.Printf("[CreateSnapshot] Idempotency check: GetVolume returned error: %s", err.Error())
+		return nil, status.Errorf(codes.Internal, "Failed to create snapshot -- GetVolume returned unexpected error: %s", err.Error())
+	}
+
 	for _, vol := range existingVols {
 		ancestor := vol.AncestorVolumeID
-		log.Printf("idempotent Name %s Name %s Ancestor %s id %s VTree %s pool %s\n",
+		Log.Printf("idempotent Name %s Name %s Ancestor %s id %s VTree %s pool %s\n",
 			vol.Name, req.Name, ancestor, volID, vol.VTreeID, vol.StoragePoolID)
 		if vol.Name == req.Name && vol.AncestorVolumeID == volID {
-			log.Printf("Idempotent request, snapshot %s ancestor %s already exists\n", req.Name, volID)
+			// populate response structure
+			creationTimeUnix := time.Unix(int64(vol.CreationTime), 0)
+			creationTimeStamp, _ := ptypes.TimestampProto(creationTimeUnix)
+			Log.Printf("Idempotent request, snapshot %s ancestor %s already exists\n", req.Name, volID)
 			snapshot := &csi.Snapshot{SizeBytes: int64(vol.SizeInKb) * bytesInKiB,
 				SnapshotId:     vol.ID,
 				SourceVolumeId: csiVolID, ReadyToUse: true,
-				CreationTime: ptypes.TimestampNow()}
+				CreationTime: creationTimeStamp}
 			resp := &csi.CreateSnapshotResponse{Snapshot: snapshot}
 			return resp, nil
 		}
@@ -1668,7 +1690,7 @@ func (s *service) CreateSnapshot(
 			"failure checking volume status: %s", err.Error())
 	}
 	vtreeID := vol.VTreeID
-	log.Printf("vtree ID: %s\n", vtreeID)
+	Log.Printf("vtree ID: %s\n", vtreeID)
 
 	// Build list of volumes to be snapshotted.
 	snapshotDefs := make([]*siotypes.SnapshotDef, 0)
@@ -1690,7 +1712,7 @@ func (s *service) CreateSnapshot(
 			if consistencyGroupSystem != "" && consistencyGroupSystem != systemID {
 				//system needs to be the same throughout snapshot consistency group, this is an error
 				err = status.Errorf(codes.Internal, "Consistency group needs to be on the same system but vol %s is not on system: %s ", v, systemID)
-				log.Errorf("Consistency group needs to be on the same system but vol %s is not on system: %s ", v, systemID)
+				Log.Errorf("Consistency group needs to be on the same system but vol %s is not on system: %s ", v, systemID)
 				return nil, err
 			}
 			v = getVolumeIDFromCsiVolumeID(v)
@@ -1717,16 +1739,22 @@ func (s *service) CreateSnapshot(
 	}
 
 	// populate response structure
+	vol, err = s.getVolByID(volID, systemID)
+	if err != nil {
+		return nil, status.Errorf(codes.NotFound, "volume %s was not found", volID)
+	}
+	creationTimeUnix := time.Unix(int64(vol.CreationTime), 0)
+	creationTimeStamp, _ := ptypes.TimestampProto(creationTimeUnix)
 	dash := "-"
 	csiSnapshotID := systemID + dash + snapResponse.VolumeIDList[0]
 	snapshot := &csi.Snapshot{SizeBytes: int64(vol.SizeInKb) * bytesInKiB,
 		SnapshotId:     csiSnapshotID,
 		SourceVolumeId: csiVolID, ReadyToUse: true,
-		CreationTime: ptypes.TimestampNow()}
+		CreationTime: creationTimeStamp}
 	resp := &csi.CreateSnapshotResponse{Snapshot: snapshot}
 	s.clearCache()
 
-	log.Printf("createSnapshot: SnapshotId %s SourceVolumeId %s CreationTime %s",
+	Log.Printf("createSnapshot: SnapshotId %s SourceVolumeId %s CreationTime %s",
 		snapshot.SnapshotId, snapshot.SourceVolumeId, ptypes.TimestampString(snapshot.CreationTime))
 	return resp, nil
 }
@@ -1752,7 +1780,7 @@ func (s *service) DeleteSnapshot(
 	// Display any secrets passed in
 	secrets := req.GetSecrets()
 	for k, v := range secrets {
-		log.Printf("secret: %s = %s", k, v)
+		Log.Printf("secret: %s = %s", k, v)
 	}
 
 	// Validate snapshot volume
@@ -1781,7 +1809,7 @@ func (s *service) DeleteSnapshot(
 	vol, err := s.getVolByID(snapID, systemID)
 	if err != nil {
 		if strings.Contains(err.Error(), "Could not find the volume") || strings.Contains(err.Error(), "must be a hexadecimal number") {
-			log.Printf("Snapshot %s already deleted on system %s \n", snapID, systemID)
+			Log.Printf("Snapshot %s already deleted on system %s \n", snapID, systemID)
 			return &csi.DeleteSnapshotResponse{}, nil
 		}
 		return nil, status.Errorf(codes.Internal, "Failed to retrieve snapshot: %s", err.Error())
@@ -1829,7 +1857,7 @@ func (s *service) DeleteSnapshotConsistencyGroup(
 	cgVols := make([]*siotypes.Volume, 0)
 	exposedVols := make([]string, 0)
 	cgID := snapVol.ConsistencyGroupID
-	log.Printf("Called DeleteSnapshotConsistencyGroup id: cg %s\n", cgID)
+	Log.Printf("Called DeleteSnapshotConsistencyGroup id: cg %s\n", cgID)
 
 	// make call to cluster to get all volumes
 	// Collect a list of the volumes in the same consistency group (cgVols)
@@ -1837,7 +1865,7 @@ func (s *service) DeleteSnapshotConsistencyGroup(
 	sioVols, err := adminClient.GetVolume("", "", "", "", true)
 	for _, vol := range sioVols {
 		if vol.ConsistencyGroupID == cgID {
-			log.Printf("Name %s CG %s ID %s", vol.Name, vol.ConsistencyGroupID, vol.ID)
+			Log.Printf("Name %s CG %s ID %s", vol.Name, vol.ConsistencyGroupID, vol.ID)
 			cgVols = append(cgVols, vol)
 			if len(vol.MappedSdcInfo) > 0 {
 				exposedVols = append(exposedVols, fmt.Sprintf("%s (%s) ", vol.Name, vol.ID))
@@ -1852,10 +1880,10 @@ func (s *service) DeleteSnapshotConsistencyGroup(
 	}
 	// If there are no volumes, at least add the original one passed in.
 	if len(cgVols) == 0 {
-		log.Printf("Name %s CG %s ID %s", snapVol.Name, snapVol.ConsistencyGroupID, snapVol.ID)
+		Log.Printf("Name %s CG %s ID %s", snapVol.Name, snapVol.ConsistencyGroupID, snapVol.ID)
 		cgVols = append(cgVols, snapVol)
 	}
-	log.Printf("CG Snapshots to be deleted: %v\n", cgVols)
+	Log.Printf("CG Snapshots to be deleted: %v\n", cgVols)
 
 	// Otherwise let's delete them all. If there is an error we fail immediately.
 	s.clearCache()
@@ -1924,27 +1952,27 @@ func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.Controlle
 
 	volName := vol.Name
 	cr := req.GetCapacityRange()
-	log.Printf("cr:%d", cr)
+	Log.Printf("cr:%d", cr)
 	requestedSize, err := validateVolSize(cr)
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("req.size:%d", requestedSize)
+	Log.Printf("req.size:%d", requestedSize)
 	fields := map[string]interface{}{
 		"RequestID":     reqID,
 		"VolumeName":    volName,
 		"RequestedSize": requestedSize,
 	}
-	log.WithFields(fields).Info("Executing ExpandVolume with following fields")
+	Log.WithFields(fields).Info("Executing ExpandVolume with following fields")
 	allocatedSize := int64(vol.SizeInKb)
-	log.Printf("allocatedsize:%d", allocatedSize)
+	Log.Printf("allocatedsize:%d", allocatedSize)
 
 	if requestedSize < allocatedSize {
 		return &csi.ControllerExpandVolumeResponse{}, nil
 	}
 
 	if requestedSize == allocatedSize {
-		log.Infof("Idempotent call detected for volume (%s) with requested size (%d) SizeInKb and allocated size (%d) SizeInKb",
+		Log.Infof("Idempotent call detected for volume (%s) with requested size (%d) SizeInKb and allocated size (%d) SizeInKb",
 			volName, requestedSize, allocatedSize)
 		return &csi.ControllerExpandVolumeResponse{
 			CapacityBytes:         requestedSize * bytesInKiB,
@@ -1956,7 +1984,7 @@ func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.Controlle
 	tgtVol.Volume = vol
 	err = tgtVol.SetVolumeSize(strconv.Itoa(int(reqSize)))
 	if err != nil {
-		log.Errorf("Failed to execute ExpandVolume() with error (%s)", err.Error())
+		Log.Errorf("Failed to execute ExpandVolume() with error (%s)", err.Error())
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
@@ -2024,13 +2052,20 @@ func (s *service) Clone(req *csi.CreateVolumeRequest,
 
 	// Check for idempotent request
 	existingVols, err := adminClient.GetVolume("", "", "", name, false)
+	noVolErrString1 := "Error: problem finding volume: Volume not found"
+	noVolErrString2 := "Error: problem finding volume: Could not find the volume"
+	if (err != nil) && !(strings.Contains(err.Error(), noVolErrString1) || strings.Contains(err.Error(), noVolErrString2)) {
+		Log.Printf("[Clone] Idempotency check: GetVolume returned error: %s", err.Error())
+		return nil, status.Errorf(codes.Internal, "Failed to create clone -- GetVolume returned unexpected error: %s", err.Error())
+	}
+
 	for _, vol := range existingVols {
 		if vol.Name == name && vol.StoragePoolID == srcVol.StoragePoolID {
-			log.Printf("Requested volume %s already exists", name)
+			Log.Printf("Requested volume %s already exists", name)
 			csiVolume := s.getCSIVolume(vol, systemID)
 			csiVolume.ContentSource = req.GetVolumeContentSource()
 			copyInterestingParameters(req.GetParameters(), csiVolume.VolumeContext)
-			log.Printf("Requested volume (from clone) already exists %s (%s) storage pool %s",
+			Log.Printf("Requested volume (from clone) already exists %s (%s) storage pool %s",
 				csiVolume.VolumeContext["Name"], csiVolume.VolumeId, csiVolume.VolumeContext["StoragePoolName"])
 			return &csi.CreateVolumeResponse{Volume: csiVolume}, nil
 
@@ -2067,9 +2102,14 @@ func (s *service) Clone(req *csi.CreateVolumeRequest,
 	csiVolume.ContentSource = req.GetVolumeContentSource()
 	copyInterestingParameters(req.GetParameters(), csiVolume.VolumeContext)
 
-	log.Printf("Volume (from volume clone) %s (%s) storage pool %s",
+	Log.Printf("Volume (from volume clone) %s (%s) storage pool %s",
 		csiVolume.VolumeContext["Name"], csiVolume.VolumeId, csiVolume.VolumeContext["storagePoolName"])
 
 	return &csi.CreateVolumeResponse{Volume: csiVolume}, nil
 
+}
+
+func (s *service) ControllerGetVolume(context.Context,
+	*csi.ControllerGetVolumeRequest) (*csi.ControllerGetVolumeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "")
 }

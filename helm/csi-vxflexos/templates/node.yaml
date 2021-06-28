@@ -113,10 +113,14 @@ spec:
           volumeMounts:
             - name: kubelet-pods
               mountPath: /var/lib/kubelet/pods
+              mountPropagation: "Bidirectional"
             - name: driver-path
               mountPath: /var/lib/kubelet/plugins/vxflexos.emc.dell.com
+              mountPropagation: "Bidirectional"
             - name: usr-bin
               mountPath: /usr-bin
+            - name: var-run
+              mountPath: /var/run
 {{ end }}
         - name: driver
           securityContext:
@@ -129,13 +133,12 @@ spec:
           command: [ "/csi-vxflexos.sh" ]
           args:
             - "--array-config=/vxflexos-config/config"
+            - "--log-config=/vxflexos-config/log-config/driver-config.yaml"
           env:
             - name: CSI_ENDPOINT
               value: unix:///var/lib/kubelet/plugins/vxflexos.emc.dell.com/csi_sock
             - name: X_CSI_MODE
               value: node
-            - name: X_CSI_DEBUG
-              value: "true"
             - name: X_CSI_PRIVATE_MOUNT_DIR
               value: "/var/lib/kubelet/plugins/vxflexos.emc.dell.com/disks"
             - name: X_CSI_ALLOW_RWO_MULTI_POD_ACCESS
@@ -153,6 +156,8 @@ spec:
               mountPath: /dev
             - name: vxflexos-config
               mountPath: /vxflexos-config
+            - name: log-config
+              mountPath: /vxflexos-config/log-config
         - name: registrar
           image: {{ required "Must provide the CSI node registrar container image." .Values.images.registrar }}
           args:
@@ -280,6 +285,9 @@ spec:
         - name: vxflexos-config
           secret:
             secretName: {{ .Release.Name }}-config
+        - name: log-config
+          configMap:
+            name: driver-config 
 {{ if .Values.podmon.enabled }}
         - name: usr-bin
           hostPath:
@@ -289,4 +297,9 @@ spec:
           hostPath:
             path: /var/lib/kubelet/pods
             type: Directory
+        - name: var-run
+          hostPath:
+            path: /var/run
+            type: Directory
+
 {{ end }}

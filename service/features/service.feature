@@ -278,6 +278,12 @@ Feature: VxFlex OS CSI interface
     When I call NodeGetInfo
     Then a valid NodeGetInfoResponse is returned
 
+  Scenario: Call NodeGetInfo with empty connectedSystemsID
+    Given a VxFlexOS service
+    And I induce error "EmptyConnectedSystemIDErrorNoAutoProbe"
+    When I call NodeGetInfo
+    Then the error contains ""
+
   Scenario: Call NodeGetInfo which requires probe and returns error
     Given a VxFlexOS service
     And I induce error "require-probe"
@@ -372,12 +378,20 @@ Feature: VxFlex OS CSI interface
     When I call NodeStageVolume
     Then the error contains "Unimplemented"
 
-  Scenario: Call NodeUnstageVolume, should get unimplemented
+  Scenario Outline: Call NodeUnstageVolume to test podmon functionality
     Given a VxFlexOS service
     And I call Probe
-    When I call NodeUnstageVolume
-    Then the error contains "Unimplemented"
+    When I call NodeUnstageVolume with <error>
+    Then the error contains <errormsg>
 
+    Examples:
+    | error                   | errormsg                                                        |
+    | "none"                  | "none"                                                          |
+    | "NoRequestID"           | "none"                                                          |
+    | "NoVolumeID"            | "Volume ID is required"                                         |
+    | "NoStagingTarget"       | "StagingTargetPath is required"                                 |
+    | "EphemeralVolume"       | "none"                                                          |
+    | "UnmountError"          | "Unable to remove staging target path"                          |
 
   Scenario: Call NodeGetCapabilities should return a valid response
     Given a VxFlexOS service
@@ -397,12 +411,17 @@ Feature: VxFlex OS CSI interface
     Given a VxFlexOS service
     When I call Probe
     And I call CreateVolume "vol1"
+    And I induce error <error>
     And a valid CreateVolumeResponse is returned
-    And I call CreateSnapshot "snapshot-a5d67905-14e9-11e9-ab1c-005056264ad3"
+    And I call CreateSnapshot "clone"
     And no error was received
-    And I call CreateSnapshot "snapshot-a5d67905-14e9-11e9-ab1c-005056264ad3"
-    Then a valid CreateSnapshotResponse is returned
-    And no error was received
+    And I call CreateSnapshot "clone"
+    Then the error contains <errormsg>
+
+    Examples:
+      | error             | errormsg                                                           |
+      | "none"            | "none"                                                             |
+      | "BadVolIDJSON"    | "Failed to create snapshot -- GetVolume returned unexpected error" |
 
   Scenario: Request to create Snapshot with same name and different SourceVolumeID
     Given a VxFlexOS service
@@ -446,7 +465,7 @@ Feature: VxFlex OS CSI interface
     When I invalidate the Probe cache
     And I call CreateSnapshot "snap1"
     Then the error contains "systemID is not found in the request and there is no default system"
-
+ 
   Scenario: Snapshot a block volume consistency group
     Given a VxFlexOS service
     When I call Probe
@@ -458,21 +477,6 @@ Feature: VxFlex OS CSI interface
     And a valid CreateVolumeResponse is returned
     And I call CreateSnapshot "snap1"
     Then a valid CreateSnapshotResponse is returned
- 
-  Scenario: Snapshot a block volume consistency group with wrong system
-  Given a VxFlexOS service
-  When I call Probe
-   And I call CreateVolume "vol1"
-   And a valid CreateVolumeResponse is returned
-   And I call CreateVolume "vol2"
-   And a valid CreateVolumeResponse is returned
-   And I call CreateVolume "vol3"
-   And a valid CreateVolumeResponse is returned
-   And I induce error "WrongSystemError"
-   And I call CreateSnapshot "snap1"
-   Then the error contains "Consistency group needs to be on the same system"
-
-
 
   Scenario: Delete a snapshot
     Given a VxFlexOS service
@@ -561,6 +565,16 @@ Feature: VxFlex OS CSI interface
     And I call DeleteSnapshot
     Then the error contains "error removing snapshot"
 
+  Scenario: Idempotent create a volume from a snapshot
+    Given a VxFlexOS service
+    And a valid snapshot
+    When I call Probe
+    And I call Create Volume from Snapshot
+    And no error was received
+    And I call Create Volume from Snapshot
+    Then a valid CreateVolumeResponse is returned
+    And no error was received
+
   Scenario: Create a volume from a snapshot
     Given a VxFlexOS service
     And a valid snapshot
@@ -601,18 +615,21 @@ Feature: VxFlex OS CSI interface
     And I call Create Volume from Snapshot
     Then the error contains "Failed to create snapshot"
 
-
   Scenario: Idempotent create a volume from a snapshot
     Given a VxFlexOS service
     And a valid snapshot
     When I call Probe
+    And I induce error <error>
     And I call Create Volume from Snapshot
     And a valid CreateVolumeResponse is returned
     And no error was received
-    Then I call Create Volume from Snapshot
-    And no error was received
-    And a valid CreateVolumeResponse is returned
+    And I call Create Volume from Snapshot
+    Then the error contains <errormsg>
 
+    Examples:
+      | error             | errormsg                                                                |
+      | "none"            | "none"                                                                  |
+      | "BadVolIDJSON"    | "Failed to create vol from snap -- GetVolume returned unexpected error" |
 
   Scenario Outline: Call ControllerExpandVolume
     Given a VxFlexOS service
@@ -634,6 +651,32 @@ Feature: VxFlex OS CSI interface
       | "none"               | 64 | "none"                  |
       | "GetVolByIDError"    | 64 | "induced error"         |
 
+  Scenario Outline: Call NodeExpandVolume with non sysID and no defaultSysID
+    Given setup Get SystemID to fail
+    And a VxFlexOS service
+    And I call CreateVolumeSize "volume4" "32"
+    And a controller published volume
+    And a capability with voltype "mount" access "single-writer" fstype "xfs"
+    And get Node Publish Volume Request
+    And I call NodePublishVolume "SDC_GUID"
+    And I induce error "EmptySysIDInNodeExpand"
+    When I call NodeExpandVolume with volumePath as "test/tmp/datadir"
+    Then the error contains "systemID is not found in the request and there is no default system"
+
+  Scenario Outline: Call NodeExpandVolume with invalid volID
+    Given undo setup Get SystemID to fail
+    And a VxFlexOS service
+    And I call Probe
+    And I call CreateVolumeSize "volume4" "32"
+    And a controller published volume
+    And a capability with voltype "mount" access "single-writer" fstype "xfs"
+    And get Node Publish Volume Request
+    And I call NodePublishVolume "SDC_GUID"
+    And no error was received
+    And I induce error "WrongVolIDErrorInNodeExpand"
+    When I call NodeExpandVolume with volumePath as "test/tmp/datadir"
+    Then the error contains "not published to node"
+
   Scenario Outline: Call NodeExpandVolume
     Given a VxFlexOS service
     And I call Probe
@@ -648,14 +691,17 @@ Feature: VxFlex OS CSI interface
     Then the error contains <errormsg>
 
     Examples:
-      | error                     | volPath             | errormsg                     |
-      | "none"                    | ""                  | "Volume path required"       |
-      | "none"                    | "test/tmp/datadir"  | "none"                       |
-      | "GOFSInduceFSTypeError"   | "test/tmp/datadir"  | "Failed to fetch filesystem" |
-      | "GOFSInduceResizeFSError" | "test/tmp/datadir"  | "Failed to resize device"    |
-      | "NoVolumeIDError"         | "test/tmp/datadir"  | "volume ID is required"      |
-      | "none"                    | "not/a/path/1234"   | "Could not stat volume path" |
-      | "none"                    | "test/tmp/datafile" | "none"                       |
+      | error                                   | volPath             | errormsg                                    |
+      | "none"                                  | ""                  | "Volume path required"                      |
+      | "none"                                  | "test/tmp/datadir"  | "none"                                      |
+      | "GOFSInduceFSTypeError"                 | "test/tmp/datadir"  | "Failed to fetch filesystem"                |
+      | "GOFSInduceResizeFSError"               | "test/tmp/datadir"  | "Failed to resize device"                   |
+      | "NoVolumeIDError"                       | "test/tmp/datadir"  | "volume ID is required"                     |
+      | "none"                                  | "not/a/path/1234"   | "Could not stat volume path"                |
+      | "none"                                  | "test/tmp/datafile" | "none"                                      |
+      | "CorrectFormatBadCsiVolIDInNodeExpand"  | "test/tmp/datadir"  | "is not configured in the driver"           |
+      | "VolumeIDTooShortErrorInNodeExpand"     | "test/tmp/datadir"  | "is shorter than 3 chars, returning error"  |
+      | "TooManyDashesVolIDInNodeExpand"        | "test/tmp/datadir"  | "volume ID is required"                     |
 
   Scenario: Call NodeGetVolumeStats, should get unimplemented
     Given a VxFlexOS service
@@ -717,6 +763,22 @@ Feature: VxFlex OS CSI interface
     When I call evalsymlink "invalidpath"
     Then the error contains "Could not evaluate symlinks for path"
 
+  Scenario: Idempotent clone of a volume
+    Given a VxFlexOS service
+    When I call Probe
+    And I induce error <error>
+    And I call CreateVolume "vol1"
+    And a valid CreateVolumeResponse is returned
+    And I call Clone volume
+    And no error was received
+    And I call Clone volume
+    Then the error contains <errormsg>
+
+    Examples:
+      | error             | errormsg                                                        |
+      | "none"            | "none"                                                          |
+      | "BadVolIDJSON"    | "Failed to create clone -- GetVolume returned unexpected error" |
+
   Scenario: Clone a volume
     Given a VxFlexOS service
     And a valid volume
@@ -762,7 +824,7 @@ Feature: VxFlex OS CSI interface
     When I call BeforeServe
     # Get different error message on Windows vs. Linux
     Then the error contains "unable to login to VxFlexOS Gateway"
-
+  
   Scenario: Test getArrayConfig with invalid config file
     Given an invalid config <configPath>
     When I call getArrayConfig
@@ -779,5 +841,8 @@ Feature: VxFlex OS CSI interface
       | "features/array-config/invalid_endpoint"    | "invalid value for Endpoint"                                          |
       | "features/array-config/two_default_array"   | "'isDefault' parameter presents more than once in storage array list" |
       | "features/array-config/empty"               | "arrays details are not provided in vxflexos-creds secret"            |
-
-
+  
+  Scenario: Call ControllerGetVolume
+    Given a VxFlexOS service
+    When I call ControllerGetVolume
+    Then the error contains "Unimplemented" 

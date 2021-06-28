@@ -2,11 +2,8 @@ package service
 
 import (
 	"fmt"
-	"strings"
-
-	log "github.com/sirupsen/logrus"
-
 	"golang.org/x/net/context"
+	"strings"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	wrappers "github.com/golang/protobuf/ptypes/wrappers"
@@ -65,18 +62,18 @@ func (s *service) Probe(
 	req *csi.ProbeRequest) (
 	*csi.ProbeResponse, error) {
 
-	log.Debug("Probe called")
+	Log.Debug("Probe called")
 	if !strings.EqualFold(s.mode, "node") {
-		log.Debug("systemProbe")
+		Log.Debug("systemProbe")
 		if err := s.systemProbeAll(ctx); err != nil {
-			log.Printf("error in systemProbeAll: %s", err.Error())
+			Log.Printf("error in systemProbeAll: %s", err.Error())
 			return nil, err
 		}
 	}
 	if !strings.EqualFold(s.mode, "controller") {
-		log.Debug("nodeProbe")
+		Log.Debug("nodeProbe")
 		if err := s.nodeProbe(ctx); err != nil {
-			log.Printf("error in nodeProbe: %s", err.Error())
+			Log.Printf("error in nodeProbe: %s", err.Error())
 			return nil, err
 		}
 	}
@@ -84,7 +81,7 @@ func (s *service) Probe(
 	ready.Value = true
 	rep := new(csi.ProbeResponse)
 	rep.Ready = ready
-	log.Debug(fmt.Sprintf("Probe returning: %v", rep.Ready.GetValue()))
+	Log.Debug(fmt.Sprintf("Probe returning: %v", rep.Ready.GetValue()))
 
 	return rep, nil
 }

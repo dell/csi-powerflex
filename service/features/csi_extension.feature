@@ -74,4 +74,131 @@ Feature: VxFlex OS CSI interface
     And I call ValidateConnectivity
     Then the error contains "Could not retrieve volume statistics"
 
+  Scenario Outline: Call CreateVolumeSnapshotGroup with errors
+    Given a VxFlexOS service
+    When I call Probe
+    And I call CreateVolume "vol1"
+    And a valid CreateVolumeResponse is returned
+    And I call CreateVolume "vol2"
+    And a valid CreateVolumeResponse is returned
+    And I call CreateVolume "vol3"
+    And a valid CreateVolumeResponse is returned
+    And I induce error <error>
+    And I call CreateVolumeSnapshotGroup
+    Then the error contains <errorMsg>
+    And a valid CreateVolumeSnapshotGroup response is returned 
+
+Examples:
+      | error                       | errorMsg                          |
+      | "none"                      | "none"                            |
+      | "CreateVGSNoNameError"      | "needs Name to be set"            |
+      | "VolIDListEmptyError"       | "SourceVolumeIDs cannot be empty" |
+      | "CreateVGSAcrossTwoArrays"  | "should be on the same system"    |
+      | "CreateVGSNameTooLongError" | "longer than 27 character max"    |
+      | "SIOGatewayVolumeNotFound"  | "failure checking source"         |
+      | "CreateVGSLegacyVol"        | "none"                            |
+      | "CreateSnapshotError"       | "Failed to create group"          |
+      | "NoSysNameError"            | "systemID is not found"           | 
+     
+  Scenario: I call CreateVolumeSnapshotGroup with legacy vol conflict
+    Given a VxFlexOS service
+    #When I call Probe
+    #And I induce error "LegacyVolumeConflictError"
+    And a valid volume
+    When I call Probe
+    And I induce error "LegacyVolumeConflictError"
+    And I call CreateVolumeSnapshotGroup
+    Then the error contains "Expecting this volume id only on default system"
+
+  Scenario: Call DeleteVolumeSnapshotGroup
+    Given a VxFlexOS service
+    When I call Probe
+    And I call DeleteVolumeSnapshotGroup
+    Then the error contains "DeleteVolumeGroupSnapshot not implemented"
+
+  Scenario: Snapshot a block volume consistency group with wrong system
+    Given a VxFlexOS service
+    When I call Probe
+    And I call CreateVolume "vol1"
+    And a valid CreateVolumeResponse is returned
+    And I call CreateVolume "vol2"
+    And a valid CreateVolumeResponse is returned
+    And I call CreateVolume "vol3"
+    And a valid CreateVolumeResponse is returned
+    And I induce error "WrongSystemError"
+    And I call CreateSnapshot "snap1"
+    Then the error contains "needs to be on the same system"
+
+  Scenario: CheckCreationTime with non consistent times
+    Given a VxFlexOS service
+    When I call Probe
+    And I call CreateVolume "vol1"
+    And a valid CreateVolumeResponse is returned
+    And I call CreateVolume "vol2"
+    And a valid CreateVolumeResponse is returned
+    And I call CreateVolume "vol3"
+    And a valid CreateVolumeResponse is returned
+    And I call CreateVolumeSnapshotGroup
+    Then the error contains "none"
+    And I induce error "CreateVGSBadTimeError"
+    And I call CheckCreationTime
+    Then the error contains "All snapshot creation times should be equal"
+
+ Scenario: CreateVolumeSnapshotGroup idempotent 
+    Given a VxFlexOS service
+    When I call Probe
+    And I call CreateVolume "vol1"
+    And a valid CreateVolumeResponse is returned
+    And I call CreateVolume "vol2"
+    And a valid CreateVolumeResponse is returned
+    And I call CreateVolume "vol3"
+    And a valid CreateVolumeResponse is returned
+    And I call CreateVolumeSnapshotGroup
+    And I call CreateVolumeSnapshotGroup
+    Then the error contains "none"
+
+ Scenario: CreateVolumeSnapshotGroup idempotent; when criteria 1 fails
+    Given a VxFlexOS service
+    When I call Probe
+    And I call CreateVolume "vol1"
+    And a valid CreateVolumeResponse is returned
+    And I call CreateVolume "vol2"
+    And a valid CreateVolumeResponse is returned
+    And I call CreateVolume "vol3"
+    And a valid CreateVolumeResponse is returned
+    And I call CreateVolumeSnapshotGroup
+    And I call CreateVolume "vol4"
+    And a valid CreateVolumeResponse is returned
+    And I call CreateVolumeSnapshotGroup
+    Then the error contains "Some snapshots exist on array, while others need to be created."
+
+Scenario: Call CreateVolumeGroupSnapshot idempotent; criteria 2 fails
+  Given a VxFlexOS service
+  When I call Probe
+  And I call CreateVolume "vol1"
+  And a valid CreateVolumeResponse is returned
+  And I call CreateVolume "vol2"
+  And a valid CreateVolumeResponse is returned
+  And I call CreateVolume "vol3"
+  And a valid CreateVolumeResponse is returned
+  And I induce error "CreateSplitVGSError" 
+  And I call CreateVolumeSnapshotGroup
+  And I call CreateVolumeSnapshotGroup
+  Then the error contains "Idempotent snapshots belong to different consistency groups on array."
+
+
+Scenario: Call CreateVolumeGroupSnapshot idempotent; criteria 3 fails
+  Given a VxFlexOS service
+  When I call Probe
+  And I call CreateVolume "vol1"
+  And a valid CreateVolumeResponse is returned
+  And I call CreateVolume "vol2"
+  And a valid CreateVolumeResponse is returned
+  And I call CreateVolume "vol3"
+  And a valid CreateVolumeResponse is returned
+  And I call CreateVolumeSnapshotGroup
+  And remove a volume from VolumeGroupSnapshotRequest
+  And I call CreateVolumeSnapshotGroup
+  Then the error contains "contains more snapshots"
+
 

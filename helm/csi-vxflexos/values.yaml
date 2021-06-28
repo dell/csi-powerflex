@@ -55,6 +55,11 @@ monitor:
   # hostPID determines if the monitor pod should run in the host namespace
   hostPID: true
 
+#vg snapshot controller sidecar
+vgsnapshotter:
+  enabled: false
+  image:
+
 # Podmon is an optional feature under development and tech preview.
 # Enable this feature only after contact support for additional information
 podmon:

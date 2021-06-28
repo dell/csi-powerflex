@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"io/ioutil"
@@ -13,7 +12,7 @@ import (
 	"strconv"
 )
 
-const (
+var (
 	ephemeralStagingMountPath = "/var/lib/kubelet/plugins/kubernetes.io/csi/pv/ephemeral/"
 )
 
@@ -50,10 +49,10 @@ func (s *service) ephemeralNodePublish(
 	*csi.NodePublishVolumeResponse, error) {
 
 	if _, err := os.Stat(ephemeralStagingMountPath); os.IsNotExist(err) {
-		log.Debug("path does not exist, will attempt to create it")
+		Log.Debug("path does not exist, will attempt to create it")
 		err = os.MkdirAll(ephemeralStagingMountPath, 0750)
 		if err != nil {
-			log.Errorf("ephemeralNodePublish: %s", err.Error())
+			Log.Errorf("ephemeralNodePublish: %s", err.Error())
 			return nil, status.Error(codes.Internal, "Unable to create directory for mounting ephemeral volumes")
 		}
 	}
@@ -61,26 +60,26 @@ func (s *service) ephemeralNodePublish(
 	volID := req.GetVolumeId()
 	volName := req.VolumeContext["volumeName"]
 	if len(volName) > 31 {
-		log.Errorf("Volume name: %s is over 32 characters, too long.", volName)
+		Log.Errorf("Volume name: %s is over 32 characters, too long.", volName)
 		return nil, status.Error(codes.Internal, "Volume name too long")
 
 	}
 
 	if volName == "" {
-		log.Errorf("Missing Parameter: volumeName must be specified in volume attributes section for ephemeral volumes")
+		Log.Errorf("Missing Parameter: volumeName must be specified in volume attributes section for ephemeral volumes")
 		return nil, status.Error(codes.Internal, "Volume name not specified")
 	}
 
 	volSize, err := parseSize(req.VolumeContext["size"])
 	if err != nil {
-		log.Errorf("Parse size failed %s", err.Error())
+		Log.Errorf("Parse size failed %s", err.Error())
 		return nil, status.Error(codes.Internal, "inline ephemeral parse size failed")
 	}
 
 	systemName := req.VolumeContext["systemID"]
 
 	if systemName == "" {
-		log.Debug("systemName not specified, using default array")
+		Log.Debug("systemName not specified, using default array")
 		systemName = s.opts.defaultSystemID
 	}
 
@@ -89,7 +88,7 @@ func (s *service) ephemeralNodePublish(
 	err = s.systemProbe(ctx, array)
 
 	if err != nil {
-		log.Errorf("systemProb  Ephemeral %s", err.Error())
+		Log.Errorf("systemProb  Ephemeral %s", err.Error())
 		return nil, status.Error(codes.Internal, "inline ephemeral system prob failed: "+err.Error())
 	}
 
@@ -105,11 +104,11 @@ func (s *service) ephemeralNodePublish(
 	})
 
 	if err != nil {
-		log.Errorf("CreateVolume Ephemeral %s", err.Error())
+		Log.Errorf("CreateVolume Ephemeral %s", err.Error())
 		return nil, status.Error(codes.Internal, "inline ephemeral create volume failed: "+err.Error())
 	}
 
-	log.Infof("volume ID returned from CreateVolume is: %s ", crvolresp.Volume.VolumeId)
+	Log.Infof("volume ID returned from CreateVolume is: %s ", crvolresp.Volume.VolumeId)
 
 	//Create lockfile to map vol ID from request to volID returned by CreateVolume
 	// will also be used to determine if volume is ephemeral in NodeUnpublish
@@ -134,7 +133,7 @@ func (s *service) ephemeralNodePublish(
 
 	if systemName == "" {
 
-		log.Errorf("getSystemIDFromCsiVolumeID was not able to determine systemName from volID: %s", volumeID)
+		Log.Errorf("getSystemIDFromCsiVolumeID was not able to determine systemName from volID: %s", volumeID)
 		return nil, status.Error(codes.Internal, "inline ephemeral getSystemIDFromCsiVolumeID failed ")
 	}
 
@@ -150,7 +149,7 @@ func (s *service) ephemeralNodePublish(
 	})
 
 	if err != nil {
-		log.Infof("Rolling back and calling unpublish ephemeral volumes with VolId %s", crvolresp.Volume.VolumeId)
+		Log.Infof("Rolling back and calling unpublish ephemeral volumes with VolId %s", crvolresp.Volume.VolumeId)
 		_, _ = s.NodeUnpublishVolume(ctx, &csi.NodeUnpublishVolumeRequest{
 			VolumeId:   volID,
 			TargetPath: req.TargetPath,
@@ -169,7 +168,7 @@ func (s *service) ephemeralNodePublish(
 		VolumeContext:     crvolresp.Volume.VolumeContext,
 	})
 	if err != nil {
-		log.Errorf("NodePublishErrEph %s", err.Error())
+		Log.Errorf("NodePublishErrEph %s", err.Error())
 		_, _ = s.NodeUnpublishVolume(ctx, &csi.NodeUnpublishVolumeRequest{
 			VolumeId:   volID,
 			TargetPath: req.TargetPath,
@@ -186,7 +185,7 @@ func (s *service) ephemeralNodeUnpublish(
 	ctx context.Context,
 	req *csi.NodeUnpublishVolumeRequest) error {
 
-	log.Infof("Called ephemeral Node unpublish")
+	Log.Infof("Called ephemeral Node unpublish")
 
 	volID := req.GetVolumeId()
 	if volID == "" {

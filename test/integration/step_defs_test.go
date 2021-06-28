@@ -16,8 +16,9 @@ import (
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/cucumber/godog"
-	//csiext "github.com/dell/csi-vxflexos/csiextensions/podmon_csi"
-	csiext "../../dell-csi-extensions/podmon"
+	csiext "github.com/dell/dell-csi-extensions/podmon"
+	//volGroupSnap "../../dell-csi-extensions/volumeGroupSnapshot"
+	volGroupSnap "github.com/dell/dell-csi-extensions/volumeGroupSnapshot"
 	ptypes "github.com/golang/protobuf/ptypes"
 )
 
@@ -51,16 +52,19 @@ type feature struct {
 	volID                    string
 	snapshotID               string
 	volIDList                []string
+	volIDListShort           []string
 	maxRetryCount            int
 	expandVolumeResponse     *csi.ControllerExpandVolumeResponse
 	nodeExpandVolumeRequest  *csi.NodeExpandVolumeRequest
 	nodeExpandVolumeResponse *csi.NodeExpandVolumeResponse
 	arrays                   map[string]*ArrayConnectionData
+	VolumeGroupSnapshot      *volGroupSnap.CreateVolumeGroupSnapshotResponse
+	VolumeGroupSnapshot2     *volGroupSnap.CreateVolumeGroupSnapshotResponse
 }
 
 // there is no way to call service.go methods from here
 // hence copy same method over there , this is used to get all arrays and pick different
-// systemID to test with see  method iSetAnotherSystemId
+// systemID to test with see  method iSetAnotherSystemID
 func (f *feature) getArrayConfig() (map[string]*ArrayConnectionData, error) {
 	arrays := make(map[string]*ArrayConnectionData)
 
@@ -267,9 +271,8 @@ func (f *feature) theErrorMessageShouldContain(expected string) error {
 	if expected == "none" {
 		if len(f.errs) == 0 {
 			return nil
-		} else {
-			return fmt.Errorf("Unexpected error(s): %s", f.errs[0])
 		}
+		return fmt.Errorf("Unexpected error(s): %s", f.errs[0])
 	}
 	// We expect an error...
 	if len(f.errs) == 0 {
@@ -277,8 +280,9 @@ func (f *feature) theErrorMessageShouldContain(expected string) error {
 	}
 	err0 := f.errs[0]
 	if !strings.Contains(err0.Error(), expected) {
-		return errors.New(fmt.Sprintf("Error %s does not contain the expected message: %s", err0.Error(), expected))
+		return fmt.Errorf("Error %s does not contain the expected message: %s", err0.Error(), expected)
 	}
+	f.errs = nil
 	return nil
 }
 
@@ -587,7 +591,7 @@ func (f *feature) verifyPublishedVolumeWithVoltypeAccessFstype(voltype, access, 
 			return errors.New("Mount did not contain /tmp/datadir for type mount")
 		}
 		if !strings.Contains(string(stdout), fmt.Sprintf("type %s", fstype)) {
-			return errors.New(fmt.Sprintf("Did not find expected fstype %s", fstype))
+			return fmt.Errorf("Did not find expected fstype %s", fstype)
 		}
 
 	} else if voltype == "block" {
@@ -658,7 +662,6 @@ func (f *feature) iCallCreateSnapshotConsistencyGroup() error {
 	req.Parameters["VolumeIDList"] = volumeIDList
 	resp, err := client.CreateSnapshot(ctx, req)
 	if err != nil {
-		fmt.Printf("oops")
 		fmt.Printf("CreateSnapshot returned error: %s\n", err.Error())
 		f.addError(err)
 	} else {
@@ -784,6 +787,19 @@ func (f *feature) aValidListVolumeResponseIsReturned() error {
 	return nil
 }
 
+func (f *feature) iCallListSnapshotForSnap() error {
+	var err error
+	ctx := context.Background()
+	req := &csi.ListSnapshotsRequest{SnapshotId: f.snapshotID}
+	client := csi.NewControllerClient(grpcClient)
+	fmt.Printf("ListSnapshots for snap id %s\n", f.snapshotID)
+	f.listSnapshotsResponse, err = client.ListSnapshots(ctx, req)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (f *feature) iCallListSnapshot() error {
 	var err error
 	ctx := context.Background()
@@ -796,22 +812,44 @@ func (f *feature) iCallListSnapshot() error {
 	return nil
 }
 
+func (f *feature) expectErrorListSnapshotResponse() error {
+	err := f.aValidListSnapshotResponseIsReturned()
+	expected := "ListSnapshots does not contain snap id"
+	// expect does not contain snap id
+	if !strings.Contains(err.Error(), expected) {
+		return fmt.Errorf("Error %s does not contain the expected message: %s", err.Error(), expected)
+	}
+	fmt.Printf("got expected error " + err.Error())
+	return nil
+}
+
 func (f *feature) aValidListSnapshotResponseIsReturned() error {
 	nextToken := f.listSnapshotsResponse.GetNextToken()
 	if nextToken != "" {
 		return errors.New("received NextToken on ListSnapshots but didn't expect one")
 	}
+	fmt.Printf("Looking for snap id %s\n", f.snapshotID)
 	entries := f.listSnapshotsResponse.GetEntries()
+	var FOUND_SNAP bool
 	for j := 0; j < len(entries); j++ {
 		entry := entries[j]
 		id := entry.GetSnapshot().SnapshotId
 		ts := ptypes.TimestampString(entry.GetSnapshot().CreationTime)
+
 		fmt.Printf("snapshot ID %s source ID %s timestamp %s\n", id, entry.GetSnapshot().SourceVolumeId, ts)
+		if f.snapshotID != "" && strings.Contains(id, f.snapshotID) {
+			FOUND_SNAP = true
+		}
+	}
+	if f.snapshotID != "" && !FOUND_SNAP {
+		msg := "ListSnapshots does not contain snap id " + f.snapshotID
+		fmt.Printf(msg)
+		return errors.New(msg)
 	}
 	return nil
 }
 
-func (f *feature) iSetAnotherSystemId(systemType string) error {
+func (f *feature) iSetAnotherSystemID(systemType string) error {
 
 	if f.arrays == nil {
 		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
@@ -1228,11 +1266,121 @@ func (f *feature) iCallValidateVolumeHostConnectivity() error {
 	f.errs = make([]error, 0)
 	if connect.IosInProgress {
 		return nil
-	} else {
-		err = fmt.Errorf("Unexpected error IO to volume: %t", connect.IosInProgress)
+	}
+	err = fmt.Errorf("Unexpected error IO to volume: %t", connect.IosInProgress)
+	f.addError(err)
+	return nil
+}
+
+func (f *feature) iRemoveAVolumeFromVolumeGroupSnapshotRequest() error {
+	//cut last volume off of list
+	f.volIDList = f.volIDList[0 : len(f.volIDList)-1]
+	return nil
+}
+
+func (f *feature) iCallCreateVolumeGroupSnapshot() error {
+	ctx := context.Background()
+	vgsClient := volGroupSnap.NewVolumeGroupSnapshotClient(grpcClient)
+	req := &volGroupSnap.CreateVolumeGroupSnapshotRequest{
+		Name:            "apple",
+		SourceVolumeIDs: f.volIDList,
+	}
+	group, err := vgsClient.CreateVolumeGroupSnapshot(ctx, req)
+	if err != nil {
 		f.addError(err)
+	}
+	fmt.Printf("Group returned is: %v \n", group)
+	if group != nil {
+		f.VolumeGroupSnapshot = group
+	}
+	return nil
+}
+
+//takes f.VolumeGroupSnapshot (assumes length >=2 ), and splits its snapshots into
+//two VolumeGroupSnapshots, f.volumeGroupSnapshot and  f.volumeGroupSnapshot2
+func (f *feature) iCallSplitVolumeGroupSnapshot() error {
+	if f.VolumeGroupSnapshot == nil {
+		fmt.Printf("No VolumeGroupSnapshot to split.\n")
 		return nil
 	}
+	ctx := context.Background()
+	vgsClient := volGroupSnap.NewVolumeGroupSnapshotClient(grpcClient)
+	snapList := f.VolumeGroupSnapshot.Snapshots
+
+	//delete first snap from VGS, and save corresponding VGS as f.volumeGroupSnapshot2
+	f.VolumeGroupSnapshot.Snapshots = snapList[0:1]
+	fmt.Printf("Snapshots in VGS to be deleted are: %v \n", f.VolumeGroupSnapshot.Snapshots)
+	f.iCallDeleteVGS()
+	f.VolumeGroupSnapshot.Snapshots = snapList[1:]
+	f.VolumeGroupSnapshot2 = f.VolumeGroupSnapshot
+
+	//adjust f.volIDList to only contain the first, unsnapped volume, and create another VGS for it. Save this one as  f.volumeGroupSnapshot
+	f.volIDListShort = f.volIDList[0:1]
+	req := &volGroupSnap.CreateVolumeGroupSnapshotRequest{
+		Name:            "apple",
+		SourceVolumeIDs: f.volIDListShort,
+	}
+	group, err := vgsClient.CreateVolumeGroupSnapshot(ctx, req)
+	if err != nil {
+		f.addError(err)
+	}
+	if group != nil {
+		f.VolumeGroupSnapshot = group
+	}
+
+	fmt.Printf("group 1 is: %v \n", f.VolumeGroupSnapshot)
+	fmt.Printf("group 2 is: %v \n", f.VolumeGroupSnapshot2)
+
+	return nil
+
+}
+
+func (f *feature) iCallDeleteVGS() error {
+	ctx := context.Background()
+	client := csi.NewControllerClient(grpcClient)
+	if f.VolumeGroupSnapshot == nil && f.VolumeGroupSnapshot2 != nil {
+		fmt.Printf("VolumeGroupSnapshot already deleted.\n")
+		return nil
+	}
+	for _, snap := range f.VolumeGroupSnapshot.Snapshots {
+		fmt.Printf("Deleting:  %v \n", snap.SnapId)
+		req := &csi.DeleteSnapshotRequest{
+			SnapshotId: snap.SnapId,
+		}
+		_, err := client.DeleteSnapshot(ctx, req)
+		if err != nil {
+			fmt.Printf("DeleteSnapshot returned error: %s\n", err.Error())
+		}
+	}
+
+	if f.VolumeGroupSnapshot2 != nil {
+		for _, snap := range f.VolumeGroupSnapshot2.Snapshots {
+			fmt.Printf("Deleting:  %v \n", snap.SnapId)
+			req := &csi.DeleteSnapshotRequest{
+				SnapshotId: snap.SnapId,
+			}
+			_, err := client.DeleteSnapshot(ctx, req)
+			if err != nil {
+				fmt.Printf("DeleteSnapshot returned error: %s\n", err.Error())
+			}
+		}
+
+	}
+	return nil
+}
+
+func (f *feature) iCallDeleteVolumeGroupSnapshot() error {
+	ctx := context.Background()
+	vgsClient := volGroupSnap.NewVolumeGroupSnapshotClient(grpcClient)
+	req := &volGroupSnap.DeleteVolumeGroupSnapshotRequest{
+		SnapshotGroupID: "Group1",
+	}
+	resp, err := vgsClient.DeleteVolumeGroupSnapshot(ctx, req)
+	if err != nil {
+		f.addError(err)
+	}
+	fmt.Printf("Resp returned is: %v \n", resp)
+	return nil
 }
 
 func (f *feature) whenICallExpandVolumeTo(size int64) error {
@@ -1364,10 +1512,12 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^I call ListVolume$`, f.iCallListVolume)
 	s.Step(`^a valid ListVolumeResponse is returned$`, f.aValidListVolumeResponseIsReturned)
 	s.Step(`^I call ListSnapshot$`, f.iCallListSnapshot)
+	s.Step(`^I call ListSnapshot For Snap$`, f.iCallListSnapshotForSnap)
 	s.Step(`^a valid ListSnapshotResponse is returned$`, f.aValidListSnapshotResponseIsReturned)
+	s.Step(`^expect Error ListSnapshotResponse$`, f.expectErrorListSnapshotResponse)
 	s.Step(`^I create (\d+) volumes in parallel$`, f.iCreateVolumesInParallel)
 	s.Step(`^I publish (\d+) volumes in parallel$`, f.iPublishVolumesInParallel)
-	s.Step(`^I set another systemId "([^"]*)"$`, f.iSetAnotherSystemId)
+	s.Step(`^I set another systemID "([^"]*)"$`, f.iSetAnotherSystemID)
 	s.Step(`^I node publish (\d+) volumes in parallel$`, f.iNodePublishVolumesInParallel)
 	s.Step(`^I node unpublish (\d+) volumes in parallel$`, f.iNodeUnpublishVolumesInParallel)
 	s.Step(`^I unpublish (\d+) volumes in parallel$`, f.iUnpublishVolumesInParallel)
@@ -1375,9 +1525,14 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^I write block data$`, f.iWriteBlockData)
 	s.Step(`^I read write data to volume "([^"]*)"$`, f.iReadWriteToVolume)
 	s.Step(`^when I call Validate Volume Host connectivity$`, f.iCallValidateVolumeHostConnectivity)
+	s.Step(`^I call CreateVolumeGroupSnapshot$`, f.iCallCreateVolumeGroupSnapshot)
+	s.Step(`^I call DeleteVolumeGroupSnapshot$`, f.iCallDeleteVolumeGroupSnapshot)
 	s.Step(`^when I call ExpandVolume to "([^"]*)"$`, f.whenICallExpandVolumeTo)
 	s.Step(`^when I call NodeExpandVolume$`, f.whenICallNodeExpandVolume)
 	s.Step(`^I call CloneVolume$`, f.iCallCloneVolume)
 	s.Step(`^I call CloneManyVolumes$`, f.iCallCloneManyVolumes)
 	s.Step(`^I call EthemeralNodePublishVolume with ID "([^"]*)" and size "([^"]*)"$`, f.iCallEthemeralNodePublishVolume)
+	s.Step(`^I call DeleteVGS$`, f.iCallDeleteVGS)
+	s.Step(`^remove a volume from VolumeGroupSnapshotRequest$`, f.iRemoveAVolumeFromVolumeGroupSnapshotRequest)
+	s.Step(`^I call split VolumeGroupSnapshot$`, f.iCallSplitVolumeGroupSnapshot)
 }

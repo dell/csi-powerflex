@@ -3,7 +3,6 @@ Feature: VxFlex OS CSI interface
   I want to test list service methods
   So that they are known to work
 
-  @wip
   Scenario: Test list volumes allowing an unlimited number of volumes
     Given a VxFlex OS service
     And there are 5 valid volumes
@@ -64,6 +63,7 @@ Feature: VxFlex OS CSI interface
     When I call Probe
     And I call ListSnapshots with max_entries "5" and starting_token ""
     Then a valid ListSnapshotsResponse is returned with listed "5" and next_token ""
+
   Scenario: List snapshots without calling probe
     Given a VxFlexOS service
     And there are 5 valid snapshots of "default" volume
@@ -140,7 +140,7 @@ Feature: VxFlex OS CSI interface
     And a valid volume
     And there are 5 valid snapshots of "default" volume
     When I call Probe
-    Then I call ListSnapshots for snapshot "0000-3"
+    Then I call ListSnapshots for snapshot "14dbbf5617523654-3456"
     And a valid ListSnapshotsResponse is returned with listed "1" and next_token ""
     And the snapshot ID is "0000-3"
 
@@ -150,5 +150,5 @@ Feature: VxFlex OS CSI interface
     And there are 5 valid snapshots of "default" volume
     When I call Probe
     And I induce error "GetVolByIDError"
-    Then I call ListSnapshots for snapshot "0000-3"
+    Then I call ListSnapshots for snapshot "14dbbf5617523654-3456"
     And the error contains "Unable to list volumes"
