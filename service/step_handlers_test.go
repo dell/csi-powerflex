@@ -4,15 +4,15 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	types "github.com/dell/goscaleio/types/v1"
+	"github.com/gorilla/mux"
+	codes "google.golang.org/grpc/codes"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
-
-	types "github.com/dell/goscaleio/types/v1"
-	"github.com/gorilla/mux"
-	codes "google.golang.org/grpc/codes"
 )
 
 var (
@@ -42,6 +42,7 @@ var (
 		RemoveVolumeError             bool
 		VolumeInstancesError          bool
 		BadVolIDError                 bool
+		NoCsiVolIDError               bool
 		WrongVolIDError               bool
 		WrongSystemError              bool
 		NoEndpointError               bool
@@ -55,6 +56,19 @@ var (
 		systemNameMatchingError       bool
 		LegacyVolumeConflictError     bool
 		VolumeIDTooShortError         bool
+		EmptyEphemeralID              bool
+		IncorrectEphemeralID          bool
+		TooManyDashesVolIDError       bool
+		CorrectFormatBadCsiVolID      bool
+		EmptySysID                    bool
+		VolIDListEmptyError           bool
+		CreateVGSNoNameError          bool
+		CreateVGSNameTooLongError     bool
+		CreateVGSLegacyVol            bool
+		CreateVGSAcrossTwoArrays      bool
+		CreateVGSBadTimeError         bool
+		CreateSplitVGSError           bool
+		BadVolIDJSON                  bool
 	}
 )
 
@@ -100,6 +114,7 @@ func getHandler() http.Handler {
 	stepHandlersErrors.RemoveVolumeError = false
 	stepHandlersErrors.VolumeInstancesError = false
 	stepHandlersErrors.BadVolIDError = false
+	stepHandlersErrors.NoCsiVolIDError = false
 	stepHandlersErrors.WrongVolIDError = false
 	stepHandlersErrors.WrongSystemError = false
 	stepHandlersErrors.NoEndpointError = false
@@ -112,6 +127,19 @@ func getHandler() http.Handler {
 	stepHandlersErrors.SetVolumeSizeError = false
 	stepHandlersErrors.LegacyVolumeConflictError = false
 	stepHandlersErrors.VolumeIDTooShortError = false
+	stepHandlersErrors.EmptyEphemeralID = false
+	stepHandlersErrors.IncorrectEphemeralID = false
+	stepHandlersErrors.TooManyDashesVolIDError = false
+	stepHandlersErrors.CorrectFormatBadCsiVolID = false
+	stepHandlersErrors.EmptySysID = false
+	stepHandlersErrors.VolIDListEmptyError = false
+	stepHandlersErrors.CreateVGSNoNameError = false
+	stepHandlersErrors.CreateVGSNameTooLongError = false
+	stepHandlersErrors.CreateVGSLegacyVol = false
+	stepHandlersErrors.CreateVGSAcrossTwoArrays = false
+	stepHandlersErrors.CreateVGSBadTimeError = false
+	stepHandlersErrors.CreateSplitVGSError = false
+	stepHandlersErrors.BadVolIDJSON = false
 	sdcMappings = sdcMappings[:0]
 	sdcMappingsID = ""
 	return handler
@@ -387,11 +415,21 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("error decoding json: %s\n", err.Error())
 		}
-		for _, snapParam := range req.SnapshotDefs {
-			// For now3, only a single snapshot ID is supported
+		for index, snapParam := range req.SnapshotDefs {
+			// For now, only a single snapshot ID is supported
 
 			id := "9999"
-			if snapParam.SnapshotName == "clone" {
+			cgValue := "null"
+			//if snap is part of VGS, we need more than 1 snapshot ID
+			if strings.Contains(snapParam.SnapshotName, "apple") {
+				id = id + strconv.Itoa(index)
+				cgValue = "bab120324566"
+				if stepHandlersErrors.CreateSplitVGSError && index == 0 {
+					cgValue = "bab120324567"
+				}
+			}
+
+			if snapParam.SnapshotName == "clone" || snapParam.SnapshotName == "volumeFromSnap" {
 				id = "72cee42500000003"
 			}
 			if snapParam.SnapshotName == "invalid-clone" {
@@ -411,7 +449,7 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 			volumeIDToName[id] = snapParam.SnapshotName
 			volumeNameToID[snapParam.SnapshotName] = id
 			volumeIDToAncestorID[id] = snapParam.VolumeID
-			volumeIDToConsistencyGroupID[id] = "null"
+			volumeIDToConsistencyGroupID[id] = cgValue
 		}
 
 		if stepHandlersErrors.WrongVolIDError {
@@ -572,7 +610,6 @@ func handleQueryVolumeIDByKey(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "induced error", http.StatusRequestTimeout, codes.Internal)
 		return
 	}
-
 	req := new(types.VolumeQeryIdByKeyParam)
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(&req)
@@ -584,7 +621,11 @@ func handleQueryVolumeIDByKey(w http.ResponseWriter, r *http.Request) {
 		resp.ID = volumeNameToID[req.Name]
 		log.Printf("found volume %s id %s\n", req.Name, volumeNameToID[req.Name])
 		encoder := json.NewEncoder(w)
-		err := encoder.Encode(resp)
+		if stepHandlersErrors.BadVolIDJSON {
+			err = encoder.Encode("thisWill://causeUnmarshalErr")
+		} else {
+			err = encoder.Encode(resp.ID)
+		}
 		if err != nil {
 			log.Printf("error encoding json: %s\n", err.Error())
 		}
@@ -592,6 +633,7 @@ func handleQueryVolumeIDByKey(w http.ResponseWriter, r *http.Request) {
 		log.Printf("did not find volume %s\n", req.Name)
 		volumeNameToID[req.Name] = ""
 		writeError(w, fmt.Sprintf("Volume not found %s", req.Name), http.StatusNotFound, codes.NotFound)
+
 	}
 }
 

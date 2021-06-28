@@ -6,13 +6,14 @@ provisioner: csi-vxflexos.dellemc.com
 reclaimPolicy: Delete
 allowVolumeExpansion: true
 parameters:
-  storagepool: <STORAGE_POOL>   #Insert Storage pool.
+  storagepool: <STORAGE_POOL> # Insert Storage pool
+  systemID: <SYSTEM_ID> # Insert System ID
+  mkfsFormatOption: "<mkfs_format_option>" # Insert file system format option
   FsType: xfs
-  systemID: <SYSTEM_ID>   #Insert System ID
 volumeBindingMode: WaitForFirstConsumer
 allowedTopologies:
 - matchLabelExpressions:
-  - key: csi-vxflexos.dellemc.com/<SYSTEM_ID>  #Insert System ID.
+  - key: csi-vxflexos.dellemc.com/<SYSTEM_ID> # Insert System ID
     values:
     - csi-vxflexos.dellemc.com
 

@@ -3,6 +3,9 @@ package service
 import (
 	"errors"
 	"fmt"
+	csi "github.com/container-storage-interface/spec/lib/go/csi"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"log"
 	"net"
 	"net/http/httptest"
@@ -11,11 +14,10 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-
-	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	//"github.com/cucumber/gherkin-go"
 	"github.com/cucumber/godog"
 	podmon "github.com/dell/dell-csi-extensions/podmon"
+	volGroupSnap "github.com/dell/dell-csi-extensions/volumeGroupSnapshot"
 	"github.com/dell/gofsutil"
 	"github.com/dell/goscaleio"
 	types "github.com/dell/goscaleio/types/v1"
@@ -28,6 +30,7 @@ const (
 	arrayID                    = "14dbbf5617523654"
 	arrayID2                   = "15dbbf5617523655"
 	badVolumeID                = "Totally Fake ID"
+	badCsiVolumeID             = "ffff-f250"
 	goodVolumeID               = "111"
 	badVolumeID2               = "9999"
 	badVolumeID3               = "99"
@@ -41,11 +44,14 @@ const (
 	altdatadir                 = "test/tmp/altdatadir"
 	altdatafile                = "test/tmp/altdatafile"
 	sdcVolume1                 = "d0f055a700000000"
-	sdcVolume2                 = "d0f055aa00000001"
+	sdcVolume2                 = "c0f055aa00000000"
 	sdcVolume0                 = "0000000000000000"
 	ephemVolumeSDC             = "6373692d64306630353561373030303030303030"
-	mdmID                      = "0000"
+	mdmID                      = "14dbbf5617523654"
 	mdmIDEphem                 = "14dbbf5617523654"
+	mdmID1                     = "24dbbf5617523654"
+	mdmID2                     = "34dbbf5617523654"
+	badMdmID                   = "9999"
 	nodePublishBlockDevicePath = "test/dev/scinia"
 	nodePublishAltBlockDevPath = "test/dev/scinib"
 	nodePublishEphemDevPath    = "test/dev/scinic"
@@ -74,6 +80,7 @@ type feature struct {
 	nodeGetInfoResponse                   *csi.NodeGetInfoResponse
 	nodeGetCapabilitiesResponse           *csi.NodeGetCapabilitiesResponse
 	deleteVolumeResponse                  *csi.DeleteVolumeResponse
+	getMappedVolResponse                  *goscaleio.SdcMappedVolume
 	getCapacityResponse                   *csi.GetCapacityResponse
 	controllerGetCapabilitiesResponse     *csi.ControllerGetCapabilitiesResponse
 	validateVolumeCapabilitiesResponse    *csi.ValidateVolumeCapabilitiesResponse
@@ -100,6 +107,7 @@ type feature struct {
 	volumeIDList                          []string
 	snapshotIndex                         int
 	volumeID                              string
+	VolumeGroupSnapshot                   *volGroupSnap.CreateVolumeGroupSnapshotResponse
 }
 
 func (f *feature) checkGoRoutines(tag string) {
@@ -158,6 +166,7 @@ func (f *feature) aVxFlexOSService() error {
 	f.wrongStoragePool = false
 	f.deleteVolumeRequest = nil
 	f.deleteVolumeResponse = nil
+	f.getMappedVolResponse = nil
 	f.listVolumesRequest = nil
 	f.listVolumesResponse = nil
 	f.listVolumesNextTokenCache = ""
@@ -291,8 +300,27 @@ func (f *feature) iCallGetPluginInfo() error {
 
 func (f *feature) iCallcheckVolumesMap(id string) error {
 	f.err = f.service.checkVolumesMap(id)
+
 	return nil
 
+}
+
+func (f *feature) iCallgetMappedVolsWithVolIDAndSysID(volID, sysID string) error {
+	f.getMappedVolResponse, f.err = getMappedVol(volID, sysID)
+
+	return nil
+}
+
+func (f *feature) theVolumeIsFromTheCorrectSystem(volID, sysID string) error {
+	if f.getMappedVolResponse.VolumeID == volID {
+		if f.getMappedVolResponse.MdmID == sysID {
+			return nil
+		}
+		errString := fmt.Sprintf("correct volume ID %s returned from wrong system %s", volID, sysID)
+		return errors.New(errString)
+	}
+	errString := fmt.Sprintf("incorrect volume ID %s returned", volID)
+	return errors.New(errString)
 }
 
 func (f *feature) aValidGetPlugInfoResponseIsReturned() error {
@@ -504,7 +532,7 @@ func (f *feature) iCallValidateVolumeHostConnectivity() error {
 	} else if stepHandlersErrors.PodmonNodeProbeError == true {
 		f.service.mode = "node"
 	} else if stepHandlersErrors.PodmonVolumeError == true {
-		volid := "9999"
+		volid := badVolumeID2
 		volIDs = append(volIDs, volid)
 	} else if stepHandlersErrors.PodmonNoSystemError == true {
 		f.service.mode = "node"
@@ -724,6 +752,33 @@ func (f *feature) iInduceError(errtype string) error {
 		stepHandlersErrors.WrongSystemError = true
 	case "BadVolIDError":
 		stepHandlersErrors.BadVolIDError = true
+	case "NoCsiVolIDError":
+		f.nodePublishVolumeRequest.VolumeId = ""
+	case "EmptyConnectedSystemIDErrorNoAutoProbe":
+		connectedSystemID = nil
+		f.service.opts.AutoProbe = false
+	case "NoSysIDError":
+		f.nodePublishVolumeRequest.VolumeId = badVolumeID2
+	case "WrongSysIDError":
+		f.nodePublishVolumeRequest.VolumeId = badVolumeID2
+	case "RequireProbeFailError":
+		f.nodePublishVolumeRequest.VolumeId = "50"
+	case "VolumeIDTooShortErrorInNodeExpand":
+		stepHandlersErrors.VolumeIDTooShortError = true
+	case "TooManyDashesVolIDInNodeExpand":
+		stepHandlersErrors.TooManyDashesVolIDError = true
+	case "CorrectFormatBadCsiVolIDInNodeExpand":
+		stepHandlersErrors.CorrectFormatBadCsiVolID = true
+	case "EmptySysIDInNodeExpand":
+		stepHandlersErrors.EmptySysID = true
+	case "WrongVolIDErrorInNodeExpand":
+		stepHandlersErrors.BadVolIDError = true
+	case "EmptyEphemeralID":
+		f.nodePublishVolumeRequest.VolumeId = mdmID
+		stepHandlersErrors.EmptyEphemeralID = true
+	case "IncorrectEphemeralID":
+		f.nodePublishVolumeRequest.VolumeId = mdmID
+		stepHandlersErrors.IncorrectEphemeralID = true
 	case "FindVolumeIDError":
 		stepHandlersErrors.FindVolumeIDError = true
 	case "GetVolByIDError":
@@ -773,6 +828,8 @@ func (f *feature) iInduceError(errtype string) error {
 		stepHandlersErrors.VolumeInstancesError = true
 	case "NoVolumeIDError":
 		stepHandlersErrors.NoVolumeIDError = true
+	case "BadVolIDJSON":
+		stepHandlersErrors.BadVolIDJSON = true
 	case "SetVolumeSizeError":
 		stepHandlersErrors.SetVolumeSizeError = true
 	case "NoSymlinkForNodePublish":
@@ -879,6 +936,20 @@ func (f *feature) iInduceError(errtype string) error {
 		stepHandlersErrors.LegacyVolumeConflictError = true
 	case "VolumeIDTooShortError":
 		stepHandlersErrors.VolumeIDTooShortError = true
+	case "VolIDListEmptyError":
+		stepHandlersErrors.VolIDListEmptyError = true
+	case "CreateVGSNoNameError":
+		stepHandlersErrors.CreateVGSNoNameError = true
+	case "CreateVGSNameTooLongError":
+		stepHandlersErrors.CreateVGSNameTooLongError = true
+	case "CreateVGSLegacyVol":
+		stepHandlersErrors.CreateVGSLegacyVol = true
+	case "CreateVGSAcrossTwoArrays":
+		stepHandlersErrors.CreateVGSAcrossTwoArrays = true
+	case "CreateVGSBadTimeError":
+		stepHandlersErrors.CreateVGSBadTimeError = true
+	case "CreateSplitVGSError":
+		stepHandlersErrors.CreateSplitVGSError = true
 	default:
 		return fmt.Errorf("Don't know how to induce error %q", errtype)
 	}
@@ -1656,6 +1727,73 @@ func (f *feature) aControllerPublishedVolume() error {
 	return nil
 }
 
+func (f *feature) twoIdenticalVolumesOnTwoDifferentSystems() error {
+	// Make two directories, one for each volume/system
+	for _, mdmID := range [2]string{mdmID1, mdmID2} {
+		volDirectory := "twoVolTest/dev/disk/by-id/emc-vol-" + mdmID + "-" + sdcVolume2
+		_, err := os.Stat(volDirectory)
+		if err != nil {
+			cmdstring := "mkdir -p " + volDirectory
+			cmd := exec.Command("sh", "-c", cmdstring)
+			output, err := cmd.CombinedOutput()
+			fmt.Printf("mkdir output: %s\n", output)
+			if err != nil {
+				fmt.Printf("mkdir: %s\n", err.Error())
+				err = nil
+			}
+		}
+	}
+
+	// Set variable in goscaleio that dev is in a different place.
+	goscaleio.FSDevDirectoryPrefix = "twoVolTest"
+
+	return nil
+}
+
+func (f *feature) iCreateFalseEphemeralID() error {
+	fakeEphemeralIDFolder := ephemeralStagingMountPath + mdmIDEphem
+
+	_, err := os.Stat(fakeEphemeralIDFolder)
+	if err != nil {
+		cmdstring := "mkdir -p " + fakeEphemeralIDFolder
+		cmd := exec.Command("sh", "-c", cmdstring)
+		output, err := cmd.CombinedOutput()
+		fmt.Printf("mkdir output: %s\n", output)
+		if err != nil {
+			fmt.Printf("mkdir: %s\n", err.Error())
+			err = nil
+		}
+	}
+
+	file, err := os.Create(fakeEphemeralIDFolder + "/id")
+	if err != nil {
+		fmt.Printf("mkdir: %s\n", err.Error())
+		// return error
+	}
+
+	if stepHandlersErrors.IncorrectEphemeralID {
+		id, err := file.WriteString("1996")
+		fmt.Printf("%d written to file %s\n", id, fakeEphemeralIDFolder+"/id")
+		if err != nil {
+			// print error
+			file.Close()
+			// return error
+		}
+
+		// print `line` written successfully
+		err = file.Close()
+		if err != nil {
+			// How to print error??
+			return nil
+		}
+		return nil
+	} else if stepHandlersErrors.EmptyEphemeralID {
+		return nil
+	}
+
+	return nil
+}
+
 func (f *feature) getNodeEphemeralVolumePublishRequest(name, size, sp, systemName string) error {
 	req := new(csi.NodePublishVolumeRequest)
 	req.VolumeId = sdcVolume1
@@ -1733,6 +1871,35 @@ func (f *feature) iCallNodePublishVolume(arg1 string) error {
 	}
 	return nil
 }
+
+func (f *feature) iCallCleanupPrivateTarget() error {
+	sysdevice, terr := GetDevice("test/dev/scinia")
+	if terr != nil {
+		return terr
+	}
+	err := cleanupPrivateTarget(sysdevice, "1", "features/d0f055a700000000")
+	if err != nil {
+		fmt.Printf("Cleanupprivatetarget failed: %s\n", err.Error())
+		if f.err == nil {
+			f.err = err
+		}
+	}
+	return nil
+}
+
+func (f *feature) iCallUnmountAndDeleteTarget() error {
+	header := metadata.New(map[string]string{"csi.requestid": "1"})
+	ctx := metadata.NewIncomingContext(context.Background(), header)
+	targetPath := f.nodePublishVolumeRequest.TargetPath
+	if err := gofsutil.Unmount(ctx, targetPath); err != nil {
+		return err
+	}
+	if err := os.Remove(targetPath); err != nil {
+		fmt.Printf("Unable to remove directory: %v", err)
+	}
+	return nil
+}
+
 func (f *feature) iCallEphemeralNodeUnpublish() error {
 	header := metadata.New(map[string]string{"csi.requestid": "1"})
 	ctx := metadata.NewIncomingContext(context.Background(), header)
@@ -1763,7 +1930,6 @@ func (f *feature) iCallNodeUnpublishVolume(arg1 string) error {
 	req := new(csi.NodeUnpublishVolumeRequest)
 	req.VolumeId = f.nodePublishVolumeRequest.VolumeId
 	req.TargetPath = f.nodePublishVolumeRequest.TargetPath
-
 	fmt.Printf("Calling NodeUnpublishVolume\n")
 	_, err := f.service.NodeUnpublishVolume(ctx, req)
 	if err != nil {
@@ -1836,6 +2002,16 @@ func (f *feature) iCallNodeExpandVolume(volPath string) error {
 	}
 	if stepHandlersErrors.NoVolumeIDError {
 		req.VolumeId = ""
+	} else if stepHandlersErrors.VolumeIDTooShortError {
+		req.VolumeId = "50"
+	} else if stepHandlersErrors.TooManyDashesVolIDError {
+		req.VolumeId = "1-2-3"
+	} else if stepHandlersErrors.CorrectFormatBadCsiVolID {
+		req.VolumeId = badCsiVolumeID
+	} else if stepHandlersErrors.EmptySysID {
+		req.VolumeId = goodVolumeID
+	} else if stepHandlersErrors.BadVolIDError {
+		req.VolumeId = badVolumeID
 	}
 	_, f.err = f.service.NodeExpandVolume(ctx, req)
 	return nil
@@ -1848,10 +2024,38 @@ func (f *feature) iCallNodeGetVolumeStats() error {
 	return nil
 }
 
-func (f *feature) iCallNodeUnstageVolume() error {
-	ctx := new(context.Context)
+func (f *feature) iCallNodeUnstageVolumeWith(error string) error {
+	// Save the ephemeralStagingMountPath to restore below
+	ephemeralPath := ephemeralStagingMountPath
+	header := metadata.New(map[string]string{"csi.requestid": "1"})
+	if error == "NoRequestID" {
+		header = metadata.New(map[string]string{"csi.requestid": ""})
+	}
+	ctx := metadata.NewIncomingContext(context.Background(), header)
 	req := new(csi.NodeUnstageVolumeRequest)
-	_, f.err = f.service.NodeUnstageVolume(*ctx, req)
+	req.VolumeId = goodVolumeID
+	if error == "NoVolumeID" {
+		req.VolumeId = ""
+	}
+	req.StagingTargetPath = datadir
+	if error == "NoStagingTarget" {
+		req.StagingTargetPath = ""
+	}
+	if error == "UnmountError" {
+		req.StagingTargetPath = "/tmp"
+		gofsutil.GOFSMock.InduceUnmountError = true
+	}
+	if error == "EphemeralVolume" {
+		// Create an ephemeral volume id
+		ephemeralStagingMountPath = "test/"
+		err := os.MkdirAll("test"+"/"+goodVolumeID+"/id", 0777)
+		if err != nil {
+			return err
+		}
+	}
+	_, f.err = f.service.NodeUnstageVolume(ctx, req)
+	ephemeralStagingMountPath = ephemeralPath
+	os.Remove("test" + "/" + goodVolumeID + "/id")
 	return nil
 }
 
@@ -1889,6 +2093,142 @@ func (f *feature) aValidNodeGetCapabilitiesResponseIsReturned() error {
 	return errors.New("expected NodeGetCapabilitiesResponse but didn't get one")
 }
 
+func (f *feature) iCallCreateVolumeGroupSnapshot() error {
+	ctx := context.Background()
+	name := "apple"
+
+	if stepHandlersErrors.NoSysNameError {
+		f.service.opts.defaultSystemID = ""
+		f.volumeIDList = []string{"1235"}
+	}
+	if stepHandlersErrors.CreateVGSNoNameError {
+		name = ""
+	}
+
+	if stepHandlersErrors.CreateVGSNameTooLongError {
+		name = "ThisNameIsOverThe27CharacterLimit"
+	}
+	if stepHandlersErrors.VolIDListEmptyError {
+		f.volumeIDList = nil
+	}
+	if stepHandlersErrors.CreateVGSAcrossTwoArrays {
+		f.volumeIDList = []string{"14dbbf5617523654-12235531", "15dbbf5617523655-12345986", "14dbbf5617523654-12456777"}
+	}
+
+	if stepHandlersErrors.LegacyVolumeConflictError {
+		//need a legacy vol so check map executes
+		f.volumeIDList = []string{"1234"}
+
+	}
+	if stepHandlersErrors.CreateVGSLegacyVol {
+		//make sure legacy vol works
+		tokens := strings.Split(f.volumeIDList[0], "-")
+		f.volumeIDList[0] = tokens[1]
+	}
+
+	req := &volGroupSnap.CreateVolumeGroupSnapshotRequest{
+		Name:            name,
+		SourceVolumeIDs: f.volumeIDList,
+	}
+
+	group, err := f.service.CreateVolumeGroupSnapshot(ctx, req)
+	if err != nil {
+		f.err = err
+	}
+	if group != nil {
+		f.VolumeGroupSnapshot = group
+	}
+	return nil
+}
+
+func (f *feature) iRemoveAVolumeFromVolumeGroupSnapshotRequest() error {
+	//cut last volume off of list
+	f.volumeIDList = f.volumeIDList[0 : len(f.volumeIDList)-1]
+	return nil
+}
+
+func (f *feature) iCallCheckCreationTime() error {
+	if f.VolumeGroupSnapshot == nil || f.err != nil {
+		return nil
+	}
+	//add a bad snap so creation time will not match
+	if stepHandlersErrors.CreateVGSBadTimeError {
+
+		snap := volGroupSnap.Snapshot{
+			Name:          "unit-test-1",
+			CapacityBytes: 34359738368,
+			SnapId:        "test-1",
+			SourceId:      "source-1",
+			ReadyToUse:    true,
+			CreationTime:  123,
+		}
+		f.VolumeGroupSnapshot.Snapshots = append(f.VolumeGroupSnapshot.Snapshots, &snap)
+
+	}
+
+	err := checkCreationTime(f.VolumeGroupSnapshot.Snapshots[0].CreationTime, f.VolumeGroupSnapshot.Snapshots)
+	if err != nil {
+		f.err = err
+	}
+	return nil
+}
+
+func (f *feature) iCallControllerGetVolume() error {
+	ctx := context.Background()
+	req := new(csi.ControllerGetVolumeRequest)
+	resp, err := f.service.ControllerGetVolume(ctx, req)
+	if err != nil {
+		f.err = err
+	}
+	fmt.Printf("Response from ControllerGetVolume is %v", resp)
+	return nil
+}
+
+func (f *feature) aValidCreateVolumeSnapshotGroupResponse() error {
+	//only check resp. if CreateVolumeGroupSnapshot returns okay
+	if f.VolumeGroupSnapshot == nil || f.err != nil {
+		return nil
+	}
+	err := status.Errorf(codes.Internal, "Bad VolumeSnapshotGroupResponse")
+	gID := f.VolumeGroupSnapshot.SnapshotGroupID
+	tokens := strings.Split(gID, "-")
+	if len(tokens) == 0 {
+		fmt.Printf("Error: VolumeSnapshotGroupResponse SnapshotGroupID: %s does not contain systemID \n", gID)
+		return err
+	}
+	for _, snap := range f.VolumeGroupSnapshot.Snapshots {
+		snapID := snap.SnapId
+		srcID := snap.SourceId
+		tokens = strings.Split(snapID, "-")
+		if len(tokens) == 0 {
+			fmt.Printf("Error: VolumeSnapshotGroupResponse SnapId: %s does not contain systemID \n", snapID)
+			return err
+		}
+		fmt.Printf("SnapId: %s contains systemID: %s \n", snapID, tokens[0])
+		tokens = strings.Split(srcID, "-")
+		if len(tokens) == 0 {
+			fmt.Printf("Error: VolumeSnapshotGroupResponse SourceId: %s does not contain systemID \n", srcID)
+			return err
+		}
+		fmt.Printf("SourceId: %s contains systemID: %s \n", srcID, tokens[0])
+	}
+
+	fmt.Printf("VolumeSnapshotGroupResponse looks OK \n")
+	return nil
+}
+
+func (f *feature) iCallDeleteVolumeGroupSnapshot() error {
+	ctx := context.Background()
+	req := &volGroupSnap.DeleteVolumeGroupSnapshotRequest{
+		SnapshotGroupID: "1234",
+	}
+	_, err := f.service.DeleteVolumeGroupSnapshot(ctx, req)
+	if err != nil {
+		f.err = err
+	}
+	return nil
+}
+
 func (f *feature) iCallCreateSnapshot(snapName string) error {
 	ctx := new(context.Context)
 
@@ -1905,7 +2245,7 @@ func (f *feature) iCallCreateSnapshot(snapName string) error {
 	}
 
 	if f.invalidVolumeID {
-		req.SourceVolumeId = "9999"
+		req.SourceVolumeId = badVolumeID2
 	} else if f.noVolumeID {
 		req.SourceVolumeId = ""
 	} else if len(f.volumeIDList) > 1 {
@@ -1954,7 +2294,7 @@ func (f *feature) iCallDeleteSnapshot() error {
 	req := &csi.DeleteSnapshotRequest{SnapshotId: goodSnapID, Secrets: make(map[string]string)}
 	req.Secrets["x"] = "y"
 	if f.invalidVolumeID {
-		req.SnapshotId = "9999"
+		req.SnapshotId = badVolumeID2
 	} else if f.noVolumeID {
 		req.SnapshotId = ""
 	}
@@ -2061,7 +2401,7 @@ func (f *feature) iCallListSnapshotsForVolume(arg1 string) error {
 
 	if stepHandlersErrors.BadVolIDError {
 		req.SourceVolumeId = "Not at all valid"
-		req.SnapshotId = "111-111"
+		req.SnapshotId = "14dbbf5617523654-11111111"
 	}
 
 	f.listSnapshotsRequest = req
@@ -2216,6 +2556,11 @@ func (f *feature) iCallGetVolProvisionTypeWithBadParams() error {
 
 	f.service.getVolProvisionType(params)
 
+	return nil
+}
+
+func (f *feature) undoSetupGetSystemIDtoFail() error {
+	setupGetSystemIDtoFail = false
 	return nil
 }
 
@@ -2426,9 +2771,13 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^there (?:are|is) (\d+) valid volumes?$`, f.thereAreValidVolumes)
 	s.Step(`^(\d+) volume(?:s)? (?:are|is) listed$`, f.volumesAreListed)
 	s.Step(`^an invalid ListVolumesResponse is returned$`, f.anInvalidListVolumesResponseIsReturned)
+	s.Step(`^setup Get SystemID to fail$`, f.setupGetSystemIDtoFail)
+	s.Step(`^undo setup Get SystemID to fail$`, f.undoSetupGetSystemIDtoFail)
 	s.Step(`^a capability with voltype "([^"]*)" access "([^"]*)" fstype "([^"]*)"$`, f.aCapabilityWithVoltypeAccessFstype)
 	s.Step(`^a controller published volume$`, f.aControllerPublishedVolume)
 	s.Step(`^I call NodePublishVolume "([^"]*)"$`, f.iCallNodePublishVolume)
+	s.Step(`^I call CleanupPrivateTarget$`, f.iCallCleanupPrivateTarget)
+	s.Step(`^I call UnmountAndDeleteTarget$`, f.iCallUnmountAndDeleteTarget)
 	s.Step(`^get Node Publish Volume Request$`, f.getNodePublishVolumeRequest)
 	s.Step(`^get Node Publish Ephemeral Volume Request with name "([^"]*)" size "([^"]*)" storagepool "([^"]*)" and systemName "([^"]*)"$`, f.getNodeEphemeralVolumePublishRequest)
 	s.Step(`^I mark request read only$`, f.iMarkRequestReadOnly)
@@ -2436,7 +2785,7 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^there are no remaining mounts$`, f.thereAreNoRemainingMounts)
 	s.Step(`^I call BeforeServe$`, f.iCallBeforeServe)
 	s.Step(`^I call NodeStageVolume$`, f.iCallNodeStageVolume)
-	s.Step(`^I call NodeUnstageVolume$`, f.iCallNodeUnstageVolume)
+	s.Step(`^I call NodeUnstageVolume with "([^"]*)"$`, f.iCallNodeUnstageVolumeWith)
 	s.Step(`^I call NodeGetCapabilities$`, f.iCallNodeGetCapabilities)
 	s.Step(`^a valid NodeGetCapabilitiesResponse is returned$`, f.aValidNodeGetCapabilitiesResponseIsReturned)
 	s.Step(`^I call CreateSnapshot "([^"]*)"$`, f.iCallCreateSnapshot)
@@ -2470,9 +2819,11 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^I do not have a valid gateway endpoint$`, f.iDoNotHaveAValidGatewayEndpoint)
 	s.Step(`^I do not have a valid gateway password$`, f.iDoNotHaveAValidGatewayPassword)
 	s.Step(`^I call Clone volume$`, f.iCallCloneVolume)
+	s.Step(`^I call CreateVolumeSnapshotGroup$`, f.iCallCreateVolumeGroupSnapshot)
+	s.Step(`^I call DeleteVolumeSnapshotGroup$`, f.iCallDeleteVolumeGroupSnapshot)
 	s.Step(`^the ValidateConnectivity response message contains "([^"]*)"$`, f.theValidateConnectivityResponseMessageContains)
+	s.Step(`^I create false ephemeral ID$`, f.iCreateFalseEphemeralID)
 	s.Step(`^I call EphemeralNodeUnpublish$`, f.iCallEphemeralNodeUnpublish)
-	s.Step(`^setup Get SystemID to fail$`, f.setupGetSystemIDtoFail)
 	s.Step(`^I call getVolumeIDFromCsiVolumeID "([^"]*)"$`, f.iCallGetVolumeIDFromCsiVolumeID)
 	s.Step(`^I call getSystemIDFromCsiVolumeID "([^"]*)"$`, f.iCallGetSystemIDFromCsiVolumeID)
 	s.Step(`^I call GetSystemIDFromParameters with bad params "([^"]*)"$`, f.iCallGetSystemIDFromParameters)
@@ -2484,4 +2835,11 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^a controller published ephemeral volume$`, f.aControllerPublishedEphemeralVolume)
 	s.Step(`^I call UpdateVolumePrefixToSystemsMap "([^"]*)"$`, f.iCallupdateVolumesMap)
 	s.Step(`^I call checkVolumesMap "([^"]*)"$`, f.iCallcheckVolumesMap)
+	s.Step(`^two identical volumes on two different systems$`, f.twoIdenticalVolumesOnTwoDifferentSystems)
+	s.Step(`^I call getMappedVols with volID "([^"]*)" and sysID "([^"]*)"$`, f.iCallgetMappedVolsWithVolIDAndSysID)
+	s.Step(`the volume "([^"]*)" is from the correct system "([^"]*)"$`, f.theVolumeIsFromTheCorrectSystem)
+	s.Step(`^a valid CreateVolumeSnapshotGroup response is returned$`, f.aValidCreateVolumeSnapshotGroupResponse)
+	s.Step(`^I call CheckCreationTime$`, f.iCallCheckCreationTime)
+	s.Step(`^I call ControllerGetVolume$`, f.iCallControllerGetVolume)
+	s.Step(`^remove a volume from VolumeGroupSnapshotRequest$`, f.iRemoveAVolumeFromVolumeGroupSnapshotRequest)
 }

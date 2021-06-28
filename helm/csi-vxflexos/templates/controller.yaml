@@ -61,6 +61,11 @@ rules:
   - apiGroups: [""]
     resources: ["secrets"]
     verbs: ["get", "list"]
+{{ if .Values.vgsnapshotter.enabled }}
+  - apiGroups: ["volumegroup.storage.dell.com"]
+    resources: ["dellcsivolumegroupsnapshots","dellcsivolumegroupsnapshots/status"]
+    verbs: ["create", "list", "watch", "delete", "update"]
+{{ end }}
   - apiGroups: ["snapshot.storage.k8s.io"]
     resources: ["volumesnapshotclasses"]
     verbs: ["get", "list", "watch"]
@@ -69,7 +74,11 @@ rules:
     verbs: ["create", "get", "list", "watch", "update", "delete"]
   - apiGroups: ["snapshot.storage.k8s.io"]
     resources: ["volumesnapshots"]
+{{ if .Values.vgsnapshotter.enabled }}
+    verbs: ["get", "list", "watch", "update", "create"]
+{{ else }}
     verbs: ["get", "list", "watch", "update"]
+{{ end }}
   - apiGroups: ["snapshot.storage.k8s.io"]
     resources: ["volumesnapshots/status","volumesnapshotcontents/status"]
     verbs: ["get", "list", "watch", "update"]
@@ -179,6 +188,17 @@ spec:
           volumeMounts:
             - name: socket-dir
               mountPath: /var/run/csi
+{{ if .Values.vgsnapshotter.enabled }}
+        - name: vg-snapshotter
+          image: {{ required "Must provide the vgsnapshotter container image." .Values.vgsnapshotter.image }}
+          env:
+            - name: ADDRESS
+              value: /var/run/csi/csi.sock
+          imagePullPolicy: Always
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /var/run/csi
+{{ end }}
         - name: snapshotter
           image: {{ required "Must provide the CSI snapshotter container image." .Values.images.snapshotter }}
           args:
@@ -212,13 +232,12 @@ spec:
           args:
             - "--leader-election"
             - "--array-config=/vxflexos-config/config"
+            - "--log-config=/vxflexos-config/log-config/driver-config.yaml"
           env:
             - name: CSI_ENDPOINT
               value: /var/run/csi/csi.sock
             - name: X_CSI_MODE
               value: controller
-            - name: X_CSI_DEBUG
-              value: "true"
             - name: X_CSI_VXFLEXOS_ENABLESNAPSHOTCGDELETE
               value: "{{ required "Enable this to allow deletion of all snaps in CG" .Values.enablesnapshotcgdelete }}"
             - name: X_CSI_VXFLEXOS_ENABLELISTVOLUMESNAPSHOT
@@ -228,9 +247,14 @@ spec:
               mountPath: /var/run/csi
             - name: vxflexos-config
               mountPath: /vxflexos-config
+            - name: log-config
+              mountPath: /vxflexos-config/log-config
       volumes:
         - name: socket-dir
           emptyDir:
         - name: vxflexos-config
           secret:
             secretName: {{ .Release.Name }}-config
+        - name: log-config
+          configMap:
+             name: driver-config

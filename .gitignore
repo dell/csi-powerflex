@@ -8,6 +8,6 @@ test/integration/stderr
 semver.mk
 goscaleio/
 gofsutil/
-.idea/*
-.vscode/
-
+.idea
+.vscode
+*.log
