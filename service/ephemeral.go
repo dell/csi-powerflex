@@ -79,11 +79,25 @@ func (s *service) ephemeralNodePublish(
 	systemName := req.VolumeContext["systemID"]
 
 	if systemName == "" {
-		Log.Debug("systemName not specified, using default array")
+		Log.Info("systemName not specified, using default array")
 		systemName = s.opts.defaultSystemID
 	}
 
 	array := s.opts.arrays[systemName]
+
+	if array == nil {
+		//to get inside this if block, req has name, but secret has ID, need to convert from name -> ID
+		if id, ok := s.connectedSystemNameToID[systemName]; ok {
+			//systemName was sent in req, but secret used ID. Change to ID.
+			Log.Debug("systemName set to id")
+			array = s.opts.arrays[id]
+		} else {
+			err = status.Errorf(codes.Internal, "systemID: %s not recgonized", systemName)
+			Log.Errorf("Error from ephemeralNodePublish: %v ", err)
+			return nil, err
+
+		}
+	}
 
 	err = s.systemProbe(ctx, array)
 
@@ -129,7 +143,7 @@ func (s *service) ephemeralNodePublish(
 	volumeID := crvolresp.Volume.VolumeId
 
 	//in case systemName was not given with volume context
-	systemName = getSystemIDFromCsiVolumeID(volumeID)
+	systemName = s.getSystemIDFromCsiVolumeID(volumeID)
 
 	if systemName == "" {
 

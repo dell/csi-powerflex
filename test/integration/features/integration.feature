@@ -50,7 +50,7 @@ Feature: VxFlex OS CSI interface
     When I call CreateVolume
     And when I call DeleteVolume
     Then there are no errors
-
+  
   Scenario: Create publish, unpublish, and delete basic volume
     Given a VxFlexOS service
     And a basic block volume request "integration5" "8"
@@ -58,6 +58,40 @@ Feature: VxFlex OS CSI interface
     And there are no errors
     And when I call PublishVolume "SDC_GUID"
     And there are no errors
+    And when I call UnpublishVolume "SDC_GUID"
+    And there are no errors
+    And when I call DeleteVolume
+    Then there are no errors
+
+  Scenario: Create, publish, unpublish, and delete basic vol, but sc and config do not have matching systemIDs
+  Given a VxFlexOS service
+  And a capability with voltype "mount" access "single-writer" fstype "ext4"
+  And a volume request "int-arrayName" "8"
+  When I call CreateVolume
+  And there are no errors
+  And when I call PublishVolume "SDC_GUID"
+  And there are no errors
+  And when I call NodePublishVolume "SDC_GUID"
+  And when I call NodeUnpublishVolume "SDC_GUID"
+  And when I call UnpublishVolume "SDC_GUID"
+  And there are no errors
+  And when I call DeleteVolume
+  Then there are no errors
+
+  @wip
+  Scenario: Create, publish, unpublish, and delete basic vol, change name of array and specify allSystemNames
+    Given a VxFlexOS service
+    And I set another systemID "altSystem"
+    And Set System Name As "1235e15806d1ec0f-pflex-system"
+    And a capability with voltype "mount" access "single-writer" fstype "ext4"
+    And a volume request "name-arrayName" "8"
+    When I call CreateVolume
+    And Set System Name As "1235e15806d1ec0f_pflex_system"
+    And there are no errors
+    And when I call PublishVolume "SDC_GUID"
+    And there are no errors
+    And when I call NodePublishVolume "SDC_GUID"
+    And when I call NodeUnpublishVolume "SDC_GUID"
     And when I call UnpublishVolume "SDC_GUID"
     And there are no errors
     And when I call DeleteVolume
@@ -92,7 +126,7 @@ Feature: VxFlex OS CSI interface
       | "32" |
       | "64" |
 
-  @wip
+  
   Scenario: Create volume, create snapshot, create volume from snapshot, delete original volume, delete new volume
     Given a VxFlexOS service
     And I set another systemID "altSystem"

@@ -13,6 +13,11 @@ export ALT_GUID=
 #Debug variables for goscaleio library
 export GOSCALEIO_SHOWHTTP="true"
 
+#If you put the system ID in your config.json, put the
+#system's name here, and vice versa. If your instance does not have a name,
+#leave this variable blank. 
+export ALT_SYSTEM_ID=""
+
 MDM=`grep mdm ../../config.json | awk -F":" '{print $2}'`
 for i in $MDM
 do

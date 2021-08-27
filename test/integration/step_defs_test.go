@@ -1,12 +1,16 @@
 package integration_test
 
 import (
+	"bytes"
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -424,6 +428,16 @@ func (f *feature) aVolumeRequest(name string, size int64) error {
 	params["thickprovisioning"] = "true"
 	if len(f.anotherSystemID) > 0 {
 		params["systemID"] = f.anotherSystemID
+	}
+	if strings.Contains(name, "arrayName") {
+		systemID := os.Getenv("ALT_SYSTEM_ID")
+		if systemID != "" {
+			fmt.Printf("Using %s as systemID for volume request \n", systemID)
+			params["systemID"] = systemID
+			os.Setenv("ALT_SYSTEM_ID", "")
+		} else {
+			fmt.Printf("Env variable ALT_SYSTEM_ID not set, assuming default system does not have a name \n")
+		}
 	}
 	req.Parameters = params
 	makeAUniqueName(&name)
@@ -1481,10 +1495,110 @@ func makeAUniqueName(name *string) {
 	return
 }
 
+// And Set System Name As  "1235e15806d1ec0f-1235-system"
+func (f *feature) iSetSystemName(name string) error {
+	parts := strings.Split(name, "-")
+	id := "1235e15806d1ec0f"
+	if len(parts) > 1 {
+		id = parts[0]
+	} else {
+		parts = strings.Split(name, "_")
+		if len(parts) > 1 {
+			id = parts[0]
+		}
+	}
+	endpoint := ""
+	var array *ArrayConnectionData
+	for _, a := range f.arrays {
+		if strings.Contains(a.SystemID, id) || strings.Contains(a.SystemID, "pflex") {
+			endpoint = a.Endpoint
+			array = a
+		}
+	}
+	if endpoint != "" {
+		cred := array.Username + ":" + array.Password
+		url := endpoint + "/api/login"
+		fmt.Printf("call url %s\n", url)
+		token, err := f.restCallToSetName(cred, url, "")
+		if err != nil {
+			fmt.Printf("name changed error %s", err.Error())
+		}
+		if len(token) > 1 {
+			auth := array.Username + ":" + token
+			urlsys := endpoint + "/api/instances/System::" + id + "/action/setSystemName"
+			fmt.Printf("call urlsys %s\n", urlsys)
+			fmt.Printf("call name %s\n", name)
+			_, err := f.restCallToSetName(auth, urlsys, name)
+			if err != nil {
+				return fmt.Errorf("Error during set name on pflex %s", err.Error())
+			}
+			os.Setenv("ALT_SYSTEM_ID", name)
+			return nil
+		}
+	}
+	return fmt.Errorf("Error during set name on pflex %s", name)
+}
+
+func (f *feature) restCallToSetName(auth string, url string, name string) (string, error) {
+
+	var req *http.Request
+	var err error
+	if name != "" {
+		type Payload struct {
+			NewName string `json:"newName"`
+		}
+		data := Payload{
+			NewName: name,
+		}
+		payloadBytes, err := json.Marshal(data)
+		if err != nil {
+			// handle err
+			fmt.Printf("name change rest payload error %s", err.Error())
+			return "", err
+		}
+		body := bytes.NewReader(payloadBytes)
+		req, err = http.NewRequest("POST", url, body)
+		fmt.Printf("name change body  %#v\n", data)
+	} else {
+		req, err = http.NewRequest("GET", url, nil)
+	}
+	if err != nil {
+		fmt.Printf("name change rest error %s", err.Error())
+		return "", err
+	}
+
+	tokens := strings.Split(auth, ":")
+	req.SetBasicAuth(tokens[0], tokens[1])
+	req.Header.Set("Content-Type", "application/json")
+
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	hc := &http.Client{Timeout: 2 * time.Second, Transport: tr}
+
+	resp, err := hc.Do(req)
+	if err != nil {
+		// handle err
+		fmt.Printf("name change rest error %s", err.Error())
+		return "", err
+	}
+	if name == "" {
+		responseData, _ := ioutil.ReadAll(resp.Body)
+		token := regexp.MustCompile(`^"(.*)"$`).ReplaceAllString(string(responseData), `$1`)
+		fmt.Printf("name change token %s\n", token)
+		return token, nil
+	}
+	responseData, _ := ioutil.ReadAll(resp.Body)
+	fmt.Printf("name change response %s\n", responseData)
+	defer resp.Body.Close()
+	return "", nil
+}
+
 func FeatureContext(s *godog.Suite) {
 	f := &feature{}
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
 	s.Step(`^a basic block volume request "([^"]*)" "(\d+)"$`, f.aBasicBlockVolumeRequest)
+	s.Step(`^Set System Name As "([^"]*)"$`, f.iSetSystemName)
 	s.Step(`^I call CreateVolume$`, f.iCallCreateVolume)
 	s.Step(`^when I call DeleteVolume$`, f.whenICallDeleteVolume)
 	s.Step(`^there are no errors$`, f.thereAreNoErrors)
