@@ -131,7 +131,7 @@ func (s *service) NodePublishVolume(
 	volID := getVolumeIDFromCsiVolumeID(csiVolID)
 	Log.Printf("[NodePublishVolume] volumeID: %s", volID)
 
-	systemID := getSystemIDFromCsiVolumeID(csiVolID)
+	systemID := s.getSystemIDFromCsiVolumeID(csiVolID)
 	Log.Printf("[NodePublishVolume] systemID: %s harvested from csiVolID: %s", systemID, csiVolID)
 	if systemID == "" {
 		// use default system
@@ -216,7 +216,7 @@ func (s *service) NodeUnpublishVolume(
 	volID := getVolumeIDFromCsiVolumeID(csiVolID)
 	Log.Printf("NodeUnpublishVolume volumeID: %s", volID)
 
-	systemID := getSystemIDFromCsiVolumeID(csiVolID)
+	systemID := s.getSystemIDFromCsiVolumeID(csiVolID)
 	if systemID == "" {
 		// use default system
 		systemID = s.opts.defaultSystemID
@@ -293,6 +293,10 @@ func (s *service) getSDCMappedVol(volumeID string, systemID string, maxRetry int
 	var sdcMappedVol *goscaleio.SdcMappedVolume
 	var err error
 	for i := 0; i < maxRetry; i++ {
+		if id, ok := s.connectedSystemNameToID[systemID]; ok {
+			Log.Printf("Node publish getMappedVol name: %s id: %s", systemID, id)
+			systemID = id
+		}
 		sdcMappedVol, err = getMappedVol(volumeID, systemID)
 		if sdcMappedVol != nil {
 			break
@@ -329,41 +333,22 @@ func getMappedVol(volID string, systemID string) (*goscaleio.SdcMappedVolume, er
 	return sdcMappedVol, nil
 }
 
-// getDefaultSystemName gets the system name for the default system and append it to connectedSystemID variable
-func (s *service) getDefaultSystemName(ctx context.Context, systems []string) error {
-	for _, system := range systems {
-		array := s.opts.arrays[system]
-		if array != nil && array.IsDefault {
-			// makes sure it has ScleIO API client
-			err := s.systemProbe(ctx, array)
-			if err != nil {
-				// Could not probe system. Log a message and return
-				e := fmt.Errorf("Unable to probe system with ID: %s. Error is %v", array.SystemID, err)
-				Log.Error(e)
-				return e
-			}
-			adminClient := s.adminClients[array.SystemID]
-			sys, err := adminClient.FindSystem(array.SystemID, array.SystemID, "")
-			if err != nil {
-				// could not find the name for this system. Log a message and keep going
-				e := fmt.Errorf("Unable to find VxFlex OS system name matching system ID: %s. Error is %v", array.SystemID, err)
-				Log.Error(e)
-			} else {
-				if sys.System == nil || sys.System.Name == "" {
-					// system does not have a name, this is fine
-					Log.Printf("Found system without a name, system ID: %s", array.SystemID)
-				} else {
-					Log.Printf("Found system Name: %s", sys.System.Name)
-					connectedSystemID = append(connectedSystemID, sys.System.Name)
+// getSystemName gets the system name for each system and append it to connectedSystemID variable
+func (s *service) getSystemName(ctx context.Context, systems []string) bool {
+	for systemID := range s.opts.arrays {
+		if id, ok := s.connectedSystemNameToID[systemID]; ok {
+			for _, system := range systems {
+				if id == system {
+					Log.Printf("nodeProbe found system Name: %s with id %s", systemID, id)
+					connectedSystemID = append(connectedSystemID, systemID)
 				}
 			}
-			break
 		}
 	}
-	return nil
+	return true
 }
 
-// nodeProbe fetchs the SDC GUID by drv_cfg and the systemIDs/names by getDefaultSystemName method.
+// nodeProbe fetchs the SDC GUID by drv_cfg and the systemIDs/names by getSystemName method.
 // It also makes sure private directory(privDir) is created
 func (s *service) nodeProbe(ctx context.Context) error {
 
@@ -397,9 +382,7 @@ func (s *service) nodeProbe(ctx context.Context) error {
 	}
 
 	// get all the system names and IDs.
-	// ignore the errors here as all the information is supplementary
-	/* #nosec G104 */
-	s.getDefaultSystemName(ctx, connectedSystemID)
+	s.getSystemName(ctx, connectedSystemID)
 
 	// make sure privDir is pre-created
 	if _, err := mkdir(s.privDir); err != nil {
@@ -594,7 +577,7 @@ func (s *service) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolum
 			"volume ID is required")
 	}
 
-	systemID := getSystemIDFromCsiVolumeID(csiVolID)
+	systemID := s.getSystemIDFromCsiVolumeID(csiVolID)
 	if systemID == "" {
 		// use default system
 		systemID = s.opts.defaultSystemID

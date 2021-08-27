@@ -34,7 +34,7 @@ func (s *service) ValidateVolumeHostConnectivity(ctx context.Context, req *podmo
 	systemID := req.GetArrayId()
 	if systemID == "" {
 		if len(req.GetVolumeIds()) > 0 {
-			systemID = getSystemIDFromCsiVolumeID(req.GetVolumeIds()[0])
+			systemID = s.getSystemIDFromCsiVolumeID(req.GetVolumeIds()[0])
 		}
 		if systemID == "" {
 			systemID = s.opts.defaultSystemID
@@ -60,7 +60,7 @@ func (s *service) ValidateVolumeHostConnectivity(ctx context.Context, req *podmo
 	for _, volID := range req.GetVolumeIds() {
 		// Probe system
 		prevSystemID := systemID
-		systemID = getSystemIDFromCsiVolumeID(volID)
+		systemID = s.getSystemIDFromCsiVolumeID(volID)
 		if systemID == "" {
 			systemID = s.opts.defaultSystemID
 		}
@@ -191,7 +191,7 @@ func checkCreationTime(time int64, snapshots []*volumeGroupSnapshot.Snapshot) er
 
 func (s *service) getSystemID(req *volumeGroupSnapshot.CreateVolumeGroupSnapshotRequest) (string, error) {
 	//take first volume to calculate systemID. It is expected this systemID is consistent throughout
-	systemID := getSystemIDFromCsiVolumeID(req.SourceVolumeIDs[0])
+	systemID := s.getSystemIDFromCsiVolumeID(req.SourceVolumeIDs[0])
 	if systemID == "" {
 		// use default system
 		systemID = s.opts.defaultSystemID
@@ -237,7 +237,7 @@ func (s *service) buildSnapshotDefs(req *volumeGroupSnapshot.CreateVolumeGroupSn
 	snapshotDefs := make([]*siotypes.SnapshotDef, 0)
 
 	for index, id := range req.SourceVolumeIDs {
-		snapSystemID := strings.TrimSpace(getSystemIDFromCsiVolumeID(id))
+		snapSystemID := strings.TrimSpace(s.getSystemIDFromCsiVolumeID(id))
 		if snapSystemID != "" && snapSystemID != systemID {
 			err := status.Errorf(codes.Internal, "Source volumes for volume group snapshot should be on the same system but vol %s is not on system: %s", id, systemID)
 			Log.Errorf("Error from buildSnapshotDefs: %v \n", err)

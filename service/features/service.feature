@@ -701,7 +701,6 @@ Feature: VxFlex OS CSI interface
       | "none"                                  | "test/tmp/datafile" | "none"                                      |
       | "CorrectFormatBadCsiVolIDInNodeExpand"  | "test/tmp/datadir"  | "is not configured in the driver"           |
       | "VolumeIDTooShortErrorInNodeExpand"     | "test/tmp/datadir"  | "is shorter than 3 chars, returning error"  |
-      | "TooManyDashesVolIDInNodeExpand"        | "test/tmp/datadir"  | "volume ID is required"                     |
 
   Scenario: Call NodeGetVolumeStats, should get unimplemented
     Given a VxFlexOS service
@@ -716,7 +715,7 @@ Feature: VxFlex OS CSI interface
   Scenario: Call getDefaultSystemName, should get error Unable to probe system with ID
     Given a VxFlexOS service
     When I call getDefaultSystemNameError
-    Then the error contains "Unable to probe system with ID"
+    Then the error contains "missing VxFlexOS system name"
 
   Scenario: Call getDefaultSystemName, should get Found system Name: mocksystem
     Given a VxFlexOS service
@@ -737,7 +736,6 @@ Feature: VxFlex OS CSI interface
     Given a VxFlexOS service
     When i Call getStoragePoolnameByID "123"
     Then the error contains "cannot find storage pool"
-
 
   Scenario: Call Node getAllSystems
     Given a VxFlexOS service

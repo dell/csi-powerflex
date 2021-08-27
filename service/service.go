@@ -60,6 +60,7 @@ type ArrayConnectionData struct {
 	SkipCertificateValidation bool   `json:"skipCertificateValidation,omitempty"`
 	Insecure                  bool   `json:"insecure,omitempty"`
 	IsDefault                 bool   `json:"isDefault,omitempty"`
+	AllSystemNames            string `json:"allSystemNames"`
 }
 
 // Manifest is the SP's manifest.
@@ -110,14 +111,16 @@ type service struct {
 	storagePoolIDToName map[string]string
 	statisticsCounter   int
 	//maps the first 24 bits of a volume ID to the volume's systemID
-	volumePrefixToSystems map[string][]string
+	volumePrefixToSystems   map[string][]string
+	connectedSystemNameToID map[string]string
 }
 
 // New returns a new Service.
 func New() Service {
 	return &service{
-		storagePoolIDToName:   map[string]string{},
-		volumePrefixToSystems: map[string][]string{},
+		storagePoolIDToName:     map[string]string{},
+		connectedSystemNameToID: map[string]string{},
+		volumePrefixToSystems:   map[string][]string{},
 	}
 }
 
@@ -274,6 +277,9 @@ func (s *service) getSDCID(sdcGUID string, systemID string) (string, error) {
 	sdcGUID = strings.ToUpper(sdcGUID)
 
 	// Need to translate sdcGUID to sdcID
+	if s.systems[systemID] == nil {
+		return "", fmt.Errorf("getSDCID error systemID not found: %s", systemID)
+	}
 	id, err := s.systems[systemID].FindSdc("SdcGuid", sdcGUID)
 	if err != nil {
 		return "", fmt.Errorf("error finding SDC from GUID: %s, err: %s",
@@ -414,6 +420,11 @@ func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error
 			if c.Endpoint == "" {
 				return nil, fmt.Errorf(fmt.Sprintf("invalid value for Endpoint at index %d", i))
 			}
+			// ArrayConnectionData
+			if c.AllSystemNames != "" {
+				names := strings.Split(c.AllSystemNames, ",")
+				Log.Printf("For systemID %s configured System Names found %#v ", systemID, names)
+			}
 
 			insecure := c.SkipCertificateValidation || c.Insecure
 
@@ -424,6 +435,7 @@ func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error
 				"skipCertificateValidation": insecure,
 				"isDefault":                 c.IsDefault,
 				"systemID":                  c.SystemID,
+				"allSystemNames":            c.AllSystemNames,
 			}
 
 			Log.WithFields(fields).Infof("configured %s", c.SystemID)
@@ -453,23 +465,35 @@ func getVolumeIDFromCsiVolumeID(csiVolID string) string {
 	if csiVolID == "" {
 		return ""
 	}
-
-	tokens := strings.Split(csiVolID, "-")
-	if len(tokens) == 1 {
-		// Only one token found, which means volume created using csi powerflex from v1.0 to v1.3
-		return tokens[0]
-	} else if len(tokens) == 2 {
-		return tokens[1]
+	i := strings.LastIndex(csiVolID, "-")
+	if i == -1 {
+		return csiVolID
 	}
+	tokens := strings.Split(csiVolID, "-")
+	index := len(tokens)
+	if index > 0 {
+		return tokens[index-1]
+	}
+	err := errors.New("csiVolID unexpected string")
+	Log.WithError(err).Errorf("%s format error", csiVolID)
 
 	return ""
+
 }
 
 // getSystemIDFromCsiVolumeId returns PowerFlex volume ID from CSI volume ID
-func getSystemIDFromCsiVolumeID(csiVolID string) string {
+func (s *service) getSystemIDFromCsiVolumeID(csiVolID string) string {
+	i := strings.LastIndex(csiVolID, "-")
+	if i == -1 {
+		return ""
+	}
 	tokens := strings.Split(csiVolID, "-")
-	if len(tokens) == 2 {
-		return tokens[0]
+	if len(tokens) > 1 {
+		sys := csiVolID[:i]
+		if id, ok := s.connectedSystemNameToID[sys]; ok {
+			return id
+		}
+		return sys
 	}
 
 	// There is only volume ID in csi volume ID
@@ -528,7 +552,7 @@ func (s *service) UpdateVolumePrefixToSystemsMap(systemID string) error {
 
 func (s *service) checkVolumesMap(volumeID string) error {
 
-	systemID := getSystemIDFromCsiVolumeID(volumeID)
+	systemID := s.getSystemIDFromCsiVolumeID(volumeID)
 
 	// ID is legacy, so we  ensure it's only found on default system
 	if systemID == "" {

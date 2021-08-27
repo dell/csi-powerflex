@@ -30,7 +30,7 @@ func CreateKubeClientSet(kubeconfig string) (*kubernetes.Clientset, error) {
 	return clientset, nil
 }
 
-// LeaderElection
+//LeaderElection setup
 func LeaderElection(clientset *kubernetes.Clientset, lockName string, namespace string, runFunc func(ctx context.Context)) {
 	le := leaderelection.NewLeaderElection(clientset, lockName, runFunc)
 	le.WithNamespace(namespace)

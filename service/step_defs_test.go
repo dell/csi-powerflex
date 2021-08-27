@@ -242,6 +242,7 @@ func (f *feature) getService() *service {
 
 	svc.storagePoolIDToName = map[string]string{}
 	svc.volumePrefixToSystems = map[string][]string{}
+	svc.connectedSystemNameToID = map[string]string{}
 	svc.privDir = "./features"
 	ArrayConfig = "./features/array-config/config"
 
@@ -2009,7 +2010,7 @@ func (f *feature) iCallNodeExpandVolume(volPath string) error {
 	} else if stepHandlersErrors.CorrectFormatBadCsiVolID {
 		req.VolumeId = badCsiVolumeID
 	} else if stepHandlersErrors.EmptySysID {
-		req.VolumeId = goodVolumeID
+		req.VolumeId = "-12345"
 	} else if stepHandlersErrors.BadVolIDError {
 		req.VolumeId = badVolumeID
 	}
@@ -2578,7 +2579,7 @@ func (f *feature) iCallGetVolumeIDFromCsiVolumeID(csiVolID string) error {
 }
 
 func (f *feature) iCallGetSystemIDFromCsiVolumeID(csiVolID string) error {
-	s := getSystemIDFromCsiVolumeID(csiVolID)
+	s := f.service.getSystemIDFromCsiVolumeID(csiVolID)
 	fmt.Printf("DEBUG getSystem %s\n", s)
 	out := fmt.Sprintf("Got %s\n", s)
 	f.err = errors.New(out)
@@ -2624,7 +2625,7 @@ func (f *feature) iCallGetDefaultSystemNameMatchingError() error {
 	systems = append(systems, id)
 	systems = append(systems, "14dbbf5617523654")
 	stepHandlersErrors.systemNameMatchingError = true
-	f.err = f.service.getDefaultSystemName(context.TODO(), systems)
+	f.service.getSystemName(context.TODO(), systems)
 	return nil
 
 }
@@ -2634,15 +2635,16 @@ func (f *feature) iCallGetDefaultSystemNameError() error {
 	id := "9999999999999999"
 	systems = append(systems, id)
 	// this works with wrong id
-	array := f.service.opts.arrays[arrayID]
-	array.SystemID = ""
+	badarray := f.service.opts.arrays[arrayID]
+	badarray.SystemID = ""
 
 	f.service.opts.arrays = make(map[string]*ArrayConnectionData)
-	f.service.opts.arrays[id] = array
+	f.service.opts.arrays[id] = badarray
 
 	stepHandlersErrors.PodmonNodeProbeError = true
 	//  Unable to probe system with ID:
-	f.err = f.service.getDefaultSystemName(context.TODO(), systems)
+	ctx := new(context.Context)
+	f.err = f.service.systemProbe(*ctx, badarray)
 	return nil
 
 }
@@ -2650,7 +2652,7 @@ func (f *feature) iCallGetDefaultSystemNameError() error {
 func (f *feature) iCallGetDefaultSystemName() error {
 	systems := make([]string, 0)
 	systems = append(systems, arrayID)
-	f.err = f.service.getDefaultSystemName(context.TODO(), systems)
+	f.service.getSystemName(context.TODO(), systems)
 	return nil
 
 }
@@ -2659,9 +2661,10 @@ func (f *feature) iCallNodeGetAllSystems() error {
 	// lookup the system names for a couple of systems
 	// This should not generate an error as systems without names are supported
 	systems := make([]string, 0)
-	systems = append(systems, "14dbbf5617523654")
 	systems = append(systems, "9999999999999999")
-	f.err = f.service.getDefaultSystemName(context.TODO(), systems)
+	ctx := new(context.Context)
+	badarray := f.service.opts.arrays[arrayID]
+	f.err = f.service.systemProbe(*ctx, badarray)
 	return nil
 }
 

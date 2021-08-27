@@ -130,12 +130,12 @@ func (s *service) CreateVolume(
 		}
 
 		sName := ""
-		if s.opts.defaultSystemID == systemID {
-			// if default system, we will also check name match with topology  (backward compatibility)
-			sName = s.systems[systemID].System.Name
-		}
+
+		//We need to get name of system, in case sc was set up to use name
+		sName = s.systems[systemID].System.Name
 
 		segments := accessibility.GetPreferred()[0].GetSegments()
+
 		for key := range segments {
 			if strings.HasPrefix(key, Name) {
 				tokens := strings.Split(key, "/")
@@ -144,12 +144,18 @@ func (s *service) CreateVolume(
 					constraint = tokens[1]
 				}
 				Log.Printf("Found topology constraint: VxFlex OS system: %s", constraint)
+
 				if constraint == sID || constraint == sName {
-					requestedSystem = sID
-					// segment matches system ID/Name where volume will be created
-					systemSegments[key] = segments[key]
+					if constraint == sID {
+						requestedSystem = sID
+					} else {
+						requestedSystem = sName
+					}
+					//segment matches system ID/Name where volume will be created
+					topologyKey := tokens[0] + "/" + sID
+					systemSegments[topologyKey] = segments[key]
 					Log.Printf("Added accessible topology segment for volume: %s, segment: %s = %s", req.GetName(),
-						key, systemSegments[key])
+						topologyKey, systemSegments[topologyKey])
 				}
 			}
 		}
@@ -344,8 +350,14 @@ func (s *service) getSystemIDFromParameters(params map[string]string) (string, e
 			return "", status.Errorf(codes.FailedPrecondition, "No system ID is found in parameters or as default")
 		}
 	}
+	Log.Printf("getSystemIDFromParameters system %s", systemID)
 
-	Log.Printf("getSystemIDFromParameters got system %s", systemID)
+	// if name set for array.SystemID use id instead
+	// names can change , id will remain unique
+	if id, ok := s.connectedSystemNameToID[systemID]; ok {
+		systemID = id
+	}
+	Log.Printf("Use systemID as %s", systemID)
 	return systemID, nil
 }
 
@@ -356,7 +368,7 @@ func (s *service) createVolumeFromSnapshot(req *csi.CreateVolumeRequest,
 	name string, sizeInKbytes int64, storagePool string) (*csi.CreateVolumeResponse, error) {
 
 	// get systemID from snapshot source CSI id
-	systemID := getSystemIDFromCsiVolumeID(snapshotSource.SnapshotId)
+	systemID := s.getSystemIDFromCsiVolumeID(snapshotSource.SnapshotId)
 	if systemID == "" {
 		// use default system
 		systemID = s.opts.defaultSystemID
@@ -523,7 +535,7 @@ func (s *service) DeleteVolume(
 	}
 
 	// get systemID from req
-	systemID := getSystemIDFromCsiVolumeID(csiVolID)
+	systemID := s.getSystemIDFromCsiVolumeID(csiVolID)
 	if systemID == "" {
 		// use default system
 		systemID = s.opts.defaultSystemID
@@ -618,7 +630,7 @@ func (s *service) ControllerPublishVolume(
 	}
 
 	// get systemID from req
-	systemID := getSystemIDFromCsiVolumeID(csiVolID)
+	systemID := s.getSystemIDFromCsiVolumeID(csiVolID)
 	if systemID == "" {
 		// use default system
 		systemID = s.opts.defaultSystemID
@@ -796,7 +808,7 @@ func (s *service) ControllerUnpublishVolume(
 	*csi.ControllerUnpublishVolumeResponse, error) {
 
 	// get systemID from req
-	systemID := getSystemIDFromCsiVolumeID(req.GetVolumeId())
+	systemID := s.getSystemIDFromCsiVolumeID(req.GetVolumeId())
 	if systemID == "" {
 		// use default system
 		systemID = s.opts.defaultSystemID
@@ -899,7 +911,7 @@ func (s *service) ValidateVolumeCapabilities(
 	}
 
 	// get systemID from req
-	systemID := getSystemIDFromCsiVolumeID(csiVolID)
+	systemID := s.getSystemIDFromCsiVolumeID(csiVolID)
 	if systemID == "" {
 		// use default system
 		systemID = s.opts.defaultSystemID
@@ -1117,7 +1129,7 @@ func (s *service) ListSnapshots(
 	// Use systemID from csiSourceID if available, otherwise default systemID is used
 	systemID := s.opts.defaultSystemID
 	if csiSourceID != "" {
-		systemID = getSystemIDFromCsiVolumeID(csiSourceID)
+		systemID = s.getSystemIDFromCsiVolumeID(csiSourceID)
 		if systemID == "" {
 			// use default system
 			systemID = s.opts.defaultSystemID
@@ -1491,7 +1503,7 @@ func (s *service) systemProbeAll(ctx context.Context) error {
 		err := s.systemProbe(ctx, array)
 		systemID := array.SystemID
 		if err == nil {
-			Log.Infof("array %s probe successfully", systemID)
+			Log.Infof("array %s probed successfully", systemID)
 			allArrayFail = false
 		} else {
 			errMap[systemID] = err
@@ -1527,6 +1539,10 @@ func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) e
 		return status.Error(codes.FailedPrecondition,
 			"missing VxFlexOS system name")
 	}
+	var altSystemNames []string
+	if array.AllSystemNames != "" {
+		altSystemNames = strings.Split(array.AllSystemNames, ",")
+	}
 
 	systemID := array.SystemID
 
@@ -1539,6 +1555,9 @@ func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) e
 				"unable to create ScaleIO client: %s", err.Error())
 		}
 		s.adminClients[systemID] = c
+		for _, name := range altSystemNames {
+			s.adminClients[name] = c
+		}
 	}
 
 	if s.adminClients[systemID].GetToken() == "" {
@@ -1563,15 +1582,34 @@ func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) e
 				"unable to find matching VxFlexOS system name: %s",
 				err.Error())
 		}
+
 		s.systems[systemID] = system
+		if system.System != nil && system.System.Name != "" {
+			Log.Printf("Found Name for system=%s with ID=%s", system.System.Name, system.System.ID)
+			s.connectedSystemNameToID[system.System.Name] = system.System.ID
+			s.systems[system.System.ID] = system
+			s.adminClients[system.System.ID] = s.adminClients[systemID]
+		}
+		// associate alternate system name to systemID
+		for _, name := range altSystemNames {
+			s.systems[name] = system
+			s.adminClients[name] = s.adminClients[systemID]
+			s.connectedSystemNameToID[name] = system.System.ID
+		}
 	}
 
+	sysID := systemID
+	if id, ok := s.connectedSystemNameToID[systemID]; ok {
+		Log.Printf("System with name %s found id: %s", systemID, id)
+		sysID = id
+		s.opts.arrays[sysID] = array
+	}
 	if array.IsDefault == true {
-		Log.Infof("default array is set to array ID: %s", systemID)
-		s.opts.defaultSystemID = systemID
-		Log.Printf("%s is the default array, skipping VolumePrefixToSystems map update. \n", systemID)
+		Log.Infof("default array is set to array ID: %s", sysID)
+		s.opts.defaultSystemID = sysID
+		Log.Printf("%s is the default array, skipping VolumePrefixToSystems map update. \n", sysID)
 	} else {
-		err := s.UpdateVolumePrefixToSystemsMap(systemID)
+		err := s.UpdateVolumePrefixToSystemsMap(sysID)
 		if err != nil {
 			return err
 		}
@@ -1623,7 +1661,7 @@ func (s *service) CreateSnapshot(
 	}
 
 	volID := getVolumeIDFromCsiVolumeID(csiVolID)
-	systemID := getSystemIDFromCsiVolumeID(csiVolID)
+	systemID := s.getSystemIDFromCsiVolumeID(csiVolID)
 
 	if systemID == "" {
 		// use default system
@@ -1708,7 +1746,7 @@ func (s *service) CreateSnapshot(
 		volIDs := strings.Split(volIDList, ",")
 		for _, v := range volIDs {
 			//neeed to trim space in case there are spaces inside VolumeIDList
-			consistencyGroupSystem := strings.TrimSpace(getSystemIDFromCsiVolumeID(v))
+			consistencyGroupSystem := strings.TrimSpace(s.getSystemIDFromCsiVolumeID(v))
 			if consistencyGroupSystem != "" && consistencyGroupSystem != systemID {
 				//system needs to be the same throughout snapshot consistency group, this is an error
 				err = status.Errorf(codes.Internal, "Consistency group needs to be on the same system but vol %s is not on system: %s ", v, systemID)
@@ -1789,7 +1827,7 @@ func (s *service) DeleteSnapshot(
 		return nil, status.Errorf(codes.InvalidArgument, "snapshot ID to be deleted is required")
 	}
 
-	systemID := getSystemIDFromCsiVolumeID(csiSnapID)
+	systemID := s.getSystemIDFromCsiVolumeID(csiSnapID)
 	if systemID == "" {
 		// use default system
 		systemID = s.opts.defaultSystemID
@@ -1926,7 +1964,7 @@ func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.Controlle
 	}
 
 	volID := getVolumeIDFromCsiVolumeID(csiVolID)
-	systemID := getSystemIDFromCsiVolumeID(csiVolID)
+	systemID := s.getSystemIDFromCsiVolumeID(csiVolID)
 	if systemID == "" {
 		// use default system
 		systemID = s.opts.defaultSystemID
@@ -2018,7 +2056,7 @@ func (s *service) Clone(req *csi.CreateVolumeRequest,
 	volumeSource *csi.VolumeContentSource_VolumeSource, name string, sizeInKbytes int64, storagePool string) (*csi.CreateVolumeResponse, error) {
 
 	// get systemID from volume source CSI id
-	systemID := getSystemIDFromCsiVolumeID(volumeSource.VolumeId)
+	systemID := s.getSystemIDFromCsiVolumeID(volumeSource.VolumeId)
 	if systemID == "" {
 		// use default system
 		systemID = s.opts.defaultSystemID
