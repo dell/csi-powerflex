@@ -44,7 +44,7 @@ The Node portion of the driver can only be run on nodes which have network conne
 Also, if the `X_CSI_VXFLEXOS_SDCGUID` environment variable is not set, the driver will attempt to query the SDC GUID automatically. If this fails, the driver will not run.
 
 ## Driver Installation
-Please consult the [Installation Guide](https://dell.github.io/storage-plugin-docs/docs/installation/)
+Please consult the [Installation Guide](https://dell.github.io/csm-docs/docs/csidriver/installation/)
 
 As referenced in the guide, installation in a Kubernetes cluster should be done using the scripts within the `dell-csi-helm-installer` directory. For more detailed information on the scripts, consult the [README.md](dell-csi-helm-installer/README.md)
 
