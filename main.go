@@ -10,9 +10,7 @@ import (
 	"github.com/dell/csi-vxflexos/provider"
 	"github.com/dell/csi-vxflexos/service"
 	"github.com/dell/gocsi"
-	"github.com/fsnotify/fsnotify"
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
 	"os"
 	"strings"
 )
@@ -21,39 +19,27 @@ import (
 func main() {
 
 	logger := logrus.New()
+	service.Log = logger
 
-	// enable viper to get properties from environment variables or default configuration file
-	viper.AutomaticEnv()
-
-	arrayConfig := flag.String("array-config", "", "yaml file with array(s) configuration")
-	logConfigfile := flag.String("log-config", "", "yaml file with logrus configuration")
+	arrayConfigfile := flag.String("array-config", "", "yaml file with array(s) configuration")
+	driverConfigParamsfile := flag.String("driver-config-params", "", "yaml file with driver config params")
 	enableLeaderElection := flag.Bool("leader-election", false, "boolean to enable leader election")
 	leaderElectionNamespace := flag.String("leader-election-namespace", "", "namespace where leader election lease will be created")
 	kubeconfig := flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
 	flag.Parse()
 
-	if *arrayConfig == "" {
+	if *arrayConfigfile == "" {
 		fmt.Fprintf(os.Stderr, "array-config argument is mandatory")
 		os.Exit(1)
 	}
-	service.ArrayConfig = *arrayConfig
 
-	viper.SetConfigFile(*logConfigfile)
-
-	err := viper.ReadInConfig()
-	// if unable to read configuration file, default values will be used in updateLoggingSettings
-	if err != nil {
-		logger.WithError(err).Error("unable to read config file, using default values")
+	if *driverConfigParamsfile == "" {
+		fmt.Fprintf(os.Stderr, "driver-config-params argument is mandatory")
+		os.Exit(1)
 	}
-
-	updateLoggingSettings(logger)
-	viper.WatchConfig()
-	viper.OnConfigChange(func(e fsnotify.Event) {
-		logger.WithField("file", logConfigfile).Info("log configuration file changed")
-		updateLoggingSettings(logger)
-	})
-
-	service.Log = logger
+	service.ArrayConfigFile = *arrayConfigfile
+	service.DriverConfigParamsFile = *driverConfigParamsfile
+	service.KubeConfig = *kubeconfig
 
 	run := func(ctx context.Context) {
 		gocsi.Run(ctx, service.Name, "A PowerFlex Container Storage Interface (CSI) Plugin",
@@ -64,40 +50,15 @@ func main() {
 	} else {
 		driverName := strings.Replace(service.Name, ".", "-", -1)
 		lockName := fmt.Sprintf("driver-%s", driverName)
-		k8sclientset, err := k8sutils.CreateKubeClientSet(*kubeconfig)
+		err := k8sutils.CreateKubeClientSet(*kubeconfig)
 		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "failed to initialize leader election: %v", err)
+			_, _ = fmt.Fprintf(os.Stderr, "failed to create clientset for leader election: %v", err)
 			os.Exit(1)
 		}
+		service.K8sClientset = k8sutils.Clientset
 		// Attempt to become leader and start the driver
-		k8sutils.LeaderElection(k8sclientset, lockName, *leaderElectionNamespace, run)
+		k8sutils.LeaderElection(&k8sutils.Clientset, lockName, *leaderElectionNamespace, run)
 	}
-
-}
-
-func updateLoggingSettings(logger *logrus.Logger) {
-	logFormat := viper.GetString("LOG_FORMAT")
-	logFormat = strings.ToLower(logFormat)
-	logger.WithField("format", logFormat).Info("Read LOG_FORMAT from log configuration file")
-	if strings.EqualFold(logFormat, "json") {
-		logger.SetFormatter(&logrus.JSONFormatter{})
-	} else {
-		// use text formatter by default
-		if logFormat != "text" {
-			logger.WithField("format", logFormat).Info("LOG_FORMAT value not recognized, setting to text")
-		}
-		logger.SetFormatter(&logrus.TextFormatter{})
-	}
-	logLevel := viper.GetString("LOG_LEVEL")
-	logLevel = strings.ToLower(logLevel)
-	logger.WithField("level", logLevel).Info("Read LOG_LEVEL from log configuration file")
-	level, err := logrus.ParseLevel(logLevel)
-	if err != nil {
-		logger.WithField("level", logLevel).Info("LOG_LEVEL value not recognized, setting to info")
-		// use INFO level by default
-		level = logrus.InfoLevel
-	}
-	logger.SetLevel(level)
 }
 
 const usage = `    X_CSI_VXFLEXOS_SDCGUID

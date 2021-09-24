@@ -2,7 +2,7 @@
 source ../../env.sh
 rm -rf unix_sock
 
-../../csi-vxflexos --array-config="wrong_config.json" 2>stderr 
+../../csi-vxflexos --driver-config-params=../../service/features/driver-config/logConfig.yaml --array-config="wrong_config.json" 2>stderr 
 grep "Unauthorized" stderr
 rc=$?
 echo rc $rc

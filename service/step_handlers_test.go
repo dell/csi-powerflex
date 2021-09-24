@@ -4,15 +4,16 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	types "github.com/dell/goscaleio/types/v1"
-	"github.com/gorilla/mux"
-	codes "google.golang.org/grpc/codes"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	types "github.com/dell/goscaleio/types/v1"
+	"github.com/gorilla/mux"
+	codes "google.golang.org/grpc/codes"
 )
 
 var (
@@ -125,6 +126,7 @@ func getHandler() http.Handler {
 	stepHandlersErrors.WrongSysNameError = false
 	stepHandlersErrors.NoVolumeIDError = false
 	stepHandlersErrors.SetVolumeSizeError = false
+	stepHandlersErrors.systemNameMatchingError = false
 	stepHandlersErrors.LegacyVolumeConflictError = false
 	stepHandlersErrors.VolumeIDTooShortError = false
 	stepHandlersErrors.EmptyEphemeralID = false
@@ -334,7 +336,6 @@ func handleVolumeInstances(w http.ResponseWriter, r *http.Request) {
 		}
 
 		log.Printf("end make volumes")
-		break
 	// Read all the Volumes
 	case http.MethodGet:
 		instances := make([]*types.Volume, 0)
@@ -358,7 +359,6 @@ func handleVolumeInstances(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("error encoding json: %s\n", err)
 		}
-		break
 	}
 }
 

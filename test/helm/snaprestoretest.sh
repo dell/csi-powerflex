@@ -11,7 +11,7 @@ kubectl exec -n ${NS} vxflextest-0 -- ls -l /data0
 kubectl exec -n ${NS} vxflextest-0 -- sync
 kubectl exec -n ${NS} vxflextest-0 -- sync
 echo "creating snap1 of pvol0"
-kubectl create -f betasnap1.yaml
+kubectl create -f snap1.yaml
 sleep 10
 kubectl get volumesnapshot -n ${NS}
 echo "updating container to add a volume sourced from snapshot"

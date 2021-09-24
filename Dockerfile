@@ -2,6 +2,7 @@
 ARG GOPROXY
 ARG GOVERSION
 ARG BASEIMAGE
+ARG DIGEST
 
 # Stage to build the driver
 FROM golang:${GOVERSION} as builder
@@ -13,7 +14,7 @@ RUN CGO_ENABLED=0 \
     make build
 
 # Stage to build the driver image
-FROM $BASEIMAGE AS driver
+FROM $BASEIMAGE@${DIGEST} AS driver
 # install necessary packages
 # alphabetical order for easier maintenance
 RUN microdnf update -y && \
@@ -38,6 +39,6 @@ LABEL vendor="Dell Inc." \
     name="csi-powerflex" \
     summary="CSI Driver for Dell EMC PowerFlex" \
     description="CSI Driver for provisioning persistent storage from Dell EMC PowerFlex" \
-    version="1.5.1" \
+    version="2.0.0" \
     license="Apache-2.0"
 COPY ./licenses /licenses

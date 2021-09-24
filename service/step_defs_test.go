@@ -3,9 +3,6 @@ package service
 import (
 	"errors"
 	"fmt"
-	csi "github.com/container-storage-interface/spec/lib/go/csi"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"log"
 	"net"
 	"net/http/httptest"
@@ -14,16 +11,25 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	//"github.com/cucumber/gherkin-go"
+	"time"
+
+	"github.com/container-storage-interface/spec/lib/go/csi"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"github.com/cucumber/godog"
-	podmon "github.com/dell/dell-csi-extensions/podmon"
+	"github.com/dell/dell-csi-extensions/podmon"
 	volGroupSnap "github.com/dell/dell-csi-extensions/volumeGroupSnapshot"
 	"github.com/dell/gofsutil"
 	"github.com/dell/goscaleio"
 	types "github.com/dell/goscaleio/types/v1"
-	ptypes "github.com/golang/protobuf/ptypes"
+	"github.com/golang/protobuf/ptypes"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/metadata"
+	v1 "k8s.io/api/core/v1"
+	storage "k8s.io/api/storage/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/fake"
 )
 
 const (
@@ -69,6 +75,7 @@ type feature struct {
 	adminClient                           *goscaleio.Client
 	system                                *goscaleio.System
 	adminClient2                          *goscaleio.Client
+	countOfArrays                         int
 	system2                               *goscaleio.System
 	err                                   error // return from the preceding call
 	getPluginInfoResponse                 *csi.GetPluginInfoResponse
@@ -212,7 +219,6 @@ func (f *feature) aVxFlexOSService() error {
 		}
 		f.service.opts.arrays[arrayID].Endpoint = f.server.URL
 		f.service.opts.arrays[arrayID2].Endpoint = f.server.URL
-
 	} else {
 		f.server = nil
 	}
@@ -223,6 +229,7 @@ func (f *feature) aVxFlexOSService() error {
 func (f *feature) getService() *service {
 	testControllerHasNoConnection = false
 	svc := new(service)
+
 	svc.adminClients = make(map[string]*goscaleio.Client)
 	svc.systems = make(map[string]*goscaleio.System)
 
@@ -244,8 +251,12 @@ func (f *feature) getService() *service {
 	svc.volumePrefixToSystems = map[string][]string{}
 	svc.connectedSystemNameToID = map[string]string{}
 	svc.privDir = "./features"
-	ArrayConfig = "./features/array-config/config"
+	ArrayConfigFile = "./features/array-config/config"
+	DriverConfigParamsFile = "./features/driver-config/logConfig.yaml"
 
+	if f.service != nil {
+		return f.service
+	}
 	var opts Opts
 	ctx := new(context.Context)
 	var err error
@@ -283,9 +294,103 @@ MDM-ID 14dbbf5617523654 SDC ID d0f33bd700000004 INSTALLATION ID 1c078b073d75512c
 		svc.systems[arrayID] = f.system
 	}
 	f.service = svc
+	f.countOfArrays = len(svc.systems)
 	svc.statisticsCounter = 99
 	svc.logStatistics()
+	if K8sClientset == nil {
+		f.CreateCSINode()
+		svc.ProcessMapSecretChange()
+	}
 	return svc
+}
+
+//CreateCSINode uses fakeclient to make csinode with topology key
+func (f *feature) CreateCSINode() (*storage.CSINode, error) {
+
+	K8sClientset = fake.NewSimpleClientset()
+
+	//csiKubeClient := nim.volumeHost.GetKubeClient()
+	nodeKind := v1.SchemeGroupVersion.WithKind("Node")
+
+	fakeCSINode := &storage.CSINode{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "node1",
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: nodeKind.Version,
+					Kind:       nodeKind.Kind,
+					Name:       "node1",
+				},
+			},
+		},
+		Spec: storage.CSINodeSpec{
+			Drivers: []storage.CSINodeDriver{
+				{
+					Name:         "csi-vxflexos.dellemc.com",
+					NodeID:       "9E56672F-2F4B-4A42-BFF4-88B6846FBFDA",
+					TopologyKeys: []string{"csi-vxflexos.dellemc.com/000000000001"},
+				},
+			},
+		},
+	}
+
+	return K8sClientset.StorageV1().CSINodes().Create(context.TODO(), fakeCSINode, metav1.CreateOptions{})
+}
+
+func (f *feature) aValidDynamicArrayChange() error {
+	var count = 0
+	for _, array := range f.service.opts.arrays {
+		log.Printf("array after config change array details %#v", array.SystemID)
+		count++
+	}
+	if count != 3 {
+		return errors.New("Expected DynamicArrayChange to show 3 arrays ")
+	}
+
+	// put back array config
+	backup := "features/config"
+	_ = os.Rename(ArrayConfigFile, "features/array-config/config.2")
+	_ = os.Rename(backup, ArrayConfigFile)
+	return nil
+}
+
+func (f *feature) iCallDynamicArrayChange() error {
+	f.countOfArrays = len(f.service.adminClients)
+	log.Printf("before config change array count=%d", f.countOfArrays)
+	for key := range f.service.adminClients {
+		log.Printf("before config change array ID %s", key)
+	}
+	backup := "features/config"
+	os.Rename(ArrayConfigFile, backup)
+	err := os.Rename("features/array-config/config.2", ArrayConfigFile)
+	log.Printf("wait for config change %s %#v", backup, err)
+	time.Sleep(10 * time.Second)
+	return nil
+}
+
+func (f *feature) iCallDynamicLogChange(file string) error {
+	log.Printf("level before change: %s", Log.GetLevel())
+	backup := "features/driver-config/logBackup.json"
+	_ = os.Rename(DriverConfigParamsFile, backup)
+	_ = os.Rename("features/driver-config/"+file, DriverConfigParamsFile)
+	log.Printf("wait for config change %s", backup)
+	time.Sleep(10 * time.Second)
+	return nil
+
+}
+
+func (f *feature) aValidDynamicLogChange(file, expectedLevel string) error {
+	log.Printf("level after change: %s", Log.GetLevel())
+	backup := "features/driver-config/logBackup.json"
+	if Log.GetLevel().String() != expectedLevel {
+		err := fmt.Errorf("level was expected to be %s, but was %s instead", expectedLevel, Log.GetLevel().String())
+		return err
+	}
+	log.Printf("Reverting log changes made")
+	_ = os.Rename(DriverConfigParamsFile, "features/driver-config/"+file)
+	_ = os.Rename(backup, DriverConfigParamsFile)
+	return nil
+
 }
 
 // GetPluginInfo
@@ -975,19 +1080,14 @@ func (f *feature) getControllerPublishVolumeRequest(accessType string) *csi.Cont
 	switch accessType {
 	case "multi-single-writer":
 		accessMode.Mode = csi.VolumeCapability_AccessMode_MULTI_NODE_SINGLE_WRITER
-		break
 	case "single-writer":
 		accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER
-		break
 	case "multiple-reader":
 		accessMode.Mode = csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY
-		break
 	case "multiple-writer":
 		accessMode.Mode = csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER
-		break
 	case "unknown":
 		accessMode.Mode = csi.VolumeCapability_AccessMode_UNKNOWN
-		break
 	}
 	if !f.omitAccessMode {
 		capability.AccessMode = accessMode
@@ -1042,16 +1142,12 @@ func (f *feature) getControllerDeleteVolumeRequest(accessType string) *csi.Delet
 	switch accessType {
 	case "single-writer":
 		accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER
-		break
 	case "multiple-reader":
 		accessMode.Mode = csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY
-		break
 	case "multiple-writer":
 		accessMode.Mode = csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER
-		break
 	case "unknown":
 		accessMode.Mode = csi.VolumeCapability_AccessMode_UNKNOWN
-		break
 	}
 	if !f.omitAccessMode {
 		capability.AccessMode = accessMode
@@ -1201,6 +1297,8 @@ func (f *feature) theNumberOfSDCMappingsIs(arg1 int) error {
 func (f *feature) iCallNodeGetInfo() error {
 	ctx := new(context.Context)
 	req := new(csi.NodeGetInfoRequest)
+	// xxxxxxxxxxxxxx
+	f.service.opts.SdcGUID = "9E56672F-2F4B-4A42-BFF4-88B6846FBFDA"
 	f.nodeGetInfoResponse, f.err = f.service.NodeGetInfo(*ctx, req)
 	return nil
 }
@@ -1962,6 +2060,12 @@ func (f *feature) iCallBeforeServe() error {
 	if err != nil {
 		return err
 	}
+	os.Setenv(EnvAutoProbe, "true")
+	presp, perr := f.service.ProbeController(ctx, nil)
+	fmt.Printf("ProbeController resp %#v \n", presp)
+	if perr != nil {
+		f.err = perr
+	}
 	f.err = f.service.BeforeServe(ctx, nil, listener)
 	listener.Close()
 	return nil
@@ -2006,11 +2110,11 @@ func (f *feature) iCallNodeExpandVolume(volPath string) error {
 	} else if stepHandlersErrors.VolumeIDTooShortError {
 		req.VolumeId = "50"
 	} else if stepHandlersErrors.TooManyDashesVolIDError {
-		req.VolumeId = "1-2-3"
+		req.VolumeId = "abcd-3"
 	} else if stepHandlersErrors.CorrectFormatBadCsiVolID {
 		req.VolumeId = badCsiVolumeID
 	} else if stepHandlersErrors.EmptySysID {
-		req.VolumeId = "-12345"
+		req.VolumeId = goodVolumeID
 	} else if stepHandlersErrors.BadVolIDError {
 		req.VolumeId = badVolumeID
 	}
@@ -2619,7 +2723,7 @@ func (f *feature) iCallGetStoragePoolnameByID(id string) error {
 	return nil
 }
 
-func (f *feature) iCallGetDefaultSystemNameMatchingError() error {
+func (f *feature) iCallGetSystemNameMatchingError() error {
 	systems := make([]string, 0)
 	id := "9999999999999999"
 	systems = append(systems, id)
@@ -2627,13 +2731,10 @@ func (f *feature) iCallGetDefaultSystemNameMatchingError() error {
 	stepHandlersErrors.systemNameMatchingError = true
 	f.service.getSystemName(context.TODO(), systems)
 	return nil
-
 }
 
-func (f *feature) iCallGetDefaultSystemNameError() error {
-	systems := make([]string, 0)
+func (f *feature) iCallGetSystemNameError() error {
 	id := "9999999999999999"
-	systems = append(systems, id)
 	// this works with wrong id
 	badarray := f.service.opts.arrays[arrayID]
 	badarray.SystemID = ""
@@ -2649,7 +2750,7 @@ func (f *feature) iCallGetDefaultSystemNameError() error {
 
 }
 
-func (f *feature) iCallGetDefaultSystemName() error {
+func (f *feature) iCallGetSystemName() error {
 	systems := make([]string, 0)
 	systems = append(systems, arrayID)
 	f.service.getSystemName(context.TODO(), systems)
@@ -2660,8 +2761,6 @@ func (f *feature) iCallGetDefaultSystemName() error {
 func (f *feature) iCallNodeGetAllSystems() error {
 	// lookup the system names for a couple of systems
 	// This should not generate an error as systems without names are supported
-	systems := make([]string, 0)
-	systems = append(systems, "9999999999999999")
 	ctx := new(context.Context)
 	badarray := f.service.opts.arrays[arrayID]
 	f.err = f.service.systemProbe(*ctx, badarray)
@@ -2697,7 +2796,7 @@ func (f *feature) theValidateConnectivityResponseMessageContains(expected string
 }
 
 func (f *feature) anInvalidConfig(config string) error {
-	ArrayConfig = config
+	ArrayConfigFile = config
 	return nil
 }
 
@@ -2710,10 +2809,12 @@ func (f *feature) iCallGetArrayConfig() error {
 	return nil
 }
 
-func FeatureContext(s *godog.Suite) {
+func FeatureContext(s *godog.ScenarioContext) {
 	f := &feature{}
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
 	s.Step(`^I call GetPluginInfo$`, f.iCallGetPluginInfo)
+	s.Step(`^I call DynamicArrayChange$`, f.iCallDynamicArrayChange)
+	s.Step(`^a valid DynamicArrayChange occurs$`, f.aValidDynamicArrayChange)
 	s.Step(`^a valid GetPlugInfoResponse is returned$`, f.aValidGetPlugInfoResponseIsReturned)
 	s.Step(`^I call GetPluginCapabilities$`, f.iCallGetPluginCapabilities)
 	s.Step(`^a valid GetPluginCapabilitiesResponse is returned$`, f.aValidGetPluginCapabilitiesResponseIsReturned)
@@ -2830,9 +2931,9 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^I call getVolumeIDFromCsiVolumeID "([^"]*)"$`, f.iCallGetVolumeIDFromCsiVolumeID)
 	s.Step(`^I call getSystemIDFromCsiVolumeID "([^"]*)"$`, f.iCallGetSystemIDFromCsiVolumeID)
 	s.Step(`^I call GetSystemIDFromParameters with bad params "([^"]*)"$`, f.iCallGetSystemIDFromParameters)
-	s.Step(`^I call getDefaultSystemName$`, f.iCallGetDefaultSystemName)
-	s.Step(`^I call getDefaultSystemNameError$`, f.iCallGetDefaultSystemNameError)
-	s.Step(`^I call getDefaultSystemNameMatchingError$`, f.iCallGetDefaultSystemNameMatchingError)
+	s.Step(`^I call getSystemName$`, f.iCallGetSystemName)
+	s.Step(`^I call getSystemNameError$`, f.iCallGetSystemNameError)
+	s.Step(`^I call getSystemNameMatchingError$`, f.iCallGetSystemNameMatchingError)
 	s.Step(`^an invalid config "([^"]*)"$`, f.anInvalidConfig)
 	s.Step(`^I call getArrayConfig$`, f.iCallGetArrayConfig)
 	s.Step(`^a controller published ephemeral volume$`, f.aControllerPublishedEphemeralVolume)
@@ -2845,4 +2946,13 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^I call CheckCreationTime$`, f.iCallCheckCreationTime)
 	s.Step(`^I call ControllerGetVolume$`, f.iCallControllerGetVolume)
 	s.Step(`^remove a volume from VolumeGroupSnapshotRequest$`, f.iRemoveAVolumeFromVolumeGroupSnapshotRequest)
+	s.Step(`^I call DynamicLogChange "([^"]*)"$`, f.iCallDynamicLogChange)
+	s.Step(`^a valid DynamicLogChange occurs "([^"]*)" "([^"]*)"$`, f.aValidDynamicLogChange)
+
+	s.After(func(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
+		if f.server != nil {
+			f.server.Close()
+		}
+		return ctx, nil
+	})
 }

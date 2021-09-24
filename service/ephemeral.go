@@ -79,7 +79,7 @@ func (s *service) ephemeralNodePublish(
 	systemName := req.VolumeContext["systemID"]
 
 	if systemName == "" {
-		Log.Info("systemName not specified, using default array")
+		Log.Debug("systemName not specified, using default array")
 		systemName = s.opts.defaultSystemID
 	}
 

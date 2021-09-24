@@ -1,0 +1,11 @@
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: vxflexos-snapclass
+driver: csi-vxflexos.dellemc.com
+# Configure what happens to a VolumeSnapshotContent when the VolumeSnapshot object
+# it is bound to is to be deleted
+# Allowed values:
+#   Delete: the underlying storage snapshot will be deleted along with the VolumeSnapshotContent object.
+#   Retain: both the underlying snapshot and VolumeSnapshotContent remain.
+deletionPolicy: Delete

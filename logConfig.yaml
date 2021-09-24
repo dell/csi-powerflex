@@ -1,9 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: driver-config
-  namespace: vxflexos
-data:
-  driver-config.yaml: |
-    LOG_LEVEL: "INFO"
-    LOG_FORMAT: "TEXT"

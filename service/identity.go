@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
+	csiext "github.com/dell/dell-csi-extensions/volumeGroupSnapshot"
 	wrappers "github.com/golang/protobuf/ptypes/wrappers"
 
 	"github.com/dell/csi-vxflexos/core"
@@ -82,6 +83,26 @@ func (s *service) Probe(
 	rep := new(csi.ProbeResponse)
 	rep.Ready = ready
 	Log.Debug(fmt.Sprintf("Probe returning: %v", rep.Ready.GetValue()))
+
+	return rep, nil
+}
+
+func (s *service) ProbeController(ctx context.Context,
+	req *csiext.ProbeControllerRequest) (
+	*csiext.ProbeControllerResponse, error) {
+
+	if !strings.EqualFold(s.mode, "node") {
+		Log.Debug("systemProbe")
+		if err := s.systemProbeAll(ctx); err != nil {
+			Log.Printf("error in systemProbeAll: %s", err.Error())
+			return nil, err
+		}
+	}
+
+	rep := new(csiext.ProbeControllerResponse)
+	rep.Name = Name
+	rep.VendorVersion = core.SemVer
+	rep.Manifest = Manifest
 
 	return rep, nil
 }

@@ -16,16 +16,22 @@ import (
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/dell/csi-vxflexos/core"
+	"github.com/dell/csi-vxflexos/k8sutils"
 	podmon "github.com/dell/dell-csi-extensions/podmon"
 	volumeGroupSnapshot "github.com/dell/dell-csi-extensions/volumeGroupSnapshot"
 	"github.com/dell/gocsi"
 	csictx "github.com/dell/gocsi/context"
 	sio "github.com/dell/goscaleio"
 	siotypes "github.com/dell/goscaleio/types/v1"
-	ptypes "github.com/golang/protobuf/ptypes"
-	log "github.com/sirupsen/logrus"
-	"google.golang.org/grpc"
+	"github.com/fsnotify/fsnotify"
+	"github.com/golang/protobuf/ptypes"
+	logrus "github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
+	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/yaml"
+
+	"google.golang.org/grpc"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -42,14 +48,29 @@ const (
 
 	// SystemTopologySystemValue is the supported topology key
 	SystemTopologySystemValue string = "csi-vxflexos.dellemc.com"
+
+	//DefaultLogLevel for csi logs
+	DefaultLogLevel = logrus.DebugLevel
+
+	//ParamCSILogLevel csi driver log level
+	ParamCSILogLevel = "CSI_LOG_LEVEL"
 )
 
-// ArrayConfig is file name with array connection data
-var ArrayConfig string
+// ArrayConfigFile is file name with array connection data
+var ArrayConfigFile string
+
+// DriverConfigParamsFile is the name of the input driver config params file
+var DriverConfigParamsFile string
+
+// KubeConfig is the kube config
+var KubeConfig string
+
+// K8sClientset is the client to query k8s
+var K8sClientset kubernetes.Interface
 
 //Log controlls the logger
 //give default value, will be overwritten by configmap
-var Log = log.New()
+var Log = logrus.New()
 
 // ArrayConnectionData contains data required to connect to array
 type ArrayConnectionData struct {
@@ -78,6 +99,7 @@ type Service interface {
 	csi.NodeServer
 	BeforeServe(context.Context, *gocsi.StoragePlugin, net.Listener) error
 	RegisterAdditionalServers(server *grpc.Server)
+	ProcessMapSecretChange() error
 }
 
 // Opts defines service configuration options.
@@ -115,7 +137,117 @@ type service struct {
 	connectedSystemNameToID map[string]string
 }
 
-// New returns a new Service.
+// Process dynamic changes to configMap or Secret.
+func (s *service) ProcessMapSecretChange() error {
+
+	//Update dynamic config params
+	vc := viper.New()
+	vc.AutomaticEnv()
+	Log.WithField("file", DriverConfigParamsFile).Info("driver configuration file ")
+	vc.SetConfigFile(DriverConfigParamsFile)
+	if err := vc.ReadInConfig(); err != nil {
+		Log.WithError(err).Error("unable to read config file, using default values")
+	}
+	if err := s.updateDriverConfigParams(Log, vc); err != nil {
+		return err
+	}
+	vc.WatchConfig()
+	vc.OnConfigChange(func(e fsnotify.Event) {
+		Log.WithField("file", DriverConfigParamsFile).Info("log configuration file changed")
+		if err := s.updateDriverConfigParams(Log, vc); err != nil {
+			Log.Warn(err)
+		}
+	})
+
+	// dynamic array secret change
+	va := viper.New()
+	// /vxflexos-config/config
+	va.SetConfigFile(ArrayConfigFile)
+	va.SetConfigType("ini")
+	Log.WithField("file", ArrayConfigFile).Info("array configuration file")
+
+	va.WatchConfig()
+
+	va.OnConfigChange(func(e fsnotify.Event) {
+		Log.WithField("file", ArrayConfigFile).Info("array configuration file changed")
+		var err error
+		err = os.Setenv(EnvAutoProbe, "true")
+		if err != nil {
+			Log.WithError(err).Error("unable to setenv auto proble during multi array config reload")
+		}
+		s.opts.arrays, err = getArrayConfig(context.Background())
+		if err != nil {
+			Log.WithError(err).Error("unable to reload multi array config file")
+		}
+		err = s.doProbe(context.Background())
+		if err != nil {
+			Log.WithError(err).Error("unable to probe array in multi array config")
+		}
+		// log csiNode topology keys
+		if err = s.logCsiNodeTopologyKeys(); err != nil {
+			Log.WithError(err).Error("unable to log csiNode topology keys")
+		}
+	})
+	return nil
+}
+
+func (s *service) logCsiNodeTopologyKeys() error {
+	if K8sClientset == nil {
+		err := k8sutils.CreateKubeClientSet(KubeConfig)
+		if err != nil {
+			Log.WithError(err).Error("unable to create k8s clientset for query")
+			return err
+		}
+		K8sClientset = k8sutils.Clientset
+	}
+
+	csiNodes, err := K8sClientset.StorageV1().CSINodes().List(context.TODO(), metav1.ListOptions{})
+	node, err := s.NodeGetInfo(context.Background(), nil)
+	fmt.Printf("debug get csinode info")
+	if node != nil {
+		Log.WithField("node info", node.NodeId).Info("NodeInfo ID")
+		segMap := node.AccessibleTopology.Segments
+
+		for key := range segMap {
+			Log.WithField("node info key", key).Info("NodeInfo topologykeys")
+		}
+
+		if err == nil {
+			for _, csiNode := range csiNodes.Items {
+				if len(csiNode.Spec.Drivers) > 0 {
+					csinodeID := csiNode.Spec.Drivers[0].NodeID
+					if csinodeID == node.NodeId {
+						Log.WithField("csinode", csiNode.Name).Info("csiNode name")
+						Log.WithField("csinode ID", csinodeID).Info("csiNode id")
+						tkeys := csiNode.Spec.Drivers[0].TopologyKeys
+						if tkeys != nil {
+							Log.WithField("csinode topologykeys", len(tkeys)).Info("count")
+							needMap := make(map[string]string)
+							for key := range segMap {
+								for _, tkey := range tkeys {
+									if tkey != key {
+										needMap[key] = "missing"
+									} else {
+										Log.WithField("csinode topologykeys", "ok").Info("found")
+									}
+								}
+							}
+							for akey := range needMap {
+								Log.WithField("csinode missing topology key", akey).Info("node key")
+							}
+						}
+					}
+				}
+			}
+		} else {
+			Log.WithError(err).Error("unable to list csiNodes in cluster")
+		}
+	}
+	return nil
+
+}
+
+//New returns a handle to service
 func New() Service {
 	return &service{
 		storagePoolIDToName:     map[string]string{},
@@ -124,9 +256,42 @@ func New() Service {
 	}
 }
 
+func (s *service) updateDriverConfigParams(logger *logrus.Logger, v *viper.Viper) error {
+
+	logFormat := v.GetString("CSI_LOG_FORMAT")
+	logFormat = strings.ToLower(logFormat)
+	logger.WithField("format", logFormat).Info("Read CSI_LOG_FORMAT from log configuration file")
+	if strings.EqualFold(logFormat, "json") {
+		logger.SetFormatter(&logrus.JSONFormatter{})
+	} else {
+		// use text formatter by defualt
+		if logFormat != "text" {
+			logger.WithField("format", logFormat).Info("CSI_LOG_FORMAT value not recognized, setting to text")
+		}
+		logger.SetFormatter(&logrus.TextFormatter{})
+	}
+
+	level := DefaultLogLevel
+	if v.IsSet(ParamCSILogLevel) {
+		logLevel := v.GetString(ParamCSILogLevel)
+		if logLevel != "" {
+			logLevel = strings.ToLower(logLevel)
+			logger.WithField("level", logLevel).Info("Read CSI_LOG_LEVEL from log configuration file")
+			var err error
+			level, err = logrus.ParseLevel(logLevel)
+			if err != nil {
+				Log.WithError(err).Errorf("CSI_LOG_LEVEL %s value not recognized, setting to debug error: %s ", logLevel, err.Error())
+				logger.SetLevel(DefaultLogLevel)
+				return fmt.Errorf("input log level %q is not valid", logLevel)
+			}
+		}
+	}
+	logger.SetLevel(level)
+	return nil
+}
+
 func (s *service) BeforeServe(
 	ctx context.Context, sp *gocsi.StoragePlugin, lis net.Listener) error {
-
 	defer func() {
 		fields := map[string]interface{}{
 			"sdcGUID":                s.opts.SdcGUID,
@@ -150,6 +315,12 @@ func (s *service) BeforeServe(
 	// Process configuration file and initialize system clients
 	opts.arrays, err = getArrayConfig(ctx)
 	if err != nil {
+		Log.Warnf("unable to get arrays from config: %s", err.Error())
+		return err
+	}
+
+	if err = s.ProcessMapSecretChange(); err != nil {
+		Log.Warnf("unable to configure dynamic configMap secret change detection : %s", err.Error())
 		return err
 	}
 
@@ -179,6 +350,11 @@ func (s *service) BeforeServe(
 		s.privDir = defaultPrivDir
 	}
 
+	// log csiNode topology keys
+	if err = s.logCsiNodeTopologyKeys(); err != nil {
+		Log.WithError(err).Error("unable to log csiNode topology keys")
+	}
+
 	// pb parses an environment variable into a boolean value. If an error
 	// is encountered, default is set to false, and error is logged
 	pb := func(n string) bool {
@@ -195,33 +371,37 @@ func (s *service) BeforeServe(
 	}
 
 	opts.Thick = pb(EnvThick)
-	opts.AutoProbe = pb(EnvAutoProbe)
+	opts.AutoProbe = true
 
 	s.opts = opts
 	s.adminClients = make(map[string]*sio.Client)
 	s.systems = make(map[string]*sio.System)
 
 	if _, ok := csictx.LookupEnv(ctx, "X_CSI_VXFLEXOS_NO_PROBE_ON_START"); !ok {
-		// Probe all systems managed by driver
-		if !strings.EqualFold(s.mode, "node") {
-			if err := s.systemProbeAll(ctx); err != nil {
-				return err
-			}
-		}
+		return s.doProbe(ctx)
+	}
+	return nil
+}
 
-		// Do a node probe
-		if !strings.EqualFold(s.mode, "controller") {
-			// Probe all systems managed by driver
-			if err := s.systemProbeAll(ctx); err != nil {
-				return err
-			}
-
-			if err := s.nodeProbe(ctx); err != nil {
-				return err
-			}
+// Probe all systems managed by driver
+func (s *service) doProbe(ctx context.Context) error {
+	if !strings.EqualFold(s.mode, "node") {
+		if err := s.systemProbeAll(ctx); err != nil {
+			return err
 		}
 	}
 
+	// Do a node probe
+	if !strings.EqualFold(s.mode, "controller") {
+		// Probe all systems managed by driver
+		if err := s.systemProbeAll(ctx); err != nil {
+			return err
+		}
+
+		if err := s.nodeProbe(ctx); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -244,7 +424,7 @@ func (s *service) getVolProvisionType(params map[string]string) string {
 	if tp, ok := params[KeyThickProvisioning]; ok {
 		tpb, err := strconv.ParseBool(tp)
 		if err != nil {
-			Log.Warnf("invalid boolean received `%s`=(%v) in params",
+			Log.Warnf("invalid boolean received %s=(%#v) in params",
 				KeyThickProvisioning, tp)
 		} else if tpb {
 			volType = thickProvisioned
@@ -263,7 +443,7 @@ func (s *service) getVolByID(id string, systemID string) (*siotypes.Volume, erro
 	if adminClient == nil {
 		return nil, fmt.Errorf("can't find adminClient by id %s", systemID)
 	}
-	// The `GetVolume` API returns a slice of volumes, but when only passing
+	// The GetVolume API returns a slice of volumes, but when only passing
 	// in a volume ID, the response will be just the one volume
 	vols, err := adminClient.GetVolume("", strings.TrimSpace(id), "", "", false)
 	if err != nil {
@@ -276,7 +456,7 @@ func (s *service) getVolByID(id string, systemID string) (*siotypes.Volume, erro
 func (s *service) getSDCID(sdcGUID string, systemID string) (string, error) {
 	sdcGUID = strings.ToUpper(sdcGUID)
 
-	// Need to translate sdcGUID to sdcID
+	// Need to translate sdcGUID to fmt.Errorf("getSDCID error systemID not found: %s", systemID)
 	if s.systems[systemID] == nil {
 		return "", fmt.Errorf("getSDCID error systemID not found: %s", systemID)
 	}
@@ -380,13 +560,13 @@ func (s *service) logStatistics() {
 func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error) {
 	arrays := make(map[string]*ArrayConnectionData)
 
-	if _, err := os.Stat(ArrayConfig); os.IsNotExist(err) {
-		return nil, fmt.Errorf(fmt.Sprintf("File %s does not exist", ArrayConfig))
+	if _, err := os.Stat(ArrayConfigFile); os.IsNotExist(err) {
+		return nil, fmt.Errorf(fmt.Sprintf("File %s does not exist", ArrayConfigFile))
 	}
 
-	config, err := ioutil.ReadFile(filepath.Clean(ArrayConfig))
+	config, err := ioutil.ReadFile(filepath.Clean(ArrayConfigFile))
 	if err != nil {
-		return nil, fmt.Errorf(fmt.Sprintf("File %s errors: %v", ArrayConfig, err))
+		return nil, fmt.Errorf(fmt.Sprintf("File %s errors: %v", ArrayConfigFile, err))
 	}
 
 	if string(config) != "" {
@@ -423,16 +603,16 @@ func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error
 			// ArrayConnectionData
 			if c.AllSystemNames != "" {
 				names := strings.Split(c.AllSystemNames, ",")
-				Log.Printf("For systemID %s configured System Names found %#v ", systemID, names)
+				Log.Printf("Powerflex systemID %s AllSytemNames given %#v\n", systemID, names)
 			}
 
-			insecure := c.SkipCertificateValidation || c.Insecure
+			skipCertificateValidation := c.SkipCertificateValidation || c.Insecure
 
 			fields := map[string]interface{}{
 				"endpoint":                  c.Endpoint,
 				"user":                      c.Username,
 				"password":                  "********",
-				"skipCertificateValidation": insecure,
+				"skipCertificateValidation": skipCertificateValidation,
 				"isDefault":                 c.IsDefault,
 				"systemID":                  c.SystemID,
 				"allSystemNames":            c.AllSystemNames,
@@ -478,7 +658,6 @@ func getVolumeIDFromCsiVolumeID(csiVolID string) string {
 	Log.WithError(err).Errorf("%s format error", csiVolID)
 
 	return ""
-
 }
 
 // getSystemIDFromCsiVolumeId returns PowerFlex volume ID from CSI volume ID

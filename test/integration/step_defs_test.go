@@ -21,9 +21,10 @@ import (
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/cucumber/godog"
 	csiext "github.com/dell/dell-csi-extensions/podmon"
+
 	//volGroupSnap "../../dell-csi-extensions/volumeGroupSnapshot"
 	volGroupSnap "github.com/dell/dell-csi-extensions/volumeGroupSnapshot"
-	ptypes "github.com/golang/protobuf/ptypes"
+	"github.com/golang/protobuf/ptypes"
 )
 
 const (
@@ -35,12 +36,13 @@ const (
 
 // ArrayConnectionData contains data required to connect to array
 type ArrayConnectionData struct {
-	SystemID  string `json:"systemID"`
-	Username  string `json:"username"`
-	Password  string `json:"password"`
-	Endpoint  string `json:"endpoint"`
-	Insecure  bool   `json:"insecure,omitempty"`
-	IsDefault bool   `json:"isDefault,omitempty"`
+	SystemID       string `json:"systemID"`
+	Username       string `json:"username"`
+	Password       string `json:"password"`
+	Endpoint       string `json:"endpoint"`
+	Insecure       bool   `json:"insecure,omitempty"`
+	IsDefault      bool   `json:"isDefault,omitempty"`
+	AllSystemNames string `json:"allSystemNames"`
 }
 
 type feature struct {
@@ -59,7 +61,6 @@ type feature struct {
 	volIDListShort           []string
 	maxRetryCount            int
 	expandVolumeResponse     *csi.ControllerExpandVolumeResponse
-	nodeExpandVolumeRequest  *csi.NodeExpandVolumeRequest
 	nodeExpandVolumeResponse *csi.NodeExpandVolumeResponse
 	arrays                   map[string]*ArrayConnectionData
 	VolumeGroupSnapshot      *volGroupSnap.CreateVolumeGroupSnapshotResponse
@@ -110,14 +111,20 @@ func (f *feature) getArrayConfig() (map[string]*ArrayConnectionData, error) {
 			if c.Endpoint == "" {
 				return nil, fmt.Errorf(fmt.Sprintf("invalid value for Endpoint at index %d", i))
 			}
+			// ArrayConnectionData
+			if c.AllSystemNames != "" {
+				names := strings.Split(c.AllSystemNames, ",")
+				fmt.Printf("For systemID %s configured System Names found %#v ", systemID, names)
+			}
 
 			fields := map[string]interface{}{
-				"endpoint":  c.Endpoint,
-				"user":      c.Username,
-				"password":  "********",
-				"insecure":  c.Insecure,
-				"isDefault": c.IsDefault,
-				"systemID":  c.SystemID,
+				"endpoint":       c.Endpoint,
+				"user":           c.Username,
+				"password":       "********",
+				"insecure":       c.Insecure,
+				"isDefault":      c.IsDefault,
+				"systemID":       c.SystemID,
+				"allSystemNames": c.AllSystemNames,
 			}
 
 			fmt.Printf("array found  %s %#v\n", c.SystemID, fields)
@@ -429,15 +436,15 @@ func (f *feature) aVolumeRequest(name string, size int64) error {
 	if len(f.anotherSystemID) > 0 {
 		params["systemID"] = f.anotherSystemID
 	}
-	if strings.Contains(name, "arrayName") {
-		systemID := os.Getenv("ALT_SYSTEM_ID")
-		if systemID != "" {
-			fmt.Printf("Using %s as systemID for volume request \n", systemID)
-			params["systemID"] = systemID
-			os.Setenv("ALT_SYSTEM_ID", "")
-		} else {
-			fmt.Printf("Env variable ALT_SYSTEM_ID not set, assuming default system does not have a name \n")
-		}
+	// use new system name instead of previous name
+	newName := os.Getenv("ALT_SYSTEM_ID")
+	if len(newName) > 0 {
+		fmt.Printf("Using %s as systemID for volume request \n", newName)
+		params["systemID"] = newName
+		// reset
+		os.Setenv("ALT_SYSTEM_ID", "")
+	} else {
+		fmt.Printf("Env variable ALT_SYSTEM_ID not set, assuming default system does not have a name \n")
 	}
 	req.Parameters = params
 	makeAUniqueName(&name)
@@ -795,7 +802,7 @@ func (f *feature) aValidListVolumeResponseIsReturned() error {
 			capacity := vol.CapacityBytes
 			name := vol.VolumeContext["Name"]
 			creation := vol.VolumeContext["CreationTime"]
-			fmt.Sprintf("Volume ID: %s Name: %s Capacity: %d CreationTime: %s\n", id, name, capacity, creation)
+			fmt.Printf("Volume ID: %s Name: %s Capacity: %d CreationTime: %s\n", id, name, capacity, creation)
 		}
 	}
 	return nil
@@ -857,8 +864,40 @@ func (f *feature) aValidListSnapshotResponseIsReturned() error {
 	}
 	if f.snapshotID != "" && !FOUND_SNAP {
 		msg := "ListSnapshots does not contain snap id " + f.snapshotID
-		fmt.Printf(msg)
+		fmt.Print(msg)
 		return errors.New(msg)
+	}
+	return nil
+}
+
+func (f *feature) iSetAnotherSystemName(systemType string) error {
+
+	if f.arrays == nil {
+		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
+		var err error
+		f.arrays, err = f.getArrayConfig()
+		if err != nil {
+			return errors.New("Get multi array config failed " + err.Error())
+		}
+	}
+	isNumeric := regexp.MustCompile(`^[0-9a-f]+$`).MatchString
+	for _, a := range f.arrays {
+		if systemType == "altSystem" && !a.IsDefault {
+			if !isNumeric(a.SystemID) {
+				f.anotherSystemID = a.SystemID
+				break
+			}
+		}
+		if systemType == "defaultSystem" && a.IsDefault {
+			if !isNumeric(a.SystemID) {
+				f.anotherSystemID = a.SystemID
+				break
+			}
+		}
+	}
+	fmt.Printf("array selected for %s is %s\n", systemType, f.anotherSystemID)
+	if f.anotherSystemID == "" {
+		return errors.New("Failed to get  multi array config for " + systemType)
 	}
 	return nil
 }
@@ -905,7 +944,6 @@ func (f *feature) iCreateVolumesInParallel(nVols int) error {
 				if i%2 == 0 {
 					fmt.Printf("DEBUG change system %d\n", i)
 					req.Parameters["systemID"] = ""
-					// "1235e15806d1ec0f"
 				}
 				resp, err = f.createVolume(req)
 				if resp != nil {
@@ -990,8 +1028,7 @@ func (f *feature) iNodePublishVolumesInParallel(nVols int) error {
 	for i := 0; i < nVols; i++ {
 		dataDirName := fmt.Sprintf("/tmp/datadir%d", i)
 		fmt.Printf("Checking %s\n", dataDirName)
-		var fileMode os.FileMode
-		fileMode = 0777
+		var fileMode os.FileMode = 0777
 		err := os.Mkdir(dataDirName, fileMode)
 		if err != nil && !os.IsExist(err) {
 			fmt.Printf("%s: %s\n", dataDirName, err)
@@ -1278,7 +1315,7 @@ func (f *feature) iCallValidateVolumeHostConnectivity() error {
 	//req = nil
 	//pclient = nil
 	f.errs = make([]error, 0)
-	if connect.IosInProgress {
+	if connect.IosInProgress || connect.Connected {
 		return nil
 	}
 	err = fmt.Errorf("Unexpected error IO to volume: %t", connect.IosInProgress)
@@ -1492,13 +1529,24 @@ func makeAUniqueName(name *string) {
 	if len(tmp) > 30 {
 		*name = tmp[len(tmp)-30:]
 	}
-	return
 }
 
-// And Set System Name As  "1235e15806d1ec0f-1235-system"
+func (f *feature) iSetBadAllSystemNames() error {
+	name := os.Getenv("ALT_SYSTEM_ID")
+	for _, a := range f.arrays {
+		if strings.Contains(a.AllSystemNames, name) {
+			a.AllSystemNames = "badname"
+			fmt.Printf("set bad allSystemNames for %s done \n", name)
+			return nil
+		}
+	}
+	return fmt.Errorf("Error during set bad secret allSystemNames for %s", name)
+}
+
+// And Set System Name As  "id-some-name" or "id_some_name"
 func (f *feature) iSetSystemName(name string) error {
 	parts := strings.Split(name, "-")
-	id := "1235e15806d1ec0f"
+	id := ""
 	if len(parts) > 1 {
 		id = parts[0]
 	} else {
@@ -1506,6 +1554,10 @@ func (f *feature) iSetSystemName(name string) error {
 		if len(parts) > 1 {
 			id = parts[0]
 		}
+	}
+	isNumeric := regexp.MustCompile(`^[0-9a-f]+$`).MatchString
+	if !isNumeric(id) {
+		return fmt.Errorf("Error during set name on pflex %s is not id of system", id)
 	}
 	endpoint := ""
 	var array *ArrayConnectionData
@@ -1515,6 +1567,9 @@ func (f *feature) iSetSystemName(name string) error {
 			array = a
 		}
 	}
+	if array == nil {
+		return fmt.Errorf("Error during set name on pflex %s not found in secret", name)
+	}
 	if endpoint != "" {
 		cred := array.Username + ":" + array.Password
 		url := endpoint + "/api/login"
@@ -1522,6 +1577,7 @@ func (f *feature) iSetSystemName(name string) error {
 		token, err := f.restCallToSetName(cred, url, "")
 		if err != nil {
 			fmt.Printf("name changed error %s", err.Error())
+			return err
 		}
 		if len(token) > 1 {
 			auth := array.Username + ":" + token
@@ -1594,11 +1650,12 @@ func (f *feature) restCallToSetName(auth string, url string, name string) (strin
 	return "", nil
 }
 
-func FeatureContext(s *godog.Suite) {
+func FeatureContext(s *godog.ScenarioContext) {
 	f := &feature{}
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
 	s.Step(`^a basic block volume request "([^"]*)" "(\d+)"$`, f.aBasicBlockVolumeRequest)
 	s.Step(`^Set System Name As "([^"]*)"$`, f.iSetSystemName)
+	s.Step(`^Set Bad AllSystemNames$`, f.iSetBadAllSystemNames)
 	s.Step(`^I call CreateVolume$`, f.iCallCreateVolume)
 	s.Step(`^when I call DeleteVolume$`, f.whenICallDeleteVolume)
 	s.Step(`^there are no errors$`, f.thereAreNoErrors)
@@ -1632,6 +1689,7 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^I create (\d+) volumes in parallel$`, f.iCreateVolumesInParallel)
 	s.Step(`^I publish (\d+) volumes in parallel$`, f.iPublishVolumesInParallel)
 	s.Step(`^I set another systemID "([^"]*)"$`, f.iSetAnotherSystemID)
+	s.Step(`^I set another systemName "([^"]*)"$`, f.iSetAnotherSystemName)
 	s.Step(`^I node publish (\d+) volumes in parallel$`, f.iNodePublishVolumesInParallel)
 	s.Step(`^I node unpublish (\d+) volumes in parallel$`, f.iNodeUnpublishVolumesInParallel)
 	s.Step(`^I unpublish (\d+) volumes in parallel$`, f.iUnpublishVolumesInParallel)

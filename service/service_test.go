@@ -11,18 +11,22 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	status := 0
 
 	go http.ListenAndServe("localhost:6060", nil)
 	fmt.Printf("starting godog...\n")
 
-	status = godog.RunWithOptions("godog", func(s *godog.Suite) {
-		FeatureContext(s)
-	}, godog.Options{
+	opts := godog.Options{
 		Format: "pretty",
 		Paths:  []string{"features"},
-		//Tags:   "wip",
-	})
+		// Tags:   "wip",
+	}
+
+	status := godog.TestSuite{
+		Name:                "godog",
+		ScenarioInitializer: FeatureContext,
+		Options:             &opts,
+	}.Run()
+
 	fmt.Printf("godog finished\n")
 
 	if st := m.Run(); st > status {
