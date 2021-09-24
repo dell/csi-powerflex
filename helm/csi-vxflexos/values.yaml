@@ -1,22 +1,54 @@
 ---
+# k8s/driver attributes
+
+# "version" is used to verify the values file matches driver version
+# Not recommend to change
+version: 2.0.0
+
+# Represents number of certificate secrets, which user is going to create for ssl authentication. (vxflexos-cert-0..vxflexos-cert-n)
+# If user does not use certificate, set to 0
+certSecretCount: 0
+
+# CSI driver log level
+# Allowed values: "error", "warn"/"warning", "info", "debug"
+# Default value: "debug"
+logLevel: "debug"
+
+# CSI driver log format
+# Allowed values: "TEXT" or "JSON"
+# Default value: "TEXT"
+logFormat: "TEXT"
+
+# Specify kubelet config dir path.
+# Ensure that the config.yaml file is present at this path.
+# Default value: None
+kubeletConfigDir: /var/lib/kubelet
+
 # "defaultFsType" is used to set the default FS type which will be used
 # for mount volumes if FsType is not specified in the storage class
+# Allowed values: ext4, xfs
+# Default value: none
 defaultFsType: ext4
 
-# "volumeNamePrefix" defines a string prepended to each volume created.
-volumeNamePrefix: k8s
+# imagePullPolicy: Policy to determine if the image should be pulled prior to starting the container.
+# Allowed values:
+#  Always: Always pull the image.
+#  IfNotPresent: Only pull the image if it does not already exist on the node.
+#  Never: Never pull the image.
+# Default value: None
+imagePullPolicy: IfNotPresent
 
-# "controllerCount" defines the number of VxFlex controller nodes to deploy to
-# the Kubernetes release
-controllerCount: 2
-
-# Enable this to automatically delete all snapshots in a consistency group
-# when a snap in the group is deleted
+# "enablesnapshotcgdelete"- a boolean that, when enabled, will delete all snapshots in a consistency group
+# everytime a snap in the group is deleted
+# Allowed values: true, false
+# Default value: none
 enablesnapshotcgdelete: "false"
 
-# Enable list volume operation to include snapshots (since creating a volume
+# "enablelistvolumesnapshot" - a boolean that, when enabled, will allow list volume operation to include snapshots (since creating a volume
 # from a snap actually results in a new snap)
 # It is recommend this be false unless instructed otherwise.
+# Allowed values: true, false
+# Default value: none
 enablelistvolumesnapshot: "false"
 
 # Setting allowRWOMultiPodAccess to "true" will allow multiple pods on the same node
@@ -26,36 +58,97 @@ enablelistvolumesnapshot: "false"
 # Kubernetes could make a change at their discretion that would preclude our ability to support this option.
 # Customers use this option at their own risk.
 # You should leave this set as "false" unless instructed to change it by Dell support.
+# Allowed values: true, false
+# Default value: "false"
 allowRWOMultiPodAccess: "false"
 
 # "controller" allows to configure controller specific parameters
 controller:
+
+  # volumeNamePrefix- defines a string prepended to each volume created by the CSI driver.
+  # Default value: none
+  # Examples: "k8s", "app1"
+  volumeNamePrefix: k8s
+
+  # "controllerCount" defines the number of VxFlex controller pods to deploy
+  # Allowed values: n, where n > 0
+  # Default value: none
+  controllerCount: 2
+
+  snapshot:
+    # enabled: Enable/Disable volume snapshot feature
+    # Allowed values:
+    #   true: enable volume snapshot feature(install snapshotter sidecar)
+    #   false: disable volume snapshot feature(do not install snapshotter sidecar)
+    # Default value: None
+    enabled: true
+
+  resizer:
+    # enabled: Enable/Disable volume expansion feature
+    # Allowed values:
+    #   true: enable volume expansion feature(install resizer sidecar)
+    #   false: disable volume snapshot feature(do not install resizer sidecar)
+    # Default value: None
+    enabled: true
   
   #"controller.nodeSelector" defines what nodes would be selected for pods of controller deployment
   # Leave as blank to use all nodes
+  # Allowed values: map of key-value pairs
+  # Default value: None
+  # Examples:
+  #   node-role.kubernetes.io/master: ""
   nodeSelector:
   #   node-role.kubernetes.io/master: ""
 
   # "controller.tolerations" defines tolerations that would be applied to controller deployment
   # Leave as blank to install controller on worker nodes
+  # Default value: None
   tolerations:
   # - key: "node-role.kubernetes.io/master"
   #   operator: "Exists"
   #   effect: "NoSchedule"
+
+# "node" allows to configure node specific parameters
+node:
+  # "node.nodeSelector" defines what nodes would be selected for pods of node daemonset
+  # Leave as blank to use all nodes
+  # Allowed values: map of key-value pairs
+  # Default value: None
+  nodeSelector:
+  #  node-role.kubernetes.io/master: ""
+
+  # "node.tolerations" defines tolerations that would be applied to node daemonset
+  # Leave as blank to install node driver only on worker nodes
+  # Default value: None
+  tolerations:
+  #  - key: "node-role.kubernetes.io/master"
+  #    operator: "Exists"
+  #    effect: "NoSchedule"
+
 # monitoring pod details
 # These options control the running of the monitoring container
 # This container gather diagnostic information in case of failure
 monitor:
-  # enabled allows the usage of te monitoring pod to be disabled
+  # enabled allows the usage of the monitoring pod to be disabled
+  # Allowed values: true, false
+  # Default value: "false"
   enabled: false
 
   # hostNetwork determines if the monitor pod should run on the host network or not
+  # Allowed values: true, false
+  # Default value: "false"
   hostNetwork: true
 
   # hostPID determines if the monitor pod should run in the host namespace
+  # Allowed values: true, false
+  # Default value: "false"
   hostPID: true
 
-#vg snapshot controller sidecar
+
+# CSM module attributes
+
+# volume group snapshotter(vgsnapshotter) details
+# These options control the running of the vgsnapshotter container
 vgsnapshotter:
   enabled: false
   image:
@@ -67,13 +160,15 @@ podmon:
   image: 
   #controller:
   #  args:
-  #    - "-csisock=unix:/var/run/csi/csi.sock"
-  #    - "-labelvalue=csi-vxflexos"
-  #    - "-mode=controller"
+  #    - "--csisock=unix:/var/run/csi/csi.sock"
+  #    - "--labelvalue=csi-vxflexos"
+  #    - "--mode=controller"
+  #    - "--driver-config-params=/vxflexos-config-params/driver-config-params.yaml"
   #node:
   #  args:
-  #    - "-csisock=unix:/var/lib/kubelet/plugins/vxflexos.emc.dell.com/csi_sock"
-  #    - "-labelvalue=csi-vxflexos"
-  #    - "-mode=node"
-  #    - "-leaderelection=false"
+  #    - "--csisock=unix:/var/lib/kubelet/plugins/vxflexos.emc.dell.com/csi_sock"
+  #    - "--labelvalue=csi-vxflexos"
+  #    - "--mode=node"
+  #    - "--leaderelection=false"
+  #    - "--driver-config-params=/vxflexos-config-params/driver-config-params.yaml"
 

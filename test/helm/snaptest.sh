@@ -3,13 +3,13 @@ NS=helmtest-vxflexos
 source ./common.bash
 
 echo "creating snap1 of pvol0"
-kubectl create -f betasnap1.yaml
+kubectl create -f snap1.yaml
 sleep 10
 kubectl get volumesnapshot -n ${NS}
 kubectl describe volumesnapshot -n ${NS}
 sleep 10
 echo "creating snap2 of pvol0"
-kubectl create -f betasnap2.yaml
+kubectl create -f snap2.yaml
 sleep 10
 kubectl describe volumesnapshot -n ${NS}
 sleep 10

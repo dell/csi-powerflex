@@ -87,13 +87,18 @@ func TestMain(m *testing.M) {
 		file.Close()
 	}
 
-	exitVal := godog.RunWithOptions("godog", func(s *godog.Suite) {
-		FeatureContext(s)
-	}, godog.Options{
+	opts := godog.Options{
 		Format: "pretty",
 		Paths:  []string{"features"},
-		//Tags:   "wip",
-	})
+		// Tags: "wip",
+	}
+
+	exitVal := godog.TestSuite{
+		Name:                "godog",
+		ScenarioInitializer: FeatureContext,
+		Options:             &opts,
+	}.Run()
+
 	if st := m.Run(); st > exitVal {
 		exitVal = st
 	}
@@ -116,7 +121,7 @@ func TestIdentityGetPluginInfo(t *testing.T) {
 
 func startServer(ctx context.Context) (*grpc.ClientConn, func()) {
 	// Create a new SP instance and serve it with a piped connection.
-	service.ArrayConfig = configFile
+	service.ArrayConfigFile = configFile
 	sp := provider.New()
 	lis, err := utils.GetCSIEndpointListener()
 	if err != nil {

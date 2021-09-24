@@ -34,13 +34,15 @@ rules:
     resourceNames: ["privileged"]
     resources: ["securitycontextconstraints"]
     verbs: ["use"]
-{{ if .Values.podmon.enabled }}
+{{- if hasKey .Values "podmon" }}
+{{- if eq .Values.podmon.enabled true }}
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["get", "list", "watch", "update", "delete"]
   - apiGroups: ["coordination.k8s.io"]
     resources: ["leases"]
     verbs: ["get", "watch", "list", "delete", "update", "create"]
+{{ end }}
 {{ end }}
 ---
 kind: ClusterRoleBinding
@@ -70,6 +72,14 @@ spec:
       labels:
         app: {{ .Release.Name }}-node
     spec:
+      {{ if .Values.node.nodeSelector }}
+      nodeSelector:
+      {{- toYaml .Values.node.nodeSelector | nindent 8 }}
+      {{ end }}
+      {{ if .Values.node.tolerations }}
+      tolerations:
+      {{- toYaml .Values.node.tolerations | nindent 6 }}
+      {{ end }}
       serviceAccount: {{ .Release.Name }}-node
       dnsPolicy: ClusterFirstWithHostNet
       hostNetwork: true
@@ -79,7 +89,8 @@ spec:
       hostPID: false
       {{ end }}
       containers:  
-{{ if .Values.podmon.enabled }}
+{{- if hasKey .Values "podmon" }}
+{{- if eq .Values.podmon.enabled true }}
         - name: podmon
           securityContext:
             privileged: true
@@ -97,7 +108,7 @@ spec:
                   apiVersion: v1
                   fieldPath: spec.nodeName
             - name: X_CSI_PRIVATE_MOUNT_DIR
-              value: "/var/lib/kubelet/plugins/vxflexos.emc.dell.com/disks"
+              value: "{{ .Values.kubeletConfigDir }}/plugins/vxflexos.emc.dell.com/disks"
             - name: MY_NODE_NAME
               valueFrom:
                 fieldRef:
@@ -112,15 +123,18 @@ spec:
                   fieldPath: metadata.namespace
           volumeMounts:
             - name: kubelet-pods
-              mountPath: /var/lib/kubelet/pods
+              mountPath: {{ .Values.kubeletConfigDir }}/pods
               mountPropagation: "Bidirectional"
             - name: driver-path
-              mountPath: /var/lib/kubelet/plugins/vxflexos.emc.dell.com
+              mountPath: {{ .Values.kubeletConfigDir }}/plugins/vxflexos.emc.dell.com
               mountPropagation: "Bidirectional"
             - name: usr-bin
               mountPath: /usr-bin
             - name: var-run
               mountPath: /var/run
+            - name: vxflexos-config-params
+              mountPath: /vxflexos-config-params
+{{ end }}
 {{ end }}
         - name: driver
           securityContext:
@@ -129,41 +143,50 @@ spec:
             capabilities:
               add: ["SYS_ADMIN"]
           image: {{ required "Must provide the VxFlex OS driver container image." .Values.images.driver }}
-          imagePullPolicy: Always
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
           command: [ "/csi-vxflexos.sh" ]
           args:
             - "--array-config=/vxflexos-config/config"
-            - "--log-config=/vxflexos-config/log-config/driver-config.yaml"
+            - "--driver-config-params=/vxflexos-config-params/driver-config-params.yaml"
           env:
             - name: CSI_ENDPOINT
-              value: unix:///var/lib/kubelet/plugins/vxflexos.emc.dell.com/csi_sock
+              value: unix://{{ .Values.kubeletConfigDir }}/plugins/vxflexos.emc.dell.com/csi_sock
             - name: X_CSI_MODE
               value: node
+            - name: X_CSI_DEBUG
+              value: "true"
             - name: X_CSI_PRIVATE_MOUNT_DIR
-              value: "/var/lib/kubelet/plugins/vxflexos.emc.dell.com/disks"
+              value: "{{ .Values.kubeletConfigDir }}/plugins/vxflexos.emc.dell.com/disks"
             - name: X_CSI_ALLOW_RWO_MULTI_POD_ACCESS
               value: "{{ required "Must provide a true/false string to allow RWO multi pod access." .Values.allowRWOMultiPodAccess }}"
+            - name: SSL_CERT_DIR
+              value: /certs
           volumeMounts:
             - name: driver-path
-              mountPath: /var/lib/kubelet/plugins/vxflexos.emc.dell.com
+              mountPath: {{ .Values.kubeletConfigDir }}/plugins/vxflexos.emc.dell.com
             - name: volumedevices-path
-              mountPath: /var/lib/kubelet/plugins/kubernetes.io/csi/volumeDevices
+              mountPath: {{ .Values.kubeletConfigDir }}/plugins/kubernetes.io/csi/volumeDevices
               mountPropagation: "Bidirectional"
             - name: pods-path
-              mountPath: /var/lib/kubelet/pods
+              mountPath: {{ .Values.kubeletConfigDir }}/pods
               mountPropagation: "Bidirectional"
             - name: dev
               mountPath: /dev
             - name: vxflexos-config
               mountPath: /vxflexos-config
-            - name: log-config
-              mountPath: /vxflexos-config/log-config
+            - name: vxflexos-config-params
+              mountPath: /vxflexos-config-params
+{{- if ge (int .Values.certSecretCount) 1 }}
+            - name: certs
+              mountPath: /certs
+              readOnly: true
+{{- end}}
         - name: registrar
           image: {{ required "Must provide the CSI node registrar container image." .Values.images.registrar }}
           args:
             - "--v=5"
             - "--csi-address=$(ADDRESS)"
-            - --kubelet-registration-path=/var/lib/kubelet/plugins/vxflexos.emc.dell.com/csi_sock
+            - --kubelet-registration-path={{ .Values.kubeletConfigDir }}/plugins/vxflexos.emc.dell.com/csi_sock
           env:
             - name: ADDRESS
               value: /csi/csi_sock
@@ -214,7 +237,7 @@ spec:
             - name: udev-d
               mountPath: /rules.d
         {{ end }}
-      initContainers:  
+      initContainers:
         - name: sdc
           securityContext:
             privileged: true
@@ -248,19 +271,19 @@ spec:
       volumes:
         - name: registration-dir
           hostPath:
-            path: /var/lib/kubelet/plugins_registry/
+            path: {{ .Values.kubeletConfigDir }}/plugins_registry/
             type: DirectoryOrCreate
         - name: driver-path
           hostPath:
-            path: /var/lib/kubelet/plugins/vxflexos.emc.dell.com
+            path: {{ .Values.kubeletConfigDir }}/plugins/vxflexos.emc.dell.com
             type: DirectoryOrCreate
         - name: volumedevices-path
           hostPath:
-            path: /var/lib/kubelet/plugins/kubernetes.io/csi/volumeDevices
+            path: {{ .Values.kubeletConfigDir }}/plugins/kubernetes.io/csi/volumeDevices
             type: DirectoryOrCreate
         - name: pods-path
           hostPath:
-            path: /var/lib/kubelet/pods
+            path: {{ .Values.kubeletConfigDir }}/pods
             type: Directory
         - name: dev
           hostPath:
@@ -285,10 +308,23 @@ spec:
         - name: vxflexos-config
           secret:
             secretName: {{ .Release.Name }}-config
-        - name: log-config
+        - name: vxflexos-config-params
           configMap:
-            name: driver-config 
-{{ if .Values.podmon.enabled }}
+            name: {{ .Release.Name }}-config-params
+{{- if ge (int .Values.certSecretCount) 1 }}
+        - name: certs
+          projected:
+            sources:
+{{- range $i, $e := until (int .Values.certSecretCount ) }}
+              - secret:
+                  name: {{ print $.Release.Name "-certs-" $e }}
+                  items:
+                    - key: cert-{{ $e }}
+                      path: cert-{{ $e }}
+{{- end }}
+{{- end }}
+{{- if hasKey .Values "podmon" }}
+{{- if eq .Values.podmon.enabled true }}
         - name: usr-bin
           hostPath:
             path: /usr/bin
@@ -301,5 +337,5 @@ spec:
           hostPath:
             path: /var/run
             type: Directory
-
+{{ end }}
 {{ end }}

@@ -26,8 +26,23 @@ Feature: VxFlex OS CSI interface
   Scenario: Identity GetPluginInfo good call
     Given a VxFlexOS service
     When I call GetPluginInfo
+    When I call BeforeServe
     Then a valid GetPlugInfoResponse is returned
 
+  Scenario Outline: Dynamic log config change
+    Given a VxFlexOS service
+    When I call DynamicLogChange <file>
+    Then a valid DynamicLogChange occurs <file> <level>
+  Examples:
+      | file                  | level    |
+      | "logConfig2.yaml"     | "trace"  |
+      | "logConfigWrong.yaml" | "debug"  |
+
+  Scenario: Dynamic array config change
+    Given a VxFlexOS service
+    When I call DynamicArrayChange 
+    Then a valid DynamicArrayChange occurs
+ 
   Scenario Outline: multi array getSystemIDFromParameters good and with errors
     Given setup Get SystemID to fail
     Given a VxFlexOS service
@@ -701,25 +716,26 @@ Feature: VxFlex OS CSI interface
       | "none"                                  | "test/tmp/datafile" | "none"                                      |
       | "CorrectFormatBadCsiVolIDInNodeExpand"  | "test/tmp/datadir"  | "is not configured in the driver"           |
       | "VolumeIDTooShortErrorInNodeExpand"     | "test/tmp/datadir"  | "is shorter than 3 chars, returning error"  |
+      | "TooManyDashesVolIDInNodeExpand"        | "test/tmp/datadir"  | "is not configured in the driver"           |
 
   Scenario: Call NodeGetVolumeStats, should get unimplemented
     Given a VxFlexOS service
     When I call NodeGetVolumeStats
     Then the error contains "Unimplemented"
 
-  Scenario: Call getDefaultSystemNameMatchingError, should get error in log but no error returned
+  Scenario: Call getSystemNameMatchingError, should get error in log but no error returned
     Given a VxFlexOS service
-    When I call getDefaultSystemNameMatchingError
+    When I call getSystemNameMatchingError
     Then no error was received
 
-  Scenario: Call getDefaultSystemName, should get error Unable to probe system with ID
+  Scenario: Call getSystemName, should get error Unable to probe system with ID
     Given a VxFlexOS service
-    When I call getDefaultSystemNameError
+    When I call getSystemNameError
     Then the error contains "missing VxFlexOS system name"
 
-  Scenario: Call getDefaultSystemName, should get Found system Name: mocksystem
+  Scenario: Call getSystemName, should get Found system Name: mocksystem
     Given a VxFlexOS service
-    When I call getDefaultSystemName
+    When I call getSystemName
     Then no error was received
 
   Scenario: Call New in service, a new service should return
@@ -734,6 +750,7 @@ Feature: VxFlex OS CSI interface
 
   Scenario: Call getstoragepool with wrong ID
     Given a VxFlexOS service
+    And I call Probe
     When i Call getStoragePoolnameByID "123"
     Then the error contains "cannot find storage pool"
 
@@ -763,7 +780,6 @@ Feature: VxFlex OS CSI interface
 
   Scenario: Idempotent clone of a volume
     Given a VxFlexOS service
-    When I call Probe
     And I induce error <error>
     And I call CreateVolume "vol1"
     And a valid CreateVolumeResponse is returned

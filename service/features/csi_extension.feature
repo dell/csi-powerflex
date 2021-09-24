@@ -15,6 +15,7 @@ Feature: VxFlex OS CSI interface
   @pmon
   Scenario: Call ValidateConnectivity with node probe error
     Given a VxFlexOS service
+    When I call Probe
     And I induce error "node-probe"
     And I call ValidateConnectivity
     Then the error contains "NodeID is invalid"
@@ -46,6 +47,7 @@ Feature: VxFlex OS CSI interface
   @pmon
   Scenario: Call ValidateConnectivity with contoller probe error
     Given a VxFlexOS service
+    When I call Probe
     And I induce error "controller-probe"
     And I call ValidateConnectivity
     Then the error contains "NodeID is invalid"
@@ -114,7 +116,7 @@ Examples:
     Given a VxFlexOS service
     When I call Probe
     And I call DeleteVolumeSnapshotGroup
-    Then the error contains "DeleteVolumeGroupSnapshot not implemented"
+    Then the error contains "none"
 
   Scenario: Snapshot a block volume consistency group with wrong system
     Given a VxFlexOS service

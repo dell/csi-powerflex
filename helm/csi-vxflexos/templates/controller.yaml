@@ -17,10 +17,12 @@ rules:
     verbs: ["list", "watch", "create", "update", "patch"]
   - apiGroups: [""]
     resources: ["nodes"]
-{{ if .Values.podmon.enabled }}
+{{- if hasKey .Values "podmon" }}
+{{- if eq .Values.podmon.enabled true }}
     verbs: ["get", "list", "watch", "patch"]
 {{ else }}
     verbs: ["get", "list", "watch"]
+{{ end }}
 {{ end }}
   - apiGroups: [""]
     resources: ["persistentvolumes"]
@@ -36,10 +38,12 @@ rules:
     verbs: ["get", "list", "watch"]
   - apiGroups: ["storage.k8s.io"]
     resources: ["volumeattachments"]
-{{ if .Values.podmon.enabled }}
+{{- if hasKey .Values "podmon" }}
+{{- if eq .Values.podmon.enabled true }}
     verbs: ["get", "list", "watch", "update", "patch", "delete"]
 {{ else }}
     verbs: ["get", "list", "watch", "update", "patch"]
+{{ end }}
 {{ end }}
   - apiGroups: ["storage.k8s.io"]
     resources: ["csinodes"]
@@ -52,19 +56,23 @@ rules:
     verbs: ["get", "list", "watch"]
   - apiGroups: [""]
     resources: ["pods"]
-{{ if .Values.podmon.enabled }}
+{{- if hasKey .Values "podmon" }}
+{{- if eq .Values.podmon.enabled true }}
     verbs: ["get", "list", "watch", "update", "delete"]
 {{ else }}
     verbs: ["get", "list", "watch"]
+{{ end }}
 {{ end }}
 # below for snapshotter
   - apiGroups: [""]
     resources: ["secrets"]
     verbs: ["get", "list"]
-{{ if .Values.vgsnapshotter.enabled }}
+{{- if hasKey .Values "vgsnapshotter" }}
+{{- if eq .Values.vgsnapshotter.enabled true }}
   - apiGroups: ["volumegroup.storage.dell.com"]
     resources: ["dellcsivolumegroupsnapshots","dellcsivolumegroupsnapshots/status"]
     verbs: ["create", "list", "watch", "delete", "update"]
+{{ end }}
 {{ end }}
   - apiGroups: ["snapshot.storage.k8s.io"]
     resources: ["volumesnapshotclasses"]
@@ -74,10 +82,12 @@ rules:
     verbs: ["create", "get", "list", "watch", "update", "delete"]
   - apiGroups: ["snapshot.storage.k8s.io"]
     resources: ["volumesnapshots"]
-{{ if .Values.vgsnapshotter.enabled }}
-    verbs: ["get", "list", "watch", "update", "create"]
+{{- if hasKey .Values "vgsnapshotter" }}
+{{- if eq .Values.vgsnapshotter.enabled true }}
+    verbs: ["get", "list", "watch", "update", "create", "delete"]
 {{ else }}
     verbs: ["get", "list", "watch", "update"]
+{{ end }}
 {{ end }}
   - apiGroups: ["snapshot.storage.k8s.io"]
     resources: ["volumesnapshots/status","volumesnapshotcontents/status"]
@@ -108,7 +118,7 @@ spec:
   selector:
     matchLabels:
       name: {{ .Release.Name }}-controller
-  replicas: {{ required "Must provide the number of controller instances to create." .Values.controllerCount }}
+  replicas: {{ required "Must provide the number of controller instances to create." .Values.controller.controllerCount }}
   template:
     metadata:
       labels:
@@ -135,7 +145,8 @@ spec:
       {{- toYaml .Values.controller.tolerations | nindent 6 }}
       {{ end }}
       containers:
-{{ if .Values.podmon.enabled }}
+{{- if hasKey .Values "podmon" }}
+{{- if eq .Values.podmon.enabled true }}
         - name: podmon
           imagePullPolicy: Always
           image: {{ required "Must provide the podmon container image." .Values.podmon.image }}
@@ -157,9 +168,13 @@ spec:
           volumeMounts:
             - name: socket-dir
               mountPath: /var/run/csi
+            - name: vxflexos-config-params
+              mountPath: /vxflexos-config-params
+{{ end }}
 {{ end }}
         - name: attacher
           image: {{ required "Must provide the CSI attacher container image." .Values.images.attacher }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
           args:
             - "--csi-address=$(ADDRESS)"
             - "--v=5"
@@ -172,10 +187,11 @@ spec:
               mountPath: /var/run/csi
         - name: provisioner
           image: {{ required "Must provide the CSI provisioner container image." .Values.images.provisioner }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
           args:
             - "--csi-address=$(ADDRESS)"
             - "--feature-gates=Topology=true"
-            - "--volume-name-prefix={{ required "Must provide a value to prefix to driver created volume names" .Values.volumeNamePrefix }}"
+            - "--volume-name-prefix={{ required "Must provide a value to prefix to driver created volume names" .Values.controller.volumeNamePrefix }}"
             - "--volume-name-uuid-length=10"
             - "--leader-election=true"
             - "--timeout=120s"
@@ -188,9 +204,11 @@ spec:
           volumeMounts:
             - name: socket-dir
               mountPath: /var/run/csi
-{{ if .Values.vgsnapshotter.enabled }}
+{{- if hasKey .Values "vgsnapshotter" }}
+{{- if eq .Values.vgsnapshotter.enabled true }}
         - name: vg-snapshotter
           image: {{ required "Must provide the vgsnapshotter container image." .Values.vgsnapshotter.image }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
           env:
             - name: ADDRESS
               value: /var/run/csi/csi.sock
@@ -199,8 +217,12 @@ spec:
             - name: socket-dir
               mountPath: /var/run/csi
 {{ end }}
+{{ end }}
+{{- if hasKey .Values.controller "snapshot" }}
+{{- if eq .Values.controller.snapshot.enabled true }}
         - name: snapshotter
           image: {{ required "Must provide the CSI snapshotter container image." .Values.images.snapshotter }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
           args:
             - "--csi-address=$(ADDRESS)"
             - "--timeout=120s"
@@ -213,8 +235,13 @@ spec:
           volumeMounts:
             - name: socket-dir
               mountPath: /var/run/csi
+{{ end }}
+{{ end }}
+{{- if hasKey .Values.controller "resizer" }}
+{{- if eq .Values.controller.resizer.enabled true }}
         - name: resizer
           image: {{ required "Must provide the CSI resizer container image." .Values.images.resizer }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
           args:
             - "--csi-address=$(ADDRESS)"
             - "--v=5"
@@ -225,36 +252,59 @@ spec:
           volumeMounts:
             - name: socket-dir
               mountPath: /var/run/csi
+{{ end }}
+{{ end }}
         - name: driver
           image: {{ required "Must provide the VxFlex OS driver container image." .Values.images.driver }}
-          imagePullPolicy: Always
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
           command: [ "/csi-vxflexos.sh" ]
           args:
             - "--leader-election"
             - "--array-config=/vxflexos-config/config"
-            - "--log-config=/vxflexos-config/log-config/driver-config.yaml"
+            - "--driver-config-params=/vxflexos-config-params/driver-config-params.yaml"
           env:
             - name: CSI_ENDPOINT
               value: /var/run/csi/csi.sock
             - name: X_CSI_MODE
               value: controller
+            - name: X_CSI_DEBUG
+              value: "true"
             - name: X_CSI_VXFLEXOS_ENABLESNAPSHOTCGDELETE
               value: "{{ required "Enable this to allow deletion of all snaps in CG" .Values.enablesnapshotcgdelete }}"
             - name: X_CSI_VXFLEXOS_ENABLELISTVOLUMESNAPSHOT
               value: "{{ required "Enable this to have CSI ListVolumes include snapshots" .Values.enablelistvolumesnapshot }}"
+            - name: SSL_CERT_DIR
+              value: /certs
           volumeMounts:
             - name: socket-dir
               mountPath: /var/run/csi
             - name: vxflexos-config
               mountPath: /vxflexos-config
-            - name: log-config
-              mountPath: /vxflexos-config/log-config
+            - name: vxflexos-config-params
+              mountPath: /vxflexos-config-params
+{{- if ge (int .Values.certSecretCount) 1 }}
+            - name: certs
+              mountPath: /certs
+              readOnly: true
+{{- end}}
       volumes:
         - name: socket-dir
           emptyDir:
         - name: vxflexos-config
           secret:
             secretName: {{ .Release.Name }}-config
-        - name: log-config
+        - name: vxflexos-config-params
           configMap:
-             name: driver-config
+            name: {{ .Release.Name }}-config-params
+{{- if ge (int .Values.certSecretCount) 1 }}
+        - name: certs
+          projected:
+            sources:
+{{- range $i, $e := until (int .Values.certSecretCount ) }}
+              - secret:
+                  name: {{ print $.Release.Name "-certs-" $e }}
+                  items:
+                    - key: cert-{{ $e }}
+                      path: cert-{{ $e }}
+{{- end }}
+{{- end }}

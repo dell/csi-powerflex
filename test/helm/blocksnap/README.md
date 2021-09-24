@@ -13,7 +13,7 @@ with the data from mounting the snap contents in the 2nd pod, which should alway
 Running the Test
 ----------------
 
-Execute "sh run.sh" to run the test in a kubernetes environment that supports beta block snapshots. The test is preconfigured to use
+Execute "sh run.sh" to run the test in a kubernetes environment that supports v1 block snapshots. The test is preconfigured to use
 the vxflexos CSI torage system in run.sh. You can edit run.sh and change the storageclass, snapclass (the volumesnapshotclass name),
 and namespace parameters to run the test for a different type of CSI storage.
 

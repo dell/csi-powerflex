@@ -129,13 +129,10 @@ func (s *service) CreateVolume(
 			sID = system.System.ID
 		}
 
-		sName := ""
-
 		//We need to get name of system, in case sc was set up to use name
-		sName = s.systems[systemID].System.Name
+		sName := system.System.Name
 
 		segments := accessibility.GetPreferred()[0].GetSegments()
-
 		for key := range segments {
 			if strings.HasPrefix(key, Name) {
 				tokens := strings.Split(key, "/")
@@ -144,7 +141,6 @@ func (s *service) CreateVolume(
 					constraint = tokens[1]
 				}
 				Log.Printf("Found topology constraint: VxFlex OS system: %s", constraint)
-
 				if constraint == sID || constraint == sName {
 					if constraint == sID {
 						requestedSystem = sID
@@ -1548,8 +1544,8 @@ func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) e
 
 	// Create ScaleIO API client if needed
 	if s.adminClients[systemID] == nil {
-		insecure := array.SkipCertificateValidation || array.Insecure
-		c, err := goscaleio.NewClientWithArgs(array.Endpoint, "", insecure, !s.opts.DisableCerts)
+		skipCertificateValidation := array.SkipCertificateValidation || array.Insecure
+		c, err := goscaleio.NewClientWithArgs(array.Endpoint, "", skipCertificateValidation, !s.opts.DisableCerts)
 		if err != nil {
 			return status.Errorf(codes.FailedPrecondition,
 				"unable to create ScaleIO client: %s", err.Error())
@@ -1582,7 +1578,6 @@ func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) e
 				"unable to find matching VxFlexOS system name: %s",
 				err.Error())
 		}
-
 		s.systems[systemID] = system
 		if system.System != nil && system.System.Name != "" {
 			Log.Printf("Found Name for system=%s with ID=%s", system.System.Name, system.System.ID)

@@ -9,30 +9,31 @@ import (
 	"os"
 )
 
+var Clientset kubernetes.Interface
+
 type leaderElection interface {
 	Run() error
 	WithNamespace(namespace string)
 }
 
 // CreateKubeClientSet - Returns kubeclient set
-func CreateKubeClientSet(kubeconfig string) (*kubernetes.Clientset, error) {
-	var clientset *kubernetes.Clientset
+func CreateKubeClientSet(kubeconfig string) error {
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		return nil, err
-	}
-	// creates the clientset
-	clientset, err = kubernetes.NewForConfig(config)
-	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return clientset, nil
+	// creates the clientset
+	Clientset, err = kubernetes.NewForConfig(config)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-//LeaderElection setup
-func LeaderElection(clientset *kubernetes.Clientset, lockName string, namespace string, runFunc func(ctx context.Context)) {
-	le := leaderelection.NewLeaderElection(clientset, lockName, runFunc)
+// LeaderElection
+func LeaderElection(clientset *kubernetes.Interface, lockName string, namespace string, runFunc func(ctx context.Context)) {
+	le := leaderelection.NewLeaderElection(*clientset, lockName, runFunc)
 	le.WithNamespace(namespace)
 	if err := le.Run(); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "failed to initialize leader election: %v", err)

@@ -3,7 +3,10 @@ package provider
 import (
 	"github.com/dell/csi-vxflexos/service"
 	"github.com/dell/gocsi"
+	logrus "github.com/sirupsen/logrus"
 )
+
+var Log = logrus.New()
 
 // New returns a new Mock Storage Plug-in Provider.
 func New() gocsi.StoragePluginProvider {
