@@ -63,10 +63,3 @@ Feature: VxFlex OS CSI interface
     And I call DeleteVolume with "single-writer"
     Then a valid DeleteVolumeResponse is returned
 
-  Scenario: Delete Volume with invalid probe cache
-    Given a VxFlexOS service
-    And a valid volume
-    When I invalidate the Probe cache
-    And I call DeleteVolume with "single-writer"
-    Then the error contains "System @@ has not been probed"
-

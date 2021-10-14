@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	types "github.com/dell/goscaleio/types/v1"
@@ -340,6 +339,7 @@ func handleVolumeInstances(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		instances := make([]*types.Volume, 0)
 		for id, name := range volumeIDToName {
+			name = id
 			replacementMap := make(map[string]string)
 			replacementMap["__ID__"] = id
 			replacementMap["__NAME__"] = name
@@ -382,11 +382,11 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 		}
 		fmt.Printf("SdcID: %s\n", req.SdcID)
 		if req.SdcID == "d0f055a700000000" {
-			sdcMappings = append(sdcMappings, types.MappedSdcInfo{SdcID: req.SdcID, SdcIP: "10.247.102.218"})
+			sdcMappings = append(sdcMappings, types.MappedSdcInfo{SdcID: req.SdcID, SdcIP: "127.1.1.11"})
 		}
 		fmt.Printf("SdcID: %s\n", req.SdcID)
 		if req.SdcID == "d0f055aa00000001" {
-			sdcMappings = append(sdcMappings, types.MappedSdcInfo{SdcID: req.SdcID, SdcIP: "10.247.102.151"})
+			sdcMappings = append(sdcMappings, types.MappedSdcInfo{SdcID: req.SdcID, SdcIP: "127.1.1.10"})
 		}
 	case "removeMappedSdc":
 		if stepHandlersErrors.RemoveMappedSdcError {
@@ -415,19 +415,12 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("error decoding json: %s\n", err.Error())
 		}
-		for index, snapParam := range req.SnapshotDefs {
+		for _, snapParam := range req.SnapshotDefs {
 			// For now, only a single snapshot ID is supported
 
-			id := "9999"
-			cgValue := "null"
-			//if snap is part of VGS, we need more than 1 snapshot ID
-			if strings.Contains(snapParam.SnapshotName, "apple") {
-				id = id + strconv.Itoa(index)
-				cgValue = "bab120324566"
-				if stepHandlersErrors.CreateSplitVGSError && index == 0 {
-					cgValue = "bab120324567"
-				}
-			}
+			id := snapParam.VolumeID
+
+			cgValue := "f30216fb00000001"
 
 			if snapParam.SnapshotName == "clone" || snapParam.SnapshotName == "volumeFromSnap" {
 				id = "72cee42500000003"
@@ -455,7 +448,6 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 		if stepHandlersErrors.WrongVolIDError {
 			returnJSONFile("features", "create_snapshot2.json", w, nil)
 		}
-
 		returnJSONFile("features", "create_snapshot.json", w, nil)
 	case "removeVolume":
 		if stepHandlersErrors.RemoveVolumeError {
@@ -473,6 +465,13 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "induced error", http.StatusRequestTimeout, codes.Internal)
 			return
 		}
+	case "setVolumeName":
+		//volumeIDToName[id] = snapParam.Name
+		req := types.SetVolumeNameParam{}
+		decoder := json.NewDecoder(r.Body)
+		_ = decoder.Decode(&req)
+		fmt.Printf("set volume name %s", req.NewName)
+		volumeIDToName[id] = req.NewName
 	}
 }
 
@@ -571,8 +570,7 @@ func handleInstances(w http.ResponseWriter, r *http.Request) {
 	switch objType {
 	case "Volume":
 		if id != "9999" {
-			log.Printf("Found id %s for %s\n", id, objType)
-			log.Printf("Found name = %s\n", volumeIDToName[id])
+			log.Printf("Get id %s for %s\n", id, objType)
 			replacementMap := make(map[string]string)
 			replacementMap["__ID__"] = id
 			replacementMap["__NAME__"] = volumeIDToName[id]

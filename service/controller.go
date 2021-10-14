@@ -1614,10 +1614,6 @@ func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) e
 
 func (s *service) requireProbe(ctx context.Context, systemID string) error {
 	if s.adminClients[systemID] == nil {
-		if !s.opts.AutoProbe {
-			return status.Errorf(codes.FailedPrecondition,
-				"System %s has not been probed", systemID)
-		}
 		Log.Debugf("probing system %s automatically", systemID)
 		array, ok := s.opts.arrays[systemID]
 		if ok {

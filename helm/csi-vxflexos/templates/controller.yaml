@@ -122,6 +122,11 @@ spec:
   template:
     metadata:
       labels:
+      {{ if eq (.Values.vgsnapshotter.enabled| toString) "true"  }}
+        vg-snapshotter-enabled: "true"
+      {{ else if eq (.Values.vgsnapshotter.enabled| toString) "false" }}
+        vg-snapshotter-enabled: "false"
+      {{ end }}
         name: {{ .Release.Name }}-controller
     spec:
       affinity:
@@ -267,8 +272,6 @@ spec:
               value: /var/run/csi/csi.sock
             - name: X_CSI_MODE
               value: controller
-            - name: X_CSI_DEBUG
-              value: "true"
             - name: X_CSI_VXFLEXOS_ENABLESNAPSHOTCGDELETE
               value: "{{ required "Enable this to allow deletion of all snaps in CG" .Values.enablesnapshotcgdelete }}"
             - name: X_CSI_VXFLEXOS_ENABLELISTVOLUMESNAPSHOT

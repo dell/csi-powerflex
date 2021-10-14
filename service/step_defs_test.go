@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -34,7 +35,7 @@ import (
 
 const (
 	arrayID                    = "14dbbf5617523654"
-	arrayID2                   = "15dbbf5617523655"
+	arrayID2                   = "15dbbf5617523655-system-name"
 	badVolumeID                = "Totally Fake ID"
 	badCsiVolumeID             = "ffff-f250"
 	goodVolumeID               = "111"
@@ -301,6 +302,8 @@ MDM-ID 14dbbf5617523654 SDC ID d0f33bd700000004 INSTALLATION ID 1c078b073d75512c
 		f.CreateCSINode()
 		svc.ProcessMapSecretChange()
 	}
+	server := grpc.NewServer()
+	svc.RegisterAdditionalServers(server)
 	return svc
 }
 
@@ -862,7 +865,6 @@ func (f *feature) iInduceError(errtype string) error {
 		f.nodePublishVolumeRequest.VolumeId = ""
 	case "EmptyConnectedSystemIDErrorNoAutoProbe":
 		connectedSystemID = nil
-		f.service.opts.AutoProbe = false
 	case "NoSysIDError":
 		f.nodePublishVolumeRequest.VolumeId = badVolumeID2
 	case "WrongSysIDError":
@@ -899,7 +901,6 @@ func (f *feature) iInduceError(errtype string) error {
 		stepHandlersErrors.RemoveMappedSdcError = true
 	case "require-probe":
 		f.service.opts.SdcGUID = ""
-		f.service.opts.AutoProbe = false
 		f.service.opts.arrays = make(map[string]*ArrayConnectionData)
 	case "no-sdc":
 		stepHandlersErrors.PodmonFindSdcError = true
@@ -986,7 +987,7 @@ func (f *feature) iInduceError(errtype string) error {
 		if err != nil {
 			fmt.Printf("Couldn't make: %s\n", datadir+"/"+sdcVolume1)
 		}
-		err = gofsutil.Mount(context.Background(), nodePublishAltBlockDevPath, "features\\"+sdcVolume1, "none")
+		err = gofsutil.Mount(context.Background(), nodePublishAltBlockDevPath, "features/"+sdcVolume1, "none")
 		if err != nil {
 			fmt.Printf("Couldn't mount: %s\n", "features\\"+sdcVolume1)
 		}
@@ -1297,7 +1298,6 @@ func (f *feature) theNumberOfSDCMappingsIs(arg1 int) error {
 func (f *feature) iCallNodeGetInfo() error {
 	ctx := new(context.Context)
 	req := new(csi.NodeGetInfoRequest)
-	// xxxxxxxxxxxxxx
 	f.service.opts.SdcGUID = "9E56672F-2F4B-4A42-BFF4-88B6846FBFDA"
 	f.nodeGetInfoResponse, f.err = f.service.NodeGetInfo(*ctx, req)
 	return nil
@@ -1898,6 +1898,7 @@ func (f *feature) getNodeEphemeralVolumePublishRequest(name, size, sp, systemNam
 	req.VolumeId = sdcVolume1
 	req.Readonly = false
 	req.VolumeCapability = f.capability
+	f.service.opts.defaultSystemID = ""
 	req.VolumeContext = map[string]string{"csi.storage.k8s.io/ephemeral": "true", "volumeName": name, "size": size, "storagepool": sp, "systemID": systemName}
 
 	//remove ephemeral mounting path before starting test
@@ -2234,6 +2235,11 @@ func (f *feature) iCallCreateVolumeGroupSnapshot() error {
 	req := &volGroupSnap.CreateVolumeGroupSnapshotRequest{
 		Name:            name,
 		SourceVolumeIDs: f.volumeIDList,
+		Parameters:      make(map[string]string),
+	}
+	if f.VolumeGroupSnapshot != nil {
+		// idempotency test
+		req.Parameters["existingSnapshotGroupID"] = f.VolumeGroupSnapshot.SnapshotGroupID
 	}
 
 	group, err := f.service.CreateVolumeGroupSnapshot(ctx, req)
@@ -2601,12 +2607,6 @@ func (f *feature) iInvalidateTheProbeCache() error {
 	} else if testControllerHasNoConnection {
 		f.service.adminClients[arrayID] = nil
 		f.service.adminClients[arrayID2] = nil
-	} else {
-		f.service.opts.AutoProbe = false
-		f.service.opts.arrays[arrayID].Endpoint = "xxxx"
-		f.service.opts.arrays[arrayID].SystemID = ""
-		f.adminClient = nil
-		f.service.adminClients[arrayID] = nil
 	}
 
 	return nil

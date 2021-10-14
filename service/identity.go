@@ -9,7 +9,7 @@ import (
 	csiext "github.com/dell/dell-csi-extensions/volumeGroupSnapshot"
 	wrappers "github.com/golang/protobuf/ptypes/wrappers"
 
-	"github.com/dell/csi-vxflexos/core"
+	"github.com/dell/csi-vxflexos/v2/core"
 )
 
 func (s *service) GetPluginInfo(

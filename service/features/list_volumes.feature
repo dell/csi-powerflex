@@ -43,13 +43,6 @@ Feature: VxFlex OS CSI interface
     And I call ListVolumes with max_entries "1" and starting_token "none"
     Then the error contains "Unable to list volumes"
 
-  Scenario: Test list volumes with no probe
-    Given a VxFlex OS service
-    And a valid volume
-    And I invalidate the Probe cache
-    And I call ListVolumes with max_entries "1" and starting_token "none"
-    Then the error contains "has not been probed"
-
   Scenario: Test list volumes with an starting token greater than volume count
     Given a VxFlex OS service
     And a valid volume
@@ -63,13 +56,6 @@ Feature: VxFlex OS CSI interface
     When I call Probe
     And I call ListSnapshots with max_entries "5" and starting_token ""
     Then a valid ListSnapshotsResponse is returned with listed "5" and next_token ""
-
-  Scenario: List snapshots without calling probe
-    Given a VxFlexOS service
-    And there are 5 valid snapshots of "default" volume
-    When I invalidate the Probe cache
-    And I call ListSnapshots with max_entries "5" and starting_token ""
-    Then the error contains "has not been probed"
 
   Scenario: List snapshots with invalid starting token
     Given a VxFlexOS service

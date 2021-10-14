@@ -153,8 +153,6 @@ spec:
               value: unix://{{ .Values.kubeletConfigDir }}/plugins/vxflexos.emc.dell.com/csi_sock
             - name: X_CSI_MODE
               value: node
-            - name: X_CSI_DEBUG
-              value: "true"
             - name: X_CSI_PRIVATE_MOUNT_DIR
               value: "{{ .Values.kubeletConfigDir }}/plugins/vxflexos.emc.dell.com/disks"
             - name: X_CSI_ALLOW_RWO_MULTI_POD_ACCESS

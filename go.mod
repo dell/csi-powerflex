@@ -1,4 +1,4 @@
-module github.com/dell/csi-vxflexos
+module github.com/dell/csi-vxflexos/v2
 
 // In order to run unit tests on Windows, you need a stubbed Windows implementation
 // of the gofsutil package. Use the following replace statements if necessary.
@@ -23,10 +23,9 @@ require (
 	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v0.2.0
 	github.com/dell/gocsi v1.3.1
 	github.com/dell/gofsutil v1.6.0
-	github.com/dell/goscaleio v1.5.0
+	github.com/dell/goscaleio v1.6.0
 	github.com/fsnotify/fsnotify v1.4.9
 	github.com/golang/protobuf v1.5.2
-	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/gorilla/context v1.1.1 // indirect
 	github.com/gorilla/mux v1.6.2
 	github.com/kubernetes-csi/csi-lib-utils v0.9.1
