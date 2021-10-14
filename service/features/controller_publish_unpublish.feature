@@ -153,12 +153,6 @@ Feature: VxFlex OS CSI interface
     And I call PublishVolume with "single-writer"
     Then the error contains "access mode is required"
 
-  Scenario: Publish volume with no previous probe
-    Given a VxFlexOS service
-    And a valid volume
-    When I invalidate the Probe cache
-    And I call PublishVolume with "single-writer"
-    Then the error contains "System @@ has not been probed"
 
   Scenario: Publish volume with getSDCID error
     Given a VxFlexOS service
@@ -225,17 +219,6 @@ Feature: VxFlex OS CSI interface
     And no volume
     And I call UnpublishVolume
     Then the error contains "volume ID is required"
-
-  Scenario: Unpublish volume with invalid probe cache
-    Given a VxFlexOS service
-    And a valid volume
-    When I call Probe
-    And I call PublishVolume with "single-writer"
-    And no error was received
-    And the number of SDC mappings is 1
-    And I invalidate the Probe cache
-    And I call UnpublishVolume
-    Then the error contains "System @@ has not been probed"
 
   Scenario: Unpublish volume with invalid volume id
     Given a VxFlexOS service

@@ -19,9 +19,9 @@ Feature: VxFlex OS CSI interface
     Then the error contains <errorMsg>
 
   Examples:
-      | systemName          | errorMsg       |
-      | "14dbbf5617523654"  | "none"         |
-      | "15dbbf5617523655"  | "none"         |
+      | systemName          		| errorMsg       |
+      | "14dbbf5617523654"  		| "none"         |
+      | "15dbbf5617523655-system-name"  | "none"         |
 
   Scenario: Identity GetPluginInfo good call
     Given a VxFlexOS service
@@ -293,18 +293,6 @@ Feature: VxFlex OS CSI interface
     When I call NodeGetInfo
     Then a valid NodeGetInfoResponse is returned
 
-  Scenario: Call NodeGetInfo with empty connectedSystemsID
-    Given a VxFlexOS service
-    And I induce error "EmptyConnectedSystemIDErrorNoAutoProbe"
-    When I call NodeGetInfo
-    Then the error contains ""
-
-  Scenario: Call NodeGetInfo which requires probe and returns error
-    Given a VxFlexOS service
-    And I induce error "require-probe"
-    When I call NodeGetInfo
-    Then the error contains "Node Service has not been probed"
-
   Scenario: Call GetCapacity without specifying Storage Pool Name (this returns overall capacity)
     Given a VxFlexOS service
     When I call Probe
@@ -315,12 +303,6 @@ Feature: VxFlex OS CSI interface
     When I call Probe
     And I call GetCapacity with storage pool "viki_pool_HDD_20181031"
     Then a valid GetCapacityResponse is returned
-
-  Scenario: Call GetCapacity without specifying Storage Pool and without probe
-    Given a VxFlexOS service
-    When I invalidate the Probe cache
-    And I call GetCapacity with storage pool ""
-    Then the error contains "System @@ has not been probed"
 
   Scenario: Call GetCapacity with invalid Storage Pool name
     Given a VxFlexOS service

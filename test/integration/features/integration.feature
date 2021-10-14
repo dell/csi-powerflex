@@ -62,12 +62,29 @@ Feature: VxFlex OS CSI interface
     And there are no errors
     And when I call DeleteVolume
     Then there are no errors
-
-  Scenario: Create, publish, unpublish, and delete basic vol, but sc and config do not have matching systemIDs
+  
+  #note: only run if secret has systemID 
+  Scenario: Create, publish, unpublish, and delete basic vol, but sc has name, and secret has id 
+    Given a VxFlexOS service
+    And a capability with voltype "mount" access "single-writer" fstype "ext4"
+    And a volume request "alt_system_id_integration7" "8"
+    When I call CreateVolume
+    And there are no errors
+    And when I call PublishVolume "SDC_GUID"
+    And there are no errors
+    And when I call NodePublishVolume "SDC_GUID"
+    And when I call NodeUnpublishVolume "SDC_GUID"
+    And when I call UnpublishVolume "SDC_GUID"
+    And there are no errors
+    And when I call DeleteVolume
+    Then there are no errors
+  
+  
+  Scenario Outline: Create, publish, unpublish, and delete basic vol, using systemName. Second run: sc has ID, but secret has name 
     Given a VxFlexOS service
     And a capability with voltype "mount" access "single-writer" fstype "ext4"
     And I set another systemName "altSystem"
-    And a volume request "integration7" "8"
+    And a volume request <name> "8"
     When I call CreateVolume
     And there are no errors
     And when I call PublishVolume "SDC_GUID"
@@ -79,6 +96,12 @@ Feature: VxFlex OS CSI interface
     And when I call DeleteVolume
     Then there are no errors
 
+Examples:
+	|name		              |
+	|"integration7"               |
+	|"alt_system_id_integration8" |
+
+ 
   Scenario: Create, publish, unpublish, and delete basic vol, change name of array and specify wrong allSystemNames , this will pass if volume because handle has id
     Given a VxFlexOS service
     And I set another systemID "altSystem"
@@ -95,7 +118,8 @@ Feature: VxFlex OS CSI interface
     And when I call UnpublishVolume "SDC_GUID"
     And there are no errors
     And when I call DeleteVolume
-
+  
+  
   Scenario: Create, publish, unpublish, and delete basic vol, change name of array and specify allSystemNames
     Given a VxFlexOS service
     And I set another systemID "altSystem"
@@ -113,8 +137,8 @@ Feature: VxFlex OS CSI interface
     And there are no errors
     And when I call DeleteVolume
     Then there are no errors
-
-  @long
+  
+@long
   Scenario Outline: Create volume, create snapshot, delete snapshot, delete volume for multiple sizes
     Given a VxFlexOS service
     And a capability with voltype "block" access "single-writer" fstype "xfs"
@@ -516,6 +540,7 @@ Scenario: Call CreateVolumeGroupSnapshot idempotent
   And when I call DeleteAllVolumes
   Then the error message should contain "none"
 
+@vg
 Scenario: Call CreateVolumeGroupSnapshot idempotent; criteria 1 fails
   Given a VxFlexOS service
   And a basic block volume request "integration1" "8"
@@ -548,6 +573,7 @@ Scenario: Call CreateVolumeGroupSnapshot idempotent; criteria 1 fails
 #  And when I call DeleteAllVolumes
 #  Then the error message should contain "Idempotent snapshots belong to different consistency groups on array"
 
+@vg
 Scenario: Call CreateVolumeGroupSnapshot idempotent; criteria 3 fails
   Given a VxFlexOS service
   And a basic block volume request "integration1" "8"

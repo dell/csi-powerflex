@@ -14,10 +14,10 @@ import (
 	"sync"
 	"time"
 
-	csi "github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/dell/csi-vxflexos/core"
-	"github.com/dell/csi-vxflexos/k8sutils"
-	podmon "github.com/dell/dell-csi-extensions/podmon"
+	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/dell/csi-vxflexos/v2/core"
+	"github.com/dell/csi-vxflexos/v2/k8sutils"
+	"github.com/dell/dell-csi-extensions/podmon"
 	volumeGroupSnapshot "github.com/dell/dell-csi-extensions/volumeGroupSnapshot"
 	"github.com/dell/gocsi"
 	csictx "github.com/dell/gocsi/context"
@@ -25,7 +25,7 @@ import (
 	siotypes "github.com/dell/goscaleio/types/v1"
 	"github.com/fsnotify/fsnotify"
 	"github.com/golang/protobuf/ptypes"
-	logrus "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/yaml"
@@ -171,10 +171,6 @@ func (s *service) ProcessMapSecretChange() error {
 	va.OnConfigChange(func(e fsnotify.Event) {
 		Log.WithField("file", ArrayConfigFile).Info("array configuration file changed")
 		var err error
-		err = os.Setenv(EnvAutoProbe, "true")
-		if err != nil {
-			Log.WithError(err).Error("unable to setenv auto proble during multi array config reload")
-		}
 		s.opts.arrays, err = getArrayConfig(context.Background())
 		if err != nil {
 			Log.WithError(err).Error("unable to reload multi array config file")
@@ -213,13 +209,15 @@ func (s *service) logCsiNodeTopologyKeys() error {
 		}
 
 		if err == nil {
-			for _, csiNode := range csiNodes.Items {
+			for i, csiNode := range csiNodes.Items {
 				if len(csiNode.Spec.Drivers) > 0 {
-					csinodeID := csiNode.Spec.Drivers[0].NodeID
-					if csinodeID == node.NodeId {
+					csinodeID := csiNode.Spec.Drivers[i].NodeID
+					csiNodeName := csiNode.Spec.Drivers[i].Name
+					if csinodeID == node.NodeId && csiNodeName == Name {
+						csinodeID := csiNode.Spec.Drivers[i].NodeID
 						Log.WithField("csinode", csiNode.Name).Info("csiNode name")
 						Log.WithField("csinode ID", csinodeID).Info("csiNode id")
-						tkeys := csiNode.Spec.Drivers[0].TopologyKeys
+						tkeys := csiNode.Spec.Drivers[i].TopologyKeys
 						if tkeys != nil {
 							Log.WithField("csinode topologykeys", len(tkeys)).Info("count")
 							needMap := make(map[string]string)
@@ -287,6 +285,8 @@ func (s *service) updateDriverConfigParams(logger *logrus.Logger, v *viper.Viper
 		}
 	}
 	logger.SetLevel(level)
+	// set X_CSI_LOG_LEVEL so that gocsi doesn't overwrite the loglevel set by us
+	_ = os.Setenv(gocsi.EnvVarLogLevel, level.String())
 	return nil
 }
 

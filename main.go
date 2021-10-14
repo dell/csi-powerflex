@@ -6,9 +6,9 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/dell/csi-vxflexos/k8sutils"
-	"github.com/dell/csi-vxflexos/provider"
-	"github.com/dell/csi-vxflexos/service"
+	"github.com/dell/csi-vxflexos/v2/k8sutils"
+	"github.com/dell/csi-vxflexos/v2/provider"
+	"github.com/dell/csi-vxflexos/v2/service"
 	"github.com/dell/gocsi"
 	"github.com/sirupsen/logrus"
 	"os"
@@ -20,7 +20,11 @@ func main() {
 
 	logger := logrus.New()
 	service.Log = logger
-
+	// Always set X_CSI_DEBUG to false irrespective of what user has specified
+	_ = os.Setenv(gocsi.EnvVarDebug, "false")
+	// We always want to enable Request and Response logging(no reason for users to control this)
+	_ = os.Setenv(gocsi.EnvVarReqLogging, "true")
+	_ = os.Setenv(gocsi.EnvVarRepLogging, "true")
 	arrayConfigfile := flag.String("array-config", "", "yaml file with array(s) configuration")
 	driverConfigParamsfile := flag.String("driver-config-params", "", "yaml file with driver config params")
 	enableLeaderElection := flag.Bool("leader-election", false, "boolean to enable leader election")

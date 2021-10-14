@@ -6,8 +6,8 @@ package main
 import "C"
 
 import (
-	"github.com/dell/csi-vxflexos/provider"
-	"github.com/dell/csi-vxflexos/service"
+	"github.com/dell/csi-vxflexos/v2/provider"
+	"github.com/dell/csi-vxflexos/v2/service"
 )
 
 ////////////////////////////////////////////////////////////////////////////////

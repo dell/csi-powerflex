@@ -14,7 +14,7 @@ RUN CGO_ENABLED=0 \
     make build
 
 # Stage to build the driver image
-FROM $BASEIMAGE@${DIGEST} AS driver
+FROM $BASEIMAGE@${DIGEST} AS final
 # install necessary packages
 # alphabetical order for easier maintenance
 RUN microdnf update -y && \
@@ -30,11 +30,6 @@ ENTRYPOINT ["/csi-vxflexos.sh"]
 COPY --from=builder /go/src/csi-vxflexos /
 COPY "csi-vxflexos.sh" /
 RUN chmod +x /csi-vxflexos.sh
-
-# final stage
-# simple stage to use the driver image as the resultant image 
-FROM driver as final
-
 LABEL vendor="Dell Inc." \
     name="csi-powerflex" \
     summary="CSI Driver for Dell EMC PowerFlex" \
@@ -42,3 +37,6 @@ LABEL vendor="Dell Inc." \
     version="2.0.0" \
     license="Apache-2.0"
 COPY ./licenses /licenses
+
+
+

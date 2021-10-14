@@ -22,7 +22,6 @@ import (
 	"github.com/cucumber/godog"
 	csiext "github.com/dell/dell-csi-extensions/podmon"
 
-	//volGroupSnap "../../dell-csi-extensions/volumeGroupSnapshot"
 	volGroupSnap "github.com/dell/dell-csi-extensions/volumeGroupSnapshot"
 	"github.com/golang/protobuf/ptypes"
 )
@@ -436,15 +435,13 @@ func (f *feature) aVolumeRequest(name string, size int64) error {
 	if len(f.anotherSystemID) > 0 {
 		params["systemID"] = f.anotherSystemID
 	}
-	// use new system name instead of previous name
+	// use new system name instead of previous name, only set if name has substring alt_system_id
 	newName := os.Getenv("ALT_SYSTEM_ID")
-	if len(newName) > 0 {
+	if len(newName) > 0 && strings.Contains(name, "alt_system_id") {
 		fmt.Printf("Using %s as systemID for volume request \n", newName)
 		params["systemID"] = newName
-		// reset
-		os.Setenv("ALT_SYSTEM_ID", "")
 	} else {
-		fmt.Printf("Env variable ALT_SYSTEM_ID not set, assuming default system does not have a name \n")
+		fmt.Printf("Env variable ALT_SYSTEM_ID not set, assuming system does not have a name \n")
 	}
 	req.Parameters = params
 	makeAUniqueName(&name)
@@ -1332,9 +1329,14 @@ func (f *feature) iRemoveAVolumeFromVolumeGroupSnapshotRequest() error {
 func (f *feature) iCallCreateVolumeGroupSnapshot() error {
 	ctx := context.Background()
 	vgsClient := volGroupSnap.NewVolumeGroupSnapshotClient(grpcClient)
+	params := make(map[string]string)
+	if f.VolumeGroupSnapshot != nil {
+		params["existingSnapshotGroupID"] = f.VolumeGroupSnapshot.SnapshotGroupID
+	}
 	req := &volGroupSnap.CreateVolumeGroupSnapshotRequest{
 		Name:            "apple",
 		SourceVolumeIDs: f.volIDList,
+		Parameters:      params,
 	}
 	group, err := vgsClient.CreateVolumeGroupSnapshot(ctx, req)
 	if err != nil {
