@@ -1,0 +1,78 @@
+name: Workflow
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+jobs:
+  code-check:
+    name: Check Go formatting, linting, vetting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v2
+      - name: Run the formatter, linter, and vetter
+        uses: dell/common-github-actions/go-code-formatter-linter-vetter@main
+        with:
+          directories: ./...
+  sanitize:
+    name: Check for forbidden words
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v2
+      - name: Run the forbidden words scan
+        uses: dell/common-github-actions/code-sanitizer@main
+        with:
+          args: /github/workspace
+  test:
+    name: Run Go unit tests and check package coverage
+    runs-on: ubuntu-latest
+    container: node:10.18-jessie
+    services:
+      # Label used to access the service container
+      redis:
+        # Docker Hub image
+        image: redis
+        # Set health checks to wait until redis has started
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v2
+      - name: Run unit tests and check package coverage
+        uses: dell/common-github-actions/go-code-tester@main
+        with:
+          threshold: 90
+          skip-list: ""
+        env:
+          # The hostname used to communicate with the Redis service container
+          REDIS_HOST: redis
+          # The default Redis port
+          REDIS_PORT: 6379
+
+  go_security_scan:
+    name: Go security
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v2
+      - name: Run Go Security
+        uses: securego/gosec@master
+        with:
+          args: -exclude=G108,G402 ./...
+  malware_security_scan:
+    name: Malware Scanner
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v2
+      - name: Run malware scan
+        uses: dell/common-github-actions/malware-scanner@main
+        with:
+          directories: .
+          options: -ri
