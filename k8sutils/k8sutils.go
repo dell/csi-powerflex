@@ -8,6 +8,7 @@ import (
 	"k8s.io/client-go/rest"
 	"os"
 )
+
 // Clientset - Interface to kubernetes
 var Clientset kubernetes.Interface
 
