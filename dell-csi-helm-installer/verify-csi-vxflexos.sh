@@ -20,6 +20,7 @@ function verify-csi-vxflexos() {
   verify_snap_requirements
   verify_helm_3
   verify_helm_values_version 2.0.0
+  verify_authorization_proxy_server
 }
 
 # Check if the SDC is installed and the kernel module loaded
