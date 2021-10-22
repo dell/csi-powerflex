@@ -553,7 +553,6 @@ func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolume
 	}
 
 	//check if volume is known to SDC
-	// (s *service) getSDCMappedVol(volumeID string, systemID string, maxRetry int)
 	_, err = s.getSDCMappedVol(volID, systemID, 30)
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "volume with ID '%s' not found on SDC", volID)
@@ -564,7 +563,6 @@ func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolume
 	if len(mounts) > 0 {
 		for _, m := range mounts {
 			if m.Path == volPath {
-				// volume already published to target
 				Log.Infof("volPath: %s is mounted", volPath)
 				mounted = true
 			}
