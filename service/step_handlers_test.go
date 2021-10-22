@@ -69,6 +69,10 @@ var (
 		CreateVGSBadTimeError         bool
 		CreateSplitVGSError           bool
 		BadVolIDJSON                  bool
+		BadMountPathError             bool
+		NoMountPathError              bool
+		NoVolIDError                  bool
+		NoVolIDSDCError               bool
 	}
 )
 
@@ -141,6 +145,10 @@ func getHandler() http.Handler {
 	stepHandlersErrors.CreateVGSBadTimeError = false
 	stepHandlersErrors.CreateSplitVGSError = false
 	stepHandlersErrors.BadVolIDJSON = false
+	stepHandlersErrors.BadMountPathError = false
+	stepHandlersErrors.NoMountPathError = false
+	stepHandlersErrors.NoVolIDError = false
+	stepHandlersErrors.NoVolIDSDCError = false
 	sdcMappings = sdcMappings[:0]
 	sdcMappingsID = ""
 	return handler

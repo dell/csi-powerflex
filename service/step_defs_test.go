@@ -87,6 +87,7 @@ type feature struct {
 	unpublishVolumeResponse               *csi.ControllerUnpublishVolumeResponse
 	nodeGetInfoResponse                   *csi.NodeGetInfoResponse
 	nodeGetCapabilitiesResponse           *csi.NodeGetCapabilitiesResponse
+	nodeGetVolumeStatsResponse            *csi.NodeGetVolumeStatsResponse
 	deleteVolumeResponse                  *csi.DeleteVolumeResponse
 	getMappedVolResponse                  *goscaleio.SdcMappedVolume
 	getCapacityResponse                   *csi.GetCapacityResponse
@@ -937,6 +938,14 @@ func (f *feature) iInduceError(errtype string) error {
 		stepHandlersErrors.NoVolumeIDError = true
 	case "BadVolIDJSON":
 		stepHandlersErrors.BadVolIDJSON = true
+	case "BadMountPathError":
+		stepHandlersErrors.BadMountPathError = true
+	case "NoMountPathError":
+		stepHandlersErrors.NoMountPathError = true
+	case "NoVolIDError":
+		stepHandlersErrors.NoVolIDError = true
+	case "NoVolIDSDCError":
+		stepHandlersErrors.NoVolIDSDCError = true
 	case "SetVolumeSizeError":
 		stepHandlersErrors.SetVolumeSizeError = true
 	case "NoSymlinkForNodePublish":
@@ -1504,11 +1513,13 @@ func (f *feature) aValidControllerGetCapabilitiesResponseIsReturned() error {
 				count = count + 1
 			case csi.ControllerServiceCapability_RPC_CLONE_VOLUME:
 				count = count + 1
+			case csi.ControllerServiceCapability_RPC_VOLUME_CONDITION:
+				count = count + 1
 			default:
 				return fmt.Errorf("received unexpected capability: %v", typex)
 			}
 		}
-		if count != 8 {
+		if count != 9 {
 			return errors.New("Did not retrieve all the expected capabilities")
 		}
 		return nil
@@ -2125,8 +2136,74 @@ func (f *feature) iCallNodeExpandVolume(volPath string) error {
 
 func (f *feature) iCallNodeGetVolumeStats() error {
 	ctx := new(context.Context)
-	req := new(csi.NodeGetVolumeStatsRequest)
-	_, f.err = f.service.NodeGetVolumeStats(*ctx, req)
+
+	VolumeID := sdcVolume1
+	VolumePath := datadir
+
+	if stepHandlersErrors.BadVolIDError {
+		VolumeID = badVolumeID
+	}
+	if stepHandlersErrors.NoVolIDError {
+		VolumeID = ""
+	}
+	if stepHandlersErrors.BadMountPathError {
+		VolumePath = "there/is/nothing/mounted/here"
+	}
+	if stepHandlersErrors.NoMountPathError {
+		VolumePath = ""
+	}
+	if stepHandlersErrors.NoVolIDSDCError {
+		VolumeID = goodVolumeID
+	}
+	req := &csi.NodeGetVolumeStatsRequest{VolumeId: VolumeId, VolumePath: VolumePath}
+
+	f.nodeGetVolumeStatsResponse, f.err = f.service.NodeGetVolumeStats(*ctx, req)
+
+	return nil
+}
+
+func (f *feature) aCorrectNodeGetVolumeStatsResponse() error {
+	if stepHandlersErrors.NoVolIDError || stepHandlersErrors.NoVolIDSDCError || stepHandlersErrors.NoMountPathError || stepHandlersErrors.BadVolIDError {
+		//errors and no responses should be returned in these instances
+		if f.nodeGetVolumeStatsResponse == nil {
+			fmt.Printf("Response check passed\n")
+			return nil
+		}
+
+		fmt.Printf("Expected NodeGetVolumeStatsResponse to be nil, but instead, it was %v", f.nodeGetVolumeStatsResponse)
+		return status.Errorf(codes.Internal, "Check NodeGetVolumeStatsResponse failed")
+	}
+
+	//assume no errors induced, so response should be okay, these values will change below if errors were induced
+	abnormal := false
+	message := ""
+	usage := true
+
+	fmt.Printf("response from NodeGetVolumeStats is: %v\n", f.nodeGetVolumeStatsResponse)
+
+	if stepHandlersErrors.BadMountPathError {
+		abnormal = true
+		message = "volume path not mounted"
+		usage = false
+	}
+
+	//check message and abnormal state returned in NodeGetVolumeStatsResponse.VolumeCondition
+	if f.nodeGetVolumeStatsResponse.VolumeCondition.Abnormal == abnormal && f.nodeGetVolumeStatsResponse.VolumeCondition.Message == message {
+		fmt.Printf("NodeGetVolumeStats Response VolumeCondition check passed\n")
+	} else {
+		fmt.Printf("Expected nodeGetVolumeStatsResponse.Abnormal to be %v, and message to be %s, but instead, abnormal was %v and message was %s", abnormal, message, f.nodeGetVolumeStatsResponse.VolumeCondition.Abnormal, f.nodeGetVolumeStatsResponse.VolumeCondition.Message)
+		return status.Errorf(codes.Internal, "Check NodeGetVolumeStatsResponse failed")
+	}
+
+	//check Usage returned in NodeGetVolumeStatsResponse
+	if usage {
+		if f.nodeGetVolumeStatsResponse.Usage != nil {
+			fmt.Printf("NodeGetVolumeStats Response Usage check passed\n")
+		} else {
+			fmt.Printf("Expected NodeGetVolumeStats Response to have Usage, but Usage was nil")
+		}
+	}
+
 	return nil
 }
 
@@ -2187,11 +2264,15 @@ func (f *feature) aValidNodeGetCapabilitiesResponseIsReturned() error {
 			switch typex {
 			case csi.NodeServiceCapability_RPC_EXPAND_VOLUME:
 				count = count + 1
+			case csi.NodeServiceCapability_RPC_VOLUME_CONDITION:
+				count = count + 1
+			case csi.NodeServiceCapability_RPC_GET_VOLUME_STATS:
+				count = count + 1
 			default:
 				return fmt.Errorf("received unxexpcted capability: %v", typex)
 			}
 		}
-		if count != 1 {
+		if count != 3 {
 			return errors.New("Did not retrieve all the expected capabilities")
 		}
 		return nil
@@ -2911,6 +2992,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call ControllerExpandVolume set to (\d+)$`, f.iCallControllerExpandVolume)
 	s.Step(`^I call NodeExpandVolume with volumePath as "([^"]*)"$`, f.iCallNodeExpandVolume)
 	s.Step(`^I call NodeGetVolumeStats$`, f.iCallNodeGetVolumeStats)
+	s.Step(`^a correct NodeGetVolumeStats Response is returned$`, f.aCorrectNodeGetVolumeStatsResponse)
 	s.Step(`^I give request volume context$`, f.iGiveRequestVolumeContext)
 	s.Step(`^I call GetDevice "([^"]*)"$`, f.iCallGetDevice)
 	s.Step(`^I call NewService$`, f.iCallNewService)

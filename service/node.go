@@ -9,8 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"io/ioutil"
-
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/dell/gofsutil"
 	"github.com/dell/goscaleio"
@@ -19,6 +17,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"io/ioutil"
+	k8sutilfs "k8s.io/kubernetes/pkg/volume/util/fs"
 )
 
 var (
@@ -461,6 +461,21 @@ func (s *service) NodeGetCapabilities(
 					},
 				},
 			},
+			{
+				Type: &csi.NodeServiceCapability_Rpc{
+					Rpc: &csi.NodeServiceCapability_RPC{
+						Type: csi.NodeServiceCapability_RPC_VOLUME_CONDITION,
+					},
+				},
+			},
+
+			{
+				Type: &csi.NodeServiceCapability_Rpc{
+					Rpc: &csi.NodeServiceCapability_RPC{
+						Type: csi.NodeServiceCapability_RPC_GET_VOLUME_STATS,
+					},
+				},
+			},
 		},
 	}, nil
 
@@ -504,9 +519,99 @@ func (s *service) NodeGetInfo(
 	}, nil
 }
 
-func (s *service) NodeGetVolumeStats(
-	ctx context.Context, req *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "")
+func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
+
+	csiVolID := req.GetVolumeId()
+	volPath := req.GetVolumePath()
+	mounted := false
+	healthy := true
+	message := ""
+
+	//validate params first, make sure neither field is empty
+	if len(volPath) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "no volume Path provided")
+	}
+
+	if len(csiVolID) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "no volume ID  provided")
+	}
+
+	//check if volume exists
+	systemID := s.getSystemIDFromCsiVolumeID(csiVolID)
+
+	if systemID == "" {
+		// use default system
+		systemID = s.opts.defaultSystemID
+	}
+
+	volID := getVolumeIDFromCsiVolumeID(csiVolID)
+
+	vol, _, err := s.listVolumes(systemID, 0, 0, true, false, volID, "")
+
+	if err != nil || len(vol) == 0 || vol[0].ID != volID {
+		return nil, status.Errorf(codes.NotFound, "volume with ID '%s' not found on array %s", volID, systemID)
+	}
+
+	//check if volume is known to SDC
+	// (s *service) getSDCMappedVol(volumeID string, systemID string, maxRetry int)
+	_, err = s.getSDCMappedVol(volID, systemID, 30)
+	if err != nil {
+		return nil, status.Errorf(codes.NotFound, "volume with ID '%s' not found on SDC", volID)
+	}
+
+	//check if path is mounted on node
+	mounts, err := getPathMounts(volPath)
+	if len(mounts) > 0 {
+		for _, m := range mounts {
+			if m.Path == volPath {
+				// volume already published to target
+				Log.Infof("volPath: %s is mounted", volPath)
+				mounted = true
+			}
+		}
+	}
+	if len(mounts) == 0 || mounted == false {
+		Log.Infof("volPath: %s is not mounted", volPath)
+		healthy = false
+		message = "volume path not mounted"
+	}
+
+	if !healthy {
+
+		return &csi.NodeGetVolumeStatsResponse{
+			VolumeCondition: &csi.VolumeCondition{
+				Abnormal: !healthy,
+				Message:  message,
+			},
+		}, nil
+
+	}
+
+	availableBytes, totalBytes, usedBytes, totalInodes, freeInodes, usedInodes, err := k8sutilfs.Info(volPath)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to get metrics for volume with error: %v", err)
+	}
+
+	return &csi.NodeGetVolumeStatsResponse{
+		Usage: []*csi.VolumeUsage{
+			{
+				Available: availableBytes,
+				Total:     totalBytes,
+				Used:      usedBytes,
+				Unit:      csi.VolumeUsage_BYTES,
+			},
+			{
+				Available: freeInodes,
+				Total:     totalInodes,
+				Used:      usedInodes,
+				Unit:      csi.VolumeUsage_INODES,
+			},
+		},
+		VolumeCondition: &csi.VolumeCondition{
+			Abnormal: !healthy,
+			Message:  message,
+		},
+	}, nil
 
 }
 
