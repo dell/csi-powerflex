@@ -15,6 +15,9 @@ import (
 	"syscall"
 	"time"
 
+	"google.golang.org/grpc/codes"
+        "google.golang.org/grpc/status"
+
 	"encoding/json"
 	"path/filepath"
 
@@ -45,25 +48,26 @@ type ArrayConnectionData struct {
 }
 
 type feature struct {
-	errs                     []error
-	anotherSystemID          string
-	createVolumeRequest      *csi.CreateVolumeRequest
-	publishVolumeRequest     *csi.ControllerPublishVolumeRequest
-	nodePublishVolumeRequest *csi.NodePublishVolumeRequest
-	listVolumesResponse      *csi.ListVolumesResponse
-	listSnapshotsResponse    *csi.ListSnapshotsResponse
-	capability               *csi.VolumeCapability
-	capabilities             []*csi.VolumeCapability
-	volID                    string
-	snapshotID               string
-	volIDList                []string
-	volIDListShort           []string
-	maxRetryCount            int
-	expandVolumeResponse     *csi.ControllerExpandVolumeResponse
-	nodeExpandVolumeResponse *csi.NodeExpandVolumeResponse
-	arrays                   map[string]*ArrayConnectionData
-	VolumeGroupSnapshot      *volGroupSnap.CreateVolumeGroupSnapshotResponse
-	VolumeGroupSnapshot2     *volGroupSnap.CreateVolumeGroupSnapshotResponse
+	errs                       []error
+	anotherSystemID            string
+	createVolumeRequest        *csi.CreateVolumeRequest
+	publishVolumeRequest       *csi.ControllerPublishVolumeRequest
+	nodePublishVolumeRequest   *csi.NodePublishVolumeRequest
+	listVolumesResponse        *csi.ListVolumesResponse
+	listSnapshotsResponse      *csi.ListSnapshotsResponse
+	capability                 *csi.VolumeCapability
+	capabilities               []*csi.VolumeCapability
+	volID                      string
+	snapshotID                 string
+	volIDList                  []string
+	volIDListShort             []string
+	maxRetryCount              int
+	expandVolumeResponse       *csi.ControllerExpandVolumeResponse
+	nodeExpandVolumeResponse   *csi.NodeExpandVolumeResponse
+	nodeGetVolumeStatsResponse *csi.NodeGetVolumeStatsResponse
+	arrays                     map[string]*ArrayConnectionData
+	VolumeGroupSnapshot        *volGroupSnap.CreateVolumeGroupSnapshotResponse
+	VolumeGroupSnapshot2       *volGroupSnap.CreateVolumeGroupSnapshotResponse
 }
 
 // there is no way to call service.go methods from here
@@ -1491,6 +1495,40 @@ func (f *feature) whenICallNodeExpandVolume() error {
 
 }
 
+func (f *feature) iCallNodeGetVolumeStats() error {
+	ctx := context.Background()
+	client := csi.NewNodeClient(grpcClient)
+	var err error
+
+	volId := f.volID
+	vPath := "/tmp/datafile"
+
+	req := &csi.NodeGetVolumeStatsRequest{VolumeId: volId, VolumePath: vPath}
+
+	f.nodeGetVolumeStatsResponse, err = client.NodeGetVolumeStats(ctx, req)
+
+	return err
+}
+
+func (f *feature) theVolumeConditionIs(condition string) error {
+
+	fmt.Printf("f.nodeGetVolumeStatsResponse is %v\n", f.nodeGetVolumeStatsResponse)
+	
+	abnormal := false	
+
+	if condition == "abnormal" {
+		abnormal = true
+	}
+
+	if f.nodeGetVolumeStatsResponse.VolumeCondition.Abnormal == abnormal {
+		fmt.Printf("f.nodeGetVolumeStatsResponse check passed")
+		return nil
+	}
+	fmt.Printf("abnormal should have been %v, but was %v instead", abnormal, f.nodeGetVolumeStatsResponse.VolumeCondition.Abnormal)
+	return status.Errorf(codes.Internal, "Check NodeGetVolumeStatsResponse failed")
+
+}
+
 func (f *feature) nodeExpandVolume(volID, volPath string) error {
 	var resp *csi.NodeExpandVolumeResponse
 	var err error
@@ -1709,4 +1747,6 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call DeleteVGS$`, f.iCallDeleteVGS)
 	s.Step(`^remove a volume from VolumeGroupSnapshotRequest$`, f.iRemoveAVolumeFromVolumeGroupSnapshotRequest)
 	s.Step(`^I call split VolumeGroupSnapshot$`, f.iCallSplitVolumeGroupSnapshot)
+	s.Step(`^I call NodeGetVolumeStats$`, f.iCallNodeGetVolumeStats)
+	s.Step(`^the VolumeCondition is "([^"]*)"$`, f.theVolumeConditionIs)
 }

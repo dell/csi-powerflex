@@ -700,7 +700,6 @@ Feature: VxFlex OS CSI interface
       | "VolumeIDTooShortErrorInNodeExpand"     | "test/tmp/datadir"  | "is shorter than 3 chars, returning error"  |
       | "TooManyDashesVolIDInNodeExpand"        | "test/tmp/datadir"  | "is not configured in the driver"           |
 
-  @wip
   Scenario Outline: Call NodeGetVolumeStats with various errors
     Given a VxFlexOS service
     And a controller published volume
