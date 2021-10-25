@@ -596,7 +596,8 @@ Scenario: Call DeleteVolumeGroupSnapshot
 
 Scenario: Call NodeGetVolumeStats on volume 
   Given a VxFlexOS service
-  And a basic block volume request "integration5" "8"
+  And a capability with voltype "mount" access "single-writer" fstype "ext4"
+  And a volume request "integration" "8"
   When I call CreateVolume
   And there are no errors
   And when I call PublishVolume "SDC_GUID"
@@ -610,9 +611,10 @@ Scenario: Call NodeGetVolumeStats on volume
   And when I call DeleteVolume
   Then there are no errors
 
-Scenario: Call NodeGetVolumeStats on volume, abnormal = true 
+Scenario: Call NodeGetVolumeStats on unmounted volume
   Given a VxFlexOS service
-  And a basic block volume request "integration5" "8"
+  And a capability with voltype "mount" access "single-writer" fstype "ext4"
+  And a volume request "integration" "8"
   When I call CreateVolume
   And there are no errors
   And when I call PublishVolume "SDC_GUID"

@@ -1501,7 +1501,7 @@ func (f *feature) iCallNodeGetVolumeStats() error {
 	var err error
 
 	volId := f.volID
-	vPath := "/tmp/datafile"
+	vPath := "/tmp/datadir"
 
 	req := &csi.NodeGetVolumeStatsRequest{VolumeId: volId, VolumePath: vPath}
 
