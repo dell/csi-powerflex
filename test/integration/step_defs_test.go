@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc/codes"
-        "google.golang.org/grpc/status"
+	"google.golang.org/grpc/status"
 
 	"encoding/json"
 	"path/filepath"
@@ -1513,8 +1513,8 @@ func (f *feature) iCallNodeGetVolumeStats() error {
 func (f *feature) theVolumeConditionIs(condition string) error {
 
 	fmt.Printf("f.nodeGetVolumeStatsResponse is %v\n", f.nodeGetVolumeStatsResponse)
-	
-	abnormal := false	
+
+	abnormal := false
 
 	if condition == "abnormal" {
 		abnormal = true
