@@ -2155,7 +2155,7 @@ func (f *feature) iCallNodeGetVolumeStats() error {
 	if stepHandlersErrors.NoVolIDSDCError {
 		VolumeID = goodVolumeID
 	}
-	req := &csi.NodeGetVolumeStatsRequest{VolumeId: VolumeId, VolumePath: VolumePath}
+	req := &csi.NodeGetVolumeStatsRequest{VolumeId: VolumeID, VolumePath: VolumePath}
 
 	f.nodeGetVolumeStatsResponse, f.err = f.service.NodeGetVolumeStats(*ctx, req)
 
@@ -2183,15 +2183,21 @@ func (f *feature) aCorrectNodeGetVolumeStatsResponse() error {
 
 	if stepHandlersErrors.BadMountPathError {
 		abnormal = true
-		message = "volume path not mounted"
+		message = "not accessible"
+		usage = false
+	}
+
+	if gofsutil.GOFSMock.InduceGetMountsError {
+		abnormal = true
+		message = "not mounted"
 		usage = false
 	}
 
 	//check message and abnormal state returned in NodeGetVolumeStatsResponse.VolumeCondition
-	if f.nodeGetVolumeStatsResponse.VolumeCondition.Abnormal == abnormal && f.nodeGetVolumeStatsResponse.VolumeCondition.Message == message {
+	if f.nodeGetVolumeStatsResponse.VolumeCondition.Abnormal == abnormal && strings.Contains(f.nodeGetVolumeStatsResponse.VolumeCondition.Message, message) {
 		fmt.Printf("NodeGetVolumeStats Response VolumeCondition check passed\n")
 	} else {
-		fmt.Printf("Expected nodeGetVolumeStatsResponse.Abnormal to be %v, and message to be %s, but instead, abnormal was %v and message was %s", abnormal, message, f.nodeGetVolumeStatsResponse.VolumeCondition.Abnormal, f.nodeGetVolumeStatsResponse.VolumeCondition.Message)
+		fmt.Printf("Expected nodeGetVolumeStatsResponse.Abnormal to be %v, and message to contain: %s, but instead, abnormal was: %v and message was: %s", abnormal, message, f.nodeGetVolumeStatsResponse.VolumeCondition.Abnormal, f.nodeGetVolumeStatsResponse.VolumeCondition.Message)
 		return status.Errorf(codes.Internal, "Check NodeGetVolumeStatsResponse failed")
 	}
 
@@ -2199,9 +2205,10 @@ func (f *feature) aCorrectNodeGetVolumeStatsResponse() error {
 	if usage {
 		if f.nodeGetVolumeStatsResponse.Usage != nil {
 			fmt.Printf("NodeGetVolumeStats Response Usage check passed\n")
-		} else {
-			fmt.Printf("Expected NodeGetVolumeStats Response to have Usage, but Usage was nil")
+			return nil
 		}
+		fmt.Printf("Expected NodeGetVolumeStats Response to have Usage, but Usage was nil")
+		return status.Errorf(codes.Internal, "Check NodeGetVolumeStatsResponse failed")
 	}
 
 	return nil

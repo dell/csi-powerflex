@@ -558,6 +558,13 @@ func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolume
 		return nil, status.Errorf(codes.NotFound, "volume with ID '%s' not found on SDC", volID)
 	}
 
+	//check if volume path is accessible
+	_, err = os.ReadDir(volPath)
+	if err != nil {
+		healthy = false
+		message = fmt.Sprintf("volume path: %s is not accessible: %v", volPath, err)
+	}
+
 	//check if path is mounted on node
 	mounts, err := getPathMounts(volPath)
 	if len(mounts) > 0 {
@@ -568,10 +575,9 @@ func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolume
 			}
 		}
 	}
-	if len(mounts) == 0 || mounted == false {
-		Log.Infof("volPath: %s is not mounted", volPath)
+	if healthy && (len(mounts) == 0 || mounted == false) {
 		healthy = false
-		message = "volume path not mounted"
+		message = fmt.Sprintf("volPath: %s is not mounted", volPath)
 	}
 
 	if !healthy {
