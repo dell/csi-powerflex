@@ -20,10 +20,10 @@ rules:
 {{- if hasKey .Values "podmon" }}
 {{- if eq .Values.podmon.enabled true }}
     verbs: ["get", "list", "watch", "patch"]
-{{ else }}
+{{- else }}
     verbs: ["get", "list", "watch"]
-{{ end }}
-{{ end }}
+{{- end }}
+{{- end }}
   - apiGroups: [""]
     resources: ["persistentvolumes"]
     verbs: ["get", "list", "watch", "create", "delete", "update", "patch"]
@@ -41,10 +41,10 @@ rules:
 {{- if hasKey .Values "podmon" }}
 {{- if eq .Values.podmon.enabled true }}
     verbs: ["get", "list", "watch", "update", "patch", "delete"]
-{{ else }}
+{{- else }}
     verbs: ["get", "list", "watch", "update", "patch"]
-{{ end }}
-{{ end }}
+{{- end }}
+{{- end }}
   - apiGroups: ["storage.k8s.io"]
     resources: ["csinodes"]
     verbs: ["get", "list", "watch", "update"]
@@ -59,10 +59,10 @@ rules:
 {{- if hasKey .Values "podmon" }}
 {{- if eq .Values.podmon.enabled true }}
     verbs: ["get", "list", "watch", "update", "delete"]
-{{ else }}
+{{- else }}
     verbs: ["get", "list", "watch"]
-{{ end }}
-{{ end }}
+{{- end }}
+{{- end }}
 # below for snapshotter
   - apiGroups: [""]
     resources: ["secrets"]
@@ -72,8 +72,8 @@ rules:
   - apiGroups: ["volumegroup.storage.dell.com"]
     resources: ["dellcsivolumegroupsnapshots","dellcsivolumegroupsnapshots/status"]
     verbs: ["create", "list", "watch", "delete", "update"]
-{{ end }}
-{{ end }}
+{{- end }}
+{{- end }}
   - apiGroups: ["snapshot.storage.k8s.io"]
     resources: ["volumesnapshotclasses"]
     verbs: ["get", "list", "watch"]
@@ -85,10 +85,10 @@ rules:
 {{- if hasKey .Values "vgsnapshotter" }}
 {{- if eq .Values.vgsnapshotter.enabled true }}
     verbs: ["get", "list", "watch", "update", "create", "delete"]
-{{ else }}
+{{- else }}
     verbs: ["get", "list", "watch", "update"]
-{{ end }}
-{{ end }}
+{{- end }}
+{{- end }}
   - apiGroups: ["snapshot.storage.k8s.io"]
     resources: ["volumesnapshots/status","volumesnapshotcontents/status"]
     verbs: ["get", "list", "watch", "update"]
@@ -115,6 +115,11 @@ metadata:
   name: {{ .Release.Name }}-controller
   namespace: {{ .Release.Namespace }}
 spec:
+{{- if gt (int .Values.controller.controllerCount) 1 }}
+  strategy:
+    rollingUpdate:
+      maxUnavailable:  1
+{{- end }}
   selector:
     matchLabels:
       name: {{ .Release.Name }}-controller
@@ -122,11 +127,11 @@ spec:
   template:
     metadata:
       labels:
-      {{ if eq (.Values.vgsnapshotter.enabled| toString) "true"  }}
+      {{- if eq (.Values.vgsnapshotter.enabled| toString) "true"  }}
         vg-snapshotter-enabled: "true"
-      {{ else if eq (.Values.vgsnapshotter.enabled| toString) "false" }}
+      {{- else if eq (.Values.vgsnapshotter.enabled| toString) "false" }}
         vg-snapshotter-enabled: "false"
-      {{ end }}
+      {{- end }}
         name: {{ .Release.Name }}-controller
     spec:
       affinity:
@@ -141,14 +146,14 @@ spec:
                 - {{ .Release.Name }}-controller
             topologyKey: kubernetes.io/hostname        
       serviceAccountName: {{ .Release.Name }}-controller
-      {{ if .Values.controller.nodeSelector }}
+      {{- if .Values.controller.nodeSelector }}
       nodeSelector:
       {{- toYaml .Values.controller.nodeSelector | nindent 8 }}
-      {{ end }}
-      {{ if .Values.controller.tolerations }}
+      {{- end }}
+      {{- if .Values.controller.tolerations }}
       tolerations: 
       {{- toYaml .Values.controller.tolerations | nindent 6 }}
-      {{ end }}
+      {{- end }}
       containers:
 {{- if hasKey .Values "podmon" }}
 {{- if eq .Values.podmon.enabled true }}
@@ -175,10 +180,10 @@ spec:
               mountPath: /var/run/csi
             - name: vxflexos-config-params
               mountPath: /vxflexos-config-params
-{{ end }}
-{{ end }}
+{{- end }}
+{{- end }}
         - name: attacher
-          image: {{ required "Must provide the CSI attacher container image." .Values.images.attacher }}
+          image: {{ required "Must provide the CSI attacher container image." ( include "csi-vxflexos.attacherImage" . ) }}
           imagePullPolicy: {{ .Values.imagePullPolicy }}
           args:
             - "--csi-address=$(ADDRESS)"
@@ -191,7 +196,7 @@ spec:
             - name: socket-dir
               mountPath: /var/run/csi
         - name: provisioner
-          image: {{ required "Must provide the CSI provisioner container image." .Values.images.provisioner }}
+          image: {{ required "Must provide the CSI provisioner container image." ( include "csi-vxflexos.provisionerImage" . ) }}	
           imagePullPolicy: {{ .Values.imagePullPolicy }}
           args:
             - "--csi-address=$(ADDRESS)"
@@ -221,12 +226,12 @@ spec:
           volumeMounts:
             - name: socket-dir
               mountPath: /var/run/csi
-{{ end }}
-{{ end }}
+{{- end }}
+{{- end }}
 {{- if hasKey .Values.controller "snapshot" }}
 {{- if eq .Values.controller.snapshot.enabled true }}
         - name: snapshotter
-          image: {{ required "Must provide the CSI snapshotter container image." .Values.images.snapshotter }}
+          image: {{ required "Must provide the CSI snapshotter container image. " ( include "csi-vxflexos.snapshotterImage" . ) }}
           imagePullPolicy: {{ .Values.imagePullPolicy }}
           args:
             - "--csi-address=$(ADDRESS)"
@@ -240,12 +245,12 @@ spec:
           volumeMounts:
             - name: socket-dir
               mountPath: /var/run/csi
-{{ end }}
-{{ end }}
+{{- end }}
+{{- end }}
 {{- if hasKey .Values.controller "resizer" }}
 {{- if eq .Values.controller.resizer.enabled true }}
         - name: resizer
-          image: {{ required "Must provide the CSI resizer container image." .Values.images.resizer }}
+          image: {{ required "Must provide the CSI resizer container image." ( include "csi-vxflexos.resizerImage" . ) }}
           imagePullPolicy: {{ .Values.imagePullPolicy }}
           args:
             - "--csi-address=$(ADDRESS)"
@@ -257,10 +262,10 @@ spec:
           volumeMounts:
             - name: socket-dir
               mountPath: /var/run/csi
-{{ end }}
-{{ end }}
+{{- end }}
+{{- end }}
         - name: driver
-          image: {{ required "Must provide the VxFlex OS driver container image." .Values.images.driver }}
+          image: "{{ required "Must provide the driver image repository." .Values.images.driverRepository }}/{{ .Chart.Name }}:v{{ .Values.version }}"
           imagePullPolicy: {{ .Values.imagePullPolicy }}
           command: [ "/csi-vxflexos.sh" ]
           args:
