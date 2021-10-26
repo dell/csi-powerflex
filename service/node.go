@@ -519,6 +519,11 @@ func (s *service) NodeGetInfo(
 	}, nil
 }
 
+// NodeGetVolumeStats will check the status of a volume given its ID and path
+// if volume is healthy, stats on volume usage will be returned
+// if volume is unhealthy, a message will be returned detailing the issue
+// To determine if volume is healthy, this method checks: volume known to array, volume known to SDC, volume path readable, and volume path mounted
+// Note: kubelet only calls this method when feature gate: CSIVolumeHealth=true
 func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
 
 	csiVolID := req.GetVolumeId()
