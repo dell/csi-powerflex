@@ -477,11 +477,6 @@ func (s *service) NodeGetInfo(
 
 	// Fetch SDC GUID
 	if s.opts.SdcGUID == "" {
-		if !s.opts.AutoProbe {
-			return nil, status.Error(codes.FailedPrecondition,
-				"Unable to get Node ID. Either it is not configured, "+
-					"or Node Service has not been probed")
-		}
 		if err := s.nodeProbe(ctx); err != nil {
 			return nil, err
 		}
@@ -489,11 +484,6 @@ func (s *service) NodeGetInfo(
 
 	// Fetch Node ID
 	if len(connectedSystemID) == 0 {
-		if !s.opts.AutoProbe {
-			return nil, status.Error(codes.FailedPrecondition,
-				"Unable to get Node ID. Either it is not configured, "+
-					"or Node Service has not been probed")
-		}
 		if err := s.nodeProbe(ctx); err != nil {
 			return nil, err
 		}

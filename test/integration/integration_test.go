@@ -14,8 +14,8 @@ import (
 	"github.com/akutz/memconn"
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/cucumber/godog"
-	"github.com/dell/csi-vxflexos/provider"
-	"github.com/dell/csi-vxflexos/service"
+	"github.com/dell/csi-vxflexos/v2/provider"
+	"github.com/dell/csi-vxflexos/v2/service"
 	"github.com/dell/gocsi/utils"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
@@ -90,7 +90,7 @@ func TestMain(m *testing.M) {
 	opts := godog.Options{
 		Format: "pretty",
 		Paths:  []string{"features"},
-	    //Tags: "wip",
+		//Tags: "wip",
 	}
 
 	exitVal := godog.TestSuite{

@@ -3,6 +3,9 @@ package service
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
+
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	podmon "github.com/dell/dell-csi-extensions/podmon"
 	volumeGroupSnapshot "github.com/dell/dell-csi-extensions/volumeGroupSnapshot"
@@ -10,8 +13,11 @@ import (
 	siotypes "github.com/dell/goscaleio/types/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"strconv"
-	"strings"
+)
+
+const (
+	//ExistingGroupID group id on powerflex array
+	ExistingGroupID = "existingSnapshotGroupID"
 )
 
 func (s *service) ValidateVolumeHostConnectivity(ctx context.Context, req *podmon.ValidateVolumeHostConnectivityRequest) (*podmon.ValidateVolumeHostConnectivityResponse, error) {
@@ -131,7 +137,7 @@ func (s *service) CreateVolumeGroupSnapshot(ctx context.Context, req *volumeGrou
 	snapParam := &siotypes.SnapshotVolumesParam{SnapshotDefs: snapshotDefs}
 
 	//check if req is Idempotent, return group found if yes
-	existingGroup, err := s.checkIdempotency(ctx, snapParam, systemID)
+	existingGroup, err := s.checkIdempotency(ctx, snapParam, systemID, req.Parameters[ExistingGroupID])
 	if err != nil {
 		return nil, err
 	}
@@ -218,9 +224,8 @@ func validateCreateVGSreq(req *volumeGroupSnapshot.CreateVolumeGroupSnapshotRequ
 	}
 
 	if req.Name == "" {
-		err := status.Error(codes.InvalidArgument, "CreateVolumeGroupSnapshotRequest needs Name to be set")
-		Log.Errorf("Error from validateCreateVGSreq: %v ", err)
-		return err
+		err := status.Error(codes.InvalidArgument, "CreateVolumeGroupSnapshotRequest Name is not  set")
+		Log.Warnf("Warning from validateCreateVGSreq: %v ", err)
 	}
 
 	//name must be less than 28 chars, because we name snapshots with -<index>, and index can at most be 3 chars
@@ -237,7 +242,7 @@ func (s *service) buildSnapshotDefs(req *volumeGroupSnapshot.CreateVolumeGroupSn
 
 	snapshotDefs := make([]*siotypes.SnapshotDef, 0)
 
-	for index, id := range req.SourceVolumeIDs {
+	for _, id := range req.SourceVolumeIDs {
 		snapSystemID := strings.TrimSpace(s.getSystemIDFromCsiVolumeID(id))
 		if snapSystemID != "" && snapSystemID != systemID {
 			err := status.Errorf(codes.Internal, "Source volumes for volume group snapshot should be on the same system but vol %s is not on system: %s", id, systemID)
@@ -253,10 +258,6 @@ func (s *service) buildSnapshotDefs(req *volumeGroupSnapshot.CreateVolumeGroupSn
 			return nil, err
 		}
 
-		snapName := req.Name + "-" + strconv.Itoa(index)
-
-		fmt.Printf("snapName is %s\n", snapName)
-
 		volID := getVolumeIDFromCsiVolumeID(id)
 
 		_, err = s.getVolByID(volID, systemID)
@@ -266,7 +267,7 @@ func (s *service) buildSnapshotDefs(req *volumeGroupSnapshot.CreateVolumeGroupSn
 			return nil, err
 		}
 
-		snapDef := siotypes.SnapshotDef{VolumeID: volID, SnapshotName: snapName}
+		snapDef := siotypes.SnapshotDef{VolumeID: volID, SnapshotName: ""}
 		snapshotDefs = append(snapshotDefs, &snapDef)
 	}
 
@@ -278,7 +279,7 @@ func (s *service) buildSnapshotDefs(req *volumeGroupSnapshot.CreateVolumeGroupSn
 //1. For each snapshot we intend to make, there is a snapshot with the same name and ancestor ID on array
 //2. Each snapshot that we find to satisfy criteria 1 all belong to the same consitency group
 //3. The consistency group that satisfies criteria 2 contain no other snapshots
-func (s *service) checkIdempotency(ctx context.Context, snapshotsToMake *siotypes.SnapshotVolumesParam, systemID string) (*volumeGroupSnapshot.CreateVolumeGroupSnapshotResponse, error) {
+func (s *service) checkIdempotency(ctx context.Context, snapshotsToMake *siotypes.SnapshotVolumesParam, systemID string, snapGrpID string) (*volumeGroupSnapshot.CreateVolumeGroupSnapshotResponse, error) {
 	Log.Infof("CheckIdempotency called")
 
 	//We use maps to keep track of info, to ensure criterias 1-3 are met
@@ -296,31 +297,33 @@ func (s *service) checkIdempotency(ctx context.Context, snapshotsToMake *siotype
 	//Maps snapshot name -> snapshot ID
 	IDsForResponse := make(map[string]string)
 
-	//fill in maps with default values, assume snapshots are not already on array
-	for _, snap := range snapshotsToMake.SnapshotDefs {
-		idempotencyMap[snap.SnapshotName] = false
-		//snapshots will always have a  consistency group ID, so setting it to "", means no snapshot was found
-		consistencyGroupMap[snap.SnapshotName] = ""
-	}
-
 	//go through the existing vols, and update maps as needed
+	//check that all idempotent snapshots belong to the same consistency group.
+	//this check verifies criteria #2
+	consitencyGroupValue := snapGrpID
+	var idempotencyValue bool
 	for _, snap := range snapshotsToMake.SnapshotDefs {
-		existingSnaps, _ := s.adminClients[systemID].GetVolume("", "", snap.VolumeID, snap.SnapshotName, true)
+		//snapshots will always have a  consistency group ID, so setting it to "", means no snapshot was found
+		existingSnaps, _ := s.adminClients[systemID].GetVolume("", "", snap.VolumeID, "", true)
+		idempotencyMap[snap.VolumeID] = false
 		for _, existingSnap := range existingSnaps {
+			consistencyGroupMap[existingSnap.Name] = ""
 			//a snapshot in snapshotsToMake already exists in array, update maps
-			if snap.VolumeID == existingSnap.AncestorVolumeID && snap.SnapshotName == existingSnap.Name {
-				Log.Infof("Snapshot %s was found already on array", snap.SnapshotName)
-				idempotencyMap[snap.SnapshotName] = true
-				consistencyGroupMap[snap.SnapshotName] = existingSnap.ConsistencyGroupID
-				IDsForResponse[snap.SnapshotName] = existingSnap.ID
+			foundGrpID := systemID + "-" + existingSnap.ConsistencyGroupID
+			if snap.VolumeID == existingSnap.AncestorVolumeID && snapGrpID == foundGrpID {
+				Log.Infof("Snapshot for %s exists on array for group id %s", snap.VolumeID, foundGrpID)
+				idempotencyMap[snap.VolumeID] = true
+				idempotencyValue = true
+				consistencyGroupMap[existingSnap.Name] = foundGrpID
+				IDsForResponse[existingSnap.Name] = existingSnap.ID
+			} else {
+				delete(consistencyGroupMap, existingSnap.Name)
 			}
 		}
-
 	}
 
 	//check Idempotency map. Either all snapshots can be idempodent, or none can be idempotent. A mixture is not allowed
 	//this check verifies criteria #1
-	idempotencyValue := idempotencyMap[snapshotsToMake.SnapshotDefs[0].SnapshotName]
 	for snap := range idempotencyMap {
 		if idempotencyMap[snap] != idempotencyValue {
 			err := status.Error(codes.Internal, "Some snapshots exist on array, while others need to be created. Cannot create VolumeGroupSnapshot")
@@ -338,27 +341,13 @@ func (s *service) checkIdempotency(ctx context.Context, snapshotsToMake *siotype
 
 	}
 
-	//check that all idempotent snapshots belong to the same consistency group.
-	//this check verifies criteria #2
-	consitencyGroupValue := consistencyGroupMap[snapshotsToMake.SnapshotDefs[0].SnapshotName]
-	for snap := range consistencyGroupMap {
-		if consistencyGroupMap[snap] != consitencyGroupValue {
-			err := status.Error(codes.Internal, "Idempotent snapshots belong to different consistency groups on array. Cannot create VolumeGroupSnapshot")
-			Log.Errorf("Error from checkIdempotency: %v ", err)
-			return nil, err
-
-		}
-		Log.Infof("snap: %s Consistency group is %s", snap, consistencyGroupMap[snap])
-	}
-
 	//now we need to check that the consistency group contains no extra snaps. This is done last.
 	existingVols, _ := s.adminClients[systemID].GetVolume("", "", "", "", true)
 	for _, vol := range existingVols {
-
-		if vol.ConsistencyGroupID == consitencyGroupValue {
+		grpID := systemID + "-" + vol.ConsistencyGroupID
+		if grpID == consitencyGroupValue {
 			Log.Infof("Checking  %s: Snapshot %s found in consistency group.", consitencyGroupValue, vol.Name)
 			consistencyGroupOnArray = append(consistencyGroupOnArray, vol.Name)
-
 		}
 	}
 
@@ -403,7 +392,7 @@ func (s *service) checkIdempotency(ctx context.Context, snapshotsToMake *siotype
 //build the response for CreateVGS to return
 func (s *service) buildCreateVGSResponse(ctx context.Context, snapResponse *siotypes.SnapshotVolumesResp, snapshotDefs []*siotypes.SnapshotDef, systemID string) ([]*volumeGroupSnapshot.Snapshot, error) {
 	var groupSnapshots []*volumeGroupSnapshot.Snapshot
-	for _, id := range snapResponse.VolumeIDList {
+	for index, id := range snapResponse.VolumeIDList {
 		idToQuery := systemID + "-" + id
 		req := &csi.ListSnapshotsRequest{SnapshotId: idToQuery}
 		lResponse, err := s.ListSnapshots(ctx, req)
@@ -412,16 +401,28 @@ func (s *service) buildCreateVGSResponse(ctx context.Context, snapResponse *siot
 			Log.Errorf("Error from buildCreateVGSResponse: %v ", err)
 			return nil, err
 		}
-		//arraySnapName is name of snapshot found in the array
 		var arraySnapName string
-		for _, snap := range snapshotDefs {
-			if snap.VolumeID == lResponse.Entries[0].Snapshot.SourceVolumeId {
-				arraySnapName = snap.SnapshotName
+		// ancestorvolumeid
+		existingSnap, _ := s.adminClients[systemID].GetVolume("", id, lResponse.Entries[0].Snapshot.SourceVolumeId, "", true)
+		for _, e := range existingSnap {
+			if e.ID == id && e.ConsistencyGroupID == snapResponse.SnapshotGroupID {
+				if e.Name == "" {
+					Log.Infof("debug set snap name for [%s]", e.ID)
+					arraySnapName = e.ID + "-snap-" + strconv.Itoa(index)
+					tgtVol := sio.NewVolume(s.adminClients[systemID])
+					tgtVol.Volume = e
+					err := tgtVol.SetVolumeName(arraySnapName)
+					if err != nil {
+						Log.Errorf("Error setting name of snapshot id=%s name=%s %s", e.ID, arraySnapName, err.Error())
+					}
+				} else {
+					Log.Infof("debug found snap name %s for %s", e.Name, e.ID)
+					arraySnapName = e.Name
+				}
 			}
-
 		}
 
-		Log.Infof("Name for: %s is %s", lResponse.Entries[0].Snapshot.SnapshotId, arraySnapName)
+		Log.Infof("Snapshot Name created for: %s is %s", lResponse.Entries[0].Snapshot.SnapshotId, arraySnapName)
 		//need to convert time from seconds and nanoseconds to int64 nano seconds
 		creationTime := lResponse.Entries[0].Snapshot.CreationTime.GetSeconds()*1000000000 + int64(lResponse.Entries[0].Snapshot.CreationTime.GetNanos())
 		Log.Infof("Creation time is: %d\n", creationTime)

@@ -11,8 +11,9 @@
       "endpoint": "http://127.0.0.2",
       "username": "admin",
       "password": "Password123",
-      "insecure": true,
+      "skipCertificateValidation": true,
       "isDefault": false,
-      "systemID": "15dbbf5617523655"
+      "systemID": "15dbbf5617523655-system-name",
+      "AllSystemNames" : "15dbbf5617523655-previous-name"
    }
 ]
