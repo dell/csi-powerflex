@@ -314,6 +314,16 @@ Feature: VxFlex OS CSI interface
      Given a VxFlexOS service
      And I call CleanupPrivateTarget for errors
      Then the error contains "error in CleanupPrivateTarget"
+   
+    Scenario: mount publishVolume negative test
+     Given a VxFlexOS service
+     And I call mount publishVolume
+     Then the error contains "error in publishVolume"
+   
+    Scenario: Call unpublishVolume negative test
+     Given a VxFlexOS service
+     And I call mount unpublishVolume
+     Then the error contains "error in unpublishVolume"
 
   Scenario: Call mount validateVolCapabilities negative test
      Given a VxFlexOS service

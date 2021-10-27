@@ -1955,17 +1955,38 @@ func (f *feature) iMarkRequestReadOnly() error {
 	return nil
 }
 
-func (f *feature) iCallPublishVolume() error {
-	req := f.nodePublishVolumeRequest
-	err := publishVolume(req, "", "/bad/device", 1)
+func (f *feature) iCallMountPublishVolume() error {
+	req := new(csi.NodePublishVolumeRequest)
+	req.TargetPath = "/badpath"
+	capability := new(csi.VolumeCapability)
+	accessType := new(csi.VolumeCapability_Block)
+	capability.AccessType = accessType
+	accessMode := new(csi.VolumeCapability_AccessMode)
+	capability.AccessMode = accessMode
+	req.VolumeCapability = capability
+	err := publishVolume(req, "", "/bad/device", "1")
+	if err != nil {
+		fmt.Printf("nodePublishVolume bad targetPath: %s\n", err.Error())
+		f.err = errors.New("error in publishVolume")
+	}
+	return nil
 }
 
-func (f *feature) iCallUnpublishVolume() error {
-	req := f.nodePublishVolumeRequest
+func (f *feature) iCallMountUnpublishVolume() error {
+	req := new(csi.NodeUnpublishVolumeRequest)
+	req.TargetPath = ""
+	err := unpublishVolume(req, "", "/bad/device", "1")
+	if err != nil {
+		fmt.Printf("NodeUnpublishVolume bad targetPath: %s\n", err.Error())
+		f.err = errors.New("error in unpublishVolume")
+	}
 	req.TargetPath = "/badpath"
-
-	err := unpublishVolume(req, "", "/bad/device", 1)
-
+	err = unpublishVolume(req, "", "/bad/device", "1")
+	if err != nil {
+		fmt.Printf("NodeUnpublishVolume bad device : %s\n", err.Error())
+		f.err = errors.New("error in unpublishVolume")
+	}
+	return nil
 }
 
 func (f *feature) iCallNodePublishVolume(arg1 string) error {
@@ -2003,17 +2024,24 @@ func (f *feature) iCallUnmountPrivMount() error {
 			f.err = errors.New("error in unmountPrivMount")
 		}
 	}
-	/*  needs a mounted ok device to unmount
-		gofsutil.GOFSMock.InduceGetMountsError = false
-		gofsutil.GOFSMock.InduceUnmountError = true
-		err = unmountPrivMount(*ctx, nil, "/foo/bar")
-		fmt.Printf("unmountPrivMount unmount error: %s\n", err)
-	        if err != nil {
-	                f.err = errors.New("error in unmountPrivMount")
-			f.theErrorContains(err.Error())
-	        }
-	*/
+	/*
+	//  needs a mounted ok device to unmount
+	_ = handlePrivFSMount(context.TODO(), accessMode, sysDevice, nil, "", "", "")
 
+	target := "/tmp/foo"
+	flags := make([]string, 0)
+	flags = append(flags, "rw")
+	_ = mountBlock(sysDevice, target, flags, false)
+
+	gofsutil.GOFSMock.InduceGetMountsError = false
+	gofsutil.GOFSMock.InduceUnmountError = true
+	err = unmountPrivMount(*ctx, nil, target)
+	fmt.Printf("unmountPrivMount unmount error: %s\n", err)
+	if err != nil {
+		f.err = errors.New("error in unmountPrivMount")
+		f.theErrorContains(err.Error())
+	}
+	*/
 	return nil
 }
 
@@ -2035,7 +2063,12 @@ func (f *feature) iCallHandlePrivFSMount() error {
 	accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY
 	gofsutil.GOFSMock.InduceMountError = true
 	device := "/dev/scinia"
-	sysDevice, _ := GetDevice(device)
+	sysDevice := &Device{
+		Name:     device,
+		FullPath: device,
+		RealDev:  device,
+	}
+	fmt.Printf("debug input param sysDevice %#v\n", sysDevice)
 	err := handlePrivFSMount(context.TODO(), accessMode, sysDevice, nil, "", "", "")
 	msg := "mount induced error"
 	fmt.Printf("expected handlePrivFSMount error msg = %s\n", err.Error())
@@ -3138,9 +3171,8 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call getSystemIDFromCsiVolumeID "([^"]*)"$`, f.iCallGetSystemIDFromCsiVolumeID)
 	s.Step(`^I call GetSystemIDFromParameters with bad params "([^"]*)"$`, f.iCallGetSystemIDFromParameters)
 	s.Step(`^I call getSystemName$`, f.iCallGetSystemName)
-	s.Step(`^I call publishVolume$`, f.iCallPublishVolume)
-	s.Step(`^I call unpublishVolume$`, f.iCallUnpublishVolume)
-
+	s.Step(`^I call mount publishVolume$`, f.iCallMountPublishVolume)
+	s.Step(`^I call mount unpublishVolume$`, f.iCallMountUnpublishVolume)
 	s.Step(`^I call getSystemNameError$`, f.iCallGetSystemNameError)
 	s.Step(`^I call getSystemNameMatchingError$`, f.iCallGetSystemNameMatchingError)
 	s.Step(`^an invalid config "([^"]*)"$`, f.anInvalidConfig)
