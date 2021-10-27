@@ -77,7 +77,7 @@ function usage() {
   decho "  Required"
   decho "  --namespace[=]<namespace>       Kubernetes namespace to install the CSI driver"
   decho "  --values[=]<values.yaml>        Values file, which defines configuration values"
-  decho "  --driver_verison                verify CSI Driver Image version is in values file"
+  decho "  --driver-verison                verify CSI Driver Image version is in values file"
 
   decho "  Optional"
   decho "  --skip-verify-node              Skip worker node verification checks"
@@ -510,7 +510,7 @@ while getopts ":h-:" optchar; do
       VERSION="${!OPTIND}"
       OPTIND=$((OPTIND + 1))
       ;;
-    driver_version)
+    driver-version)
       DRIVER_VERSION="${!OPTIND}"
       OPTIND=$((OPTIND + 1))
       ;;
