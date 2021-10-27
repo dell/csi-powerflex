@@ -218,8 +218,10 @@ func (f *feature) aVxFlexOSService() error {
 		if f.server == nil {
 			f.server = httptest.NewServer(handler)
 		}
-		f.service.opts.arrays[arrayID].Endpoint = f.server.URL
-		f.service.opts.arrays[arrayID2].Endpoint = f.server.URL
+		if f.service.opts.arrays != nil {
+			f.service.opts.arrays[arrayID].Endpoint = f.server.URL
+			f.service.opts.arrays[arrayID2].Endpoint = f.server.URL
+		}
 	} else {
 		f.server = nil
 	}
@@ -264,7 +266,6 @@ func (f *feature) getService() *service {
 	opts.arrays, err = getArrayConfig(*ctx)
 	if err != nil {
 		log.Printf("Read arrays from config file failed: %s\n", err)
-		return nil
 	}
 
 	opts.AutoProbe = true
@@ -2025,22 +2026,22 @@ func (f *feature) iCallUnmountPrivMount() error {
 		}
 	}
 	/*
-	//  needs a mounted ok device to unmount
-	_ = handlePrivFSMount(context.TODO(), accessMode, sysDevice, nil, "", "", "")
+		//  needs a mounted ok device to unmount
+		_ = handlePrivFSMount(context.TODO(), accessMode, sysDevice, nil, "", "", "")
 
-	target := "/tmp/foo"
-	flags := make([]string, 0)
-	flags = append(flags, "rw")
-	_ = mountBlock(sysDevice, target, flags, false)
+		target := "/tmp/foo"
+		flags := make([]string, 0)
+		flags = append(flags, "rw")
+		_ = mountBlock(sysDevice, target, flags, false)
 
-	gofsutil.GOFSMock.InduceGetMountsError = false
-	gofsutil.GOFSMock.InduceUnmountError = true
-	err = unmountPrivMount(*ctx, nil, target)
-	fmt.Printf("unmountPrivMount unmount error: %s\n", err)
-	if err != nil {
-		f.err = errors.New("error in unmountPrivMount")
-		f.theErrorContains(err.Error())
-	}
+		gofsutil.GOFSMock.InduceGetMountsError = false
+		gofsutil.GOFSMock.InduceUnmountError = true
+		err = unmountPrivMount(*ctx, nil, target)
+		fmt.Printf("unmountPrivMount unmount error: %s\n", err)
+		if err != nil {
+			f.err = errors.New("error in unmountPrivMount")
+			f.theErrorContains(err.Error())
+		}
 	*/
 	return nil
 }
@@ -2223,6 +2224,25 @@ func (f *feature) iCallUnmountAndDeleteTarget() error {
 	if err := os.Remove(targetPath); err != nil {
 		fmt.Printf("Unable to remove directory: %v", err)
 	}
+	return nil
+}
+
+func (f *feature) iCallEphemeralNodePublish() error {
+	save := ephemeralStagingMountPath
+	ephemeralStagingMountPath = "/tmp"
+	header := metadata.New(map[string]string{"csi.requestid": "1"})
+	ctx := metadata.NewIncomingContext(context.Background(), header)
+	req := new(csi.NodePublishVolumeRequest)
+	systemName := "bad-system-config"
+	req.VolumeContext = map[string]string{"csi.storage.k8s.io/ephemeral": "true", "volumeName": "xxxx", "size": "8Gi", "storagepool": "pool1", "systemID": systemName}
+	_, err := f.service.ephemeralNodePublish(ctx, req)
+	if err != nil {
+		fmt.Printf("ephemeralNodePublish 1 failed: %s\n", err.Error())
+		if f.err == nil {
+			f.err = err
+		}
+	}
+	ephemeralStagingMountPath = save
 	return nil
 }
 
@@ -3167,6 +3187,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^the ValidateConnectivity response message contains "([^"]*)"$`, f.theValidateConnectivityResponseMessageContains)
 	s.Step(`^I create false ephemeral ID$`, f.iCreateFalseEphemeralID)
 	s.Step(`^I call EphemeralNodeUnpublish$`, f.iCallEphemeralNodeUnpublish)
+	s.Step(`^I call EphemeralNodePublish$`, f.iCallEphemeralNodePublish)
 	s.Step(`^I call getVolumeIDFromCsiVolumeID "([^"]*)"$`, f.iCallGetVolumeIDFromCsiVolumeID)
 	s.Step(`^I call getSystemIDFromCsiVolumeID "([^"]*)"$`, f.iCallGetSystemIDFromCsiVolumeID)
 	s.Step(`^I call GetSystemIDFromParameters with bad params "([^"]*)"$`, f.iCallGetSystemIDFromParameters)
