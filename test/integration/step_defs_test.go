@@ -45,26 +45,26 @@ type ArrayConnectionData struct {
 }
 
 type feature struct {
-	errs                        	[]error
-	anotherSystemID             	string
-	createVolumeRequest      		*csi.CreateVolumeRequest
-	publishVolumeRequest     		*csi.ControllerPublishVolumeRequest
-	nodePublishVolumeRequest 		*csi.NodePublishVolumeRequest
-	listVolumesResponse      		*csi.ListVolumesResponse
-	listSnapshotsResponse    		*csi.ListSnapshotsResponse
-	capability               		*csi.VolumeCapability
-	capabilities             		[]*csi.VolumeCapability
-	volID                    		string
-	snapshotID               		string
-	volIDList                		[]string
-	volIDListShort           		[]string
-	maxRetryCount            		int
-	expandVolumeResponse     		*csi.ControllerExpandVolumeResponse
-	nodeExpandVolumeResponse 		*csi.NodeExpandVolumeResponse
-	controllerGetVolumeResponse  	*csi.ControllerGetVolumeResponse
-	arrays                   		map[string]*ArrayConnectionData
-	VolumeGroupSnapshot      		*volGroupSnap.CreateVolumeGroupSnapshotResponse
-	VolumeGroupSnapshot2     		*volGroupSnap.CreateVolumeGroupSnapshotResponse
+	errs                        []error
+	anotherSystemID             string
+	createVolumeRequest         *csi.CreateVolumeRequest
+	publishVolumeRequest        *csi.ControllerPublishVolumeRequest
+	nodePublishVolumeRequest    *csi.NodePublishVolumeRequest
+	listVolumesResponse         *csi.ListVolumesResponse
+	listSnapshotsResponse       *csi.ListSnapshotsResponse
+	capability                  *csi.VolumeCapability
+	capabilities                []*csi.VolumeCapability
+	volID                       string
+	snapshotID                  string
+	volIDList                   []string
+	volIDListShort              []string
+	maxRetryCount               int
+	expandVolumeResponse        *csi.ControllerExpandVolumeResponse
+	nodeExpandVolumeResponse    *csi.NodeExpandVolumeResponse
+	controllerGetVolumeResponse *csi.ControllerGetVolumeResponse
+	arrays                      map[string]*ArrayConnectionData
+	VolumeGroupSnapshot         *volGroupSnap.CreateVolumeGroupSnapshotResponse
+	VolumeGroupSnapshot2        *volGroupSnap.CreateVolumeGroupSnapshotResponse
 }
 
 // there is no way to call service.go methods from here
@@ -1519,13 +1519,13 @@ func (f *feature) iCallControllerGetVolume() error {
 	ctx := context.Background()
 	client := csi.NewControllerClient(grpcClient)
 	req := &csi.ControllerGetVolumeRequest{
-		VolumeId:   f.volID,
+		VolumeId: f.volID,
 	}
 	f.controllerGetVolumeResponse, err = client.ControllerGetVolume(ctx, req)
 	if err != nil {
 		f.addError(err)
 	}
-	
+
 	return nil
 }
 
@@ -1533,11 +1533,11 @@ func (f *feature) theVolumeconditionIs(health string) error {
 
 	abnormal := false
 
-	if health == "healthy"{
+	if health == "healthy" {
 		abnormal = false
 	}
 
-	if f.controllerGetVolumeResponse.Status.VolumeCondition.Abnormal == abnormal{
+	if f.controllerGetVolumeResponse.Status.VolumeCondition.Abnormal == abnormal {
 		fmt.Printf("the Volume is in a good condition")
 		return nil
 	}
@@ -1741,6 +1741,6 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^remove a volume from VolumeGroupSnapshotRequest$`, f.iRemoveAVolumeFromVolumeGroupSnapshotRequest)
 	s.Step(`^I call split VolumeGroupSnapshot$`, f.iCallSplitVolumeGroupSnapshot)
 	s.Step(`^I call ControllerGetVolume$`, f.iCallControllerGetVolume)
-    s.Step(`^the volumecondition is "([^"]*)"$`, f.theVolumeconditionIs)
+	s.Step(`^the volumecondition is "([^"]*)"$`, f.theVolumeconditionIs)
 
 }

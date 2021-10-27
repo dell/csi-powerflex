@@ -2178,12 +2178,12 @@ func (s *service) ControllerGetVolume(ctx context.Context, req *csi.ControllerGe
 	csiResp := &csi.ControllerGetVolumeResponse{
 		Volume: s.getCSIVolume(vol, systemID),
 		Status: &csi.ControllerGetVolumeResponse_VolumeStatus{
-				VolumeCondition: &csi.VolumeCondition{
-					Abnormal: abnormal,
-					Message: "Volume is in good condition",
-				},
+			VolumeCondition: &csi.VolumeCondition{
+				Abnormal: abnormal,
+				Message:  "Volume is in good condition",
+			},
 		},
 	}
 
-	return csiResp,nil
+	return csiResp, nil
 }

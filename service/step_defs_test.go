@@ -101,8 +101,8 @@ type feature struct {
 	listVolumesResponse                   *csi.ListVolumesResponse
 	listSnapshotsRequest                  *csi.ListSnapshotsRequest
 	listSnapshotsResponse                 *csi.ListSnapshotsResponse
-	controllerGetVolumeRequest			  *csi.ControllerGetVolumeRequest
-	ControllerGetVolumeResponse			  *csi.ControllerGetVolumeResponse
+	controllerGetVolumeRequest            *csi.ControllerGetVolumeRequest
+	ControllerGetVolumeResponse           *csi.ControllerGetVolumeResponse
 	validateVolumeHostConnectivityResp    *podmon.ValidateVolumeHostConnectivityResponse
 	listedVolumeIDs                       map[string]bool
 	listVolumesNextTokenCache             string
@@ -1508,9 +1508,9 @@ func (f *feature) aValidControllerGetCapabilitiesResponseIsReturned() error {
 			case csi.ControllerServiceCapability_RPC_CLONE_VOLUME:
 				count = count + 1
 			case csi.ControllerServiceCapability_RPC_GET_VOLUME:
-			    count = count + 1
+				count = count + 1
 			case csi.ControllerServiceCapability_RPC_VOLUME_CONDITION:
-			    count = count + 1
+				count = count + 1
 			default:
 				return fmt.Errorf("received unexpected capability: %v", typex)
 			}
@@ -2551,7 +2551,7 @@ func (f *feature) iCallControllerGetVolume() error {
 		req.VolumeId = ""
 	}
 	f.ControllerGetVolumeResponse, f.err = f.service.ControllerGetVolume(ctx, req)
-	
+
 	if f.err != nil {
 		log.Printf("Controller GetVolume call failed: %s\n", f.err.Error())
 	}
@@ -2568,7 +2568,7 @@ func (f *feature) aValidControllerGetVolumeResponseIsReturned() error {
 	fmt.Printf("volume condition is '%s'\n", f.ControllerGetVolumeResponse.Status)
 
 	return nil
-	
+
 }
 
 func (f *feature) aValidCreateVolumeSnapshotGroupResponse() error {
@@ -3084,8 +3084,6 @@ func (f *feature) iCallGetArrayConfig() error {
 	}
 	return nil
 }
-
-
 
 func FeatureContext(s *godog.ScenarioContext) {
 	f := &feature{}
