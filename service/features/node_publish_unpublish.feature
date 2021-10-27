@@ -54,6 +54,20 @@ Feature: VxFlex OS CSI interface
     And a capability with voltype "mount" access "single-writer" fstype "xfs"
     And get Node Publish Volume Request
     And I induce error <error>
+    When I call Probe
+    When I call NodePublishVolume "SDC_GUID"
+    Then the error contains <errormsg>
+
+    Examples:
+      | error                                       | errormsg                               |
+      | "NodePublishPrivateTargetAlreadyMounted"    | "Mount point already in use by device" |
+
+  Scenario Outline: Node publish mount volumes various induced error use cases from examples
+    Given a VxFlexOS service
+    And a controller published volume
+    And a capability with voltype "mount" access "single-writer" fstype "xfs"
+    And get Node Publish Volume Request
+    And I induce error <error>
     And I induce error <errorb>
     When I call Probe
     When I call NodePublishVolume "SDC_GUID"
@@ -77,7 +91,7 @@ Feature: VxFlex OS CSI interface
       | "NodePublishNoAccessType"                | "none"                   | "Volume Access Type is required"                                      |
       | "NodePublishFileTargetNotDir"            | "none"                   | "existing path is not a directory"                                    |
       | "NodePublishPrivateTargetAlreadyCreated" | "none"                   | "not published to node"                                               |
-      | "NodePublishPrivateTargetAlreadyMounted" | "none"                   | "Mount point already in use by device@@none"                          |
+      | "NodePublishPrivateTargetAlreadyMounted" | "none"                   | "Mount point already in use by device"                                |
       | "NodePublishPrivateTargetAlreadyMounted" | "GOFSMockGetMountsError" | "could not reliably determine existing mount status"                  |
       | "NodePublishBadTargetPath"               | "none"                   | "cannot find the path specified@@no such file or directory"           |
       | "NoCsiVolIDError"                        | "none"                   | "volume ID is required"                                               |

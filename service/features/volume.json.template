@@ -4,7 +4,7 @@
   "storagePoolId": "e65f9c2700000000",
   "isObfuscated": false,
   "volumeType": "ThickProvisioned",
-  "consistencyGroupId": "__CONSISTENCY_GROUP_ID__",
+  "consistencyGroupID": "__CONSISTENCY_GROUP_ID__",
   "ancestorVolumeId": "__ANCESTOR_ID__",
   "useRmcache": true,
   "creationTime": 1542129719,

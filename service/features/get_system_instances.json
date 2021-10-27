@@ -91,10 +91,10 @@
       "master": {
         "versionInfo": "R2_6.0.0",
         "managementIPs": [
-          "10.247.102.214"
+          "127.1.1.6"
         ],
         "ips": [
-          "10.247.102.214"
+          "127.1.1.6"
         ],
         "virtualInterfaces": [],
         "opensslVersion": "OpenSSL 1.0.2k-fips  26 Jan 2017",
@@ -106,16 +106,16 @@
         {
           "versionInfo": "R2_6.0.0",
           "managementIPs": [
-            "10.247.102.212"
+            "127.1.1.7"
           ],
           "ips": [
-            "10.247.102.212"
+            "127.1.1.7"
           ],
           "virtualInterfaces": [],
           "opensslVersion": "OpenSSL 1.0.2k-fips  26 Jan 2017",
           "role": "Manager",
           "status": "Normal",
-          "name": "10.247.102.212",
+          "name": "127.1.1.7",
           "id": "7e521a811a247d10",
           "port": 9011
         }
@@ -124,10 +124,10 @@
         {
           "versionInfo": "R2_6.0.0",
           "managementIPs": [
-            "10.247.102.216"
+            "127.1.1.8"
           ],
           "ips": [
-            "10.247.102.216"
+            "127.1.1.8"
           ],
           "opensslVersion": "N/A",
           "role": "TieBreaker",
@@ -183,8 +183,8 @@
   },  
   {
     "perfProfile": "Default",
-    "installId": "1c078b073d75512d",
-    "name": "mocksystem2",
+    "installId": "15dbbf5617523655",
+    "name": "15dbbf5617523655-system-name",
     "systemVersionName": "DellEMC ScaleIO Version: R2_6.0.133",
     "capacityAlertHighThresholdPercent": 80,
     "capacityAlertCriticalThresholdPercent": 90,
@@ -273,31 +273,32 @@
       "master": {
         "versionInfo": "R2_6.0.0",
         "managementIPs": [
-          "10.247.102.215"
+          "127.1.1.4"
         ],
         "ips": [
-          "10.247.102.215"
+          "127.1.1.4"
         ],
         "virtualInterfaces": [],
         "opensslVersion": "OpenSSL 1.0.2k-fips  26 Jan 2017",
         "role": "Manager",
-        "id": "0873f5bd5c3dd9a1",
+        "id": "15dbbf5617523655",
+	"name": "15dbbf5617523655-system-name",
         "port": 9011
       },
       "worker": [
         {
           "versionInfo": "R2_6.0.0",
           "managementIPs": [
-            "10.247.102.213"
+            "127.1.1.5"
           ],
           "ips": [
-            "10.247.102.213"
+            "127.1.1.5"
           ],
           "virtualInterfaces": [],
           "opensslVersion": "OpenSSL 1.0.2k-fips  26 Jan 2017",
           "role": "Manager",
           "status": "Normal",
-          "name": "10.247.102.213",
+          "name": "127.1.1.5",
           "id": "7e521a811a247d11",
           "port": 9011
         }
@@ -306,10 +307,10 @@
         {
           "versionInfo": "R2_6.0.0",
           "managementIPs": [
-            "10.247.102.217"
+            "127.1.1.9"
           ],
           "ips": [
-            "10.247.102.217"
+            "127.1.1.9"
           ],
           "opensslVersion": "N/A",
           "role": "TieBreaker",
@@ -320,7 +321,8 @@
       ],
       "goodNodesNum": 3,
       "goodReplicasNum": 2,
-      "id": "1503005277137548884"
+      "id": "15dbbf5617523655",
+      "name": "15dbbf5617523655-system-name"
     },
     "sdcSdsConnectivityInfo": {
       "sdcSdsConnectivityStatus": "AllConnected",
@@ -340,6 +342,7 @@
     "enterpriseFeaturesEnabled": true,
     "isInitialLicense": true,
     "id": "15dbbf5617523655",
+    "name": "15dbbf5617523655-system-name",
     "links": [
       {
         "rel": "self",

@@ -1,11 +1,12 @@
 package provider
 
 import (
-	"github.com/dell/csi-vxflexos/service"
+	"github.com/dell/csi-vxflexos/v2/service"
 	"github.com/dell/gocsi"
 	logrus "github.com/sirupsen/logrus"
 )
 
+//Log init
 var Log = logrus.New()
 
 // New returns a new Mock Storage Plug-in Provider.
