@@ -72,22 +72,22 @@ spec:
       labels:
         app: {{ .Release.Name }}-node
     spec:
-      {{ if .Values.node.nodeSelector }}
+      {{- if .Values.node.nodeSelector }}
       nodeSelector:
       {{- toYaml .Values.node.nodeSelector | nindent 8 }}
-      {{ end }}
-      {{ if .Values.node.tolerations }}
+      {{- end }}
+      {{- if .Values.node.tolerations }}
       tolerations:
       {{- toYaml .Values.node.tolerations | nindent 6 }}
-      {{ end }}
+      {{- end }}
       serviceAccount: {{ .Release.Name }}-node
       dnsPolicy: ClusterFirstWithHostNet
       hostNetwork: true
-      {{ if and .Values.monitor.enabled .Values.monitor.hostPID }}
+      {{- if and .Values.monitor.enabled .Values.monitor.hostPID }}
       hostPID: true
-      {{ else }}
+      {{- else }}
       hostPID: false
-      {{ end }}
+      {{- end }}
       containers:  
 {{- if hasKey .Values "podmon" }}
 {{- if eq .Values.podmon.enabled true }}
@@ -134,15 +134,15 @@ spec:
               mountPath: /var/run
             - name: vxflexos-config-params
               mountPath: /vxflexos-config-params
-{{ end }}
-{{ end }}
+{{- end }}
+{{- end }}
         - name: driver
           securityContext:
             privileged: true
             allowPrivilegeEscalation: true
             capabilities:
               add: ["SYS_ADMIN"]
-          image: {{ required "Must provide the VxFlex OS driver container image." .Values.images.driver }}
+          image: "{{ required "Must provide the driver image repository." .Values.images.driverRepository }}/{{ .Chart.Name }}:v{{ .Values.version }}"
           imagePullPolicy: {{ .Values.imagePullPolicy }}
           command: [ "/csi-vxflexos.sh" ]
           args:
@@ -180,7 +180,7 @@ spec:
               readOnly: true
 {{- end}}
         - name: registrar
-          image: {{ required "Must provide the CSI node registrar container image." .Values.images.registrar }}
+          image: {{ required "Must provide the CSI registrar container image." ( include "csi-vxflexos.registrarImage" . ) }}
           args:
             - "--v=5"
             - "--csi-address=$(ADDRESS)"
@@ -198,7 +198,7 @@ spec:
               mountPath: /registration
             - name: driver-path
               mountPath: /csi
-        {{ if eq .Values.monitor.enabled true }}
+        {{- if eq .Values.monitor.enabled true }}
         - name: sdc-monitor
           securityContext:
             privileged: true
@@ -234,7 +234,7 @@ spec:
               mountPath: /storage
             - name: udev-d
               mountPath: /rules.d
-        {{ end }}
+        {{- end }}
       initContainers:
         - name: sdc
           securityContext:
@@ -335,5 +335,5 @@ spec:
           hostPath:
             path: /var/run
             type: Directory
-{{ end }}
-{{ end }}
+{{- end }}
+{{- end }}
