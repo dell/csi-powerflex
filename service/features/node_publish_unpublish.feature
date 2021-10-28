@@ -17,6 +17,7 @@ Feature: VxFlex OS CSI interface
       | "mount" | "single-writer"   | "ext4" | "none"                                                            |
       | "mount" | "multiple-writer" | "ext4" | "Mount volumes do not support AccessMode MULTI_NODE_MULTI_WRITER" |
       | "block" | "single-writer"   | "none" | "none"                                                            |
+      | "block" | "single-reader"   | "none" | "none"                                                            |
       | "block" | "multiple-writer" | "none" | "none"                                                            |
 
   Scenario Outline: Node publish block volumes various induced error use cases from examples
@@ -47,6 +48,7 @@ Feature: VxFlex OS CSI interface
       | "NodePublishNoAccessMode"                | "Volume Access Mode is required"                            |
       | "NodePublishNoAccessType"                | "Volume Access Type is required"                            |
       | "NodePublishBadTargetPath"               | "cannot find the path specified@@no such file or directory" |
+      | "none"                                   | "none"                                                      |
 
   Scenario Outline: Node publish mount volumes various induced error use cases from examples
     Given a VxFlexOS service
@@ -200,6 +202,8 @@ Feature: VxFlex OS CSI interface
       | "block" | "single-writer"   | "none" | "none"   |
       | "block" | "multiple-writer" | "none" | "none"   |
       | "mount" | "single-writer"   | "xfs"  | "none"   |
+      | "mount" | "multi-pod-rw"    | "none" | "Mount volumes do not support AccessMode MULTI_NODE_MULTI_WRITER"   |
+      | "block" | "multi-pod-rw"    | "none" | "none"   |
 
   Scenario Outline: Node Unpublish mount volumes various induced error use cases from examples
     Given a VxFlexOS service
@@ -220,6 +224,7 @@ Feature: VxFlex OS CSI interface
       | "GOFSMockUnmountError"                   | "Error unmounting target"                            |
       | "PrivateDirectoryNotExistForNodePublish" | "none"                                               |
       | "NoCsiVolIDError"                        | "volume ID is required"                              |
+      | "none"                                   | "none"                                               |
 
   Scenario: Induce Node Unpublish mount volumes ephemeral ID failure
     Given a VxFlexOS service
@@ -269,6 +274,7 @@ Feature: VxFlex OS CSI interface
     When I call getMappedVols with volID "c0f055aa00000000" and sysID "34dbbf5617523654"
     Then the volume "c0f055aa00000000" is from the correct system "34dbbf5617523654"
 
+  @wip
   Scenario: Call CleanupPrivateTarget to verify that when target mounts exist, private target is not deleted
     Given a VxFlexOS service
     And a controller published volume
@@ -278,6 +284,56 @@ Feature: VxFlex OS CSI interface
     And I call NodePublishVolume "SDC_GUID"
     And I call CleanupPrivateTarget 
     Then the error contains "Cannot delete private mount as target mount exist"
+
+   Scenario: Call removeWithRetry negative test
+     Given a VxFlexOS service
+     And I call removeWithRetry
+     Then the error contains "read-only file system"
+
+   Scenario: Call I call unmountPrivMount negative test
+     Given a VxFlexOS service
+     And I call unmountPrivMount
+     Then the error contains "error in unmountPrivMount"
+
+   Scenario: Call I call getPathMounts negative test
+     Given a VxFlexOS service
+     And I call getPathMounts
+     Then the error contains "error in GetPathMounts"
+   
+   Scenario: Call handlePrivFSMount  negative test
+     Given a VxFlexOS service
+     And I call handlePrivFSMount
+     Then the error contains "error in handlePrivFSMount"
+
+   Scenario: Call evalSymlinks negative test
+     Given a VxFlexOS service
+     And I call evalSymlinks
+     Then the error contains "error in evalSymlinks"
+
+   Scenario: Call evalSymlinks negative test
+     Given a VxFlexOS service
+     And I call CleanupPrivateTarget for errors
+     Then the error contains "error in CleanupPrivateTarget"
+   
+    Scenario: mount publishVolume negative test
+     Given a VxFlexOS service
+     And I call mount publishVolume
+     Then the error contains "error in publishVolume"
+   
+    Scenario: Call unpublishVolume negative test
+     Given a VxFlexOS service
+     And I call mount unpublishVolume
+     Then the error contains "error in unpublishVolume"
+
+  Scenario: Call mount validateVolCapabilities negative test
+     Given a VxFlexOS service
+     And I call mountValidateBlockVolCapabilities
+     Then the error contains "Unknown Access Mode"
+
+  Scenario: Call block validateVolCapabilities negative test
+     Given a VxFlexOS service
+     And I call blockValidateBlockVolCapabilities
+     Then the error contains "Unknown Access Mode"
 
   Scenario: Check if the CleanupPrivateTarget target deletes private target when there are no target mounts.
     Given a VxFlexOS service
