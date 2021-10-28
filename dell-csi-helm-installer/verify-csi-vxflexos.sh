@@ -14,12 +14,12 @@ function verify-csi-vxflexos() {
   verify_k8s_versions "1.20" "1.22"
   verify_openshift_versions "4.6" "4.8"
   verify_namespace "${NS}"
+  verify_helm_values_version "${DRIVER_VERSION}"
   verify_required_secrets "${RELEASE}-config"
   verify_sdc_installation
   verify_alpha_snap_resources
   verify_snap_requirements
   verify_helm_3
-  verify_helm_values_version 2.0.0
   verify_authorization_proxy_server
 }
 
