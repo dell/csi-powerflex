@@ -2549,12 +2549,21 @@ func (f *feature) iCallControllerGetVolume() error {
 	}
 	if stepHandlersErrors.NoVolumeIDError {
 		req.VolumeId = ""
+<<<<<<< HEAD
 	}
 	f.ControllerGetVolumeResponse, f.err = f.service.ControllerGetVolume(ctx, req)
 
 	if f.err != nil {
 		log.Printf("Controller GetVolume call failed: %s\n", f.err.Error())
 	}
+=======
+	}
+	f.ControllerGetVolumeResponse, f.err = f.service.ControllerGetVolume(ctx, req)
+
+	if f.err != nil {
+		log.Printf("Controller GetVolume call failed: %s\n", f.err.Error())
+	}
+>>>>>>> 3e50ce442f38c11eee06580145e096e613b92749
 	fmt.Printf("Response from ControllerGetVolume is %v", f.ControllerGetVolumeResponse)
 	return nil
 }
