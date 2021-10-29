@@ -215,7 +215,7 @@ spec:
             - name: socket-dir
               mountPath: /var/run/csi
         - name: csi-external-health-monitor-controller
-          image: {{ required "Must provide the CSI attacher container image." .Values.images.healthmonitor }}
+          image: {{ required "Must provide the CSI external health monitor image." ( include "csi-vxflexos.healthmonitorImage" . ) }}
           imagePullPolicy: {{ .Values.imagePullPolicy }}
           args:
             - "--csi-address=$(ADDRESS)"
