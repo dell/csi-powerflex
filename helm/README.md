@@ -8,7 +8,12 @@ The general outline is:
 
     2. Create a Kubernetes secret with the PowerFlex credentials using the template in secret.yaml.
 
-    3. Copy the `csi-vxflexos/values.yaml` to a file  `myvalues.yaml` in this directory and fill in various installation parameters.
+    3. Copy the `csi-vxflexos/values.yaml` to a file  `csi-vxflexos/myvalues.yaml` in this directory and fill in various installation parameters.
 
-    4. Invoke the `install.vxflexos` shell script which deploys the helm chart in csi-vxflexos.
+    4. Run with the dry-run flag use this command line to confirm various parameters are as desired  
+	   helm install --dry-run --values ./csi-vxflexos/myvalues.yaml --namespace vxflexos vxflexos ./csi-vxflexos"
+
+       Run without the  "--dry-run" flag  to deploy the csi-driver
+
+    4. Or use `csi-install.sh` shell script which deploys the helm chart for csi-vxflexos driver.
     
