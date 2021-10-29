@@ -2145,8 +2145,10 @@ func (s *service) Clone(req *csi.CreateVolumeRequest,
 
 }
 
+// ControllerGetVolume fetch current information about a volume
+// returns volume condition if found else returns not found
 func (s *service) ControllerGetVolume(ctx context.Context, req *csi.ControllerGetVolumeRequest) (*csi.ControllerGetVolumeResponse, error) {
-	Log.Printf("reqs: %v", req)
+
 	abnormal := false
 	csiVolID := req.GetVolumeId()
 	if csiVolID == "" {
@@ -2163,8 +2165,8 @@ func (s *service) ControllerGetVolume(ctx context.Context, req *csi.ControllerGe
 		return nil, status.Error(codes.InvalidArgument,
 			"systemID is not found in the request and there is no default system")
 	}
+	// Get Volume by ID if not found return error
 	vol, err := s.getVolByID(volID, systemID)
-
 	if err != nil {
 		if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
 			return nil, status.Error(codes.NotFound,
