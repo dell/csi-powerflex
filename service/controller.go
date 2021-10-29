@@ -1444,13 +1444,6 @@ func (s *service) ControllerGetCapabilities(
 			{
 				Type: &csi.ControllerServiceCapability_Rpc{
 					Rpc: &csi.ControllerServiceCapability_RPC{
-						Type: csi.ControllerServiceCapability_RPC_LIST_VOLUMES,
-					},
-				},
-			},
-			{
-				Type: &csi.ControllerServiceCapability_Rpc{
-					Rpc: &csi.ControllerServiceCapability_RPC{
 						Type: csi.ControllerServiceCapability_RPC_GET_CAPACITY,
 					},
 				},
@@ -1480,6 +1473,20 @@ func (s *service) ControllerGetCapabilities(
 				Type: &csi.ControllerServiceCapability_Rpc{
 					Rpc: &csi.ControllerServiceCapability_RPC{
 						Type: csi.ControllerServiceCapability_RPC_CLONE_VOLUME,
+					},
+				},
+			},
+			{
+				Type: &csi.ControllerServiceCapability_Rpc{
+					Rpc: &csi.ControllerServiceCapability_RPC{
+						Type: csi.ControllerServiceCapability_RPC_GET_VOLUME,
+					},
+				},
+			},
+			{
+				Type: &csi.ControllerServiceCapability_Rpc{
+					Rpc: &csi.ControllerServiceCapability_RPC{
+						Type: csi.ControllerServiceCapability_RPC_VOLUME_CONDITION,
 					},
 				},
 			},
@@ -2138,7 +2145,45 @@ func (s *service) Clone(req *csi.CreateVolumeRequest,
 
 }
 
-func (s *service) ControllerGetVolume(context.Context,
-	*csi.ControllerGetVolumeRequest) (*csi.ControllerGetVolumeResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "")
+func (s *service) ControllerGetVolume(ctx context.Context, req *csi.ControllerGetVolumeRequest) (*csi.ControllerGetVolumeResponse, error) {
+	Log.Printf("reqs: %v", req)
+	abnormal := false
+	csiVolID := req.GetVolumeId()
+	if csiVolID == "" {
+		return nil, status.Error(codes.InvalidArgument,
+			"volume ID is required")
+	}
+	volID := getVolumeIDFromCsiVolumeID(csiVolID)
+	systemID := s.getSystemIDFromCsiVolumeID(csiVolID)
+	if systemID == "" {
+		// use default system
+		systemID = s.opts.defaultSystemID
+	}
+	if systemID == "" {
+		return nil, status.Error(codes.InvalidArgument,
+			"systemID is not found in the request and there is no default system")
+	}
+	vol, err := s.getVolByID(volID, systemID)
+
+	if err != nil {
+		if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
+			return nil, status.Error(codes.NotFound,
+				"volume not found")
+		}
+		return nil, status.Errorf(codes.Internal,
+			"failure checking volume status before controller publish: %s",
+			err.Error())
+	}
+
+	csiResp := &csi.ControllerGetVolumeResponse{
+		Volume: s.getCSIVolume(vol, systemID),
+		Status: &csi.ControllerGetVolumeResponse_VolumeStatus{
+				VolumeCondition: &csi.VolumeCondition{
+					Abnormal: abnormal,
+					Message: "Volume is in good condition",
+				},
+		},
+	}
+
+	return csiResp,nil
 }

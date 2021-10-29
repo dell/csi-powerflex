@@ -101,6 +101,8 @@ type feature struct {
 	listVolumesResponse                   *csi.ListVolumesResponse
 	listSnapshotsRequest                  *csi.ListSnapshotsRequest
 	listSnapshotsResponse                 *csi.ListSnapshotsResponse
+	controllerGetVolumeRequest			  *csi.ControllerGetVolumeRequest
+	ControllerGetVolumeResponse			  *csi.ControllerGetVolumeResponse
 	validateVolumeHostConnectivityResp    *podmon.ValidateVolumeHostConnectivityResponse
 	listedVolumeIDs                       map[string]bool
 	listVolumesNextTokenCache             string
@@ -1505,11 +1507,15 @@ func (f *feature) aValidControllerGetCapabilitiesResponseIsReturned() error {
 				count = count + 1
 			case csi.ControllerServiceCapability_RPC_CLONE_VOLUME:
 				count = count + 1
+			case csi.ControllerServiceCapability_RPC_GET_VOLUME:
+			    count = count + 1
+			case csi.ControllerServiceCapability_RPC_VOLUME_CONDITION:
+			    count = count + 1
 			default:
 				return fmt.Errorf("received unexpected capability: %v", typex)
 			}
 		}
-		if count != 8 {
+		if count != 10 {
 			return errors.New("Did not retrieve all the expected capabilities")
 		}
 		return nil
@@ -2535,14 +2541,34 @@ func (f *feature) iCallCheckCreationTime() error {
 }
 
 func (f *feature) iCallControllerGetVolume() error {
-	ctx := context.Background()
-	req := new(csi.ControllerGetVolumeRequest)
-	resp, err := f.service.ControllerGetVolume(ctx, req)
-	if err != nil {
-		f.err = err
+
+	header := metadata.New(map[string]string{"csi.requestid": "1"})
+	ctx := metadata.NewIncomingContext(context.Background(), header)
+	req := &csi.ControllerGetVolumeRequest{
+		VolumeId: sdcVolume1,
 	}
-	fmt.Printf("Response from ControllerGetVolume is %v", resp)
+	if stepHandlersErrors.NoVolumeIDError {
+		req.VolumeId = ""
+	}
+	f.ControllerGetVolumeResponse, f.err = f.service.ControllerGetVolume(ctx, req)
+	
+	if f.err != nil {
+		log.Printf("Controller GetVolume call failed: %s\n", f.err.Error())
+	}
+	fmt.Printf("Response from ControllerGetVolume is %v", f.ControllerGetVolumeResponse)
 	return nil
+}
+
+func (f *feature) aValidControllerGetVolumeResponseIsReturned() error {
+	if f.err != nil {
+		return f.err
+	}
+
+	fmt.Printf("volume is %v\n", f.ControllerGetVolumeResponse.Volume)
+	fmt.Printf("volume condition is '%s'\n", f.ControllerGetVolumeResponse.Status)
+
+	return nil
+	
 }
 
 func (f *feature) aValidCreateVolumeSnapshotGroupResponse() error {
@@ -3059,6 +3085,8 @@ func (f *feature) iCallGetArrayConfig() error {
 	return nil
 }
 
+
+
 func FeatureContext(s *godog.ScenarioContext) {
 	f := &feature{}
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
@@ -3207,6 +3235,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^a valid CreateVolumeSnapshotGroup response is returned$`, f.aValidCreateVolumeSnapshotGroupResponse)
 	s.Step(`^I call CheckCreationTime$`, f.iCallCheckCreationTime)
 	s.Step(`^I call ControllerGetVolume$`, f.iCallControllerGetVolume)
+	s.Step(`^a valid ControllerGetVolumeResponse is returned$`, f.aValidControllerGetVolumeResponseIsReturned)
 	s.Step(`^remove a volume from VolumeGroupSnapshotRequest$`, f.iRemoveAVolumeFromVolumeGroupSnapshotRequest)
 	s.Step(`^I call DynamicLogChange "([^"]*)"$`, f.iCallDynamicLogChange)
 	s.Step(`^a valid DynamicLogChange occurs "([^"]*)" "([^"]*)"$`, f.aValidDynamicLogChange)
