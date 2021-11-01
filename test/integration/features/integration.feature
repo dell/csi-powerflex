@@ -593,7 +593,7 @@ Scenario: Call DeleteVolumeGroupSnapshot
    Given a VxFlexOS service
    When I call DeleteVolumeGroupSnapshot 
    Then the error message should contain "none"
-@wip
+
 Scenario: Call ControllerGetVolume with Good VolumeID
   Given a VxFlexOS service
   And a capability with voltype "mount" access "single-writer" fstype "ext4"
@@ -613,7 +613,7 @@ Scenario: Call ControllerGetVolume with Good VolumeID
   And when I call DeleteVolume
   Then there are no errors
 
-@wip
+
 Scenario: Call ControllerGetVolume with No VolumeID
   Given a VxFlexOS service
   And a capability with voltype "mount" access "single-writer" fstype "ext4"
