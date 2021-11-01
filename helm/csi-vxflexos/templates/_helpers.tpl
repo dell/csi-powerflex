@@ -72,13 +72,13 @@ Return the appropriate sidecar images based on k8s version
 {{- define "csi-vxflexos.healthmonitorImage" -}}
   {{- if eq .Capabilities.KubeVersion.Major "1" }}
     {{- if eq ( trimSuffix "+" .Capabilities.KubeVersion.Minor ) "19" }}
-      {{- print "k8s.gcr.io/sig-storage/csi-external-health-monitor-controller:v0.4.0" -}}
+      {{- print "gcr.io/k8s-staging-sig-storage/csi-external-health-monitor-controller:v0.4.0" -}}
     {{- else if and (ge (trimSuffix "+" .Capabilities.KubeVersion.Minor) "20") (le (trimSuffix "+" .Capabilities.KubeVersion.Minor) "21") -}}
-      {{- print "k8s.gcr.io/sig-storage/csi-external-health-monitor-controller:v0.4.0" -}}
+      {{- print "gcr.io/k8s-staging-sig-storage/csi-external-health-monitor-controller:v0.4.0" -}}
     {{- else if ge (trimSuffix "+" .Capabilities.KubeVersion.Minor ) "22" -}}
-      {{- print "k8s.gcr.io/sig-storage/csi-external-health-monitor-controller:v0.4.0" -}}
+      {{- print "gcr.io/k8s-staging-sig-storage/csi-external-health-monitor-controller:v0.4.0" -}}
     {{- else -}}
-      {{- print "k8s.gcr.io/sig-storage/csi-external-health-monitor-controller:v0.4.0" -}}
+      {{- print "gcr.io/k8s-staging-sig-storage/csi-external-health-monitor-controller:v0.4.0" -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}
