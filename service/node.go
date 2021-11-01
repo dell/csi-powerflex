@@ -542,6 +542,8 @@ func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolume
 	}
 
 	//check if volume exists
+
+	volID := getVolumeIDFromCsiVolumeID(csiVolID)
 	systemID := s.getSystemIDFromCsiVolumeID(csiVolID)
 
 	if systemID == "" {
@@ -549,23 +551,23 @@ func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolume
 		systemID = s.opts.defaultSystemID
 	}
 
-	volID := getVolumeIDFromCsiVolumeID(csiVolID)
-
-	vol, _, err := s.listVolumes(systemID, 0, 0, true, false, volID, "")
-
-	if err != nil || len(vol) == 0 || vol[0].ID != volID {
-		return nil, status.Errorf(codes.NotFound, "volume with ID '%s' not found on array %s", volID, systemID)
-	}
-
-	//check if volume is known to SDC
-	_, err = s.getSDCMappedVol(volID, systemID, 30)
+	_, err := s.getSDCMappedVol(volID, systemID, 30)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "volume with ID '%s' not found on SDC", volID)
+		//volume not known to SDC, next check if it exists at all
+		vol, _, err := s.listVolumes(systemID, 0, 0, true, false, volID, "")
+
+		if err != nil || len(vol) == 0 || vol[0].ID != volID {
+			return nil, status.Errorf(codes.NotFound, "volume with ID '%s' not found on array %s", volID, systemID)
+		}
+		//volume was found, but was not known to SDC. This is abnormal.
+		healthy = false
+		message = fmt.Sprintf("volume: %s was not known to SDC: %v", volID, err)
+
 	}
 
 	//check if volume path is accessible
 	_, err = os.ReadDir(volPath)
-	if err != nil {
+	if err != nil && healthy {
 		healthy = false
 		message = fmt.Sprintf("volume path: %s is not accessible: %v", volPath, err)
 	}

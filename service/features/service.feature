@@ -718,7 +718,7 @@ Feature: VxFlex OS CSI interface
       | "NoVolIDError"           | "no volume ID  provided"   |
       | "BadMountPathError"      | "none"                     | 
       | "NoMountPathError"       | "no volume Path provided"  | 
-      | "NoVolIDSDCError"        | "not found on SDC"         |  
+      | "NoVolIDSDCError"        | "none"                     |  
       | "GOFSMockGetMountsError" | "none"                     |
 
   Scenario: Call getSystemNameMatchingError, should get error in log but no error returned
