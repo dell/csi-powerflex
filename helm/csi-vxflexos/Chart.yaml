@@ -1,6 +1,6 @@
 apiVersion: v2
 appVersion: "2.0.0"
-kubeVersion: ">= 1.19.0 <= 1.22.0"
+kubeVersion: ">= 1.19.0 < 1.23.0"
 description: |
   VxFlex OS CSI (Container Storage Interface) driver Kubernetes
   integration. This chart includes everything required to provision via CSI as
