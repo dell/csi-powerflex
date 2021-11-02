@@ -270,7 +270,7 @@ spec:
               mountPath: /var/run/csi
 {{- end }}
 {{- end }}
-{{- if hasKey .Values.controller "authorization" }}
+{{- if hasKey .Values "authorization" }}
 {{- if eq .Values.authorization.enabled true }}
         - name: karavi-authorization-proxy
           imagePullPolicy: Always
