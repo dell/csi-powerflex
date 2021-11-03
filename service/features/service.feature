@@ -714,7 +714,7 @@ Feature: VxFlex OS CSI interface
     Examples:
       | error                    | errormsg                   | 
       | "none"                   | "none"                     | 
-      | "BadVolIDError"          | "not found on array"       | 
+      | "BadVolIDError"          | "none"                     | 
       | "NoVolIDError"           | "no volume ID  provided"   |
       | "BadMountPathError"      | "none"                     | 
       | "NoMountPathError"       | "no volume Path provided"  | 

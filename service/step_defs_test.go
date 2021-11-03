@@ -2163,7 +2163,7 @@ func (f *feature) iCallNodeGetVolumeStats() error {
 }
 
 func (f *feature) aCorrectNodeGetVolumeStatsResponse() error {
-	if stepHandlersErrors.NoVolIDError || stepHandlersErrors.NoMountPathError || stepHandlersErrors.BadVolIDError {
+	if stepHandlersErrors.NoVolIDError || stepHandlersErrors.NoMountPathError {
 		//errors and no responses should be returned in these instances
 		if f.nodeGetVolumeStatsResponse == nil {
 			fmt.Printf("Response check passed\n")
@@ -2198,6 +2198,11 @@ func (f *feature) aCorrectNodeGetVolumeStatsResponse() error {
 		message = "not known to SDC"
 		usage = false
 
+	}
+	if stepHandlersErrors.BadVolIDError {
+		abnormal = true
+	        message = "not found on array"
+		usage = false
 	}
 
 	//check message and abnormal state returned in NodeGetVolumeStatsResponse.VolumeCondition
