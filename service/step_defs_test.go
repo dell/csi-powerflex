@@ -2201,7 +2201,7 @@ func (f *feature) aCorrectNodeGetVolumeStatsResponse() error {
 	}
 	if stepHandlersErrors.BadVolIDError {
 		abnormal = true
-	        message = "not found on array"
+		message = "not found on array"
 		usage = false
 	}
 
