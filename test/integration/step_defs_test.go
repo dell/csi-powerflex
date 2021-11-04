@@ -1536,11 +1536,20 @@ func (f *feature) theVolumeconditionIs(health string) error {
 	if health == "healthy" {
 		abnormal = false
 	}
+	
+	if health == "unhealthy" {
+                abnormal = true
+        }
 
 	if f.controllerGetVolumeResponse.Status.VolumeCondition.Abnormal == abnormal {
 		fmt.Printf("the Volume is in a good condition")
 		return nil
 	}
+	
+	if f.controllerGetVolumeResponse.Status.VolumeCondition.Abnormal == abnormal {
+                fmt.Printf("the Volume is not found")
+                return nil
+        }
 	return nil
 }
 

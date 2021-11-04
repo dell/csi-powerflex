@@ -86,6 +86,7 @@ const (
 
 var (
 	interestingParameters = [...]string{0: "FsType", 1: KeyMkfsFormatOption}
+	volCount = 0
 )
 
 func (s *service) CreateVolume(
@@ -2165,15 +2166,23 @@ func (s *service) ControllerGetVolume(ctx context.Context, req *csi.ControllerGe
 		return nil, status.Error(codes.InvalidArgument,
 			"systemID is not found in the request and there is no default system")
 	}
-	// Get Volume by ID if not found return error
+
 	vol, err := s.getVolByID(volID, systemID)
 	if err != nil {
-		if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
-			return nil, status.Error(codes.NotFound,
-				"volume not found")
+		if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound){
+			message := fmt.Sprintf("Volume is not found by controller at %s",time.Now().Format("2006-01-02 15:04:05"))
+			return &csi.ControllerGetVolumeResponse{
+				Volume: nil,
+				Status: &csi.ControllerGetVolumeResponse_VolumeStatus{
+					VolumeCondition: &csi.VolumeCondition{
+						Abnormal: true,
+						Message:  message,
+					},
+				},
+			}, nil
 		}
 		return nil, status.Errorf(codes.Internal,
-			"failure checking volume status before controller publish: %s",
+			"Volume status could not be determined: %s",
 			err.Error())
 	}
 
