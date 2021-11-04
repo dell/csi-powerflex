@@ -2201,7 +2201,7 @@ func (f *feature) aCorrectNodeGetVolumeStatsResponse() error {
 
 	if stepHandlersErrors.NoVolIDSDCError {
 		abnormal = true
-		message = "not known to SDC"
+		message = "not mapped to host"
 		usage = false
 
 	}

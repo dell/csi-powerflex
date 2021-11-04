@@ -554,49 +554,78 @@ func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolume
 	_, err := s.getSDCMappedVol(volID, systemID, 30)
 	if err != nil {
 		//volume not known to SDC, next check if it exists at all
-		vol, _, err := s.listVolumes(systemID, 0, 0, false, false, volID, "")
+		_, _, err := s.listVolumes(systemID, 0, 0, false, false, volID, "")
 
-		if err != nil && !strings.Contains(err.Error(), "not find") {
+		if err != nil && strings.Contains(err.Error(), "not find") {
+			message = fmt.Sprintf("Could not get volume with ID '%s' from array %s due to error: %s", volID, systemID, err)
+
+		} else if err != nil {
 			//err wasn't not found, return error
 			return nil, err
-		}
-
-		if err != nil || len(vol) == 0 || vol[0].ID != volID {
-			message = fmt.Sprintf("Could not get volume with ID '%s' from array %s due to error: %s", volID, systemID, err)
 		}
 		//volume was found, but was not known to SDC. This is abnormal.
 		healthy = false
 		if message == "" {
-			message = fmt.Sprintf("volume: %s was not known to SDC: %v", volID, err)
+			message = fmt.Sprintf("volume: %s was not mapped to host: %v", volID, err)
 		}
 
 	}
 
 	//check if volume path is accessible
-	_, err = os.ReadDir(volPath)
-	if err != nil && healthy {
-		healthy = false
-		message = fmt.Sprintf("volume path: %s is not accessible: %v", volPath, err)
-	}
-
-	//check if path is mounted on node
-	mounts, err := getPathMounts(volPath)
-	if len(mounts) > 0 {
-		for _, m := range mounts {
-			if m.Path == volPath {
-				Log.Infof("volPath: %s is mounted", volPath)
-				mounted = true
-			}
+	if healthy {
+		_, err = os.ReadDir(volPath)
+		if err != nil && healthy {
+			healthy = false
+			message = fmt.Sprintf("volume path: %s is not accessible: %v", volPath, err)
 		}
 	}
-	if healthy && (len(mounts) == 0 || mounted == false) {
-		healthy = false
-		message = fmt.Sprintf("volPath: %s is not mounted", volPath)
+
+	if healthy {
+
+		//check if path is mounted on node
+		mounts, err := getPathMounts(volPath)
+		if len(mounts) > 0 {
+			for _, m := range mounts {
+				if m.Path == volPath {
+					Log.Infof("volPath: %s is mounted", volPath)
+					mounted = true
+				}
+			}
+		}
+		if len(mounts) == 0 || mounted == false || err != nil {
+			healthy = false
+			message = fmt.Sprintf("volPath: %s is not mounted: %v", volPath, err)
+		}
+
 	}
 
-	if !healthy {
+	if healthy {
 
+		availableBytes, totalBytes, usedBytes, totalInodes, freeInodes, usedInodes, err := k8sutilfs.Info(volPath)
+		if err != nil {
+			return &csi.NodeGetVolumeStatsResponse{
+				VolumeCondition: &csi.VolumeCondition{
+					Abnormal: false,
+					Message:  fmt.Sprintf("failed to get metrics for volume with error: %v", err),
+				},
+			}, nil
+
+		}
 		return &csi.NodeGetVolumeStatsResponse{
+			Usage: []*csi.VolumeUsage{
+				{
+					Available: availableBytes,
+					Total:     totalBytes,
+					Used:      usedBytes,
+					Unit:      csi.VolumeUsage_BYTES,
+				},
+				{
+					Available: freeInodes,
+					Total:     totalInodes,
+					Used:      usedInodes,
+					Unit:      csi.VolumeUsage_INODES,
+				},
+			},
 			VolumeCondition: &csi.VolumeCondition{
 				Abnormal: !healthy,
 				Message:  message,
@@ -605,26 +634,7 @@ func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolume
 
 	}
 
-	availableBytes, totalBytes, usedBytes, totalInodes, freeInodes, usedInodes, err := k8sutilfs.Info(volPath)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to get metrics for volume with error: %v", err)
-	}
-
 	return &csi.NodeGetVolumeStatsResponse{
-		Usage: []*csi.VolumeUsage{
-			{
-				Available: availableBytes,
-				Total:     totalBytes,
-				Used:      usedBytes,
-				Unit:      csi.VolumeUsage_BYTES,
-			},
-			{
-				Available: freeInodes,
-				Total:     totalInodes,
-				Used:      usedInodes,
-				Unit:      csi.VolumeUsage_INODES,
-			},
-		},
 		VolumeCondition: &csi.VolumeCondition{
 			Abnormal: !healthy,
 			Message:  message,
