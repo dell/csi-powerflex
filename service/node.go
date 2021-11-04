@@ -554,7 +554,7 @@ func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolume
 	_, err := s.getSDCMappedVol(volID, systemID, 30)
 	if err != nil {
 		//volume not known to SDC, next check if it exists at all
-		vol, _, err := s.listVolumes(systemID, 0, 0, true, false, volID, "")
+		vol, _, err := s.listVolumes(systemID, 0, 0, false, false, volID, "")
 
 		if err != nil || len(vol) == 0 || vol[0].ID != volID {
 			message = fmt.Sprintf("volume with ID '%s' not found on array %s", volID, systemID)
