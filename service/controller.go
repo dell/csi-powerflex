@@ -86,7 +86,6 @@ const (
 
 var (
 	interestingParameters = [...]string{0: "FsType", 1: KeyMkfsFormatOption}
-	volCount = 0
 )
 
 func (s *service) CreateVolume(
@@ -2169,8 +2168,8 @@ func (s *service) ControllerGetVolume(ctx context.Context, req *csi.ControllerGe
 
 	vol, err := s.getVolByID(volID, systemID)
 	if err != nil {
-		if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound){
-			message := fmt.Sprintf("Volume is not found by controller at %s",time.Now().Format("2006-01-02 15:04:05"))
+		if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) {
+			message := fmt.Sprintf("Volume is not found by controller at %s", time.Now().Format("2006-01-02 15:04:05"))
 			return &csi.ControllerGetVolumeResponse{
 				Volume: nil,
 				Status: &csi.ControllerGetVolumeResponse_VolumeStatus{
