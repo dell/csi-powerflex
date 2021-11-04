@@ -73,6 +73,7 @@ var (
 		NoMountPathError              bool
 		NoVolIDError                  bool
 		NoVolIDSDCError               bool
+		NoVolError                    bool
 	}
 )
 
@@ -149,6 +150,7 @@ func getHandler() http.Handler {
 	stepHandlersErrors.NoMountPathError = false
 	stepHandlersErrors.NoVolIDError = false
 	stepHandlersErrors.NoVolIDSDCError = false
+	stepHandlersErrors.NoVolError = false
 	sdcMappings = sdcMappings[:0]
 	sdcMappingsID = ""
 	return handler

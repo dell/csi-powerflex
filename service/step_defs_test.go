@@ -946,6 +946,8 @@ func (f *feature) iInduceError(errtype string) error {
 		stepHandlersErrors.NoVolIDError = true
 	case "NoVolIDSDCError":
 		stepHandlersErrors.NoVolIDSDCError = true
+	case "NoVolError":
+		stepHandlersErrors.NoVolError = true
 	case "SetVolumeSizeError":
 		stepHandlersErrors.SetVolumeSizeError = true
 	case "NoSymlinkForNodePublish":
@@ -2155,6 +2157,10 @@ func (f *feature) iCallNodeGetVolumeStats() error {
 	if stepHandlersErrors.NoVolIDSDCError {
 		VolumeID = goodVolumeID
 	}
+	if stepHandlersErrors.NoVolError {
+		VolumeID = "435645643"
+		stepHandlersErrors.SIOGatewayVolumeNotFoundError = true
+	}
 	req := &csi.NodeGetVolumeStatsRequest{VolumeId: VolumeID, VolumePath: VolumePath}
 
 	f.nodeGetVolumeStatsResponse, f.err = f.service.NodeGetVolumeStats(*ctx, req)
@@ -2163,7 +2169,7 @@ func (f *feature) iCallNodeGetVolumeStats() error {
 }
 
 func (f *feature) aCorrectNodeGetVolumeStatsResponse() error {
-	if stepHandlersErrors.NoVolIDError || stepHandlersErrors.NoMountPathError {
+	if stepHandlersErrors.NoVolIDError || stepHandlersErrors.NoMountPathError || stepHandlersErrors.BadVolIDError {
 		//errors and no responses should be returned in these instances
 		if f.nodeGetVolumeStatsResponse == nil {
 			fmt.Printf("Response check passed\n")
@@ -2199,9 +2205,10 @@ func (f *feature) aCorrectNodeGetVolumeStatsResponse() error {
 		usage = false
 
 	}
-	if stepHandlersErrors.BadVolIDError {
+
+	if stepHandlersErrors.NoVolError {
 		abnormal = true
-		message = "not found on array"
+		message = "Could not find the volume"
 		usage = false
 	}
 

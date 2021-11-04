@@ -469,13 +469,13 @@ func (s *service) NodeGetCapabilities(
 				},
 			},
 
-			//{
-			//Type: &csi.NodeServiceCapability_Rpc{
-			//Rpc: &csi.NodeServiceCapability_RPC{
-			//	Type: csi.NodeServiceCapability_RPC_GET_VOLUME_STATS,
-			//},
-			//},
-			//},
+			{
+				Type: &csi.NodeServiceCapability_Rpc{
+					Rpc: &csi.NodeServiceCapability_RPC{
+						Type: csi.NodeServiceCapability_RPC_GET_VOLUME_STATS,
+					},
+				},
+			},
 		},
 	}, nil
 
@@ -556,8 +556,13 @@ func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolume
 		//volume not known to SDC, next check if it exists at all
 		vol, _, err := s.listVolumes(systemID, 0, 0, false, false, volID, "")
 
+		if err != nil && !strings.Contains(err.Error(), "not find") {
+			//err wasn't not found, return error
+			return nil, err
+		}
+
 		if err != nil || len(vol) == 0 || vol[0].ID != volID {
-			message = fmt.Sprintf("volume with ID '%s' not found on array %s", volID, systemID)
+			message = fmt.Sprintf("Could not get volume with ID '%s' from array %s due to error: %s", volID, systemID, err)
 		}
 		//volume was found, but was not known to SDC. This is abnormal.
 		healthy = false
