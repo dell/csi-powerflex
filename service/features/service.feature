@@ -699,7 +699,7 @@ Feature: VxFlex OS CSI interface
       | "CorrectFormatBadCsiVolIDInNodeExpand"  | "test/tmp/datadir"  | "is not configured in the driver"           |
       | "VolumeIDTooShortErrorInNodeExpand"     | "test/tmp/datadir"  | "is shorter than 3 chars, returning error"  |
       | "TooManyDashesVolIDInNodeExpand"        | "test/tmp/datadir"  | "is not configured in the driver"           |
- 
+  
   Scenario Outline: Call NodeGetVolumeStats with various errors
     Given a VxFlexOS service
     And a controller published volume
@@ -714,12 +714,13 @@ Feature: VxFlex OS CSI interface
     Examples:
       | error                    | errormsg                   | 
       | "none"                   | "none"                     | 
-      | "BadVolIDError"          | "none"                     | 
+      | "BadVolIDError"          | "id must be a hexadecimal" | 
       | "NoVolIDError"           | "no volume ID  provided"   |
       | "BadMountPathError"      | "none"                     | 
       | "NoMountPathError"       | "no volume Path provided"  | 
       | "NoVolIDSDCError"        | "none"                     |  
       | "GOFSMockGetMountsError" | "none"                     |
+      | "NoVolError"             | "none"                     |
 
   Scenario: Call getSystemNameMatchingError, should get error in log but no error returned
     Given a VxFlexOS service
