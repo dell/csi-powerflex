@@ -551,6 +551,11 @@ func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolume
 		systemID = s.opts.defaultSystemID
 	}
 
+	if systemID == "" {
+		return nil, status.Error(codes.InvalidArgument,
+			"systemID is not found in the request and there is no default system")
+	}
+
 	_, err := s.getSDCMappedVol(volID, systemID, 30)
 	if err != nil {
 		//volume not known to SDC, next check if it exists at all
@@ -559,7 +564,7 @@ func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolume
 			message = fmt.Sprintf("Could not get volume with ID '%s' from array %s due to error: %s", volID, systemID, err)
 
 		} else if err != nil {
-			//err wasn't not found, return error
+			//error was returned, but had nothing to do with the volume not being on the array (may be env related)
 			return nil, err
 		}
 		//volume was found, but was not known to SDC. This is abnormal.
@@ -603,6 +608,13 @@ func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolume
 		availableBytes, totalBytes, usedBytes, totalInodes, freeInodes, usedInodes, err := k8sutilfs.Info(volPath)
 		if err != nil {
 			return &csi.NodeGetVolumeStatsResponse{
+				Usage: []*csi.VolumeUsage{
+					{Available: 0,
+						Total: 0,
+						Used:  0,
+						Unit:  csi.VolumeUsage_UNKNOWN,
+					},
+				},
 				VolumeCondition: &csi.VolumeCondition{
 					Abnormal: false,
 					Message:  fmt.Sprintf("failed to get metrics for volume with error: %v", err),
@@ -634,6 +646,14 @@ func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolume
 	}
 
 	return &csi.NodeGetVolumeStatsResponse{
+		Usage: []*csi.VolumeUsage{
+			{
+				Available: 0,
+				Total:     0,
+				Used:      0,
+				Unit:      csi.VolumeUsage_UNKNOWN,
+			},
+		},
 		VolumeCondition: &csi.VolumeCondition{
 			Abnormal: !healthy,
 			Message:  message,

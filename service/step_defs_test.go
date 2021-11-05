@@ -2411,6 +2411,10 @@ func (f *feature) iCallNodeGetVolumeStats() error {
 		VolumeID = "435645643"
 		stepHandlersErrors.SIOGatewayVolumeNotFoundError = true
 	}
+	if stepHandlersErrors.NoSysNameError {
+		f.service.opts.defaultSystemID = ""
+	}
+
 	req := &csi.NodeGetVolumeStatsRequest{VolumeId: VolumeID, VolumePath: VolumePath}
 
 	f.nodeGetVolumeStatsResponse, f.err = f.service.NodeGetVolumeStats(*ctx, req)
@@ -2419,7 +2423,7 @@ func (f *feature) iCallNodeGetVolumeStats() error {
 }
 
 func (f *feature) aCorrectNodeGetVolumeStatsResponse() error {
-	if stepHandlersErrors.NoVolIDError || stepHandlersErrors.NoMountPathError || stepHandlersErrors.BadVolIDError {
+	if stepHandlersErrors.NoVolIDError || stepHandlersErrors.NoMountPathError || stepHandlersErrors.BadVolIDError || stepHandlersErrors.NoSysNameError {
 		//errors and no responses should be returned in these instances
 		if f.nodeGetVolumeStatsResponse == nil {
 			fmt.Printf("Response check passed\n")

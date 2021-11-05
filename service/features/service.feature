@@ -721,6 +721,7 @@ Feature: VxFlex OS CSI interface
       | "NoVolIDSDCError"        | "none"                     |  
       | "GOFSMockGetMountsError" | "none"                     |
       | "NoVolError"             | "none"                     |
+      | "NoSysNameError"         | "systemID is not found"    |
 
   Scenario: Call getSystemNameMatchingError, should get error in log but no error returned
     Given a VxFlexOS service
