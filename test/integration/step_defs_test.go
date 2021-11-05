@@ -1422,20 +1422,6 @@ func (f *feature) iCallDeleteVGS() error {
 	return nil
 }
 
-func (f *feature) iCallDeleteVolumeGroupSnapshot() error {
-	ctx := context.Background()
-	vgsClient := volGroupSnap.NewVolumeGroupSnapshotClient(grpcClient)
-	req := &volGroupSnap.DeleteVolumeGroupSnapshotRequest{
-		SnapshotGroupID: "Group1",
-	}
-	resp, err := vgsClient.DeleteVolumeGroupSnapshot(ctx, req)
-	if err != nil {
-		f.addError(err)
-	}
-	fmt.Printf("Resp returned is: %v \n", resp)
-	return nil
-}
-
 func (f *feature) whenICallExpandVolumeTo(size int64) error {
 
 	err := f.controllerExpandVolume(f.volID, size)
@@ -1700,7 +1686,6 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I read write data to volume "([^"]*)"$`, f.iReadWriteToVolume)
 	s.Step(`^when I call Validate Volume Host connectivity$`, f.iCallValidateVolumeHostConnectivity)
 	s.Step(`^I call CreateVolumeGroupSnapshot$`, f.iCallCreateVolumeGroupSnapshot)
-	s.Step(`^I call DeleteVolumeGroupSnapshot$`, f.iCallDeleteVolumeGroupSnapshot)
 	s.Step(`^when I call ExpandVolume to "([^"]*)"$`, f.whenICallExpandVolumeTo)
 	s.Step(`^when I call NodeExpandVolume$`, f.whenICallNodeExpandVolume)
 	s.Step(`^I call CloneVolume$`, f.iCallCloneVolume)
