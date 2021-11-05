@@ -219,8 +219,10 @@ func (f *feature) aVxFlexOSService() error {
 		if f.server == nil {
 			f.server = httptest.NewServer(handler)
 		}
-		f.service.opts.arrays[arrayID].Endpoint = f.server.URL
-		f.service.opts.arrays[arrayID2].Endpoint = f.server.URL
+		if f.service.opts.arrays != nil {
+			f.service.opts.arrays[arrayID].Endpoint = f.server.URL
+			f.service.opts.arrays[arrayID2].Endpoint = f.server.URL
+		}
 	} else {
 		f.server = nil
 	}
@@ -265,7 +267,6 @@ func (f *feature) getService() *service {
 	opts.arrays, err = getArrayConfig(*ctx)
 	if err != nil {
 		log.Printf("Read arrays from config file failed: %s\n", err)
-		return nil
 	}
 
 	opts.AutoProbe = true
@@ -1594,7 +1595,7 @@ func (f *feature) iCallValidateVolumeCapabilitiesWithVoltypeAccessFstype(voltype
 	capabilities := make([]*csi.VolumeCapability, 0)
 	capabilities = append(capabilities, capability)
 	req.VolumeCapabilities = capabilities
-	log.Printf("Calling ValidateVolumeCapabilities")
+	log.Printf("Calling ValidateVolumeCapabilities %#v", accessMode)
 	f.validateVolumeCapabilitiesResponse, f.err = f.service.ValidateVolumeCapabilities(*ctx, req)
 	if f.err != nil {
 		return nil
@@ -1675,6 +1676,12 @@ func (f *feature) aCapabilityWithVoltypeAccessFstype(voltype, access, fstype str
 		accessMode.Mode = csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY
 	case "multiple-node-single-writer":
 		accessMode.Mode = csi.VolumeCapability_AccessMode_MULTI_NODE_SINGLE_WRITER
+	case "multi-pod-rw":
+		accessMode.Mode = csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER
+		fmt.Printf("debug ALLOW_RWO_MULTI_POD set")
+		os.Setenv("ALLOW_RWO_MULTI_POD", "true")
+		f.service.opts.AllowRWOMultiPodAccess = true
+		mountAllowRWOMultiPodAccess = true
 	}
 	capability.AccessMode = accessMode
 	f.capabilities = make([]*csi.VolumeCapability, 0)
@@ -1962,6 +1969,40 @@ func (f *feature) iMarkRequestReadOnly() error {
 	return nil
 }
 
+func (f *feature) iCallMountPublishVolume() error {
+	req := new(csi.NodePublishVolumeRequest)
+	req.TargetPath = "/badpath"
+	capability := new(csi.VolumeCapability)
+	accessType := new(csi.VolumeCapability_Block)
+	capability.AccessType = accessType
+	accessMode := new(csi.VolumeCapability_AccessMode)
+	capability.AccessMode = accessMode
+	req.VolumeCapability = capability
+	err := publishVolume(req, "", "/bad/device", "1")
+	if err != nil {
+		fmt.Printf("nodePublishVolume bad targetPath: %s\n", err.Error())
+		f.err = errors.New("error in publishVolume")
+	}
+	return nil
+}
+
+func (f *feature) iCallMountUnpublishVolume() error {
+	req := new(csi.NodeUnpublishVolumeRequest)
+	req.TargetPath = ""
+	err := unpublishVolume(req, "", "/bad/device", "1")
+	if err != nil {
+		fmt.Printf("NodeUnpublishVolume bad targetPath: %s\n", err.Error())
+		f.err = errors.New("error in unpublishVolume")
+	}
+	req.TargetPath = "/badpath"
+	err = unpublishVolume(req, "", "/bad/device", "1")
+	if err != nil {
+		fmt.Printf("NodeUnpublishVolume bad device : %s\n", err.Error())
+		f.err = errors.New("error in unpublishVolume")
+	}
+	return nil
+}
+
 func (f *feature) iCallNodePublishVolume(arg1 string) error {
 	header := metadata.New(map[string]string{"csi.requestid": "1"})
 	ctx := metadata.NewIncomingContext(context.Background(), header)
@@ -1972,7 +2013,7 @@ func (f *feature) iCallNodePublishVolume(arg1 string) error {
 		req = f.nodePublishVolumeRequest
 	}
 	fmt.Printf("Calling NodePublishVolume\n")
-	fmt.Printf("NPV req is: %v \n", req)
+	fmt.Printf("nodePV req is: %v \n", req)
 	_, err := f.service.NodePublishVolume(ctx, req)
 	if err != nil {
 		fmt.Printf("NodePublishVolume failed: %s\n", err.Error())
@@ -1981,6 +2022,192 @@ func (f *feature) iCallNodePublishVolume(arg1 string) error {
 		}
 	} else {
 		fmt.Printf("NodePublishVolume completed successfully\n")
+	}
+	return nil
+}
+
+func (f *feature) iCallUnmountPrivMount() error {
+	gofsutil.GOFSMock.InduceGetMountsError = true
+	ctx := new(context.Context)
+	err := unmountPrivMount(*ctx, nil, "/foo/bar")
+	fmt.Printf("unmountPrivMount getMounts error: %s\n", err.Error())
+	//  getMounts induced error
+	if err != nil {
+		msg := err.Error()
+		if msg == "getMounts induced error" {
+			f.err = errors.New("error in unmountPrivMount")
+		}
+	}
+	/*
+		//  needs a mounted ok device to unmount
+		_ = handlePrivFSMount(context.TODO(), accessMode, sysDevice, nil, "", "", "")
+
+		target := "/tmp/foo"
+		flags := make([]string, 0)
+		flags = append(flags, "rw")
+		_ = mountBlock(sysDevice, target, flags, false)
+
+		gofsutil.GOFSMock.InduceGetMountsError = false
+		gofsutil.GOFSMock.InduceUnmountError = true
+		err = unmountPrivMount(*ctx, nil, target)
+		fmt.Printf("unmountPrivMount unmount error: %s\n", err)
+		if err != nil {
+			f.err = errors.New("error in unmountPrivMount")
+			f.theErrorContains(err.Error())
+		}
+	*/
+	return nil
+}
+
+func (f *feature) iCallGetPathMounts() error {
+	gofsutil.GOFSMock.InduceGetMountsError = true
+	_, err := getPathMounts("/foo/bar")
+	fmt.Printf(" getPathMounts error : %s\n", err)
+	// getMounts induced err
+	if err != nil {
+		f.err = errors.New("error in GetPathMounts")
+
+	}
+	return nil
+}
+
+func (f *feature) iCallHandlePrivFSMount() error {
+
+	accessMode := new(csi.VolumeCapability_AccessMode)
+	accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY
+	gofsutil.GOFSMock.InduceMountError = true
+	device := "/dev/scinia"
+	sysDevice := &Device{
+		Name:     device,
+		FullPath: device,
+		RealDev:  device,
+	}
+	fmt.Printf("debug input param sysDevice %#v\n", sysDevice)
+	err := handlePrivFSMount(context.TODO(), accessMode, sysDevice, nil, "", "", "")
+	msg := "mount induced error"
+	fmt.Printf("expected handlePrivFSMount error msg = %s\n", err.Error())
+	if err != nil && strings.Contains(err.Error(), msg) {
+		f.err = errors.New("error in handlePrivFSMount")
+	}
+	accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER
+	gofsutil.GOFSMock.InduceMountError = false
+	gofsutil.GOFSMock.InduceBindMountError = true
+	err = handlePrivFSMount(context.TODO(), accessMode, sysDevice, nil, "", "", "rw")
+	msg = "bindMount induced error"
+	fmt.Printf("expected handlePrivFSMount error msg= %s\n", err.Error())
+	if err != nil && strings.Contains(err.Error(), msg) {
+		f.err = errors.New("error in handlePrivFSMount")
+	}
+
+	accessMode.Mode = csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER
+	gofsutil.GOFSMock.InduceMountError = false
+	gofsutil.GOFSMock.InduceBindMountError = false
+	err = handlePrivFSMount(context.TODO(), accessMode, sysDevice, nil, "", "", "")
+	msg = "Invalid access mode"
+	fmt.Printf("expected handlePrivFSMount error msg= %s\n", err.Error())
+	if err != nil && strings.Contains(err.Error(), msg) {
+		f.err = errors.New("error in handlePrivFSMount")
+	}
+	return nil
+}
+
+func (f *feature) iCallEvalSymlinks() error {
+	err := evalSymlinks("/foo/bar")
+	if err == "/foo/bar" {
+		fmt.Printf("evalSymlinks failed: %s\n", err)
+		if f.err == nil {
+			f.err = errors.New("error in evalSymlinks")
+		}
+	}
+	return nil
+}
+
+func (f *feature) iCallRemoveWithRetry() error {
+	err := removeWithRetry("/sys/fs/cgroup")
+	if err != nil {
+		fmt.Printf("removeWithRetry failed: %s\n", err.Error())
+		if f.err == nil {
+			f.err = err
+		}
+	}
+	return nil
+}
+
+func (f *feature) iCallBlockValidateVolCapabilities() error {
+
+	block := new(csi.VolumeCapability_BlockVolume)
+	capability := new(csi.VolumeCapability)
+	accessType := new(csi.VolumeCapability_Block)
+	accessType.Block = block
+	capability.AccessType = accessType
+	accessMode := new(csi.VolumeCapability_AccessMode)
+	accessMode.Mode = csi.VolumeCapability_AccessMode_UNKNOWN
+	capability.AccessMode = accessMode
+
+	//isBlock, mntVol, accMode, multiAccessFlag, err := validateVolumeCapability(volCap, ro)
+
+	_, _, _, _, err := validateVolumeCapability(capability, false)
+	if err != nil {
+		fmt.Printf("error in validateVolCapabilities : %s\n", err.Error())
+		if f.err == nil {
+			f.err = err
+		}
+	}
+	return nil
+
+}
+
+func (f *feature) iCallMountValidateVolCapabilities() error {
+
+	capability := new(csi.VolumeCapability)
+	mountVolume := new(csi.VolumeCapability_MountVolume)
+	mountVolume.FsType = "xfs"
+	mountVolume.MountFlags = make([]string, 0)
+	mount := new(csi.VolumeCapability_Mount)
+	mount.Mount = mountVolume
+	capability.AccessType = mount
+	accessMode := new(csi.VolumeCapability_AccessMode)
+	accessMode.Mode = csi.VolumeCapability_AccessMode_UNKNOWN
+	capability.AccessMode = accessMode
+
+	_, _, _, _, err := validateVolumeCapability(capability, false)
+	if err != nil {
+		fmt.Printf("error in validateVolCapabilities : %s\n", err.Error())
+		if f.err == nil {
+			f.err = err
+		}
+	}
+	return nil
+
+}
+
+func (f *feature) iCallCleanupPrivateTargetForErrors() error {
+	gofsutil.GOFSMock.InduceDevMountsError = true
+	sysdevice, _ := GetDevice("test/dev/scinia")
+	err := cleanupPrivateTarget(sysdevice, "1", "features/d0f055a700000000")
+	if err != nil {
+		fmt.Printf("Cleanupprivatetarget getDevice error : %s\n", err.Error())
+		if f.err == nil {
+			f.err = errors.New("error in CleanupPrivateTarget")
+		}
+	}
+	gofsutil.GOFSMock.InduceDevMountsError = false
+	gofsutil.GOFSMock.InduceUnmountError = true
+	err = cleanupPrivateTarget(sysdevice, "1", "features/d0f055a700000000")
+	if err != nil {
+		fmt.Printf("Cleanupprivatetarget unmount error: %s\n", err.Error())
+		if f.err == nil {
+			f.err = errors.New("error in CleanupPrivateTarget")
+		}
+	}
+	gofsutil.GOFSMock.InduceUnmountError = false
+	sysdevice, _ = GetDevice("/dev/scinizz")
+	err = cleanupPrivateTarget(sysdevice, "1", "/sys/fs/cgroup")
+	if err != nil {
+		fmt.Printf("Cleanupprivatetarget /tmp : %s\n", err.Error())
+		if f.err == nil {
+			f.err = errors.New("error in CleanupPrivateTarget")
+		}
 	}
 	return nil
 }
@@ -2010,6 +2237,25 @@ func (f *feature) iCallUnmountAndDeleteTarget() error {
 	if err := os.Remove(targetPath); err != nil {
 		fmt.Printf("Unable to remove directory: %v", err)
 	}
+	return nil
+}
+
+func (f *feature) iCallEphemeralNodePublish() error {
+	save := ephemeralStagingMountPath
+	ephemeralStagingMountPath = "/tmp"
+	header := metadata.New(map[string]string{"csi.requestid": "1"})
+	ctx := metadata.NewIncomingContext(context.Background(), header)
+	req := new(csi.NodePublishVolumeRequest)
+	systemName := "bad-system-config"
+	req.VolumeContext = map[string]string{"csi.storage.k8s.io/ephemeral": "true", "volumeName": "xxxx", "size": "8Gi", "storagepool": "pool1", "systemID": systemName}
+	_, err := f.service.ephemeralNodePublish(ctx, req)
+	if err != nil {
+		fmt.Printf("ephemeralNodePublish 1 failed: %s\n", err.Error())
+		if f.err == nil {
+			f.err = err
+		}
+	}
+	ephemeralStagingMountPath = save
 	return nil
 }
 
@@ -2069,6 +2315,10 @@ func (f *feature) iCallBeforeServe() error {
 	stringSlice = append(stringSlice, "X_CSI_PRIVATE_MOUNT_DIR=/csi")
 	stringSlice = append(stringSlice, "X_CSI_VXFLEXOS_ENABLESNAPSHOTCGDELETE=true")
 	stringSlice = append(stringSlice, "X_CSI_VXFLEXOS_ENABLELISTVOLUMESNAPSHOTS=true")
+	if os.Getenv("ALLOW_RWO_MULTI_POD") == "true" {
+		fmt.Printf("debug set ALLOW_RWO_MULTI_POD\n")
+		stringSlice = append(stringSlice, "X_CSI_ALLOW_RWO_MULTI_POD_ACCESS=true")
+	}
 	ctx := context.WithValue(context.Background(), ctxOSEnviron, stringSlice)
 	listener, err := net.Listen("tcp", "127.0.0.1:65000")
 	if err != nil {
@@ -2432,18 +2682,6 @@ func (f *feature) aValidCreateVolumeSnapshotGroupResponse() error {
 	}
 
 	fmt.Printf("VolumeSnapshotGroupResponse looks OK \n")
-	return nil
-}
-
-func (f *feature) iCallDeleteVolumeGroupSnapshot() error {
-	ctx := context.Background()
-	req := &volGroupSnap.DeleteVolumeGroupSnapshotRequest{
-		SnapshotGroupID: "1234",
-	}
-	_, err := f.service.DeleteVolumeGroupSnapshot(ctx, req)
-	if err != nil {
-		f.err = err
-	}
 	return nil
 }
 
@@ -2988,6 +3226,14 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^a controller published volume$`, f.aControllerPublishedVolume)
 	s.Step(`^I call NodePublishVolume "([^"]*)"$`, f.iCallNodePublishVolume)
 	s.Step(`^I call CleanupPrivateTarget$`, f.iCallCleanupPrivateTarget)
+	s.Step(`^I call removeWithRetry$`, f.iCallRemoveWithRetry)
+	s.Step(`^I call evalSymlinks$`, f.iCallEvalSymlinks)
+	s.Step(`^I call unmountPrivMount$`, f.iCallUnmountPrivMount)
+	s.Step(`^I call CleanupPrivateTarget for errors$`, f.iCallCleanupPrivateTargetForErrors)
+
+	s.Step(`^I call getPathMounts$`, f.iCallGetPathMounts)
+	s.Step(`^I call mountValidateBlockVolCapabilities$`, f.iCallMountValidateVolCapabilities)
+	s.Step(`^I call blockValidateMountVolCapabilities$`, f.iCallBlockValidateVolCapabilities)
 	s.Step(`^I call UnmountAndDeleteTarget$`, f.iCallUnmountAndDeleteTarget)
 	s.Step(`^get Node Publish Volume Request$`, f.getNodePublishVolumeRequest)
 	s.Step(`^get Node Publish Ephemeral Volume Request with name "([^"]*)" size "([^"]*)" storagepool "([^"]*)" and systemName "([^"]*)"$`, f.getNodeEphemeralVolumePublishRequest)
@@ -3026,20 +3272,23 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call getVolProvisionType with bad params$`, f.iCallGetVolProvisionTypeWithBadParams)
 	s.Step(`^i Call getStoragePoolnameByID "([^"]*)"$`, f.iCallGetStoragePoolnameByID)
 	s.Step(`^I call evalsymlink "([^"]*)"$`, f.iCallEvalsymlink)
+	s.Step(`^I call handlePrivFSMount$`, f.iCallHandlePrivFSMount)
 	s.Step(`^I Call nodeGetAllSystems$`, f.iCallNodeGetAllSystems)
 	s.Step(`^I do not have a gateway connection$`, f.iDoNotHaveAGatewayConnection)
 	s.Step(`^I do not have a valid gateway endpoint$`, f.iDoNotHaveAValidGatewayEndpoint)
 	s.Step(`^I do not have a valid gateway password$`, f.iDoNotHaveAValidGatewayPassword)
 	s.Step(`^I call Clone volume$`, f.iCallCloneVolume)
 	s.Step(`^I call CreateVolumeSnapshotGroup$`, f.iCallCreateVolumeGroupSnapshot)
-	s.Step(`^I call DeleteVolumeSnapshotGroup$`, f.iCallDeleteVolumeGroupSnapshot)
 	s.Step(`^the ValidateConnectivity response message contains "([^"]*)"$`, f.theValidateConnectivityResponseMessageContains)
 	s.Step(`^I create false ephemeral ID$`, f.iCreateFalseEphemeralID)
 	s.Step(`^I call EphemeralNodeUnpublish$`, f.iCallEphemeralNodeUnpublish)
+	s.Step(`^I call EphemeralNodePublish$`, f.iCallEphemeralNodePublish)
 	s.Step(`^I call getVolumeIDFromCsiVolumeID "([^"]*)"$`, f.iCallGetVolumeIDFromCsiVolumeID)
 	s.Step(`^I call getSystemIDFromCsiVolumeID "([^"]*)"$`, f.iCallGetSystemIDFromCsiVolumeID)
 	s.Step(`^I call GetSystemIDFromParameters with bad params "([^"]*)"$`, f.iCallGetSystemIDFromParameters)
 	s.Step(`^I call getSystemName$`, f.iCallGetSystemName)
+	s.Step(`^I call mount publishVolume$`, f.iCallMountPublishVolume)
+	s.Step(`^I call mount unpublishVolume$`, f.iCallMountUnpublishVolume)
 	s.Step(`^I call getSystemNameError$`, f.iCallGetSystemNameError)
 	s.Step(`^I call getSystemNameMatchingError$`, f.iCallGetSystemNameMatchingError)
 	s.Step(`^an invalid config "([^"]*)"$`, f.anInvalidConfig)

@@ -76,5 +76,7 @@ Examples:
       | "NoVolumeIDError" | "volume ID is required"                         |
       | "none"            | "Inline ephemeral. Was unable to read lockfile" |
 
-
-
+Scenario Outline: Ephemeral Node Publish with errors
+        Given a VxFlexOS service
+        And I call EphemeralNodePublish
+        Then the error contains "not recgonized"

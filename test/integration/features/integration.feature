@@ -589,11 +589,6 @@ Scenario: Call CreateVolumeGroupSnapshot idempotent; criteria 3 fails
   And when I call DeleteAllVolumes
   Then the error message should contain "contains more snapshots"
 
-Scenario: Call DeleteVolumeGroupSnapshot
-   Given a VxFlexOS service
-   When I call DeleteVolumeGroupSnapshot 
-   Then the error message should contain "none"
-
 Scenario: Call NodeGetVolumeStats on volume 
   Given a VxFlexOS service
   And a capability with voltype "mount" access "single-writer" fstype "ext4"
@@ -627,6 +622,4 @@ Scenario: Call NodeGetVolumeStats on unmounted volume
   And there are no errors
   And when I call DeleteVolume
   Then there are no errors
-
-
 

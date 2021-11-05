@@ -9,6 +9,7 @@ import (
 	"os"
 )
 
+// Clientset - Interface to kubernetes
 var Clientset kubernetes.Interface
 
 type leaderElection interface {
@@ -31,7 +32,7 @@ func CreateKubeClientSet(kubeconfig string) error {
 	return nil
 }
 
-// LeaderElection
+// LeaderElection - Initializes Leader election
 func LeaderElection(clientset *kubernetes.Interface, lockName string, namespace string, runFunc func(ctx context.Context)) {
 	le := leaderelection.NewLeaderElection(*clientset, lockName, runFunc)
 	le.WithNamespace(namespace)

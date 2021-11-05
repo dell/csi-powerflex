@@ -5,6 +5,14 @@
 # Not recommend to change
 version: 2.0.0
 
+images:
+  # "driver" defines the container image, used for the driver container.
+  driverRepository: dellemc
+
+  # "powerflexSdc" defines the SDC image for init container.
+  powerflexSdc: dellemc/sdc:3.6
+
+
 # Represents number of certificate secrets, which user is going to create for ssl authentication. (vxflexos-cert-0..vxflexos-cert-n)
 # If user does not use certificate, set to 0
 certSecretCount: 0

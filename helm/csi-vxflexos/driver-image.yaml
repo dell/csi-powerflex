@@ -1,9 +1,0 @@
----
-# IT IS RECOMMENDED YOU DO NOT CHANGE THE IMAGES TO BE USED.
-images:
-  # "driver" defines the container image, used for the driver container. 
-  driver: dellemc/csi-vxflexos:v2.0.0
-
-
-  # "powerflexSdc" defines the SDC image for init container.
-  powerflexSdc: dellemc/sdc:3.6
