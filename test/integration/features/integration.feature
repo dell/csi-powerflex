@@ -588,8 +588,3 @@ Scenario: Call CreateVolumeGroupSnapshot idempotent; criteria 3 fails
   And I call DeleteVGS
   And when I call DeleteAllVolumes
   Then the error message should contain "contains more snapshots"
-
-Scenario: Call DeleteVolumeGroupSnapshot
-   Given a VxFlexOS service
-   When I call DeleteVolumeGroupSnapshot 
-   Then the error message should contain "none"
