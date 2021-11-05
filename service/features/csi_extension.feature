@@ -114,13 +114,6 @@ Examples:
     Then the error contains "Expecting this volume id only on default system"
 
   @vg
-  Scenario: Call DeleteVolumeSnapshotGroup
-    Given a VxFlexOS service
-    When I call Probe
-    And I call DeleteVolumeSnapshotGroup
-    Then the error contains "none"
-  
-  @vg
   Scenario: Snapshot a block volume consistency group with wrong system
     Given a VxFlexOS service
     When I call Probe
