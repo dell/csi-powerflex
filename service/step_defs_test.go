@@ -1088,6 +1088,10 @@ func (f *feature) getControllerPublishVolumeRequest(accessType string) *csi.Cont
 		accessMode.Mode = csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY
 	case "multiple-writer":
 		accessMode.Mode = csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER
+	case "single-node-single-writer":
+		accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_SINGLE_WRITER
+	case "single-node-multi-writer":
+		accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_MULTI_WRITER
 	case "unknown":
 		accessMode.Mode = csi.VolumeCapability_AccessMode_UNKNOWN
 	}
@@ -1505,11 +1509,13 @@ func (f *feature) aValidControllerGetCapabilitiesResponseIsReturned() error {
 				count = count + 1
 			case csi.ControllerServiceCapability_RPC_CLONE_VOLUME:
 				count = count + 1
+			case csi.ControllerServiceCapability_RPC_SINGLE_NODE_MULTI_WRITER:
+				count = count + 1
 			default:
 				return fmt.Errorf("received unexpected capability: %v", typex)
 			}
 		}
-		if count != 8 {
+		if count != 9 {
 			return errors.New("Did not retrieve all the expected capabilities")
 		}
 		return nil
@@ -1575,6 +1581,10 @@ func (f *feature) iCallValidateVolumeCapabilitiesWithVoltypeAccessFstype(voltype
 		accessMode.Mode = csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER
 	case "multi-reader":
 		accessMode.Mode = csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY
+	case "single-node-single-writer":
+		accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_SINGLE_WRITER
+	case "single-node-multi-writer":
+		accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_MULTI_WRITER
 	case "multi-node-single-writer":
 		accessMode.Mode = csi.VolumeCapability_AccessMode_MULTI_NODE_SINGLE_WRITER
 	}
@@ -1663,6 +1673,10 @@ func (f *feature) aCapabilityWithVoltypeAccessFstype(voltype, access, fstype str
 		accessMode.Mode = csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY
 	case "multiple-node-single-writer":
 		accessMode.Mode = csi.VolumeCapability_AccessMode_MULTI_NODE_SINGLE_WRITER
+	case "single-node-single-writer":
+		accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_SINGLE_WRITER
+	case "single-node-multi-writer":
+		accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_MULTI_WRITER
 	case "multi-pod-rw":
 		accessMode.Mode = csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER
 		fmt.Printf("debug ALLOW_RWO_MULTI_POD set")
@@ -2437,11 +2451,13 @@ func (f *feature) aValidNodeGetCapabilitiesResponseIsReturned() error {
 			switch typex {
 			case csi.NodeServiceCapability_RPC_EXPAND_VOLUME:
 				count = count + 1
+			case csi.NodeServiceCapability_RPC_SINGLE_NODE_MULTI_WRITER:
+				count = count + 1
 			default:
 				return fmt.Errorf("received unxexpcted capability: %v", typex)
 			}
 		}
-		if count != 1 {
+		if count != 2 {
 			return errors.New("Did not retrieve all the expected capabilities")
 		}
 		return nil
