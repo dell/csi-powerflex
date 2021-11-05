@@ -73,14 +73,6 @@ func publishVolume(
 	req *csi.NodePublishVolumeRequest,
 	privDir, device string, reqID string) error {
 
-	// Normal 2vol nodepublishvolume:
-	// time="2021-10-19T20:48:28Z" level=info msg="/csi.v1.Node/NodePublishVolume:
-	// REQ 0006: VolumeId=60462e7c4ecaa90f-91588f6700000001,
-	// TargetPath=/var/lib/kubelet/pods/b25d7b07-7db8-48ab-b9a0-23cc9b2ebea8/volumes/kubernetes.io~csi/k8s-edd09f97a4/mount,
-	// VolumeCapability=mount:<fs_type:\"ext4\" > access_mode:<mode:SINGLE_NODE_WRITER > ,
-	// Readonly=false,
-	// VolumeContext=map[CreationTime:2021-10-19 15:44:22 +0000 UTC Name:k8s-edd09f97a4 StoragePoolID:5b434eae00000000 StoragePoolName:pool1 StorageSystem:60462e7c4ecaa90f csi.storage.k8s.io/ephemeral:false csi.storage.k8s.io/pod.name:vxflextest-0 csi.storage.k8s.io/pod.namespace:helmtest-vxflexos csi.storage.k8s.io/pod.uid:b25d7b07-7db8-48ab-b9a0-23cc9b2ebea8 csi.storage.k8s.io/serviceAccount.name:vxflextest storage.kubernetes.io/csiProvisionerIdentity:1634670533059-8081-csi-vxflexos.dellemc.com]
-
 	id := req.GetVolumeId()
 
 	target := req.GetTargetPath()
@@ -106,14 +98,6 @@ func publishVolume(
 	}
 
 	isBlock, mntVol, accMode, multiAccessFlag, err := validateVolumeCapability(volCap, ro)
-	fi := logrus.Fields{
-		"isBlock":         isBlock,
-		"mntVol":          mntVol,
-		"accMode":         accMode,
-		"multiAccessFlag": multiAccessFlag,
-	}
-	Log.WithFields(fi).Debugf("fields")
-
 	if err != nil {
 		return err
 	}
@@ -157,13 +141,6 @@ func publishVolume(
 		"privateMount": privTgt,
 	}
 	Log.WithFields(f).Debugf("fields")
-
-	// level=debug msg=fields CSIRequestID=7607
-	// device=/dev/scinia
-	// id=4d4a2e5a36080e0f-a238b75700000049
-	// privateMount=/var/lib/kubelet/plugins/vxflexos.emc.dell.com/disks/4d4a2e5a36080e0f-a238b75700000049
-	// target="/var/lib/kubelet/pods/5ec40bf0-4fb0-4c6f-b54e-6c0be975bcdc/volumes/kubernetes.io~csi/yifei-4f958e2bd7/mount"
-	// volumePath=/dev/scinia
 
 	ctx := context.WithValue(context.Background(), gofsutil.ContextKey("RequestID"), reqID)
 

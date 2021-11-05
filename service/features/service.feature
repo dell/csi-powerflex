@@ -4,12 +4,12 @@ Feature: VxFlex OS CSI interface
   So that they are known to work
 
   Scenario: Call checkVolumesMap when volumes cannot be listed
-     Given a VxFlexOS service
-     And a valid volume
-     And I call Probe
-     And I induce error "VolumeInstancesError"
-     And I call checkVolumesMap "123"
-     Then the error contains "failed to list vols for array"
+    Given a VxFlexOS service
+    And a valid volume
+    And I call Probe
+    And I induce error "VolumeInstancesError"
+    And I call checkVolumesMap "123"
+    Then the error contains "failed to list vols for array"
 
   Scenario Outline: Test calls to updateVolumesMap with system already present
     Given a VxFlexOS service
@@ -18,10 +18,10 @@ Feature: VxFlex OS CSI interface
     And I call UpdateVolumePrefixToSystemsMap <systemName>
     Then the error contains <errorMsg>
 
-  Examples:
-      | systemName          		| errorMsg       |
-      | "14dbbf5617523654"  		| "none"         |
-      | "15dbbf5617523655-system-name"  | "none"         |
+    Examples:
+      | systemName                     | errorMsg |
+      | "14dbbf5617523654"             | "none"   |
+      | "15dbbf5617523655-system-name" | "none"   |
 
   Scenario: Identity GetPluginInfo good call
     Given a VxFlexOS service
@@ -33,16 +33,16 @@ Feature: VxFlex OS CSI interface
     Given a VxFlexOS service
     When I call DynamicLogChange <file>
     Then a valid DynamicLogChange occurs <file> <level>
-  Examples:
-      | file                  | level    |
-      | "logConfig2.yaml"     | "trace"  |
-      | "logConfigWrong.yaml" | "debug"  |
+    Examples:
+      | file                  | level   |
+      | "logConfig2.yaml"     | "trace" |
+      | "logConfigWrong.yaml" | "debug" |
 
   Scenario: Dynamic array config change
     Given a VxFlexOS service
-    When I call DynamicArrayChange 
+    When I call DynamicArrayChange
     Then a valid DynamicArrayChange occurs
- 
+
   Scenario Outline: multi array getSystemIDFromParameters good and with errors
     Given setup Get SystemID to fail
     Given a VxFlexOS service
@@ -96,7 +96,7 @@ Feature: VxFlex OS CSI interface
     When I call Probe
     Then a valid ProbeResponse is returned
 
-  
+
   Scenario: Identity Probe call no controller connection
     Given a VxFlexOS service
     And the Controller has no connection
@@ -243,7 +243,7 @@ Feature: VxFlex OS CSI interface
     And I call CreateVolume "accessibility"
     Then a valid CreateVolumeResponse with topology is returned
     Examples:
-      | sysID                   |
+      | sysID                      |
       | "f.service.opt.SystemName" |
 
   Scenario: Create volume with AccessMode_MULTINODE_WRITER
@@ -331,13 +331,15 @@ Feature: VxFlex OS CSI interface
     Then the error contains <errormsg>
 
     Examples:
-      | voltype | access                     | fstype | errormsg                                                         |
-      | "block" | "single-writer"            | "none" | "none"                                                           |
-      | "block" | "multi-reader"             | "none" | "none"                                                           |
-      | "mount" | "multi-writer"             | "ext4" | "multi-node with writer(s) only supported for block access type" |
-      | "mount" | "multi-node-single-writer" | "ext4" | "multi-node with writer(s) only supported for block access type" |
-      | "mount" | "unknown"                  | "ext4" | "access mode cannot be UNKNOWN"                                  |
-      | "none " | "unknown"                  | "ext4" | "unknown access type is not Block or Mount"                      |
+      | voltype | access                      | fstype | errormsg                                                         |
+      | "block" | "single-writer"             | "none" | "none"                                                           |
+      | "block" | "multi-reader"              | "none" | "none"                                                           |
+      | "mount" | "multi-writer"              | "ext4" | "multi-node with writer(s) only supported for block access type" |
+      | "mount" | "multi-node-single-writer"  | "ext4" | "multi-node with writer(s) only supported for block access type" |
+      | "mount" | "single-node-single-writer" | "ext4" | "none"                                                           |
+      | "mount" | "single-node-multi-writer"  | "ext4" | "none"                                                           |
+      | "mount" | "unknown"                   | "ext4" | "access mode cannot be UNKNOWN"                                  |
+      | "none " | "unknown"                   | "ext4" | "unknown access type is not Block or Mount"                      |
 
   Scenario Outline: Call validate volume capabilities with non-existent volume
     Given a VxFlexOS service
@@ -382,13 +384,13 @@ Feature: VxFlex OS CSI interface
     Then the error contains <errormsg>
 
     Examples:
-    | error                   | errormsg                                                        |
-    | "none"                  | "none"                                                          |
-    | "NoRequestID"           | "none"                                                          |
-    | "NoVolumeID"            | "Volume ID is required"                                         |
-    | "NoStagingTarget"       | "StagingTargetPath is required"                                 |
-    | "EphemeralVolume"       | "none"                                                          |
-    | "UnmountError"          | "Unable to remove staging target path"                          |
+      | error             | errormsg                               |
+      | "none"            | "none"                                 |
+      | "NoRequestID"     | "none"                                 |
+      | "NoVolumeID"      | "Volume ID is required"                |
+      | "NoStagingTarget" | "StagingTargetPath is required"        |
+      | "EphemeralVolume" | "none"                                 |
+      | "UnmountError"    | "Unable to remove staging target path" |
 
   Scenario: Call NodeGetCapabilities should return a valid response
     Given a VxFlexOS service
@@ -416,9 +418,9 @@ Feature: VxFlex OS CSI interface
     Then the error contains <errormsg>
 
     Examples:
-      | error             | errormsg                                                           |
-      | "none"            | "none"                                                             |
-      | "BadVolIDJSON"    | "Failed to create snapshot -- GetVolume returned unexpected error" |
+      | error          | errormsg                                                           |
+      | "none"         | "none"                                                             |
+      | "BadVolIDJSON" | "Failed to create snapshot -- GetVolume returned unexpected error" |
 
   Scenario: Request to create Snapshot with same name and different SourceVolumeID
     Given a VxFlexOS service
@@ -462,7 +464,7 @@ Feature: VxFlex OS CSI interface
     When I invalidate the Probe cache
     And I call CreateSnapshot "snap1"
     Then the error contains "systemID is not found in the request and there is no default system"
- 
+
   Scenario: Snapshot a block volume consistency group
     Given a VxFlexOS service
     When I call Probe
@@ -624,9 +626,9 @@ Feature: VxFlex OS CSI interface
     Then the error contains <errormsg>
 
     Examples:
-      | error             | errormsg                                                                |
-      | "none"            | "none"                                                                  |
-      | "BadVolIDJSON"    | "Failed to create vol from snap -- GetVolume returned unexpected error" |
+      | error          | errormsg                                                                |
+      | "none"         | "none"                                                                  |
+      | "BadVolIDJSON" | "Failed to create vol from snap -- GetVolume returned unexpected error" |
 
   Scenario Outline: Call ControllerExpandVolume
     Given a VxFlexOS service
@@ -688,17 +690,17 @@ Feature: VxFlex OS CSI interface
     Then the error contains <errormsg>
 
     Examples:
-      | error                                   | volPath             | errormsg                                    |
-      | "none"                                  | ""                  | "Volume path required"                      |
-      | "none"                                  | "test/tmp/datadir"  | "none"                                      |
-      | "GOFSInduceFSTypeError"                 | "test/tmp/datadir"  | "Failed to fetch filesystem"                |
-      | "GOFSInduceResizeFSError"               | "test/tmp/datadir"  | "Failed to resize device"                   |
-      | "NoVolumeIDError"                       | "test/tmp/datadir"  | "volume ID is required"                     |
-      | "none"                                  | "not/a/path/1234"   | "Could not stat volume path"                |
-      | "none"                                  | "test/tmp/datafile" | "none"                                      |
-      | "CorrectFormatBadCsiVolIDInNodeExpand"  | "test/tmp/datadir"  | "is not configured in the driver"           |
-      | "VolumeIDTooShortErrorInNodeExpand"     | "test/tmp/datadir"  | "is shorter than 3 chars, returning error"  |
-      | "TooManyDashesVolIDInNodeExpand"        | "test/tmp/datadir"  | "is not configured in the driver"           |
+      | error                                  | volPath             | errormsg                                   |
+      | "none"                                 | ""                  | "Volume path required"                     |
+      | "none"                                 | "test/tmp/datadir"  | "none"                                     |
+      | "GOFSInduceFSTypeError"                | "test/tmp/datadir"  | "Failed to fetch filesystem"               |
+      | "GOFSInduceResizeFSError"              | "test/tmp/datadir"  | "Failed to resize device"                  |
+      | "NoVolumeIDError"                      | "test/tmp/datadir"  | "volume ID is required"                    |
+      | "none"                                 | "not/a/path/1234"   | "Could not stat volume path"               |
+      | "none"                                 | "test/tmp/datafile" | "none"                                     |
+      | "CorrectFormatBadCsiVolIDInNodeExpand" | "test/tmp/datadir"  | "is not configured in the driver"          |
+      | "VolumeIDTooShortErrorInNodeExpand"    | "test/tmp/datadir"  | "is shorter than 3 chars, returning error" |
+      | "TooManyDashesVolIDInNodeExpand"       | "test/tmp/datadir"  | "is not configured in the driver"          |
 
   Scenario: Call NodeGetVolumeStats, should get unimplemented
     Given a VxFlexOS service
@@ -771,9 +773,9 @@ Feature: VxFlex OS CSI interface
     Then the error contains <errormsg>
 
     Examples:
-      | error             | errormsg                                                        |
-      | "none"            | "none"                                                          |
-      | "BadVolIDJSON"    | "Failed to create clone -- GetVolume returned unexpected error" |
+      | error          | errormsg                                                        |
+      | "none"         | "none"                                                          |
+      | "BadVolIDJSON" | "Failed to create clone -- GetVolume returned unexpected error" |
 
   Scenario: Clone a volume
     Given a VxFlexOS service
@@ -820,11 +822,11 @@ Feature: VxFlex OS CSI interface
     When I call BeforeServe
     # Get different error message on Windows vs. Linux
     Then the error contains "unable to login to VxFlexOS Gateway"
-  
+
   Scenario: Test getArrayConfig with invalid config file
     Given an invalid config <configPath>
     When I call getArrayConfig
-    Then the error contains <errorMsg> 
+    Then the error contains <errorMsg>
     Examples:
       | configPath                                  | errorMsg                                                              |
       | "features/array-config/DO_NOT_EXIST"        | "does not exist"                                                      |
@@ -837,8 +839,8 @@ Feature: VxFlex OS CSI interface
       | "features/array-config/invalid_endpoint"    | "invalid value for Endpoint"                                          |
       | "features/array-config/two_default_array"   | "'isDefault' parameter presents more than once in storage array list" |
       | "features/array-config/empty"               | "arrays details are not provided in vxflexos-creds secret"            |
-  
+
   Scenario: Call ControllerGetVolume
     Given a VxFlexOS service
     When I call ControllerGetVolume
-    Then the error contains "Unimplemented" 
+    Then the error contains "Unimplemented"

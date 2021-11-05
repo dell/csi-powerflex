@@ -7,25 +7,43 @@ Feature: VxFlex OS CSI interface
     Given a VxFlexOS service
     And a valid volume
     When I call Probe
-    And I call PublishVolume with "single-writer"
+    And I call PublishVolume with <access>
     Then a valid PublishVolumeResponse is returned
     And the number of SDC mappings is 1
 
-  Scenario: Publish legacy volume that is on non default array 
+    Examples:
+      | access                      |
+      | "single-writer"             |
+      | "single-node-single-writer" |
+      | "single-node-multi-writer"  |
+
+  Scenario: Publish legacy volume that is on non default array
     Given a VxFlexOS service
     And I induce error "LegacyVolumeConflictError"
     And a valid volume
     When I call Probe
-    And I call PublishVolume with "single-writer"
+    And I call PublishVolume with <access>
     Then the error contains "Expecting this volume id only on default system.  Aborting operation"
-  
+
+    Examples:
+      | access                      |
+      | "single-writer"             |
+      | "single-node-single-writer" |
+      | "single-node-multi-writer"  |
+
   Scenario: Publish volume but ID is too short to get first 24 bits
-   Given a VxFlexOS service
+    Given a VxFlexOS service
     And a valid volume
     When I call Probe
     And I induce error "VolumeIDTooShortError"
-    And I call PublishVolume with "single-writer"
+    And I call PublishVolume with <access>
     Then the error contains "is shorter than 3 chars, returning error"
+
+    Examples:
+      | access                      |
+      | "single-writer"             |
+      | "single-node-single-writer" |
+      | "single-node-multi-writer"  |
 
   Scenario: Calling probe twice, so UpdateVolumePrefixToSystemsMap gets a key,value already added
     Given a VxFlexOS service
@@ -33,7 +51,7 @@ Feature: VxFlex OS CSI interface
     When I call Probe
     And I call Probe
     Then the error contains "none"
- 
+
   Scenario Outline: Publish Volume with Wrong Access Types
     Given a VxFlexOS service
     And a valid volume
@@ -51,19 +69,31 @@ Feature: VxFlex OS CSI interface
     Given a VxFlexOS service
     And a valid volume
     When I call Probe
-    And I call PublishVolume with "single-writer"
-    And I call PublishVolume with "single-writer"
+    And I call PublishVolume with <access>
+    And I call PublishVolume with <access>
     Then a valid PublishVolumeResponse is returned
     And the number of SDC mappings is 1
+
+    Examples:
+      | access                      |
+      | "single-writer"             |
+      | "single-node-single-writer" |
+      | "single-node-multi-writer"  |
 
   Scenario: Publish block volume with multiple writers to single writer volume
     Given a VxFlexOS service
     And a valid volume
     When I call Probe
-    And I call PublishVolume with "single-writer"
+    And I call PublishVolume with <access>
     And then I use a different nodeID
-    And I call PublishVolume with "single-writer"
+    And I call PublishVolume with <access>
     Then the error contains "volume already published"
+
+    Examples:
+      | access                      |
+      | "single-writer"             |
+      | "single-node-single-writer" |
+      | "single-node-multi-writer"  |
 
   Scenario: Publish block volume with multiple writers to multiple writer volume
     Given a VxFlexOS service
@@ -89,10 +119,16 @@ Feature: VxFlex OS CSI interface
     And a valid volume
     And I use AccessType Mount
     When I call Probe
-    And I call PublishVolume with "single-writer"
+    And I call PublishVolume with <access>
     And then I use a different nodeID
-    And I call PublishVolume with "single-writer"
+    And I call PublishVolume with <access>
     Then the error contains "volume already published"
+
+    Examples:
+      | access                      |
+      | "single-writer"             |
+      | "single-node-single-writer" |
+      | "single-node-multi-writer"  |
 
   Scenario: Publish mount volume with multiple readers to multiple reader volume
     Given a VxFlexOS service
