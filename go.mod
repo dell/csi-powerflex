@@ -20,7 +20,7 @@ require (
 	github.com/container-storage-interface/spec v1.3.0
 	github.com/cucumber/godog v0.12.1
 	github.com/dell/dell-csi-extensions/podmon v1.0.0
-	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v0.2.0
+	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v0.0.0-20211104171507-7c7d0b6e3d35
 	github.com/dell/gocsi v1.3.1
 	github.com/dell/gofsutil v1.6.0
 	github.com/dell/goscaleio v1.6.0
@@ -33,7 +33,7 @@ require (
 	github.com/spf13/viper v1.8.1
 	github.com/stretchr/testify v1.7.0
 	golang.org/x/net v0.0.0-20210520170846-37e1c6afe023
-	google.golang.org/grpc v1.38.0
+	google.golang.org/grpc v1.42.0
 	k8s.io/api v0.22.1
 	k8s.io/apimachinery v0.22.1
 	k8s.io/client-go v0.22.1

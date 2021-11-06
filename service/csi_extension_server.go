@@ -176,12 +176,6 @@ func (s *service) CreateVolumeGroupSnapshot(ctx context.Context, req *volumeGrou
 	return resp, nil
 }
 
-//This function is a no-op for the driver, controller will decide what to do given the retain policy
-func (s *service) DeleteVolumeGroupSnapshot(ctx context.Context, req *volumeGroupSnapshot.DeleteVolumeGroupSnapshotRequest) (*volumeGroupSnapshot.DeleteVolumeGroupSnapshotResponse, error) {
-	Log.Infof("DeleteVolumeGroupSnapshot called %+v", req)
-	return &volumeGroupSnapshot.DeleteVolumeGroupSnapshotResponse{}, nil
-}
-
 func checkCreationTime(time int64, snapshots []*volumeGroupSnapshot.Snapshot) error {
 	Log.Infof("CheckCreationTime called with snapshots: %v", snapshots)
 	for _, snap := range snapshots {

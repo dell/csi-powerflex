@@ -2604,18 +2604,6 @@ func (f *feature) aValidCreateVolumeSnapshotGroupResponse() error {
 	return nil
 }
 
-func (f *feature) iCallDeleteVolumeGroupSnapshot() error {
-	ctx := context.Background()
-	req := &volGroupSnap.DeleteVolumeGroupSnapshotRequest{
-		SnapshotGroupID: "1234",
-	}
-	_, err := f.service.DeleteVolumeGroupSnapshot(ctx, req)
-	if err != nil {
-		f.err = err
-	}
-	return nil
-}
-
 func (f *feature) iCallCreateSnapshot(snapName string) error {
 	ctx := new(context.Context)
 
@@ -3209,7 +3197,6 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I do not have a valid gateway password$`, f.iDoNotHaveAValidGatewayPassword)
 	s.Step(`^I call Clone volume$`, f.iCallCloneVolume)
 	s.Step(`^I call CreateVolumeSnapshotGroup$`, f.iCallCreateVolumeGroupSnapshot)
-	s.Step(`^I call DeleteVolumeSnapshotGroup$`, f.iCallDeleteVolumeGroupSnapshot)
 	s.Step(`^the ValidateConnectivity response message contains "([^"]*)"$`, f.theValidateConnectivityResponseMessageContains)
 	s.Step(`^I create false ephemeral ID$`, f.iCreateFalseEphemeralID)
 	s.Step(`^I call EphemeralNodeUnpublish$`, f.iCallEphemeralNodeUnpublish)
