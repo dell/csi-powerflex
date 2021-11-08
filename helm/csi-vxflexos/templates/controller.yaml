@@ -279,7 +279,7 @@ spec:
             - name: PROXY_HOST
               value: "{{ .Values.authorization.proxyHost }}"
             - name: INSECURE
-              value: "{{ .Values.authorization.insecure }}"
+              value: "{{ .Values.authorization.skipCertificateValidation }}"
             - name: PLUGIN_IDENTIFIER
               value: powerflex
             - name: ACCESS_TOKEN
