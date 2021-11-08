@@ -65,7 +65,6 @@ Feature: VxFlex OS CSI interface
     And when I call DeleteVolume
     Then there are no errors
 
-  @wip
   #note: only run if secret has systemID
   Scenario: Create, publish, unpublish, and delete basic vol, but sc has name, and secret has id
     Given a VxFlexOS service
