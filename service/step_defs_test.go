@@ -2467,7 +2467,7 @@ func (f *feature) aCorrectNodeGetVolumeStatsResponse() error {
 
 	if stepHandlersErrors.NoVolError {
 		abnormal = true
-		message = "Could not find the volume"
+		message = "Volume is not found"
 		usage = false
 	}
 
