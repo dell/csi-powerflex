@@ -1527,7 +1527,7 @@ func (f *feature) aValidControllerGetCapabilitiesResponseIsReturned() error {
 			}
 		}
 
-		if count != 10 {
+		if count != 9 {
 			return errors.New("Did not retrieve all the expected capabilities")
 		}
 		return nil
