@@ -699,11 +699,29 @@ Feature: VxFlex OS CSI interface
       | "CorrectFormatBadCsiVolIDInNodeExpand"  | "test/tmp/datadir"  | "is not configured in the driver"           |
       | "VolumeIDTooShortErrorInNodeExpand"     | "test/tmp/datadir"  | "is shorter than 3 chars, returning error"  |
       | "TooManyDashesVolIDInNodeExpand"        | "test/tmp/datadir"  | "is not configured in the driver"           |
-
-  Scenario: Call NodeGetVolumeStats, should get unimplemented
+  
+  Scenario Outline: Call NodeGetVolumeStats with various errors
     Given a VxFlexOS service
-    When I call NodeGetVolumeStats
-    Then the error contains "Unimplemented"
+    And a controller published volume
+    And a capability with voltype "mount" access "single-writer" fstype "ext4"
+    When I call Probe
+    And I call NodePublishVolume "SDC_GUID"
+    And I induce error <error> 
+    And I call NodeGetVolumeStats
+    Then the error contains <errormsg>
+    And a correct NodeGetVolumeStats Response is returned
+    
+    Examples:
+      | error                    | errormsg                   | 
+      | "none"                   | "none"                     | 
+      | "BadVolIDError"          | "id must be a hexadecimal" | 
+      | "NoVolIDError"           | "no volume ID  provided"   |
+      | "BadMountPathError"      | "none"                     | 
+      | "NoMountPathError"       | "no volume Path provided"  | 
+      | "NoVolIDSDCError"        | "none"                     |  
+      | "GOFSMockGetMountsError" | "none"                     |
+      | "NoVolError"             | "none"                     |
+      | "NoSysNameError"         | "systemID is not found"    |
 
   Scenario: Call getSystemNameMatchingError, should get error in log but no error returned
     Given a VxFlexOS service

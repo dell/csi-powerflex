@@ -15,6 +15,9 @@ import (
 	"syscall"
 	"time"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"encoding/json"
 	"path/filepath"
 
@@ -62,6 +65,7 @@ type feature struct {
 	expandVolumeResponse        *csi.ControllerExpandVolumeResponse
 	nodeExpandVolumeResponse    *csi.NodeExpandVolumeResponse
 	controllerGetVolumeResponse *csi.ControllerGetVolumeResponse
+  nodeGetVolumeStatsResponse  *csi.NodeGetVolumeStatsResponse
 	arrays                      map[string]*ArrayConnectionData
 	VolumeGroupSnapshot         *volGroupSnap.CreateVolumeGroupSnapshotResponse
 	VolumeGroupSnapshot2        *volGroupSnap.CreateVolumeGroupSnapshotResponse
@@ -1478,6 +1482,40 @@ func (f *feature) whenICallNodeExpandVolume() error {
 
 }
 
+func (f *feature) iCallNodeGetVolumeStats() error {
+	ctx := context.Background()
+	client := csi.NewNodeClient(grpcClient)
+	var err error
+
+	volId := f.volID
+	vPath := "/tmp/datadir"
+
+	req := &csi.NodeGetVolumeStatsRequest{VolumeId: volId, VolumePath: vPath}
+
+	f.nodeGetVolumeStatsResponse, err = client.NodeGetVolumeStats(ctx, req)
+
+	return err
+}
+
+func (f *feature) theVolumeConditionIs(condition string) error {
+
+	fmt.Printf("f.nodeGetVolumeStatsResponse is %v\n", f.nodeGetVolumeStatsResponse)
+
+	abnormal := false
+
+	if condition == "abnormal" {
+		abnormal = true
+	}
+
+	if f.nodeGetVolumeStatsResponse.VolumeCondition.Abnormal == abnormal {
+		fmt.Printf("f.nodeGetVolumeStatsResponse check passed")
+		return nil
+	}
+	fmt.Printf("abnormal should have been %v, but was %v instead", abnormal, f.nodeGetVolumeStatsResponse.VolumeCondition.Abnormal)
+	return status.Errorf(codes.Internal, "Check NodeGetVolumeStatsResponse failed")
+
+}
+
 func (f *feature) nodeExpandVolume(volID, volPath string) error {
 	var resp *csi.NodeExpandVolumeResponse
 	var err error
@@ -1736,5 +1774,6 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call split VolumeGroupSnapshot$`, f.iCallSplitVolumeGroupSnapshot)
 	s.Step(`^I call ControllerGetVolume$`, f.iCallControllerGetVolume)
 	s.Step(`^the volumecondition is "([^"]*)"$`, f.theVolumeconditionIs)
-
+	s.Step(`^I call NodeGetVolumeStats$`, f.iCallNodeGetVolumeStats)
+	s.Step(`^the VolumeCondition is "([^"]*)"$`, f.theVolumeConditionIs)
 }
