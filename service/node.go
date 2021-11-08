@@ -9,8 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"io/ioutil"
-
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/dell/gofsutil"
 	"github.com/dell/goscaleio"
@@ -19,6 +17,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"io/ioutil"
+	k8sutilfs "k8s.io/kubernetes/pkg/volume/util/fs"
 )
 
 var (
@@ -461,6 +461,21 @@ func (s *service) NodeGetCapabilities(
 					},
 				},
 			},
+			{
+				Type: &csi.NodeServiceCapability_Rpc{
+					Rpc: &csi.NodeServiceCapability_RPC{
+						Type: csi.NodeServiceCapability_RPC_VOLUME_CONDITION,
+					},
+				},
+			},
+
+			{
+				Type: &csi.NodeServiceCapability_Rpc{
+					Rpc: &csi.NodeServiceCapability_RPC{
+						Type: csi.NodeServiceCapability_RPC_GET_VOLUME_STATS,
+					},
+				},
+			},
 		},
 	}, nil
 
@@ -504,9 +519,146 @@ func (s *service) NodeGetInfo(
 	}, nil
 }
 
-func (s *service) NodeGetVolumeStats(
-	ctx context.Context, req *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "")
+// NodeGetVolumeStats will check the status of a volume given its ID and path
+// if volume is healthy, stats on volume usage will be returned
+// if volume is unhealthy, a message will be returned detailing the issue
+// To determine if volume is healthy, this method checks: volume known to array, volume known to SDC, volume path readable, and volume path mounted
+// Note: kubelet only calls this method when feature gate: CSIVolumeHealth=true
+func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
+
+	csiVolID := req.GetVolumeId()
+	volPath := req.GetVolumePath()
+	mounted := false
+	healthy := true
+	message := ""
+
+	//validate params first, make sure neither field is empty
+	if len(volPath) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "no volume Path provided")
+	}
+
+	if len(csiVolID) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "no volume ID  provided")
+	}
+
+	//check if volume exists
+
+	volID := getVolumeIDFromCsiVolumeID(csiVolID)
+	systemID := s.getSystemIDFromCsiVolumeID(csiVolID)
+
+	if systemID == "" {
+		// use default system
+		systemID = s.opts.defaultSystemID
+	}
+
+	if systemID == "" {
+		return nil, status.Error(codes.InvalidArgument,
+			"systemID is not found in the request and there is no default system")
+	}
+
+	_, err := s.getSDCMappedVol(volID, systemID, 30)
+	if err != nil {
+		//volume not known to SDC, next check if it exists at all
+		_, _, err := s.listVolumes(systemID, 0, 0, false, false, volID, "")
+		if err != nil && strings.Contains(err.Error(), sioGatewayVolumeNotFound) {
+			message = fmt.Sprintf("Could not get volume with ID '%s' from array %s due to error: %s", volID, systemID, err)
+
+		} else if err != nil {
+			//error was returned, but had nothing to do with the volume not being on the array (may be env related)
+			return nil, err
+		}
+		//volume was found, but was not known to SDC. This is abnormal.
+		healthy = false
+		if message == "" {
+			message = fmt.Sprintf("volume: %s was not mapped to host: %v", volID, err)
+		}
+
+	}
+
+	//check if volume path is accessible
+	if healthy {
+		_, err = os.ReadDir(volPath)
+		if err != nil && healthy {
+			healthy = false
+			message = fmt.Sprintf("volume path: %s is not accessible: %v", volPath, err)
+		}
+	}
+
+	if healthy {
+
+		//check if path is mounted on node
+		mounts, err := getPathMounts(volPath)
+		if len(mounts) > 0 {
+			for _, m := range mounts {
+				if m.Path == volPath {
+					Log.Infof("volPath: %s is mounted", volPath)
+					mounted = true
+				}
+			}
+		}
+		if len(mounts) == 0 || mounted == false || err != nil {
+			healthy = false
+			message = fmt.Sprintf("volPath: %s is not mounted: %v", volPath, err)
+		}
+
+	}
+
+	if healthy {
+
+		availableBytes, totalBytes, usedBytes, totalInodes, freeInodes, usedInodes, err := k8sutilfs.Info(volPath)
+		if err != nil {
+			return &csi.NodeGetVolumeStatsResponse{
+				Usage: []*csi.VolumeUsage{
+					{Available: 0,
+						Total: 0,
+						Used:  0,
+						Unit:  csi.VolumeUsage_UNKNOWN,
+					},
+				},
+				VolumeCondition: &csi.VolumeCondition{
+					Abnormal: false,
+					Message:  fmt.Sprintf("failed to get metrics for volume with error: %v", err),
+				},
+			}, nil
+
+		}
+		return &csi.NodeGetVolumeStatsResponse{
+			Usage: []*csi.VolumeUsage{
+				{
+					Available: availableBytes,
+					Total:     totalBytes,
+					Used:      usedBytes,
+					Unit:      csi.VolumeUsage_BYTES,
+				},
+				{
+					Available: freeInodes,
+					Total:     totalInodes,
+					Used:      usedInodes,
+					Unit:      csi.VolumeUsage_INODES,
+				},
+			},
+			VolumeCondition: &csi.VolumeCondition{
+				Abnormal: !healthy,
+				Message:  message,
+			},
+		}, nil
+
+	}
+
+	return &csi.NodeGetVolumeStatsResponse{
+		Usage: []*csi.VolumeUsage{
+			{
+				Available: 0,
+				Total:     0,
+				Used:      0,
+				Unit:      csi.VolumeUsage_UNKNOWN,
+			},
+		},
+		VolumeCondition: &csi.VolumeCondition{
+			Abnormal: !healthy,
+			Message:  message,
+		},
+	}, nil
 
 }
 
