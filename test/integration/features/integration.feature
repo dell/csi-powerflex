@@ -589,6 +589,43 @@ Scenario: Call CreateVolumeGroupSnapshot idempotent; criteria 3 fails
   And when I call DeleteAllVolumes
   Then the error message should contain "contains more snapshots"
 
+Scenario: Call ControllerGetVolume with Good VolumeID
+  Given a VxFlexOS service
+  And a capability with voltype "mount" access "single-writer" fstype "ext4"
+  And a volume request "integration19" "8"
+  When I call CreateVolume
+  And there are no errors
+  And when I call PublishVolume "SDC_GUID"
+  And there are no errors
+  And when I call NodePublishVolume "SDC_GUID"
+  And there are no errors
+  And I call ControllerGetVolume
+  And the volumecondition is "healthy"
+  And when I call NodeUnpublishVolume "SDC_GUID"
+  And there are no errors
+  And when I call UnpublishVolume "SDC_GUID"
+  And there are no errors
+  And when I call DeleteVolume
+  Then there are no errors
+
+Scenario: Call ControllerGetVolume with No VolumeID
+  Given a VxFlexOS service
+  And a capability with voltype "mount" access "single-writer" fstype "ext4"
+  And a volume request "integration19" "8"
+  When I call CreateVolume
+  And there are no errors
+  And when I call PublishVolume "SDC_GUID"
+  And there are no errors
+  And when I call NodePublishVolume "SDC_GUID"
+  And when I call NodeUnpublishVolume "SDC_GUID"
+  And when I call UnpublishVolume "SDC_GUID"
+  And there are no errors
+  And when I call DeleteVolume
+  Then there are no errors
+  And I call ControllerGetVolume
+  And the volumecondition is "unhealthy"
+  Then there are no errors
+
 Scenario: Call NodeGetVolumeStats on volume 
   Given a VxFlexOS service
   And a capability with voltype "mount" access "single-writer" fstype "ext4"

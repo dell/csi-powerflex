@@ -856,7 +856,15 @@ Feature: VxFlex OS CSI interface
       | "features/array-config/two_default_array"   | "'isDefault' parameter presents more than once in storage array list" |
       | "features/array-config/empty"               | "arrays details are not provided in vxflexos-creds secret"            |
   
-  Scenario: Call ControllerGetVolume
+  Scenario: Call ControllerGetVolume good scenario
     Given a VxFlexOS service
+    And I call Probe
     When I call ControllerGetVolume
-    Then the error contains "Unimplemented" 
+    Then a valid ControllerGetVolumeResponse is returned
+  
+  Scenario: Call ControllerGetVolume bad scenario
+    Given a VxFlexOS service
+    And I call Probe
+    And I induce error "NoVolumeIDError"
+    When I call ControllerGetVolume
+    Then the error contains "volume ID is required"
