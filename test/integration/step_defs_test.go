@@ -65,7 +65,7 @@ type feature struct {
 	expandVolumeResponse        *csi.ControllerExpandVolumeResponse
 	nodeExpandVolumeResponse    *csi.NodeExpandVolumeResponse
 	controllerGetVolumeResponse *csi.ControllerGetVolumeResponse
-        nodeGetVolumeStatsResponse  *csi.NodeGetVolumeStatsResponse
+	nodeGetVolumeStatsResponse  *csi.NodeGetVolumeStatsResponse
 	arrays                      map[string]*ArrayConnectionData
 	VolumeGroupSnapshot         *volGroupSnap.CreateVolumeGroupSnapshotResponse
 	VolumeGroupSnapshot2        *volGroupSnap.CreateVolumeGroupSnapshotResponse
