@@ -1527,7 +1527,7 @@ func (f *feature) aValidControllerGetCapabilitiesResponseIsReturned() error {
 			}
 		}
 
-		if count != 10 {
+		if count != 9 {
 			return errors.New("Did not retrieve all the expected capabilities")
 		}
 		return nil
@@ -2467,7 +2467,7 @@ func (f *feature) aCorrectNodeGetVolumeStatsResponse() error {
 
 	if stepHandlersErrors.NoVolError {
 		abnormal = true
-		message = "Could not find the volume"
+		message = "Volume is not found"
 		usage = false
 	}
 

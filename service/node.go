@@ -561,7 +561,7 @@ func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolume
 		//volume not known to SDC, next check if it exists at all
 		_, _, err := s.listVolumes(systemID, 0, 0, false, false, volID, "")
 		if err != nil && strings.Contains(err.Error(), sioGatewayVolumeNotFound) {
-			message = fmt.Sprintf("Could not get volume with ID '%s' from array %s due to error: %s", volID, systemID, err)
+			message = fmt.Sprintf("Volume is not found by node driver at %s", time.Now().Format("2006-01-02 15:04:05"))
 
 		} else if err != nil {
 			//error was returned, but had nothing to do with the volume not being on the array (may be env related)
