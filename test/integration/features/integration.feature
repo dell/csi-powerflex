@@ -513,93 +513,158 @@ Feature: VxFlex OS CSI interface
     And I call EthemeralNodePublishVolume with ID <id> and size <size>
     And when I call NodeUnpublishVolume "SDC_GUID"
     Then the error message should contain <errormsg>
+Examples:
+  |  id           | size      |  access         | fstype | errormsg                                             | 
+  | "123456789"   | "8Gi"     |"single-writer"  | "xfs"  | "none"                                               | 
+  | "123456789"   | "8Gi"     |"single-writer"  | "ext4" | "none"                                               |
+  | "123456789"   | "8Gi"     | "multi-writer"  | "ext4" | "inline ephemeral controller publish failed"         | 
+  | ""            | "8Gi"     | "single-writer" | "ext4" | "InvalidArgument desc = required: VolumeID"          |
+  | "123456789"   | "8Gi"     | "single-writer" | "ext1" | "inline ephemeral node publish failed"               |
+  | "123456789"   | " Gi"     |"single-writer"  | "ext4" | "inline ephemeral parse size failed"                 |
 
-    Examples:
-      | id          | size  | access          | fstype | errormsg                                     |
-      | "123456789" | "8Gi" | "single-writer" | "xfs"  | "none"                                       |
-      | "123456789" | "8Gi" | "single-writer" | "ext4" | "none"                                       |
-      | "123456789" | "8Gi" | "multi-writer"  | "ext4" | "inline ephemeral controller publish failed" |
-      | ""          | "8Gi" | "single-writer" | "ext4" | "InvalidArgument desc = required: VolumeID"  |
-      | "123456789" | "8Gi" | "single-writer" | "ext1" | "inline ephemeral node publish failed"       |
-      | "123456789" | " Gi" | "single-writer" | "ext4" | "inline ephemeral parse size failed"         |
+Scenario: Call CreateVolumeGroupSnapshot
+  Given a VxFlexOS service
+  And a basic block volume request "integration1" "8"
+  When I call CreateVolume
+  And a basic block volume request "integration2" "8"
+  And I call CreateVolume
+  And a basic block volume request "integration3" "8"
+  And I call CreateVolume
+  When I call CreateVolumeGroupSnapshot
+  And I call DeleteVGS
+  And when I call DeleteAllVolumes
+  Then the error message should contain "none"
 
-  Scenario: Call CreateVolumeGroupSnapshot
-    Given a VxFlexOS service
-    And a basic block volume request "integration1" "8"
-    When I call CreateVolume
-    And a basic block volume request "integration2" "8"
-    And I call CreateVolume
-    And a basic block volume request "integration3" "8"
-    And I call CreateVolume
-    When I call CreateVolumeGroupSnapshot
-    And I call DeleteVGS
-    And when I call DeleteAllVolumes
-    Then the error message should contain "none"
+Scenario: Call CreateVolumeGroupSnapshot idempotent 
+  Given a VxFlexOS service
+  And a basic block volume request "integration1" "8"
+  When I call CreateVolume
+  And a basic block volume request "integration2" "8"
+  And I call CreateVolume
+  And a basic block volume request "integration3" "8"
+  And I call CreateVolume
+  When I call CreateVolumeGroupSnapshot
+  When I call CreateVolumeGroupSnapshot
+  And I call DeleteVGS
+  And when I call DeleteAllVolumes
+  Then the error message should contain "none"
 
-  Scenario: Call CreateVolumeGroupSnapshot idempotent
-    Given a VxFlexOS service
-    And a basic block volume request "integration1" "8"
-    When I call CreateVolume
-    And a basic block volume request "integration2" "8"
-    And I call CreateVolume
-    And a basic block volume request "integration3" "8"
-    And I call CreateVolume
-    When I call CreateVolumeGroupSnapshot
-    When I call CreateVolumeGroupSnapshot
-    And I call DeleteVGS
-    And when I call DeleteAllVolumes
-    Then the error message should contain "none"
+@vg
+Scenario: Call CreateVolumeGroupSnapshot idempotent; criteria 1 fails
+  Given a VxFlexOS service
+  And a basic block volume request "integration1" "8"
+  When I call CreateVolume
+  And a basic block volume request "integration2" "8"
+  And I call CreateVolume
+  And a basic block volume request "integration3" "8"
+  And I call CreateVolume
+  When I call CreateVolumeGroupSnapshot
+  And a basic block volume request "integration4" "8"
+  And I call CreateVolume
+  When I call CreateVolumeGroupSnapshot
+  And I call DeleteVGS
+  And when I call DeleteAllVolumes
+  Then the error message should contain "Some snapshots exist on array, while others need to be created"
 
-  @vg
-  Scenario: Call CreateVolumeGroupSnapshot idempotent; criteria 1 fails
-    Given a VxFlexOS service
-    And a basic block volume request "integration1" "8"
-    When I call CreateVolume
-    And a basic block volume request "integration2" "8"
-    And I call CreateVolume
-    And a basic block volume request "integration3" "8"
-    And I call CreateVolume
-    When I call CreateVolumeGroupSnapshot
-    And a basic block volume request "integration4" "8"
-    And I call CreateVolume
-    When I call CreateVolumeGroupSnapshot
-    And I call DeleteVGS
-    And when I call DeleteAllVolumes
-    Then the error message should contain "Some snapshots exist on array, while others need to be created"
+#X_CSI_VXFLEXOS_ENABLESNAPSHOTCGDELETE must be set to "false" in env.sh for this test
+#Scenario: Call CreateVolumeGroupSnapshot idempotent; criteria 2 fails
+# Given a VxFlexOS service
+#  And a basic block volume request "integration1" "8"
+#  When I call CreateVolume
+# And a basic block volume request "integration2" "8"
+# And I call CreateVolume
+#  And a basic block volume request "integration3" "8"
+#  And I call CreateVolume
+#  When I call CreateVolumeGroupSnapshot
+#  And I call split VolumeGroupSnapshot
+#  When I call CreateVolumeGroupSnapshot
+#  And I call DeleteVGS
+#  And when I call DeleteAllVolumes
+#  Then the error message should contain "Idempotent snapshots belong to different consistency groups on array"
 
-  #X_CSI_VXFLEXOS_ENABLESNAPSHOTCGDELETE must be set to "false" in env.sh for this test
-  #Scenario: Call CreateVolumeGroupSnapshot idempotent; criteria 2 fails
-  # Given a VxFlexOS service
-  #  And a basic block volume request "integration1" "8"
-  #  When I call CreateVolume
-  # And a basic block volume request "integration2" "8"
-  # And I call CreateVolume
-  #  And a basic block volume request "integration3" "8"
-  #  And I call CreateVolume
-  #  When I call CreateVolumeGroupSnapshot
-  #  And I call split VolumeGroupSnapshot
-  #  When I call CreateVolumeGroupSnapshot
-  #  And I call DeleteVGS
-  #  And when I call DeleteAllVolumes
-  #  Then the error message should contain "Idempotent snapshots belong to different consistency groups on array"
+@vg
+Scenario: Call CreateVolumeGroupSnapshot idempotent; criteria 3 fails
+  Given a VxFlexOS service
+  And a basic block volume request "integration1" "8"
+  When I call CreateVolume
+  And a basic block volume request "integration2" "8"
+  And I call CreateVolume
+  And a basic block volume request "integration3" "8"
+  And I call CreateVolume
+  When I call CreateVolumeGroupSnapshot
+  And remove a volume from VolumeGroupSnapshotRequest 
+  When I call CreateVolumeGroupSnapshot
+  And I call DeleteVGS
+  And when I call DeleteAllVolumes
+  Then the error message should contain "contains more snapshots"
 
-  @vg
-  Scenario: Call CreateVolumeGroupSnapshot idempotent; criteria 3 fails
-    Given a VxFlexOS service
-    And a basic block volume request "integration1" "8"
-    When I call CreateVolume
-    And a basic block volume request "integration2" "8"
-    And I call CreateVolume
-    And a basic block volume request "integration3" "8"
-    And I call CreateVolume
-    When I call CreateVolumeGroupSnapshot
-    And remove a volume from VolumeGroupSnapshotRequest
-    When I call CreateVolumeGroupSnapshot
-    And I call DeleteVGS
-    And when I call DeleteAllVolumes
-    Then the error message should contain "contains more snapshots"
+Scenario: Call ControllerGetVolume with Good VolumeID
+  Given a VxFlexOS service
+  And a capability with voltype "mount" access "single-writer" fstype "ext4"
+  And a volume request "integration19" "8"
+  When I call CreateVolume
+  And there are no errors
+  And when I call PublishVolume "SDC_GUID"
+  And there are no errors
+  And when I call NodePublishVolume "SDC_GUID"
+  And there are no errors
+  And I call ControllerGetVolume
+  And the volumecondition is "healthy"
+  And when I call NodeUnpublishVolume "SDC_GUID"
+  And there are no errors
+  And when I call UnpublishVolume "SDC_GUID"
+  And there are no errors
+  And when I call DeleteVolume
+  Then there are no errors
 
-  Scenario: Call DeleteVolumeGroupSnapshot
-    Given a VxFlexOS service
-    When I call DeleteVolumeGroupSnapshot
-    Then the error message should contain "none"
+Scenario: Call ControllerGetVolume with No VolumeID
+  Given a VxFlexOS service
+  And a capability with voltype "mount" access "single-writer" fstype "ext4"
+  And a volume request "integration19" "8"
+  When I call CreateVolume
+  And there are no errors
+  And when I call PublishVolume "SDC_GUID"
+  And there are no errors
+  And when I call NodePublishVolume "SDC_GUID"
+  And when I call NodeUnpublishVolume "SDC_GUID"
+  And when I call UnpublishVolume "SDC_GUID"
+  And there are no errors
+  And when I call DeleteVolume
+  Then there are no errors
+  And I call ControllerGetVolume
+  And the volumecondition is "unhealthy"
+  Then there are no errors
+
+Scenario: Call NodeGetVolumeStats on volume 
+  Given a VxFlexOS service
+  And a capability with voltype "mount" access "single-writer" fstype "ext4"
+  And a volume request "integration" "8"
+  When I call CreateVolume
+  And there are no errors
+  And when I call PublishVolume "SDC_GUID"
+  And there are no errors
+  And when I call NodePublishVolume "SDC_GUID"
+  And I call NodeGetVolumeStats
+  And the VolumeCondition is "ok"
+  And when I call NodeUnpublishVolume "SDC_GUID"
+  And when I call UnpublishVolume "SDC_GUID"
+  And there are no errors
+  And when I call DeleteVolume
+  Then there are no errors
+
+Scenario: Call NodeGetVolumeStats on unmounted volume
+  Given a VxFlexOS service
+  And a capability with voltype "mount" access "single-writer" fstype "ext4"
+  And a volume request "integration" "8"
+  When I call CreateVolume
+  And there are no errors
+  And when I call PublishVolume "SDC_GUID"
+  And there are no errors
+  And when I call NodePublishVolume "SDC_GUID"
+  And when I call NodeUnpublishVolume "SDC_GUID"
+  And I call NodeGetVolumeStats
+  And the VolumeCondition is "abnormal"
+  And when I call UnpublishVolume "SDC_GUID"
+  And there are no errors
+  And when I call DeleteVolume
+  Then there are no errors

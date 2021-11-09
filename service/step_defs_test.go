@@ -87,6 +87,7 @@ type feature struct {
 	unpublishVolumeResponse               *csi.ControllerUnpublishVolumeResponse
 	nodeGetInfoResponse                   *csi.NodeGetInfoResponse
 	nodeGetCapabilitiesResponse           *csi.NodeGetCapabilitiesResponse
+	nodeGetVolumeStatsResponse            *csi.NodeGetVolumeStatsResponse
 	deleteVolumeResponse                  *csi.DeleteVolumeResponse
 	getMappedVolResponse                  *goscaleio.SdcMappedVolume
 	getCapacityResponse                   *csi.GetCapacityResponse
@@ -101,6 +102,8 @@ type feature struct {
 	listVolumesResponse                   *csi.ListVolumesResponse
 	listSnapshotsRequest                  *csi.ListSnapshotsRequest
 	listSnapshotsResponse                 *csi.ListSnapshotsResponse
+	controllerGetVolumeRequest            *csi.ControllerGetVolumeRequest
+	ControllerGetVolumeResponse           *csi.ControllerGetVolumeResponse
 	validateVolumeHostConnectivityResp    *podmon.ValidateVolumeHostConnectivityResponse
 	listedVolumeIDs                       map[string]bool
 	listVolumesNextTokenCache             string
@@ -938,6 +941,16 @@ func (f *feature) iInduceError(errtype string) error {
 		stepHandlersErrors.NoVolumeIDError = true
 	case "BadVolIDJSON":
 		stepHandlersErrors.BadVolIDJSON = true
+	case "BadMountPathError":
+		stepHandlersErrors.BadMountPathError = true
+	case "NoMountPathError":
+		stepHandlersErrors.NoMountPathError = true
+	case "NoVolIDError":
+		stepHandlersErrors.NoVolIDError = true
+	case "NoVolIDSDCError":
+		stepHandlersErrors.NoVolIDSDCError = true
+	case "NoVolError":
+		stepHandlersErrors.NoVolError = true
 	case "SetVolumeSizeError":
 		stepHandlersErrors.SetVolumeSizeError = true
 	case "NoSymlinkForNodePublish":
@@ -1510,12 +1523,17 @@ func (f *feature) aValidControllerGetCapabilitiesResponseIsReturned() error {
 			case csi.ControllerServiceCapability_RPC_CLONE_VOLUME:
 				count = count + 1
 			case csi.ControllerServiceCapability_RPC_SINGLE_NODE_MULTI_WRITER:
-				count = count + 1
+        count = count + 1
+			case csi.ControllerServiceCapability_RPC_GET_VOLUME:
+        count = count + 1
+			case csi.ControllerServiceCapability_RPC_VOLUME_CONDITION:
+        count = count + 1
 			default:
 				return fmt.Errorf("received unexpected capability: %v", typex)
 			}
 		}
-		if count != 9 {
+
+		if count != 11 {
 			return errors.New("Did not retrieve all the expected capabilities")
 		}
 		return nil
@@ -2389,8 +2407,102 @@ func (f *feature) iCallNodeExpandVolume(volPath string) error {
 
 func (f *feature) iCallNodeGetVolumeStats() error {
 	ctx := new(context.Context)
-	req := new(csi.NodeGetVolumeStatsRequest)
-	_, f.err = f.service.NodeGetVolumeStats(*ctx, req)
+
+	VolumeID := sdcVolume1
+	VolumePath := datadir
+
+	if stepHandlersErrors.BadVolIDError {
+		VolumeID = badVolumeID
+	}
+	if stepHandlersErrors.NoVolIDError {
+		VolumeID = ""
+	}
+	if stepHandlersErrors.BadMountPathError {
+		VolumePath = "there/is/nothing/mounted/here"
+	}
+	if stepHandlersErrors.NoMountPathError {
+		VolumePath = ""
+	}
+	if stepHandlersErrors.NoVolIDSDCError {
+		VolumeID = goodVolumeID
+	}
+	if stepHandlersErrors.NoVolError {
+		VolumeID = "435645643"
+		stepHandlersErrors.SIOGatewayVolumeNotFoundError = true
+	}
+	if stepHandlersErrors.NoSysNameError {
+		f.service.opts.defaultSystemID = ""
+	}
+
+	req := &csi.NodeGetVolumeStatsRequest{VolumeId: VolumeID, VolumePath: VolumePath}
+
+	f.nodeGetVolumeStatsResponse, f.err = f.service.NodeGetVolumeStats(*ctx, req)
+
+	return nil
+}
+
+func (f *feature) aCorrectNodeGetVolumeStatsResponse() error {
+	if stepHandlersErrors.NoVolIDError || stepHandlersErrors.NoMountPathError || stepHandlersErrors.BadVolIDError || stepHandlersErrors.NoSysNameError {
+		//errors and no responses should be returned in these instances
+		if f.nodeGetVolumeStatsResponse == nil {
+			fmt.Printf("Response check passed\n")
+			return nil
+		}
+
+		fmt.Printf("Expected NodeGetVolumeStatsResponse to be nil, but instead, it was %v", f.nodeGetVolumeStatsResponse)
+		return status.Errorf(codes.Internal, "Check NodeGetVolumeStatsResponse failed")
+	}
+
+	//assume no errors induced, so response should be okay, these values will change below if errors were induced
+	abnormal := false
+	message := ""
+	usage := true
+
+	fmt.Printf("response from NodeGetVolumeStats is: %v\n", f.nodeGetVolumeStatsResponse)
+
+	if stepHandlersErrors.BadMountPathError {
+		abnormal = true
+		message = "not accessible"
+		usage = false
+	}
+
+	if gofsutil.GOFSMock.InduceGetMountsError {
+		abnormal = true
+		message = "not mounted"
+		usage = false
+	}
+
+	if stepHandlersErrors.NoVolIDSDCError {
+		abnormal = true
+		message = "not mapped to host"
+		usage = false
+
+	}
+
+	if stepHandlersErrors.NoVolError {
+		abnormal = true
+		message = "Volume is not found"
+		usage = false
+	}
+
+	//check message and abnormal state returned in NodeGetVolumeStatsResponse.VolumeCondition
+	if f.nodeGetVolumeStatsResponse.VolumeCondition.Abnormal == abnormal && strings.Contains(f.nodeGetVolumeStatsResponse.VolumeCondition.Message, message) {
+		fmt.Printf("NodeGetVolumeStats Response VolumeCondition check passed\n")
+	} else {
+		fmt.Printf("Expected nodeGetVolumeStatsResponse.Abnormal to be %v, and message to contain: %s, but instead, abnormal was: %v and message was: %s", abnormal, message, f.nodeGetVolumeStatsResponse.VolumeCondition.Abnormal, f.nodeGetVolumeStatsResponse.VolumeCondition.Message)
+		return status.Errorf(codes.Internal, "Check NodeGetVolumeStatsResponse failed")
+	}
+
+	//check Usage returned in NodeGetVolumeStatsResponse
+	if usage {
+		if f.nodeGetVolumeStatsResponse.Usage != nil {
+			fmt.Printf("NodeGetVolumeStats Response Usage check passed\n")
+			return nil
+		}
+		fmt.Printf("Expected NodeGetVolumeStats Response to have Usage, but Usage was nil")
+		return status.Errorf(codes.Internal, "Check NodeGetVolumeStatsResponse failed")
+	}
+
 	return nil
 }
 
@@ -2452,12 +2564,17 @@ func (f *feature) aValidNodeGetCapabilitiesResponseIsReturned() error {
 			case csi.NodeServiceCapability_RPC_EXPAND_VOLUME:
 				count = count + 1
 			case csi.NodeServiceCapability_RPC_SINGLE_NODE_MULTI_WRITER:
+        count = count + 1
+			case csi.NodeServiceCapability_RPC_VOLUME_CONDITION:
+				count = count + 1
+			case csi.NodeServiceCapability_RPC_GET_VOLUME_STATS:
 				count = count + 1
 			default:
 				return fmt.Errorf("received unxexpcted capability: %v", typex)
 			}
 		}
-		if count != 2 {
+
+		if count != 4 {
 			return errors.New("Did not retrieve all the expected capabilities")
 		}
 		return nil
@@ -2551,14 +2668,34 @@ func (f *feature) iCallCheckCreationTime() error {
 }
 
 func (f *feature) iCallControllerGetVolume() error {
-	ctx := context.Background()
-	req := new(csi.ControllerGetVolumeRequest)
-	resp, err := f.service.ControllerGetVolume(ctx, req)
-	if err != nil {
-		f.err = err
+
+	header := metadata.New(map[string]string{"csi.requestid": "1"})
+	ctx := metadata.NewIncomingContext(context.Background(), header)
+	req := &csi.ControllerGetVolumeRequest{
+		VolumeId: sdcVolume1,
 	}
-	fmt.Printf("Response from ControllerGetVolume is %v", resp)
+	if stepHandlersErrors.NoVolumeIDError {
+		req.VolumeId = ""
+	}
+	f.ControllerGetVolumeResponse, f.err = f.service.ControllerGetVolume(ctx, req)
+
+	if f.err != nil {
+		log.Printf("Controller GetVolume call failed: %s\n", f.err.Error())
+	}
+	fmt.Printf("Response from ControllerGetVolume is %v", f.ControllerGetVolumeResponse)
 	return nil
+}
+
+func (f *feature) aValidControllerGetVolumeResponseIsReturned() error {
+	if f.err != nil {
+		return f.err
+	}
+
+	fmt.Printf("volume is %v\n", f.ControllerGetVolumeResponse.Volume)
+	fmt.Printf("volume condition is '%s'\n", f.ControllerGetVolumeResponse.Status)
+
+	return nil
+
 }
 
 func (f *feature) aValidCreateVolumeSnapshotGroupResponse() error {
@@ -3173,6 +3310,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call ControllerExpandVolume set to (\d+)$`, f.iCallControllerExpandVolume)
 	s.Step(`^I call NodeExpandVolume with volumePath as "([^"]*)"$`, f.iCallNodeExpandVolume)
 	s.Step(`^I call NodeGetVolumeStats$`, f.iCallNodeGetVolumeStats)
+	s.Step(`^a correct NodeGetVolumeStats Response is returned$`, f.aCorrectNodeGetVolumeStatsResponse)
 	s.Step(`^I give request volume context$`, f.iGiveRequestVolumeContext)
 	s.Step(`^I call GetDevice "([^"]*)"$`, f.iCallGetDevice)
 	s.Step(`^I call NewService$`, f.iCallNewService)
@@ -3210,6 +3348,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^a valid CreateVolumeSnapshotGroup response is returned$`, f.aValidCreateVolumeSnapshotGroupResponse)
 	s.Step(`^I call CheckCreationTime$`, f.iCallCheckCreationTime)
 	s.Step(`^I call ControllerGetVolume$`, f.iCallControllerGetVolume)
+	s.Step(`^a valid ControllerGetVolumeResponse is returned$`, f.aValidControllerGetVolumeResponseIsReturned)
 	s.Step(`^remove a volume from VolumeGroupSnapshotRequest$`, f.iRemoveAVolumeFromVolumeGroupSnapshotRequest)
 	s.Step(`^I call DynamicLogChange "([^"]*)"$`, f.iCallDynamicLogChange)
 	s.Step(`^a valid DynamicLogChange occurs "([^"]*)" "([^"]*)"$`, f.aValidDynamicLogChange)

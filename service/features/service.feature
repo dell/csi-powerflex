@@ -690,22 +690,40 @@ Feature: VxFlex OS CSI interface
     Then the error contains <errormsg>
 
     Examples:
-      | error                                  | volPath             | errormsg                                   |
-      | "none"                                 | ""                  | "Volume path required"                     |
-      | "none"                                 | "test/tmp/datadir"  | "none"                                     |
-      | "GOFSInduceFSTypeError"                | "test/tmp/datadir"  | "Failed to fetch filesystem"               |
-      | "GOFSInduceResizeFSError"              | "test/tmp/datadir"  | "Failed to resize device"                  |
-      | "NoVolumeIDError"                      | "test/tmp/datadir"  | "volume ID is required"                    |
-      | "none"                                 | "not/a/path/1234"   | "Could not stat volume path"               |
-      | "none"                                 | "test/tmp/datafile" | "none"                                     |
-      | "CorrectFormatBadCsiVolIDInNodeExpand" | "test/tmp/datadir"  | "is not configured in the driver"          |
-      | "VolumeIDTooShortErrorInNodeExpand"    | "test/tmp/datadir"  | "is shorter than 3 chars, returning error" |
-      | "TooManyDashesVolIDInNodeExpand"       | "test/tmp/datadir"  | "is not configured in the driver"          |
-
-  Scenario: Call NodeGetVolumeStats, should get unimplemented
+      | error                                   | volPath             | errormsg                                    |
+      | "none"                                  | ""                  | "Volume path required"                      |
+      | "none"                                  | "test/tmp/datadir"  | "none"                                      |
+      | "GOFSInduceFSTypeError"                 | "test/tmp/datadir"  | "Failed to fetch filesystem"                |
+      | "GOFSInduceResizeFSError"               | "test/tmp/datadir"  | "Failed to resize device"                   |
+      | "NoVolumeIDError"                       | "test/tmp/datadir"  | "volume ID is required"                     |
+      | "none"                                  | "not/a/path/1234"   | "Could not stat volume path"                |
+      | "none"                                  | "test/tmp/datafile" | "none"                                      |
+      | "CorrectFormatBadCsiVolIDInNodeExpand"  | "test/tmp/datadir"  | "is not configured in the driver"           |
+      | "VolumeIDTooShortErrorInNodeExpand"     | "test/tmp/datadir"  | "is shorter than 3 chars, returning error"  |
+      | "TooManyDashesVolIDInNodeExpand"        | "test/tmp/datadir"  | "is not configured in the driver"           |
+  
+  Scenario Outline: Call NodeGetVolumeStats with various errors
     Given a VxFlexOS service
-    When I call NodeGetVolumeStats
-    Then the error contains "Unimplemented"
+    And a controller published volume
+    And a capability with voltype "mount" access "single-writer" fstype "ext4"
+    When I call Probe
+    And I call NodePublishVolume "SDC_GUID"
+    And I induce error <error> 
+    And I call NodeGetVolumeStats
+    Then the error contains <errormsg>
+    And a correct NodeGetVolumeStats Response is returned
+    
+    Examples:
+      | error                    | errormsg                   | 
+      | "none"                   | "none"                     | 
+      | "BadVolIDError"          | "id must be a hexadecimal" | 
+      | "NoVolIDError"           | "no volume ID  provided"   |
+      | "BadMountPathError"      | "none"                     | 
+      | "NoMountPathError"       | "no volume Path provided"  | 
+      | "NoVolIDSDCError"        | "none"                     |  
+      | "GOFSMockGetMountsError" | "none"                     |
+      | "NoVolError"             | "none"                     |
+      | "NoSysNameError"         | "systemID is not found"    |
 
   Scenario: Call getSystemNameMatchingError, should get error in log but no error returned
     Given a VxFlexOS service
@@ -840,7 +858,15 @@ Feature: VxFlex OS CSI interface
       | "features/array-config/two_default_array"   | "'isDefault' parameter presents more than once in storage array list" |
       | "features/array-config/empty"               | "arrays details are not provided in vxflexos-creds secret"            |
 
-  Scenario: Call ControllerGetVolume
+  Scenario: Call ControllerGetVolume good scenario
     Given a VxFlexOS service
+    And I call Probe
     When I call ControllerGetVolume
-    Then the error contains "Unimplemented"
+    Then a valid ControllerGetVolumeResponse is returned
+  
+  Scenario: Call ControllerGetVolume bad scenario
+    Given a VxFlexOS service
+    And I call Probe
+    And I induce error "NoVolumeIDError"
+    When I call ControllerGetVolume
+    Then the error contains "volume ID is required"
