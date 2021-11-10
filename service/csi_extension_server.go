@@ -339,7 +339,7 @@ func (s *service) checkIdempotency(ctx context.Context, snapshotsToMake *siotype
 	existingVols, _ := s.adminClients[systemID].GetVolume("", "", "", "", true)
 	for _, vol := range existingVols {
 		grpID := systemID + "-" + vol.ConsistencyGroupID
-		if grpID == consitencyGroupValue {
+		if grpID == systemID + "-" + consitencyGroupValue {
 			Log.Infof("Checking  %s: Snapshot %s found in consistency group.", consitencyGroupValue, vol.Name)
 			consistencyGroupOnArray = append(consistencyGroupOnArray, vol.Name)
 		}
