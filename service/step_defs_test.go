@@ -2622,7 +2622,7 @@ func (f *feature) iCallCreateVolumeGroupSnapshot() error {
 	}
 	if f.VolumeGroupSnapshot != nil {
 		// idempotency test
-		req.Parameters["existingSnapshotGroupID"] = f.VolumeGroupSnapshot.SnapshotGroupID
+		req.Parameters["existingSnapshotGroupID"] = strings.Split(f.VolumeGroupSnapshot.SnapshotGroupID, "-")[1]
 	}
 
 	group, err := f.service.CreateVolumeGroupSnapshot(ctx, req)

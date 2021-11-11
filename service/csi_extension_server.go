@@ -304,7 +304,7 @@ func (s *service) checkIdempotency(ctx context.Context, snapshotsToMake *siotype
 			consistencyGroupMap[existingSnap.Name] = ""
 			//a snapshot in snapshotsToMake already exists in array, update maps
 			foundGrpID := systemID + "-" + existingSnap.ConsistencyGroupID
-			if snap.VolumeID == existingSnap.AncestorVolumeID && snapGrpID == foundGrpID {
+			if snap.VolumeID == existingSnap.AncestorVolumeID && systemID+"-"+snapGrpID == foundGrpID {
 				Log.Infof("Snapshot for %s exists on array for group id %s", snap.VolumeID, foundGrpID)
 				idempotencyMap[snap.VolumeID] = true
 				idempotencyValue = true
@@ -339,7 +339,7 @@ func (s *service) checkIdempotency(ctx context.Context, snapshotsToMake *siotype
 	existingVols, _ := s.adminClients[systemID].GetVolume("", "", "", "", true)
 	for _, vol := range existingVols {
 		grpID := systemID + "-" + vol.ConsistencyGroupID
-		if grpID == consitencyGroupValue {
+		if grpID == systemID+"-"+consitencyGroupValue {
 			Log.Infof("Checking  %s: Snapshot %s found in consistency group.", consitencyGroupValue, vol.Name)
 			consistencyGroupOnArray = append(consistencyGroupOnArray, vol.Name)
 		}
