@@ -349,12 +349,6 @@ func (s *service) checkIdempotency(ctx context.Context, snapshotsToMake *siotype
 	//the only snaps in the consistency group.
 	//this check verifies criteria #3
 	if len(consistencyGroupOnArray) != len(IDsForResponse) {
-
-		Log.Infof("len(consistencyGroupOnArray) is %d", len(consistencyGroupOnArray))
-		Log.Infof("len(IDsForResponse) is %d ", len(IDsForResponse))
-		Log.Infof("consistencyGroupOnArray is %v", consistencyGroupOnArray)
-		Log.Infof("IDsForResponse is %v", IDsForResponse)
-
 		err := status.Errorf(codes.Internal, "CG: %s contains more snapshots than requested. Cannot create VolumeGroupSnapshot", consitencyGroupValue)
 		Log.Errorf("Error from checkIdempotency: %v ", err)
 		return nil, err
