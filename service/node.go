@@ -616,7 +616,7 @@ func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolume
 					},
 				},
 				VolumeCondition: &csi.VolumeCondition{
-					Abnormal: false,
+					Abnormal: true,
 					Message:  fmt.Sprintf("failed to get metrics for volume with error: %v", err),
 				},
 			}, nil
