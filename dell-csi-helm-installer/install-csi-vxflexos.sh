@@ -26,7 +26,7 @@ function install_mdm_secret() {
       VAL=$(kubectl get secret ${SECRET} -n ${NS} -o go-template='{{ .data.MDM }}' | base64 --decode)
       log smart_step "SDC MDM value created : ${VAL}"
     else
-      log error "SDC MDM string could not be determined, add mdm to config.json"
+      log error "Secret is not configured properly, check documentation to create secret"
       exit 2
     fi
   fi
