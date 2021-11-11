@@ -424,6 +424,10 @@ func (f *feature) aCapabilityWithVoltypeAccessFstype(voltype, access, fstype str
 		accessMode.Mode = csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY
 	case "multi-node-single-writer":
 		accessMode.Mode = csi.VolumeCapability_AccessMode_MULTI_NODE_SINGLE_WRITER
+	case "single-node-single-writer":
+		accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_SINGLE_WRITER
+	case "single-node-multi-writer":
+		accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_MULTI_WRITER
 	}
 	capability.AccessMode = accessMode
 	f.capabilities = make([]*csi.VolumeCapability, 0)

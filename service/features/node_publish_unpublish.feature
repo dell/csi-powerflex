@@ -12,13 +12,15 @@ Feature: VxFlex OS CSI interface
     Then the error contains <errormsg>
 
     Examples:
-      | voltype | access            | fstype | errormsg                                                          |
-      | "mount" | "single-writer"   | "xfs"  | "none"                                                            |
-      | "mount" | "single-writer"   | "ext4" | "none"                                                            |
-      | "mount" | "multiple-writer" | "ext4" | "Mount volumes do not support AccessMode MULTI_NODE_MULTI_WRITER" |
-      | "block" | "single-writer"   | "none" | "none"                                                            |
-      | "block" | "single-reader"   | "none" | "none"                                                            |
-      | "block" | "multiple-writer" | "none" | "none"                                                            |
+      | voltype | access                      | fstype | errormsg                                                          |
+      | "mount" | "single-writer"             | "xfs"  | "none"                                                            |
+      | "mount" | "single-writer"             | "ext4" | "none"                                                            |
+      | "mount" | "multiple-writer"           | "ext4" | "Mount volumes do not support AccessMode MULTI_NODE_MULTI_WRITER" |
+      | "block" | "single-writer"             | "none" | "none"                                                            |
+      | "block" | "single-reader"             | "none" | "none"                                                            |
+      | "block" | "multiple-writer"           | "none" | "none"                                                            |
+      | "mount" | "single-node-single-writer" | "none" | "none"                                                            |
+      | "mount" | "single-node-multi-writer"  | "none" | "none"                                                            |
 
   Scenario Outline: Node publish block volumes various induced error use cases from examples
     Given a VxFlexOS service
@@ -61,8 +63,8 @@ Feature: VxFlex OS CSI interface
     Then the error contains <errormsg>
 
     Examples:
-      | error                                       | errormsg                               |
-      | "NodePublishPrivateTargetAlreadyMounted"    | "Mount point already in use by device" |
+      | error                                    | errormsg                               |
+      | "NodePublishPrivateTargetAlreadyMounted" | "Mount point already in use by device" |
 
   Scenario Outline: Node publish mount volumes various induced error use cases from examples
     Given a VxFlexOS service
@@ -76,27 +78,27 @@ Feature: VxFlex OS CSI interface
     Then the error contains <errormsg>
 
     Examples:
-      | error                                    | errorb                   | errormsg                                                              |
-      | "GOFSMockDevMountsError"                 | "none"                   | "none"                                                                |
-      | "GOFSMockMountError"                     | "none"                   | "mount induced error"                                                 |
-      | "GOFSMockGetMountsError"                 | "none"                   | "could not reliably determine existing mount status"                  |
-      | "NoSymlinkForNodePublish"                | "none"                   | "not published to node"                                               |
+      | error                                    | errorb                   | errormsg                                                    |
+      | "GOFSMockDevMountsError"                 | "none"                   | "none"                                                      |
+      | "GOFSMockMountError"                     | "none"                   | "mount induced error"                                       |
+      | "GOFSMockGetMountsError"                 | "none"                   | "could not reliably determine existing mount status"        |
+      | "NoSymlinkForNodePublish"                | "none"                   | "not published to node"                                     |
       # may be different for Windows vs. Linux
-      | "NoBlockDevForNodePublish"               | "none"                   | "is not a block device@@not published to node"                        |
-      | "TargetNotCreatedForNodePublish"         | "none"                   | "none"                                                                |
+      | "NoBlockDevForNodePublish"               | "none"                   | "is not a block device@@not published to node"              |
+      | "TargetNotCreatedForNodePublish"         | "none"                   | "none"                                                      |
       # may be different for Windows vs. Linux
-      | "PrivateDirectoryNotExistForNodePublish" | "none"                   | "cannot find the path specified@@no such file or directory"           |
-      | "BlockMkfilePrivateDirectoryNodePublish" | "none"                   | "existing path is not a directory"                                    |
-      | "NodePublishNoTargetPath"                | "none"                   | "target path required"                                                |
-      | "NodePublishNoVolumeCapability"          | "none"                   | "volume capability required"                                          |
-      | "NodePublishNoAccessMode"                | "none"                   | "Volume Access Mode is required"                                      |
-      | "NodePublishNoAccessType"                | "none"                   | "Volume Access Type is required"                                      |
-      | "NodePublishFileTargetNotDir"            | "none"                   | "existing path is not a directory"                                    |
-      | "NodePublishPrivateTargetAlreadyCreated" | "none"                   | "not published to node"                                               |
-      | "NodePublishPrivateTargetAlreadyMounted" | "none"                   | "Mount point already in use by device"                                |
-      | "NodePublishPrivateTargetAlreadyMounted" | "GOFSMockGetMountsError" | "could not reliably determine existing mount status"                  |
-      | "NodePublishBadTargetPath"               | "none"                   | "cannot find the path specified@@no such file or directory"           |
-      | "NoCsiVolIDError"                        | "none"                   | "volume ID is required"                                               |
+      | "PrivateDirectoryNotExistForNodePublish" | "none"                   | "cannot find the path specified@@no such file or directory" |
+      | "BlockMkfilePrivateDirectoryNodePublish" | "none"                   | "existing path is not a directory"                          |
+      | "NodePublishNoTargetPath"                | "none"                   | "target path required"                                      |
+      | "NodePublishNoVolumeCapability"          | "none"                   | "volume capability required"                                |
+      | "NodePublishNoAccessMode"                | "none"                   | "Volume Access Mode is required"                            |
+      | "NodePublishNoAccessType"                | "none"                   | "Volume Access Type is required"                            |
+      | "NodePublishFileTargetNotDir"            | "none"                   | "existing path is not a directory"                          |
+      | "NodePublishPrivateTargetAlreadyCreated" | "none"                   | "not published to node"                                     |
+      | "NodePublishPrivateTargetAlreadyMounted" | "none"                   | "Mount point already in use by device"                      |
+      | "NodePublishPrivateTargetAlreadyMounted" | "GOFSMockGetMountsError" | "could not reliably determine existing mount status"        |
+      | "NodePublishBadTargetPath"               | "none"                   | "cannot find the path specified@@no such file or directory" |
+      | "NoCsiVolIDError"                        | "none"                   | "volume ID is required"                                     |
 
   Scenario: Induce legacy volume check failure
     Given a VxFlexOS service
@@ -198,12 +200,12 @@ Feature: VxFlex OS CSI interface
     Then the error contains <errormsg>
 
     Examples:
-      | voltype | access            | fstype | errormsg |
-      | "block" | "single-writer"   | "none" | "none"   |
-      | "block" | "multiple-writer" | "none" | "none"   |
-      | "mount" | "single-writer"   | "xfs"  | "none"   |
-      | "mount" | "multi-pod-rw"    | "none" | "Mount volumes do not support AccessMode MULTI_NODE_MULTI_WRITER"   |
-      | "block" | "multi-pod-rw"    | "none" | "none"   |
+      | voltype | access            | fstype | errormsg                                                          |
+      | "block" | "single-writer"   | "none" | "none"                                                            |
+      | "block" | "multiple-writer" | "none" | "none"                                                            |
+      | "mount" | "single-writer"   | "xfs"  | "none"                                                            |
+      | "mount" | "multi-pod-rw"    | "none" | "Mount volumes do not support AccessMode MULTI_NODE_MULTI_WRITER" |
+      | "block" | "multi-pod-rw"    | "none" | "none"                                                            |
 
   Scenario Outline: Node Unpublish mount volumes various induced error use cases from examples
     Given a VxFlexOS service
@@ -239,9 +241,9 @@ Feature: VxFlex OS CSI interface
     Then the error contains <errormsg>
 
     Examples:
-      | error                   | errormsg                                      |
-      | "IncorrectEphemeralID"  | "none"                                        |
-      | "EmptyEphemeralID"      | "is shorter than 3 chars, returning error"    |
+      | error                  | errormsg                                   |
+      | "IncorrectEphemeralID" | "none"                                     |
+      | "EmptyEphemeralID"     | "is shorter than 3 chars, returning error" |
 
   Scenario: Induce Node publish block volumes no system ID failure
     Given setup Get SystemID to fail
@@ -274,7 +276,6 @@ Feature: VxFlex OS CSI interface
     When I call getMappedVols with volID "c0f055aa00000000" and sysID "34dbbf5617523654"
     Then the volume "c0f055aa00000000" is from the correct system "34dbbf5617523654"
 
-  @wip
   Scenario: Call CleanupPrivateTarget to verify that when target mounts exist, private target is not deleted
     Given a VxFlexOS service
     And a controller published volume
@@ -282,53 +283,58 @@ Feature: VxFlex OS CSI interface
     And get Node Publish Volume Request
     When I call Probe
     And I call NodePublishVolume "SDC_GUID"
-    And I call CleanupPrivateTarget 
+    And I call CleanupPrivateTarget
     Then the error contains "Cannot delete private mount as target mount exist"
 
-   Scenario: Call removeWithRetry negative test
-     Given a VxFlexOS service
-     And I call removeWithRetry
-     Then the error contains "read-only file system"
+  Scenario: Call removeWithRetry negative test
+    Given a VxFlexOS service
+    And I call removeWithRetry
+    Then the error contains "read-only file system"
 
-   Scenario: Call I call unmountPrivMount negative test
-     Given a VxFlexOS service
-     And I call unmountPrivMount
-     Then the error contains "error in unmountPrivMount"
+  Scenario: Call I call unmountPrivMount negative test
+    Given a VxFlexOS service
+    And I call unmountPrivMount
+    Then the error contains "error in unmountPrivMount"
 
-   Scenario: Call I call getPathMounts negative test
-     Given a VxFlexOS service
-     And I call getPathMounts
-     Then the error contains "error in GetPathMounts"
-   
-   Scenario: Call handlePrivFSMount  negative test
-     Given a VxFlexOS service
-     And I call handlePrivFSMount
-     Then the error contains "error in handlePrivFSMount"
+  Scenario: Call I call getPathMounts negative test
+    Given a VxFlexOS service
+    And I call getPathMounts
+    Then the error contains "error in GetPathMounts"
 
-   Scenario: Call evalSymlinks negative test
-     Given a VxFlexOS service
-     And I call evalSymlinks
-     Then the error contains "error in evalSymlinks"
+  Scenario: Call handlePrivFSMount  negative test
+    Given a VxFlexOS service
+    And I call handlePrivFSMount
+    Then the error contains "error in handlePrivFSMount"
 
-   Scenario: Call evalSymlinks negative test
-     Given a VxFlexOS service
-     And I call CleanupPrivateTarget for errors
-     Then the error contains "error in CleanupPrivateTarget"
-   
-    Scenario: mount publishVolume negative test
-     Given a VxFlexOS service
-     And I call mount publishVolume
-     Then the error contains "error in publishVolume"
-   
-    Scenario: Call unpublishVolume negative test
-     Given a VxFlexOS service
-     And I call mount unpublishVolume
-     Then the error contains "error in unpublishVolume"
+  Scenario: Call evalSymlinks negative test
+    Given a VxFlexOS service
+    And I call evalSymlinks
+    Then the error contains "error in evalSymlinks"
+
+  Scenario: Call evalSymlinks negative test
+    Given a VxFlexOS service
+    And I call CleanupPrivateTarget for errors
+    Then the error contains "error in CleanupPrivateTarget"
+
+  Scenario: mount publishVolume negative test
+    Given a VxFlexOS service
+    And I call mount publishVolume
+    Then the error contains "error in publishVolume"
+
+  Scenario: Call unpublishVolume negative test
+    Given a VxFlexOS service
+    And I call mount unpublishVolume
+    Then the error contains "error in unpublishVolume"
 
   Scenario: Call mount validateVolCapabilities negative test
-     Given a VxFlexOS service
-     And I call mountValidateBlockVolCapabilities
-     Then the error contains "Unknown Access Mode"
+    Given a VxFlexOS service
+    And I call mountValidateBlockVolCapabilities
+    Then the error contains "Unknown Access Mode"
+
+  Scenario: Call block validateVolCapabilities negative test
+    Given a VxFlexOS service
+    And I call blockValidateBlockVolCapabilities
+    Then the error contains "Unknown Access Mode"
 
   Scenario: Check if the CleanupPrivateTarget target deletes private target when there are no target mounts.
     Given a VxFlexOS service
@@ -338,7 +344,7 @@ Feature: VxFlex OS CSI interface
     When I call Probe
     And I call NodePublishVolume "SDC_GUID"
     And I call UnmountAndDeleteTarget
-    And I call CleanupPrivateTarget 
+    And I call CleanupPrivateTarget
     Then the error contains "none"
     And I call NodeUnpublishVolume "SDC_GUID"
     Then the error contains "none"

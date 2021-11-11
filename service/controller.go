@@ -709,6 +709,8 @@ func (s *service) ControllerPublishVolume(
 		// If volume has SINGLE_NODE cap, go no farther
 		switch am.Mode {
 		case csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+			csi.VolumeCapability_AccessMode_SINGLE_NODE_MULTI_WRITER,
+			csi.VolumeCapability_AccessMode_SINGLE_NODE_SINGLE_WRITER,
 			csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY:
 			return nil, status.Errorf(codes.FailedPrecondition,
 				"volume already published to SDC id: %s", vol.MappedSdcInfo[0].SdcID)
@@ -779,6 +781,8 @@ func validateAccessType(
 	if isBlock {
 		switch am.Mode {
 		case csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+			csi.VolumeCapability_AccessMode_SINGLE_NODE_MULTI_WRITER,
+			csi.VolumeCapability_AccessMode_SINGLE_NODE_SINGLE_WRITER,
 			csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER:
 			return nil
 		default:
@@ -788,6 +792,8 @@ func validateAccessType(
 	} else {
 		switch am.Mode {
 		case csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+			csi.VolumeCapability_AccessMode_SINGLE_NODE_MULTI_WRITER,
+			csi.VolumeCapability_AccessMode_SINGLE_NODE_SINGLE_WRITER,
 			csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY,
 			csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY:
 			return nil
@@ -999,7 +1005,9 @@ func valVolumeCaps(
 			continue
 		}
 		switch am.Mode {
-		case csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER:
+		case csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+			csi.VolumeCapability_AccessMode_SINGLE_NODE_MULTI_WRITER,
+			csi.VolumeCapability_AccessMode_SINGLE_NODE_SINGLE_WRITER:
 			break
 		case csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY:
 			break
@@ -1487,6 +1495,13 @@ func (s *service) ControllerGetCapabilities(
 				Type: &csi.ControllerServiceCapability_Rpc{
 					Rpc: &csi.ControllerServiceCapability_RPC{
 						Type: csi.ControllerServiceCapability_RPC_VOLUME_CONDITION,
+					},
+				},
+			},
+			{
+				Type: &csi.ControllerServiceCapability_Rpc{
+					Rpc: &csi.ControllerServiceCapability_RPC{
+						Type: csi.ControllerServiceCapability_RPC_SINGLE_NODE_MULTI_WRITER,
 					},
 				},
 			},

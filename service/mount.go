@@ -326,7 +326,8 @@ func handlePrivFSMount(
 	formatCtx := context.WithValue(ctx, gofsutil.ContextKey(gofsutil.NoDiscard), gofsutil.NoDiscard)
 
 	// If read-only access mode, we don't allow formatting
-	if accMode.GetMode() == csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY || accMode.GetMode() == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
+	switch accMode.GetMode() {
+	case csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY, csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY:
 		mntFlags = append(mntFlags, "ro")
 		if err := gofsutil.Mount(ctx, sysDevice.FullPath, privTgt, fs, mntFlags...); err != nil {
 			return status.Errorf(codes.Internal,
@@ -334,7 +335,9 @@ func handlePrivFSMount(
 				err.Error())
 		}
 		return nil
-	} else if accMode.GetMode() == csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER {
+	case csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+		csi.VolumeCapability_AccessMode_SINGLE_NODE_SINGLE_WRITER,
+		csi.VolumeCapability_AccessMode_SINGLE_NODE_MULTI_WRITER:
 		if fsFormatOption != "" {
 			mntFlags = append(mntFlags, "fsFormatOption:"+fsFormatOption)
 		}
@@ -344,8 +347,9 @@ func handlePrivFSMount(
 				err.Error())
 		}
 		return nil
+	default:
+		return status.Error(codes.Internal, "Invalid access mode")
 	}
-	return status.Error(codes.Internal, "Invalid access mode")
 }
 
 func getPrivateMountPoint(privDir string, name string) string {
@@ -646,16 +650,16 @@ func validateVolumeCapability(volCap *csi.VolumeCapability, readOnly bool) (bool
 	return isBlock, mntVol, accMode, multiAccessFlag, nil
 }
 
-// singleAccessMode returns true if only a single access is allowed SINGLE_NODE_WRITER or SINGLE_NODE_READER_ONLY
+// singleAccessMode returns true if only a single access is allowed SINGLE_NODE_WRITER, SINGLE_NODE_READER_ONLY, or SINGLE_NODE_SINGLE_WRITER
 func singleAccessMode(accMode *csi.VolumeCapability_AccessMode) bool {
 	if mountAllowRWOMultiPodAccess {
 		// User specifically asks for multi-pod access on same nodes
 		return false
 	}
 	switch accMode.GetMode() {
-	case csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER:
-		return true
-	case csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY:
+	case csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+		csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY,
+		csi.VolumeCapability_AccessMode_SINGLE_NODE_SINGLE_WRITER:
 		return true
 	}
 	return false

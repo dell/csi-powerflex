@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"io/ioutil"
+
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/dell/gofsutil"
 	"github.com/dell/goscaleio"
@@ -17,7 +19,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"io/ioutil"
 	k8sutilfs "k8s.io/kubernetes/pkg/volume/util/fs"
 )
 
@@ -464,11 +465,17 @@ func (s *service) NodeGetCapabilities(
 			{
 				Type: &csi.NodeServiceCapability_Rpc{
 					Rpc: &csi.NodeServiceCapability_RPC{
+						Type: csi.NodeServiceCapability_RPC_SINGLE_NODE_MULTI_WRITER,
+					},
+				},
+			},
+			{
+				Type: &csi.NodeServiceCapability_Rpc{
+					Rpc: &csi.NodeServiceCapability_RPC{
 						Type: csi.NodeServiceCapability_RPC_VOLUME_CONDITION,
 					},
 				},
 			},
-
 			{
 				Type: &csi.NodeServiceCapability_Rpc{
 					Rpc: &csi.NodeServiceCapability_RPC{
