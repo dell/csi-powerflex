@@ -114,6 +114,12 @@ apiVersion: apps/v1
 metadata:
   name: {{ .Release.Name }}-controller
   namespace: {{ .Release.Namespace }}
+  {{- if hasKey .Values "authorization" }}
+  {{- if eq .Values.authorization.enabled true }}
+  annotations:
+      com.dell.karavi-authorization-proxy: "true"
+  {{ end }}
+  {{ end }}
 spec:
 {{- if gt (int .Values.controller.controllerCount) 1 }}
   strategy:
@@ -279,6 +285,37 @@ spec:
               mountPath: /var/run/csi
 {{- end }}
 {{- end }}
+{{- if hasKey .Values "authorization" }}
+{{- if eq .Values.authorization.enabled true }}
+        - name: karavi-authorization-proxy
+          imagePullPolicy: Always
+          image: {{ required "Must provide the authorization sidecar container image." .Values.authorization.sidecarProxyImage }}
+          env:
+            - name: PROXY_HOST
+              value: "{{ .Values.authorization.proxyHost }}"
+            - name: INSECURE
+              value: "{{ .Values.authorization.skipCertificateValidation }}"
+            - name: PLUGIN_IDENTIFIER
+              value: powerflex
+            - name: ACCESS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: proxy-authz-tokens
+                  key: access
+            - name: REFRESH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: proxy-authz-tokens
+                  key: refresh
+          volumeMounts:
+            - name: karavi-authorization-config
+              mountPath: /etc/karavi-authorization/config
+            - name: proxy-server-root-certificate
+              mountPath: /etc/karavi-authorization/root-certificates
+            - name: vxflexos-config-params
+              mountPath: /etc/karavi-authorization
+{{- end }}
+{{- end }}
         - name: driver
           image: "{{ required "Must provide the driver image repository." .Values.images.driverRepository }}/{{ .Chart.Name }}:v{{ .Values.version }}"
           imagePullPolicy: {{ .Values.imagePullPolicy }}
@@ -319,6 +356,16 @@ spec:
         - name: vxflexos-config-params
           configMap:
             name: {{ .Release.Name }}-config-params
+        {{- if hasKey .Values "authorization" }}
+        {{- if eq .Values.authorization.enabled true }}
+        - name: karavi-authorization-config
+          secret:
+            secretName: karavi-authorization-config
+        - name: proxy-server-root-certificate
+          secret:
+            secretName: proxy-server-root-certificate
+        {{ end }}
+        {{ end }}
 {{- if ge (int .Values.certSecretCount) 1 }}
         - name: certs
           projected:
