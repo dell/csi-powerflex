@@ -1340,7 +1340,7 @@ func (f *feature) iCallCreateVolumeGroupSnapshot() error {
 	vgsClient := volGroupSnap.NewVolumeGroupSnapshotClient(grpcClient)
 	params := make(map[string]string)
 	if f.VolumeGroupSnapshot != nil {
-		params["existingSnapshotGroupID"] = f.VolumeGroupSnapshot.SnapshotGroupID
+		params["existingSnapshotGroupID"] = strings.Split(f.VolumeGroupSnapshot.SnapshotGroupID, "-")[1]
 	}
 	req := &volGroupSnap.CreateVolumeGroupSnapshotRequest{
 		Name:            "apple",
