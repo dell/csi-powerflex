@@ -46,6 +46,12 @@ defaultFsType: ext4
 # Default value: None
 imagePullPolicy: IfNotPresent
 
+# healthMonitorInterval: Interval of monitoring volume health condition
+# Allowed values: Number followed by unit (s,m,h)
+# Examples: 60s, 5m, 1h
+# Default value: 60s
+volumeHealthMonitorInterval: 60s
+
 # "enablesnapshotcgdelete"- a boolean that, when enabled, will delete all snapshots in a consistency group
 # everytime a snap in the group is deleted
 # Allowed values: true, false
