@@ -1,6 +1,6 @@
 # Dell EMC PowerFlex Helm Chart for Kubernetes
 
-For detailed installation instructions, look in the product install [documention](https://dell.github.io/storage-plugin-docs/docs/installation/helm/powerflex/)
+For detailed installation instructions, look in the product install [documention](https://dell.github.io/storage-plugin-docs/docs/installation/helm/powerflex/). Please make sure that you have ssh keys set up between the master and worker nodes, otherwise the install will break.
 
 The general outline is:
 
