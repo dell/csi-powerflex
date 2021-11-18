@@ -18,25 +18,25 @@ go 1.16
 require (
 	github.com/akutz/memconn v0.1.0
 	github.com/container-storage-interface/spec v1.5.0
-	github.com/cucumber/godog v0.12.2
+	github.com/cucumber/godog v0.12.1
 	github.com/dell/dell-csi-extensions/podmon v1.0.0
 	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v0.0.0-20211104171507-7c7d0b6e3d35
 	github.com/dell/gocsi v1.4.0
 	github.com/dell/gofsutil v1.6.0
 	github.com/dell/goscaleio v1.6.0
-	github.com/fsnotify/fsnotify v1.5.1
+	github.com/fsnotify/fsnotify v1.4.9
 	github.com/golang/protobuf v1.5.2
 	github.com/gorilla/mux v1.8.0
-	github.com/kubernetes-csi/csi-lib-utils v0.10.0
+	github.com/kubernetes-csi/csi-lib-utils v0.9.1
 	github.com/sirupsen/logrus v1.8.1
-	github.com/spf13/viper v1.9.0
+	github.com/spf13/viper v1.8.1
 	github.com/stretchr/testify v1.7.0
 	golang.org/x/net v0.0.0-20210520170846-37e1c6afe023
 	google.golang.org/grpc v1.42.0
 	k8s.io/api v0.22.2
 	k8s.io/apimachinery v0.22.2
 	k8s.io/client-go v0.22.2
-	k8s.io/kubernetes v1.21.1
+	k8s.io/kubernetes v1.21.5
 	sigs.k8s.io/yaml v1.2.0
 )
 
