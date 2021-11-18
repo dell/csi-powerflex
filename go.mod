@@ -21,7 +21,7 @@ require (
 	github.com/cucumber/godog v0.12.1
 	github.com/dell/dell-csi-extensions/podmon v1.0.0
 	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v0.0.0-20211104171507-7c7d0b6e3d35
-	github.com/dell/gocsi v1.3.1
+	github.com/dell/gocsi v1.4.0
 	github.com/dell/gofsutil v1.6.0
 	github.com/dell/goscaleio v1.6.0
 	github.com/fsnotify/fsnotify v1.4.9
@@ -36,7 +36,7 @@ require (
 	k8s.io/api v0.22.2
 	k8s.io/apimachinery v0.22.2
 	k8s.io/client-go v0.22.2
-	k8s.io/kubernetes v1.21.1
+	k8s.io/kubernetes v1.21.5
 	sigs.k8s.io/yaml v1.2.0
 )
 
