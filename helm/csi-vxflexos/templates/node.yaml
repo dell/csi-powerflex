@@ -196,6 +196,8 @@ spec:
               value: "{{ required "Must provide a true/false string to allow RWO multi pod access." .Values.allowRWOMultiPodAccess }}"
             - name: SSL_CERT_DIR
               value: /certs
+            - name: X_CSI_HEALTH_MONITOR_ENABLED
+              value: "{{ .Values.node.healthMonitor.enabled }}"
           volumeMounts:
             - name: driver-path
               mountPath: {{ .Values.kubeletConfigDir }}/plugins/vxflexos.emc.dell.com
