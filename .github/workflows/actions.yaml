@@ -25,7 +25,7 @@ jobs:
         uses: actions/checkout@v2
         with:
           repository: 'dell/csi-powerflex'
-          path: 'csi-powerflex/service'
+          path: 'csi-powerflex'
       - name: Run unit tests and check package coverage
         uses: dell/common-github-actions/go-code-tester@main
         with:
