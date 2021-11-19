@@ -6,7 +6,7 @@ The general outline is:
 
     1. Satisfy the pre-requsites outlined in the product install documentation.
 
-    2. Create a Kubernetes secret with the PowerFlex credentials using the template in config.yaml.
+    2. Create a Kubernetes secret with the PowerFlex credentials using the template in `../samples/config.yaml`.
 
     3. Copy `csi-vxflexos/values.yaml` to a file called `csi-vxflexos/myvalues.yaml` in this directory and fill in various installation parameters.
 
