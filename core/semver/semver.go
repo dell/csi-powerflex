@@ -81,7 +81,7 @@ func main() {
 		defer fout.Close()
 	}
 
-	gitdesc := chkErr(doExec("git", "describe", "--long", "--dirty"))
+	gitdesc := chkErr(doExec("git", "describe", "--tags", "--long", "--dirty"))
 	rx := regexp.MustCompile(
 		`^[^\d]*(\d+)\.(\d+)\.(\d+)(?:-([a-zA-Z].+?))?(?:-(\d+)-g(.+?)(?:-(dirty))?)?\s*$`)
 	m := rx.FindStringSubmatch(gitdesc)
