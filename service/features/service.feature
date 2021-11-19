@@ -317,9 +317,14 @@ Feature: VxFlex OS CSI interface
     And I call GetCapacity with storage pool "viki_pool_HDD_20181031"
     Then the error contains "unable to get system stats"
 
-  Scenario: Call ControllerGetCapabilities
+  Scenario: Call ControllerGetCapabilities with health monitor enabled
     Given a VxFlexOS service
-    When I call ControllerGetCapabilities
+    When I call ControllerGetCapabilities "true"
+    Then a valid ControllerGetCapabilitiesResponse is returned
+
+  Scenario: Call ControllerGetCapabilities with health monitor disabled
+    Given a VxFlexOS service
+    When I call ControllerGetCapabilities "false"
     Then a valid ControllerGetCapabilitiesResponse is returned
 
   Scenario Outline: Calls to validate volume capabilities
