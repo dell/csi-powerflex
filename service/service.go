@@ -352,6 +352,8 @@ func (s *service) BeforeServe(
 		if healthMonitor == "true" {
 			opts.IsHealthMonitorEnabled = true
 		}
+	} else {
+		opts.IsHealthMonitorEnabled = false
 	}
 	if s.privDir == "" {
 		s.privDir = defaultPrivDir
