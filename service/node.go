@@ -453,6 +453,8 @@ func (s *service) NodeGetCapabilities(
 	req *csi.NodeGetCapabilitiesRequest) (
 	*csi.NodeGetCapabilitiesResponse, error) {
 
+	Log.Info("Health monitor env var is set to: ", s.opts.IsHealthMonitorEnabled)
+
 	return &csi.NodeGetCapabilitiesResponse{
 		Capabilities: []*csi.NodeServiceCapability{
 			{
