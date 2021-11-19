@@ -1409,7 +1409,11 @@ func (f *feature) aValidGetCapacityResponseIsReturned() error {
 	return nil
 }
 
-func (f *feature) iCallControllerGetCapabilities() error {
+func (f *feature) iCallControllerGetCapabilities(isHealthMonitorEnabled string) error {
+
+	if isHealthMonitorEnabled == "true" {
+		f.service.opts.IsHealthMonitorEnabled = true
+	}
 	ctx := new(context.Context)
 	req := new(csi.ControllerGetCapabilitiesRequest)
 	log.Printf("Calling ControllerGetCapabilities")
@@ -1533,9 +1537,16 @@ func (f *feature) aValidControllerGetCapabilitiesResponseIsReturned() error {
 			}
 		}
 
-		if count != 10 {
+		if f.service.opts.IsHealthMonitorEnabled && count != 10 {
+			// Set default value
+			f.service.opts.IsHealthMonitorEnabled = false
+			return errors.New("Did not retrieve all the expected capabilities")
+		} else if !f.service.opts.IsHealthMonitorEnabled && count != 8 {
 			return errors.New("Did not retrieve all the expected capabilities")
 		}
+
+		// Set default value
+		f.service.opts.IsHealthMonitorEnabled = false
 		return nil
 	}
 
@@ -2541,8 +2552,11 @@ func (f *feature) iCallNodeUnstageVolumeWith(error string) error {
 	return nil
 }
 
-func (f *feature) iCallNodeGetCapabilities() error {
+func (f *feature) iCallNodeGetCapabilities(isHealthMonitorEnabled string) error {
 	ctx := new(context.Context)
+	if isHealthMonitorEnabled == "true" {
+		f.service.opts.IsHealthMonitorEnabled = true
+	}
 	req := new(csi.NodeGetCapabilitiesRequest)
 	f.nodeGetCapabilitiesResponse, f.err = f.service.NodeGetCapabilities(*ctx, req)
 	return nil
@@ -2574,9 +2588,15 @@ func (f *feature) aValidNodeGetCapabilitiesResponseIsReturned() error {
 			}
 		}
 
-		if count != 4 {
+		if f.service.opts.IsHealthMonitorEnabled && count != 4 {
+			// Set default value
+			f.service.opts.IsHealthMonitorEnabled = false
+			return errors.New("Did not retrieve all the expected capabilities")
+		} else if !f.service.opts.IsHealthMonitorEnabled && count != 2 {
 			return errors.New("Did not retrieve all the expected capabilities")
 		}
+		// Set default value
+		f.service.opts.IsHealthMonitorEnabled = false
 		return nil
 	}
 	return errors.New("expected NodeGetCapabilitiesResponse but didn't get one")
@@ -3257,7 +3277,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^the volume is already mapped to an SDC$`, f.theVolumeIsAlreadyMappedToAnSDC)
 	s.Step(`^I call GetCapacity with storage pool "([^"]*)"$`, f.iCallGetCapacityWithStoragePool)
 	s.Step(`^a valid GetCapacityResponse is returned$`, f.aValidGetCapacityResponseIsReturned)
-	s.Step(`^I call ControllerGetCapabilities$`, f.iCallControllerGetCapabilities)
+	s.Step(`^I call ControllerGetCapabilities "([^"]*)"$`, f.iCallControllerGetCapabilities)
 	s.Step(`^a valid ControllerGetCapabilitiesResponse is returned$`, f.aValidControllerGetCapabilitiesResponseIsReturned)
 	s.Step(`^I call ValidateVolumeCapabilities with voltype "([^"]*)" access "([^"]*)" fstype "([^"]*)"$`, f.iCallValidateVolumeCapabilitiesWithVoltypeAccessFstype)
 	s.Step(`^a valid ListVolumesResponse is returned$`, f.aValidListVolumesResponseIsReturned)
@@ -3289,7 +3309,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call BeforeServe$`, f.iCallBeforeServe)
 	s.Step(`^I call NodeStageVolume$`, f.iCallNodeStageVolume)
 	s.Step(`^I call NodeUnstageVolume with "([^"]*)"$`, f.iCallNodeUnstageVolumeWith)
-	s.Step(`^I call NodeGetCapabilities$`, f.iCallNodeGetCapabilities)
+	s.Step(`^I call NodeGetCapabilities "([^"]*)"$`, f.iCallNodeGetCapabilities)
 	s.Step(`^a valid NodeGetCapabilitiesResponse is returned$`, f.aValidNodeGetCapabilitiesResponseIsReturned)
 	s.Step(`^I call CreateSnapshot "([^"]*)"$`, f.iCallCreateSnapshot)
 	s.Step(`^a valid CreateSnapshotResponse is returned$`, f.aValidCreateSnapshotResponseIsReturned)
