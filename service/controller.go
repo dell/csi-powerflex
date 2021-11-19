@@ -1432,6 +1432,8 @@ func (s *service) ControllerGetCapabilities(
 	ctx context.Context,
 	req *csi.ControllerGetCapabilitiesRequest) (
 	*csi.ControllerGetCapabilitiesResponse, error) {
+	
+	Log.Info("Health monitor env var is set to: ", s.opts.IsHealthMonitorEnabled)
 
 		capabilities:= []*csi.ControllerServiceCapability{
 			{

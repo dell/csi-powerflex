@@ -116,6 +116,7 @@ type Opts struct {
 	EnableSnapshotCGDelete     bool   // when snapshot deleted, enable deleting of all snaps in the CG of the snapshot
 	EnableListVolumesSnapshots bool   // when listing volumes, include snapshots and volumes
 	AllowRWOMultiPodAccess     bool   // allow multiple pods to access a RWO volume on the same node
+	IsHealthMonitorEnabled     bool   // allow driver to make use of the alpha feature gate, CSIVolumeHealth
 }
 
 type service struct {
@@ -300,6 +301,7 @@ func (s *service) BeforeServe(
 			"autoprobe":              s.opts.AutoProbe,
 			"mode":                   s.mode,
 			"allowRWOMultiPodAccess": s.opts.AllowRWOMultiPodAccess,
+			"IsHealthMonitorEnabled": s.opts.IsHealthMonitorEnabled,
 		}
 
 		Log.WithFields(fields).Infof("configured %s", Name)
@@ -344,6 +346,11 @@ func (s *service) BeforeServe(
 		if allowRWOMultiPodAccess == "true" {
 			opts.AllowRWOMultiPodAccess = true
 			mountAllowRWOMultiPodAccess = true
+		}
+	}
+	if healthMonitor, ok := csictx.LookupEnv(ctx, EnvIsHealthMonitorEnabled); ok {
+		if healthMonitor == "true" {
+			opts.IsHealthMonitorEnabled = true
 		}
 	}
 	if s.privDir == "" {
