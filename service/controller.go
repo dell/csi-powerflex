@@ -1433,8 +1433,7 @@ func (s *service) ControllerGetCapabilities(
 	req *csi.ControllerGetCapabilitiesRequest) (
 	*csi.ControllerGetCapabilitiesResponse, error) {
 
-	return &csi.ControllerGetCapabilitiesResponse{
-		Capabilities: []*csi.ControllerServiceCapability{
+		capabilities:= []*csi.ControllerServiceCapability{
 			{
 				Type: &csi.ControllerServiceCapability_Rpc{
 					Rpc: &csi.ControllerServiceCapability_RPC{
@@ -1487,10 +1486,13 @@ func (s *service) ControllerGetCapabilities(
 			{
 				Type: &csi.ControllerServiceCapability_Rpc{
 					Rpc: &csi.ControllerServiceCapability_RPC{
-						Type: csi.ControllerServiceCapability_RPC_GET_VOLUME,
+						Type: csi.ControllerServiceCapability_RPC_SINGLE_NODE_MULTI_WRITER,
 					},
 				},
 			},
+		}
+
+		healthMonitorCapabilities := []*csi.ControllerServiceCapability{
 			{
 				Type: &csi.ControllerServiceCapability_Rpc{
 					Rpc: &csi.ControllerServiceCapability_RPC{
@@ -1501,12 +1503,19 @@ func (s *service) ControllerGetCapabilities(
 			{
 				Type: &csi.ControllerServiceCapability_Rpc{
 					Rpc: &csi.ControllerServiceCapability_RPC{
-						Type: csi.ControllerServiceCapability_RPC_SINGLE_NODE_MULTI_WRITER,
+						Type: csi.ControllerServiceCapability_RPC_GET_VOLUME,
 					},
 				},
 			},
-		},
-	}, nil
+		}
+	
+		if s.opts.IsHealthMonitorEnabled {
+			capabilities = append(capabilities, healthMonitorCapabilities...)
+		}
+
+		return &csi.ControllerGetCapabilitiesResponse{
+			Capabilities: capabilities,
+		}, nil
 }
 
 // systemProbeAll will iterate through all arrays in service.opts.arrays and probe them. If failed, it logs
