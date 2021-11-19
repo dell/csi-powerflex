@@ -316,12 +316,12 @@ Feature: VxFlex OS CSI interface
     And I induce error "GetStatisticsError"
     And I call GetCapacity with storage pool "viki_pool_HDD_20181031"
     Then the error contains "unable to get system stats"
-
+  
   Scenario: Call ControllerGetCapabilities with health monitor enabled
     Given a VxFlexOS service
     When I call ControllerGetCapabilities "true"
     Then a valid ControllerGetCapabilitiesResponse is returned
-
+  
   Scenario: Call ControllerGetCapabilities with health monitor disabled
     Given a VxFlexOS service
     When I call ControllerGetCapabilities "false"
@@ -396,11 +396,17 @@ Feature: VxFlex OS CSI interface
       | "NoStagingTarget" | "StagingTargetPath is required"        |
       | "EphemeralVolume" | "none"                                 |
       | "UnmountError"    | "Unable to remove staging target path" |
-
-  Scenario: Call NodeGetCapabilities should return a valid response
+  
+  Scenario: Call NodeGetCapabilities with health monitor feature enabled
     Given a VxFlexOS service
     And I call Probe
-    When I call NodeGetCapabilities
+    When I call NodeGetCapabilities "true"
+    Then a valid NodeGetCapabilitiesResponse is returned
+  
+  Scenario: Call NodeGetCapabilities with health monitor feature disabled
+    Given a VxFlexOS service
+    And I call Probe
+    When I call NodeGetCapabilities "false"
     Then a valid NodeGetCapabilitiesResponse is returned
 
   Scenario: Snapshot a single block volume
