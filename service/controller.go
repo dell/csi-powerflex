@@ -1433,8 +1433,6 @@ func (s *service) ControllerGetCapabilities(
 	req *csi.ControllerGetCapabilitiesRequest) (
 	*csi.ControllerGetCapabilitiesResponse, error) {
 	
-	Log.Info("Health monitor env var is set to: ", s.opts.IsHealthMonitorEnabled)
-
 		capabilities:= []*csi.ControllerServiceCapability{
 			{
 				Type: &csi.ControllerServiceCapability_Rpc{
