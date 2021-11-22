@@ -17,7 +17,7 @@ jobs:
       - name: Run unit tests and check package coverage
         uses: dell/common-github-actions/go-code-tester@try-test-fix
         # set these three to appropriate values
-	run: pwd;ls -l;./go-code-tester/entrypoint.sh
+	run: "./go-code-tester/entrypoint.sh"
         with:
           threshold: 90
           # test-folder should be accurate for all csi-drivers
