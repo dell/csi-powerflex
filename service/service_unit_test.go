@@ -60,8 +60,8 @@ func TestGetVolSize(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run("", func(st *testing.T) {
+			tt := tt
 			st.Parallel()
 			size, err := validateVolSize(tt.cr)
 			fmt.Printf("debug run test 1")
@@ -112,9 +112,9 @@ func TestGetProvisionType(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run("", func(st *testing.T) {
 			st.Parallel()
+			tt := tt
 			s := &service{opts: tt.opts}
 			fmt.Printf("debug run test 2")
 			volType := s.getVolProvisionType(tt.params)
@@ -355,9 +355,9 @@ func TestVolumeCaps(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run("", func(st *testing.T) {
 			st.Parallel()
+			tt := tt
 			fmt.Printf("debug run test 3")			
 			s, _ := valVolumeCaps(tt.caps, tt.vol)
 
