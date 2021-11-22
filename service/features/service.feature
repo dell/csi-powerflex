@@ -23,6 +23,7 @@ Feature: VxFlex OS CSI interface
       | "14dbbf5617523654"             | "none"   |
       | "15dbbf5617523655-system-name" | "none"   |
 
+  @wip
   Scenario: Identity GetPluginInfo good call
     Given a VxFlexOS service
     When I call GetPluginInfo

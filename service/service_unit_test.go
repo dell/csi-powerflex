@@ -2,7 +2,7 @@ package service
 
 import (
 	"testing"
-
+	"fmt"
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	siotypes "github.com/dell/goscaleio/types/v1"
 	"github.com/stretchr/testify/assert"
@@ -64,6 +64,7 @@ func TestGetVolSize(t *testing.T) {
 		t.Run("", func(st *testing.T) {
 			st.Parallel()
 			size, err := validateVolSize(tt.cr)
+			fmt.Printf("debug run test 1")
 			if tt.sizeKiB == 0 {
 				// error is expected
 				assert.Error(st, err)
@@ -115,7 +116,7 @@ func TestGetProvisionType(t *testing.T) {
 		t.Run("", func(st *testing.T) {
 			st.Parallel()
 			s := &service{opts: tt.opts}
-
+			fmt.Printf("debug run test 2")
 			volType := s.getVolProvisionType(tt.params)
 			assert.Equal(st, tt.volType, volType)
 		})
@@ -357,6 +358,7 @@ func TestVolumeCaps(t *testing.T) {
 		tt := tt
 		t.Run("", func(st *testing.T) {
 			st.Parallel()
+			fmt.Printf("debug run test 3")			
 			s, _ := valVolumeCaps(tt.caps, tt.vol)
 
 			assert.Equal(st, tt.supported, s)
