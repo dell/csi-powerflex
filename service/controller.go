@@ -996,7 +996,7 @@ func valVolumeCaps(
 	)
 	// Check that all access types are valid
 	if !checkValidAccessTypes(vcs) {
-		fmt.Printf("debug errUnknownAccessType %t %s\n", vcs , errUnknownAccessType)
+		fmt.Printf("debug errUnknownAccessType %#v ,err= %s\n", vcs , errUnknownAccessType)
 		return false, errUnknownAccessType
 	}
 
