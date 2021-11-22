@@ -361,8 +361,8 @@ func TestVolumeCaps(t *testing.T) {
 			st.Parallel()
 			tt := tt
 			fmt.Printf("debug run test 3")			
-			s, _ := valVolumeCaps(tt.caps, tt.vol)
-			fmt.Printf("debug run test 3 tt=%t s=%t\n", st , tt.supported , s)
+			s, e := valVolumeCaps(tt.caps, tt.vol)
+			fmt.Printf("debug run test 3 tt=%t s=%t e=%s \n", st , tt.supported , s, e)
 			assert.Equal(st, tt.supported, s)
 		})
 	}
