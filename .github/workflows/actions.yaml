@@ -1,9 +1,6 @@
 name: Workflow
 on:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
 jobs:
   test:
     name: Run Go unit tests and check package coverage
