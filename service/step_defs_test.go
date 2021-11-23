@@ -261,7 +261,6 @@ func (f *feature) getService() *service {
 	svc.connectedSystemNameToID = map[string]string{}
 	svc.privDir = "./features"
 	ArrayConfigFile = "./features/array-config/config"
-	//DriverConfigParamsFile = "./features/driver-config/logConfig.yaml"
 
 	if f.service != nil {
 		return f.service
@@ -379,7 +378,6 @@ func (f *feature) iCallDynamicArrayChange() error {
 }
 
 func (f *feature) iCallDynamicLogChange(file string) error {
-	DriverConfigParamsFile = "./features/driver-config/logConfig.yaml"
 	log.Printf("level before change: %s", Log.GetLevel())
 	backup := "features/driver-config/logBackup.json"
 	_ = os.Rename(DriverConfigParamsFile, backup)
