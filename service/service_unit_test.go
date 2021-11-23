@@ -30,15 +30,6 @@ func TestGetVolSize(t *testing.T) {
 			sizeKiB: 8 * kiBytesInGiB,
 		},
 		{
-			// not requesting a minimum but setting a limit below
-			// the default size should result in an error
-			cr: &csi.CapacityRange{
-				RequiredBytes: 0,
-				LimitBytes:    4 * bytesInGiB,
-			},
-			sizeKiB: 0,
-		},
-		{
 			// requesting a size that is not evenly divisible by 8
 			// should return a size rounded up to the next by 8
 			cr: &csi.CapacityRange{
