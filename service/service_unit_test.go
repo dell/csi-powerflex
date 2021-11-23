@@ -62,12 +62,12 @@ func TestGetVolSize(t *testing.T) {
 	for _, tt := range tests {
 		t.Run("", func(st *testing.T) {
 			tt := tt
-			st.Parallel()
+			//st.Parallel()
 			size, err := validateVolSize(tt.cr)
 			fmt.Printf("debug run test 1 %d", size)
 			if tt.sizeKiB == 0 {
 				// error is expected
-				fmt.Printf("debug run test 0 %#v", err)
+				fmt.Printf("debug run test error 0 %s", err.Error())
 				assert.Error(st, err)
 			} else {
 				fmt.Printf("debug run test 1 %d %d", tt.sizeKiB,size)
