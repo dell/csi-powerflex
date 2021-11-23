@@ -61,17 +61,12 @@ func TestGetVolSize(t *testing.T) {
 
 	for _, tt := range tests {
 			tt := tt
-		fmt.Printf("debug run tt.cr\n")
 		t.Run("", func(st *testing.T) {
 			st.Parallel()
 			size, err := validateVolSize(tt.cr)
-			fmt.Printf("debug run test 1 %d\n", size)
 			if tt.sizeKiB == 0 {
-				// error is expected
-				fmt.Printf("debug run test error 0 %s\n", err.Error())
-				assert.EqualValues(st, 0, 0)
+				fmt.Printf("debug expected error %s\n", err.Error())
 			} else {
-				fmt.Printf("debug run test 1 %d %d", tt.sizeKiB,size)
 				assert.EqualValues(st, tt.sizeKiB, size)
 			}
 		})
@@ -120,7 +115,7 @@ func TestGetProvisionType(t *testing.T) {
 			tt := tt
 			s := &service{opts: tt.opts}
 			volType := s.getVolProvisionType(tt.params)
-			fmt.Printf("debug run test 2 %s %s", tt.volType, volType)
+			fmt.Printf("debug run test 2 %s %s\n", tt.volType, volType)
 			assert.Equal(st, tt.volType, volType)
 		})
 	}
@@ -361,9 +356,8 @@ func TestVolumeCaps(t *testing.T) {
 		t.Run("", func(st *testing.T) {
 			st.Parallel()
 			tt := tt
-			fmt.Printf("debug run test 3")			
-			s, e := valVolumeCaps(tt.caps, tt.vol)
-			fmt.Printf("debug run test 3 tt=%t s=%t e=%s \n", tt.supported , s, e)
+			s, _ := valVolumeCaps(tt.caps, tt.vol)
+			fmt.Printf("debug run test 3 tt=%t s=%t\n", tt.supported , s)
 			assert.Equal(st, tt.supported, s)
 		})
 	}
