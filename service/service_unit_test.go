@@ -60,14 +60,15 @@ func TestGetVolSize(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-			tt := tt
 		t.Run("", func(st *testing.T) {
-			st.Parallel()
-			size, err := validateVolSize(tt.cr)
-			if tt.sizeKiB == 0 {
-				fmt.Printf("debug expected error %s\n", err.Error())
+			//st.Parallel()
+			st.Serial()
+			ttc := tt
+			size, _ := validateVolSize(ttc.cr)
+			if ttc.sizeKiB == 0 {
+				fmt.Printf("debug expected error %s\n"))
 			} else {
-				assert.EqualValues(st, tt.sizeKiB, size)
+				assert.EqualValues(st, ttc.sizeKiB, size)
 			}
 		})
 	}
