@@ -2,7 +2,7 @@ package service
 
 import (
 	"testing"
-	"fmt"
+
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	siotypes "github.com/dell/goscaleio/types/v1"
 	"github.com/stretchr/testify/assert"
@@ -30,6 +30,15 @@ func TestGetVolSize(t *testing.T) {
 			sizeKiB: 8 * kiBytesInGiB,
 		},
 		{
+			// not requesting a minimum but setting a limit below
+			// the default size should result in an error
+			cr: &csi.CapacityRange{
+				RequiredBytes: 0,
+				LimitBytes:    4 * bytesInGiB,
+			},
+			sizeKiB: 0,
+		},
+		{
 			// requesting a size that is not evenly divisible by 8
 			// should return a size rounded up to the next by 8
 			cr: &csi.CapacityRange{
@@ -38,17 +47,28 @@ func TestGetVolSize(t *testing.T) {
 			},
 			sizeKiB: 16 * kiBytesInGiB,
 		},
+		{
+			// requesting a size that is not evenly divisible by 8
+			// and is rounded up should return an error if max size
+			// is in play
+			cr: &csi.CapacityRange{
+				RequiredBytes: 13 * bytesInGiB,
+				LimitBytes:    14 * bytesInGiB,
+			},
+			sizeKiB: 0,
+		},
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run("", func(st *testing.T) {
-			//st.Parallel()
-			ttc := tt
-			size, _ := validateVolSize(ttc.cr)
-			if ttc.sizeKiB == 0 {
-				fmt.Printf("debug expected error \n")
+			st.Parallel()
+			size, err := validateVolSize(tt.cr)
+			if tt.sizeKiB == 0 {
+				// error is expected
+				assert.Error(st, err)
 			} else {
-				assert.EqualValues(st, ttc.sizeKiB, size)
+				assert.EqualValues(st, tt.sizeKiB, size)
 			}
 		})
 	}
@@ -91,12 +111,12 @@ func TestGetProvisionType(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run("", func(st *testing.T) {
 			st.Parallel()
-			tt := tt
 			s := &service{opts: tt.opts}
+
 			volType := s.getVolProvisionType(tt.params)
-			fmt.Printf("debug run test 2 %s %s\n", tt.volType, volType)
 			assert.Equal(st, tt.volType, volType)
 		})
 	}
@@ -334,11 +354,11 @@ func TestVolumeCaps(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run("", func(st *testing.T) {
 			st.Parallel()
-			tt := tt
 			s, _ := valVolumeCaps(tt.caps, tt.vol)
-			fmt.Printf("debug run test 3 tt=%t s=%t\n", tt.supported , s)
+
 			assert.Equal(st, tt.supported, s)
 		})
 	}

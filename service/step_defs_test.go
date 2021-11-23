@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http/httptest"
 	"os"
+	"sync"
 	"os/exec"
 	"runtime"
 	"strconv"
@@ -78,6 +79,7 @@ type feature struct {
 	adminClient2                          *goscaleio.Client
 	countOfArrays                         int
 	system2                               *goscaleio.System
+	mutex				      sync.Mutex
 	err                                   error // return from the preceding call
 	getPluginInfoResponse                 *csi.GetPluginInfoResponse
 	getPluginCapabilitiesResponse         *csi.GetPluginCapabilitiesResponse
@@ -258,7 +260,9 @@ func (f *feature) getService() *service {
 	svc.connectedSystemNameToID = map[string]string{}
 	svc.privDir = "./features"
 	ArrayConfigFile = "./features/array-config/config"
+	f.mutex.Lock()
 	DriverConfigParamsFile = "./features/driver-config/logConfig.yaml"
+	f.mutex.Unlock()
 
 	if f.service != nil {
 		return f.service
