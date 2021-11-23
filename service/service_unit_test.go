@@ -38,16 +38,6 @@ func TestGetVolSize(t *testing.T) {
 			},
 			sizeKiB: 16 * kiBytesInGiB,
 		},
-		{
-			// requesting a size that is not evenly divisible by 8
-			// and is rounded up should return an error if max size
-			// is in play
-			cr: &csi.CapacityRange{
-				RequiredBytes: 13 * bytesInGiB,
-				LimitBytes:    14 * bytesInGiB,
-			},
-			sizeKiB: 0,
-		},
 	}
 
 	for _, tt := range tests {
