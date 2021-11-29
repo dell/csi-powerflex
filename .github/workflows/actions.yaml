@@ -28,12 +28,12 @@ jobs:
           repository: 'dell/csi-powerflex'
           path: 'csi-powerflex'
       - name: Run unit tests and check package coverage
-        uses: dell/common-github-actions/go-code-tester@pflex-unit-test-temp-patch
+        uses: dell/common-github-actions/go-code-tester@main
         # set these three to appropriate values
         with:
           threshold: 90
           # test-folder should be accurate for all csi-drivers
-          # test-folder: "./service"
+          test-folder: "./service"
           skip-list: "podmon/test/ssh"
   go_security_scan:
     name: Go security
