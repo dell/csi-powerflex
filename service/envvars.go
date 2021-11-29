@@ -21,4 +21,9 @@ const (
 	// Multi-node access is still not allowed for ReadWriteOnce Filesystem volumes.
 	// Enabling this option techincally violates the CSI 1.3 spec in the NodePublishVolume stating the required error returns.
 	EnvAllowRWOMultiPodAccess = "X_CSI_ALLOW_RWO_MULTI_POD_ACCESS"
+
+	//EnvIsHealthMonitorEnabled is the name of the environment variable that specifes if
+	//the driver should be reporting on volume condition. To do so, requires the alpha feature gate CSIVolumeHealth set
+	//to true in the cluster. If the feature gate is on, this should be enabled. Otherwise, this should be set to false.
+	EnvIsHealthMonitorEnabled = "X_CSI_HEALTH_MONITOR_ENABLED"
 )
