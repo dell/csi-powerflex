@@ -33,7 +33,7 @@ jobs:
         with:
           threshold: 90
           # test-folder should be accurate for all csi-drivers
-          test-folder: "./service"
+          # test-folder: "./service"
           skip-list: "podmon/test/ssh"
   go_security_scan:
     name: Go security
