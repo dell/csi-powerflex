@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http/httptest"
 	"os"
+	"sync"
 	"os/exec"
 	"runtime"
 	"strconv"
@@ -78,6 +79,7 @@ type feature struct {
 	adminClient2                          *goscaleio.Client
 	countOfArrays                         int
 	system2                               *goscaleio.System
+	mutex				      sync.Mutex
 	err                                   error // return from the preceding call
 	getPluginInfoResponse                 *csi.GetPluginInfoResponse
 	getPluginCapabilitiesResponse         *csi.GetPluginCapabilitiesResponse
@@ -211,6 +213,7 @@ func (f *feature) aVxFlexOSService() error {
 
 	// Get or reuse the cached service
 	f.getService()
+	DriverConfigParamsFile = "./features/driver-config/logConfig.yaml"
 
 	goscaleio.SCINIMockMode = true
 
@@ -258,7 +261,6 @@ func (f *feature) getService() *service {
 	svc.connectedSystemNameToID = map[string]string{}
 	svc.privDir = "./features"
 	ArrayConfigFile = "./features/array-config/config"
-	DriverConfigParamsFile = "./features/driver-config/logConfig.yaml"
 
 	if f.service != nil {
 		return f.service

@@ -470,6 +470,7 @@ func validateVolSize(cr *csi.CapacityRange) (int64, error) {
 	maxSize := cr.GetLimitBytes()
 
 	if minSize < 0 || maxSize < 0 {
+		fmt.Printf("debug size error min=%d max=%d", minSize, maxSize)
 		return 0, status.Errorf(
 			codes.OutOfRange,
 			"bad capacity: volume size bytes %d and limit size bytes: %d must not be negative", minSize, maxSize)
@@ -502,6 +503,7 @@ func validateVolSize(cr *csi.CapacityRange) (int64, error) {
 	sizeB = sizeGiB * bytesInGiB
 	if maxSize != 0 {
 		if sizeB > maxSize {
+			fmt.Printf("debug size sizeB=%d maxSize=%d\n", sizeB, maxSize)
 			return 0, status.Errorf(
 				codes.OutOfRange,
 				"bad capacity: volume size %d > limit_bytes: %d", sizeB, maxSize)
@@ -996,6 +998,7 @@ func valVolumeCaps(
 	)
 	// Check that all access types are valid
 	if !checkValidAccessTypes(vcs) {
+		fmt.Printf("debug errUnknownAccessType %#v ,err= %s\n", vcs , errUnknownAccessType)
 		return false, errUnknownAccessType
 	}
 
@@ -1029,6 +1032,7 @@ func valVolumeCaps(
 		}
 	}
 
+	fmt.Printf("debug supported %t %s\n", supported , reason)
 	return supported, reason
 }
 

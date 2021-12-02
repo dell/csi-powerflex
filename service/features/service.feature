@@ -29,14 +29,6 @@ Feature: VxFlex OS CSI interface
     When I call BeforeServe
     Then a valid GetPlugInfoResponse is returned
 
-  Scenario Outline: Dynamic log config change
-    Given a VxFlexOS service
-    When I call DynamicLogChange <file>
-    Then a valid DynamicLogChange occurs <file> <level>
-    Examples:
-      | file                  | level   |
-      | "logConfig2.yaml"     | "trace" |
-      | "logConfigWrong.yaml" | "debug" |
 
   Scenario: Dynamic array config change
     Given a VxFlexOS service
