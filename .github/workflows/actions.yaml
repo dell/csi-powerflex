@@ -18,7 +18,7 @@ jobs:
           repository: 'dell/csi-powerflex'
           path: 'csi-powerflex'
       - name: Run unit tests and check package coverage
-        uses: dell/common-github-actions/go-code-tester@fix-csi-driver-unit-tests
+        uses: dell/common-github-actions/go-code-tester@try-different-coverage-check
         # set these three to appropriate values
         with:
           threshold: 90
