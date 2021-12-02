@@ -23,4 +23,5 @@ jobs:
         with:
           threshold: 90
           # test-folder should be accurate for all csi-drivers
+          test-folder: "./service"
           skip-list: "podmon/test/ssh"
