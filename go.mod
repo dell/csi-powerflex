@@ -20,9 +20,9 @@ require (
 	github.com/container-storage-interface/spec v1.5.0
 	github.com/cucumber/godog v0.12.1
 	github.com/dell/dell-csi-extensions/podmon v1.0.0
-	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v0.0.0-20211104171507-7c7d0b6e3d35
+	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.0.0
 	github.com/dell/gocsi v1.5.0
-	github.com/dell/gofsutil v1.6.0
+	github.com/dell/gofsutil v1.7.0
 	github.com/dell/goscaleio v1.6.0
 	github.com/fsnotify/fsnotify v1.4.9
 	github.com/golang/protobuf v1.5.2
