@@ -1,9 +1,9 @@
 name: Workflow
 on:
   push:
-    branches: [ main ]
+    branches: [ temp-test-branch ]
   pull_request:
-    branches: [ main ]
+    branches: [ temp-test-branch ]
 jobs:
   code-check:
     name: Check Go formatting, linting, vetting
