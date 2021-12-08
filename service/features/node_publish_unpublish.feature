@@ -331,10 +331,10 @@ Feature: VxFlex OS CSI interface
     And I call mountValidateBlockVolCapabilities
     Then the error contains "Unknown Access Mode"
 
-  Scenario: Call block validateVolCapabilities negative test
-    Given a VxFlexOS service
-    And I call blockValidateBlockVolCapabilities
-    Then the error contains "Unknown Access Mode"
+#  Scenario: Call block validateVolCapabilities negative test
+#    Given a VxFlexOS service
+#    And I call blockValidateBlockVolCapabilities
+#    Then the error contains "Unknown Access Mode"
 
   Scenario: Check if the CleanupPrivateTarget target deletes private target when there are no target mounts.
     Given a VxFlexOS service
