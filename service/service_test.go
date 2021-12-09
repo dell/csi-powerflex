@@ -30,8 +30,8 @@ func TestMain(m *testing.M) {
 	fmt.Printf("godog finished\n")
 
 	if st := m.Run(); st > status {
-                fmt.Printf("godog.TestSuite status %d\n", status)
-                fmt.Printf("m.Run status %d\n", st)
+		fmt.Printf("godog.TestSuite status %d\n", status)
+		fmt.Printf("m.Run status %d\n", st)
 		status = st
 	}
 
