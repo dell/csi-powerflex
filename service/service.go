@@ -179,7 +179,7 @@ func (s *service) ProcessMapSecretChange() error {
 			Log.WithError(err).Error("unable to reload multi array config file")
 		}
 		mx.Lock()
-        	defer mx.Unlock()
+		defer mx.Unlock()
 		err = s.doProbe(context.Background())
 		if err != nil {
 			Log.WithError(err).Error("unable to probe array in multi array config")
@@ -392,7 +392,7 @@ func (s *service) BeforeServe(
 
 	if _, ok := csictx.LookupEnv(ctx, "X_CSI_VXFLEXOS_NO_PROBE_ON_START"); !ok {
 		mx.Lock()
-        	defer mx.Unlock()
+		defer mx.Unlock()
 		return s.doProbe(ctx)
 	}
 	return nil
