@@ -24,7 +24,6 @@ jobs:
       - name: Checkout csi-powerflex
         uses: actions/checkout@v2
         with:
-          # change these to your driver name
           repository: 'dell/csi-powerflex'
           path: 'csi-powerflex'
       - name: Run unit tests and check package coverage
