@@ -56,6 +56,8 @@ const (
 	ParamCSILogLevel = "CSI_LOG_LEVEL"
 )
 
+var mx = sync.Mutex{}
+
 // ArrayConfigFile is file name with array connection data
 var ArrayConfigFile string
 
@@ -176,6 +178,8 @@ func (s *service) ProcessMapSecretChange() error {
 		if err != nil {
 			Log.WithError(err).Error("unable to reload multi array config file")
 		}
+		mx.Lock()
+		defer mx.Unlock()
 		err = s.doProbe(context.Background())
 		if err != nil {
 			Log.WithError(err).Error("unable to probe array in multi array config")
@@ -387,6 +391,8 @@ func (s *service) BeforeServe(
 	s.systems = make(map[string]*sio.System)
 
 	if _, ok := csictx.LookupEnv(ctx, "X_CSI_VXFLEXOS_NO_PROBE_ON_START"); !ok {
+		mx.Lock()
+		defer mx.Unlock()
 		return s.doProbe(ctx)
 	}
 	return nil
@@ -394,6 +400,7 @@ func (s *service) BeforeServe(
 
 // Probe all systems managed by driver
 func (s *service) doProbe(ctx context.Context) error {
+
 	if !strings.EqualFold(s.mode, "node") {
 		if err := s.systemProbeAll(ctx); err != nil {
 			return err
