@@ -164,8 +164,8 @@ spec:
 {{- if hasKey .Values "podmon" }}
 {{- if eq .Values.podmon.enabled true }}
         - name: podmon
-          imagePullPolicy: Always
           image: {{ required "Must provide the podmon container image." .Values.podmon.image }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
           args:
             {{- toYaml .Values.podmon.controller.args | nindent 12 }}
           env:
@@ -249,7 +249,6 @@ spec:
           env:
             - name: ADDRESS
               value: /var/run/csi/csi.sock
-          imagePullPolicy: Always
           volumeMounts:
             - name: socket-dir
               mountPath: /var/run/csi
@@ -268,7 +267,6 @@ spec:
           env:
             - name: ADDRESS
               value: /var/run/csi/csi.sock
-          imagePullPolicy: Always
           volumeMounts:
             - name: socket-dir
               mountPath: /var/run/csi
@@ -294,8 +292,8 @@ spec:
 {{- if hasKey .Values "authorization" }}
 {{- if eq .Values.authorization.enabled true }}
         - name: karavi-authorization-proxy
-          imagePullPolicy: Always
           image: {{ required "Must provide the authorization sidecar container image." .Values.authorization.sidecarProxyImage }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
           env:
             - name: PROXY_HOST
               value: "{{ .Values.authorization.proxyHost }}"

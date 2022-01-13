@@ -103,8 +103,8 @@ spec:
             capabilities:
               add: ["SYS_ADMIN"]
             allowPrivilegeEscalation: true
-          imagePullPolicy: Always
           image: {{ required "Must provide the podmon container image." .Values.podmon.image }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
           args:
             {{- toYaml .Values.podmon.node.args | nindent 12 }}
           env:
@@ -145,8 +145,8 @@ spec:
 {{- if hasKey .Values "authorization" }}
 {{- if eq .Values.authorization.enabled true }}
         - name: karavi-authorization-proxy
-          imagePullPolicy: Always
           image: {{ required "Must provide the authorization sidecar container image." .Values.authorization.sidecarProxyImage }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
           env:
             - name: PROXY_HOST
               value: "{{ .Values.authorization.proxyHost }}"
@@ -222,6 +222,7 @@ spec:
 {{- end}}
         - name: registrar
           image: {{ required "Must provide the CSI registrar container image." ( include "csi-vxflexos.registrarImage" . ) }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
           args:
             - "--v=5"
             - "--csi-address=$(ADDRESS)"
@@ -244,7 +245,7 @@ spec:
           securityContext:
             privileged: true
           image: {{ required "Must provide the PowerFlex SDC container image." .Values.images.powerflexSdc }}
-          imagePullPolicy: Always
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
           env:
             {{ if eq .Values.monitor.hostPID true }}
             - name: HOST_PID
@@ -281,7 +282,7 @@ spec:
           securityContext:
             privileged: true
           image: {{ required "Must provide the PowerFlex SDC container image." .Values.images.powerflexSdc }}
-          imagePullPolicy: Always
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
           env:
             - name: NODENAME
               valueFrom:
