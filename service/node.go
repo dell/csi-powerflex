@@ -19,7 +19,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	k8sutilfs "k8s.io/kubernetes/pkg/volume/util/fs"
 )
 
 var (
@@ -622,7 +621,7 @@ func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolume
 
 	if healthy {
 
-		availableBytes, totalBytes, usedBytes, totalInodes, freeInodes, usedInodes, err := k8sutilfs.Info(volPath)
+		availableBytes, totalBytes, usedBytes, totalInodes, freeInodes, usedInodes, err := gofsutil.FsInfo(volPath)
 		if err != nil {
 			return &csi.NodeGetVolumeStatsResponse{
 				Usage: []*csi.VolumeUsage{
