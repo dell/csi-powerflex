@@ -3,7 +3,7 @@ module github.com/dell/csi-vxflexos/v2
 // In order to run unit tests on Windows, you need a stubbed Windows implementation
 // of the gofsutil package. Use the following replace statements if necessary.
 
-//replace github.com/dell/gofsutil => ./gofsutil
+replace github.com/dell/gofsutil => ./gofsutil
 
 //replace github.com/dell/goscaleio => ./goscaleio
 
@@ -36,7 +36,6 @@ require (
 	k8s.io/api v0.22.2
 	k8s.io/apimachinery v0.22.2
 	k8s.io/client-go v0.22.2
-	k8s.io/kubernetes v1.21.5
 	sigs.k8s.io/yaml v1.2.0
 )
 
