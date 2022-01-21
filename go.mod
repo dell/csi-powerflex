@@ -3,7 +3,7 @@ module github.com/dell/csi-vxflexos/v2
 // In order to run unit tests on Windows, you need a stubbed Windows implementation
 // of the gofsutil package. Use the following replace statements if necessary.
 
-replace github.com/dell/gofsutil => ./gofsutil
+replace github.com/dell/gofsutil => ../gofsutil
 
 //replace github.com/dell/goscaleio => ./goscaleio
 
