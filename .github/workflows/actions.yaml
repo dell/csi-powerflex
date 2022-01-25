@@ -19,8 +19,6 @@ jobs:
     name: Run Go unit tests and check package coverage
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout the code
-        uses: actions/checkout@v2
       - name: Checkout csi-powerflex
         uses: actions/checkout@v2
         with:
