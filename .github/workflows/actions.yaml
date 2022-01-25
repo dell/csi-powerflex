@@ -21,14 +21,11 @@ jobs:
     steps:
       - name: Checkout csi-powerflex
         uses: actions/checkout@v2
-        with:
-          repository: 'dell/csi-powerflex'
-          path: 'csi-powerflex'
       - name: Checkout gofsutil
         uses: actions/checkout@v2
         with:
           repository: 'dell/gofsutil'
-          path: 'csi-powerflex/gofsutil'
+          path: 'gofsutil'
       - name: Run unit tests and check package coverage
         uses: dell/common-github-actions/go-code-tester@fix-always-passing
         with:
