@@ -621,7 +621,7 @@ func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolume
 
 	if healthy {
 
-		availableBytes, totalBytes, usedBytes, totalInodes, freeInodes, usedInodes, err := gofsutil.FsInfo(volPath)
+		availableBytes, totalBytes, usedBytes, totalInodes, freeInodes, usedInodes, err := gofsutil.FsInfo(ctx, volPath)
 		if err != nil {
 			return &csi.NodeGetVolumeStatsResponse{
 				Usage: []*csi.VolumeUsage{
