@@ -15,7 +15,7 @@ PROG="${0}"
 NODE_VERIFY=1
 VERIFY=1
 MODE="install"
-DEFAULT_DRIVER_VERSION="2.1.0"
+DEFAULT_DRIVER_VERSION="2.0.0"
 WATCHLIST=""
 
 # export the name of the debug log, so child processes will see it
@@ -147,6 +147,8 @@ function install_driver() {
   HELMOUTPUT="/tmp/csi-install.$$.out"
   run_command helm ${1} \
     --set openshift=${OPENSHIFT} \
+    --values "${DRIVERDIR}/${DRIVER}/k8s-${kMajorVersion}.${kMinorVersion}-values.yaml" \
+    --values "${DRIVERDIR}/${DRIVER}/driver-image.yaml" \
     --values "${VALUES}" \
     --namespace ${NS} "${RELEASE}" \
     "${DRIVERDIR}/${DRIVER}" >"${HELMOUTPUT}" 2>&1
