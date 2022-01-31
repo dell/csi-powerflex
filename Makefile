@@ -44,7 +44,7 @@ push: docker
 
 # Windows or Linux; requires no hardware
 unit-test:
-	( cd service; go clean -cache; CGO_ENABLED=0 GO111MODULE=on go test -v -race -coverprofile=c.out ./... )
+	( cd service; go clean -cache; CGO_ENABLED=0 GO111MODULE=on go test -v -coverprofile=c.out ./... )
 
 # Linux only; populate env.sh with the hardware parameters
 integration-test:
