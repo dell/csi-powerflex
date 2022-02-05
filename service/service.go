@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -156,7 +155,6 @@ func (s *service) ProcessMapSecretChange() error {
 	}
 	vc.WatchConfig()
 	vc.OnConfigChange(func(e fsnotify.Event) {
-		Log.WithField("file", DriverConfigParamsFile).Info("log configuration file changed")
 		if err := s.updateDriverConfigParams(Log, vc); err != nil {
 			Log.Warn(err)
 		}
@@ -164,22 +162,20 @@ func (s *service) ProcessMapSecretChange() error {
 
 	// dynamic array secret change
 	va := viper.New()
-	// /vxflexos-config/config
 	va.SetConfigFile(ArrayConfigFile)
-	va.SetConfigType("ini")
 	Log.WithField("file", ArrayConfigFile).Info("array configuration file")
 
 	va.WatchConfig()
 
 	va.OnConfigChange(func(e fsnotify.Event) {
+		mx.Lock()
+		defer mx.Unlock()
 		Log.WithField("file", ArrayConfigFile).Info("array configuration file changed")
 		var err error
 		s.opts.arrays, err = getArrayConfig(context.Background())
 		if err != nil {
 			Log.WithError(err).Error("unable to reload multi array config file")
 		}
-		mx.Lock()
-		defer mx.Unlock()
 		err = s.doProbe(context.Background())
 		if err != nil {
 			Log.WithError(err).Error("unable to probe array in multi array config")
@@ -204,7 +200,6 @@ func (s *service) logCsiNodeTopologyKeys() error {
 
 	csiNodes, err := K8sClientset.StorageV1().CSINodes().List(context.TODO(), metav1.ListOptions{})
 	node, err := s.NodeGetInfo(context.Background(), nil)
-	fmt.Printf("debug get csinode info")
 	if node != nil {
 		Log.WithField("node info", node.NodeId).Info("NodeInfo ID")
 		segMap := node.AccessibleTopology.Segments
@@ -260,6 +255,9 @@ func New() Service {
 }
 
 func (s *service) updateDriverConfigParams(logger *logrus.Logger, v *viper.Viper) error {
+
+	mx.Lock()
+	defer mx.Unlock()
 
 	logFormat := v.GetString("CSI_LOG_FORMAT")
 	logFormat = strings.ToLower(logFormat)
@@ -580,7 +578,7 @@ func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error
 		return nil, fmt.Errorf(fmt.Sprintf("File %s does not exist", ArrayConfigFile))
 	}
 
-	config, err := ioutil.ReadFile(filepath.Clean(ArrayConfigFile))
+	config, err := ioutil.ReadFile(ArrayConfigFile)
 	if err != nil {
 		return nil, fmt.Errorf(fmt.Sprintf("File %s errors: %v", ArrayConfigFile, err))
 	}
