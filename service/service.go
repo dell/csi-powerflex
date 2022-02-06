@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -170,6 +171,7 @@ func (s *service) ProcessMapSecretChange() error {
 	va.OnConfigChange(func(e fsnotify.Event) {
 		mx.Lock()
 		defer mx.Unlock()
+
 		Log.WithField("file", ArrayConfigFile).Info("array configuration file changed")
 		var err error
 		s.opts.arrays, err = getArrayConfig(context.Background())
@@ -578,7 +580,7 @@ func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error
 		return nil, fmt.Errorf(fmt.Sprintf("File %s does not exist", ArrayConfigFile))
 	}
 
-	config, err := ioutil.ReadFile(ArrayConfigFile)
+	config, err := ioutil.ReadFile(filepath.Clean(ArrayConfigFile))
 	if err != nil {
 		return nil, fmt.Errorf(fmt.Sprintf("File %s errors: %v", ArrayConfigFile, err))
 	}
