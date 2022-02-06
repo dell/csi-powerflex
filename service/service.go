@@ -156,6 +156,9 @@ func (s *service) ProcessMapSecretChange() error {
 	}
 	vc.WatchConfig()
 	vc.OnConfigChange(func(e fsnotify.Event) {
+		mx.Lock()
+		defer mx.Unlock()
+		Log.WithField("file", DriverConfigParamsFile).Info("log configuration file changed")
 		if err := s.updateDriverConfigParams(Log, vc); err != nil {
 			Log.Warn(err)
 		}
@@ -257,9 +260,6 @@ func New() Service {
 }
 
 func (s *service) updateDriverConfigParams(logger *logrus.Logger, v *viper.Viper) error {
-
-	mx.Lock()
-	defer mx.Unlock()
 
 	logFormat := v.GetString("CSI_LOG_FORMAT")
 	logFormat = strings.ToLower(logFormat)
