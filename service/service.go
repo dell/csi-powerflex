@@ -57,6 +57,7 @@ const (
 )
 
 var mx = sync.Mutex{}
+var px = sync.Mutex{}
 
 // ArrayConfigFile is file name with array connection data
 var ArrayConfigFile string
@@ -174,7 +175,6 @@ func (s *service) ProcessMapSecretChange() error {
 	va.OnConfigChange(func(e fsnotify.Event) {
 		mx.Lock()
 		defer mx.Unlock()
-
 		Log.WithField("file", ArrayConfigFile).Info("array configuration file changed")
 		var err error
 		s.opts.arrays, err = getArrayConfig(context.Background())
@@ -391,8 +391,6 @@ func (s *service) BeforeServe(
 	s.systems = make(map[string]*sio.System)
 
 	if _, ok := csictx.LookupEnv(ctx, "X_CSI_VXFLEXOS_NO_PROBE_ON_START"); !ok {
-		mx.Lock()
-		defer mx.Unlock()
 		return s.doProbe(ctx)
 	}
 	return nil
@@ -400,6 +398,9 @@ func (s *service) BeforeServe(
 
 // Probe all systems managed by driver
 func (s *service) doProbe(ctx context.Context) error {
+
+	px.Lock()
+	defer px.Unlock()
 
 	if !strings.EqualFold(s.mode, "node") {
 		if err := s.systemProbeAll(ctx); err != nil {
