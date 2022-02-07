@@ -31,8 +31,8 @@ parameters:
   # format options to pass to mkfs
   # Allowed values: A string dictating the fs options you want passed
   # Optional: true
-  # Delete the line below if you do not plan on using mkfsFormatOption
-  mkfsFormatOption: "<mkfs_format_option>" # Insert file system format option
+  # Uncomment the line below if you want to use mkfsFormatOption
+  # mkfsFormatOption: "<mkfs_format_option>" # Insert file system format option
 # volumeBindingMode determines how volume binding and dynamic provisioning should occur
 # Allowed values: 
 #  Immediate: volume binding and dynamic provisioning occurs once PVC is created
