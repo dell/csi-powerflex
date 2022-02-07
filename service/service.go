@@ -400,7 +400,7 @@ func (s *service) BeforeServe(
 
 // Probe all systems managed by driver
 func (s *service) doProbe(ctx context.Context) error {
-	
+
 	// Putting in mutex to allow tests to pass with race flag
 	px.Lock()
 	defer px.Unlock()
