@@ -57,6 +57,7 @@ const (
 )
 
 var mx = sync.Mutex{}
+var px = sync.Mutex{}
 
 // ArrayConfigFile is file name with array connection data
 var ArrayConfigFile string
@@ -156,6 +157,9 @@ func (s *service) ProcessMapSecretChange() error {
 	}
 	vc.WatchConfig()
 	vc.OnConfigChange(func(e fsnotify.Event) {
+		// Putting in mutex to allow tests to pass with race flag
+		mx.Lock()
+		defer mx.Unlock()
 		Log.WithField("file", DriverConfigParamsFile).Info("log configuration file changed")
 		if err := s.updateDriverConfigParams(Log, vc); err != nil {
 			Log.Warn(err)
@@ -164,22 +168,21 @@ func (s *service) ProcessMapSecretChange() error {
 
 	// dynamic array secret change
 	va := viper.New()
-	// /vxflexos-config/config
 	va.SetConfigFile(ArrayConfigFile)
-	va.SetConfigType("ini")
 	Log.WithField("file", ArrayConfigFile).Info("array configuration file")
 
 	va.WatchConfig()
 
 	va.OnConfigChange(func(e fsnotify.Event) {
+		// Putting in mutex to allow tests to pass with race flag
+		mx.Lock()
+		defer mx.Unlock()
 		Log.WithField("file", ArrayConfigFile).Info("array configuration file changed")
 		var err error
 		s.opts.arrays, err = getArrayConfig(context.Background())
 		if err != nil {
 			Log.WithError(err).Error("unable to reload multi array config file")
 		}
-		mx.Lock()
-		defer mx.Unlock()
 		err = s.doProbe(context.Background())
 		if err != nil {
 			Log.WithError(err).Error("unable to probe array in multi array config")
@@ -204,7 +207,6 @@ func (s *service) logCsiNodeTopologyKeys() error {
 
 	csiNodes, err := K8sClientset.StorageV1().CSINodes().List(context.TODO(), metav1.ListOptions{})
 	node, err := s.NodeGetInfo(context.Background(), nil)
-	fmt.Printf("debug get csinode info")
 	if node != nil {
 		Log.WithField("node info", node.NodeId).Info("NodeInfo ID")
 		segMap := node.AccessibleTopology.Segments
@@ -391,8 +393,6 @@ func (s *service) BeforeServe(
 	s.systems = make(map[string]*sio.System)
 
 	if _, ok := csictx.LookupEnv(ctx, "X_CSI_VXFLEXOS_NO_PROBE_ON_START"); !ok {
-		mx.Lock()
-		defer mx.Unlock()
 		return s.doProbe(ctx)
 	}
 	return nil
@@ -400,6 +400,10 @@ func (s *service) BeforeServe(
 
 // Probe all systems managed by driver
 func (s *service) doProbe(ctx context.Context) error {
+
+	// Putting in mutex to allow tests to pass with race flag
+	px.Lock()
+	defer px.Unlock()
 
 	if !strings.EqualFold(s.mode, "node") {
 		if err := s.systemProbeAll(ctx); err != nil {

@@ -257,8 +257,12 @@ func (f *feature) getService() *service {
 	svc.volumePrefixToSystems = map[string][]string{}
 	svc.connectedSystemNameToID = map[string]string{}
 	svc.privDir = "./features"
-	ArrayConfigFile = "./features/array-config/config"
-	DriverConfigParamsFile = "./features/driver-config/logConfig.yaml"
+	if ArrayConfigFile == "" {
+		ArrayConfigFile = "./features/array-config/config"
+	}
+	if DriverConfigParamsFile == "" {
+		DriverConfigParamsFile = "./features/driver-config/logConfig.yaml"
+	}
 
 	if f.service != nil {
 		return f.service

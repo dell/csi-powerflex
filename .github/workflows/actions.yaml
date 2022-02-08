@@ -32,7 +32,7 @@ jobs:
           repository: 'dell/gofsutil'
           path: 'gofsutil'
       - name: Run unit tests and check package coverage
-        uses: dell/common-github-actions/go-code-tester@pflex-unit-test-no-race
+        uses: dell/common-github-actions/go-code-tester@main
         with:
           threshold: 90
           test-folder: "./service"
