@@ -16,6 +16,11 @@ jobs:
         with:
           repository: 'dell/gofsutil'
           path: 'gofsutil'
+      - name: Checkout gocsi
+        uses: actions/checkout@v2
+        with:
+          repository: 'dell/gocsi'
+          path: 'gocsi'
       - name: Run the formatter, linter, and vetter
         uses: dell/common-github-actions/go-code-formatter-linter-vetter@main
         with:
@@ -31,6 +36,11 @@ jobs:
         with:
           repository: 'dell/gofsutil'
           path: 'gofsutil'
+      - name: Checkout gocsi
+        uses: actions/checkout@v2
+        with:
+          repository: 'dell/gocsi'
+          path: 'gocsi'
       - name: Run unit tests and check package coverage
         uses: dell/common-github-actions/go-code-tester@main
         with:
@@ -47,6 +57,11 @@ jobs:
         with:
           repository: 'dell/gofsutil'
           path: 'gofsutil'
+      - name: Checkout gocsi
+        uses: actions/checkout@v2
+        with:
+          repository: 'dell/gocsi'
+          path: 'gocsi'
       - name: Run Go Security
         uses: securego/gosec@master
         with:
