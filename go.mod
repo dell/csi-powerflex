@@ -7,7 +7,7 @@ replace github.com/dell/gofsutil => ./gofsutil
 
 //replace github.com/dell/goscaleio => ./goscaleio
 
-//replace github.com/dell/gocsi => ./gocsi
+replace github.com/dell/gocsi => ./gocsi
 
 //replace github.com/dell/dell-csi-extensions/podmon => ./dell-csi-extensions/podmon
 
