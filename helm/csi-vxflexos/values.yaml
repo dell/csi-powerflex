@@ -193,6 +193,7 @@ podmon:
   #    - "--csisock=unix:/var/run/csi/csi.sock"
   #    - "--labelvalue=csi-vxflexos"
   #    - "--mode=controller"
+  #    - "--skipArrayConnectionValidation=false"
   #    - "--driver-config-params=/vxflexos-config-params/driver-config-params.yaml"
   #node:
   #  args:
