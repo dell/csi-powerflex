@@ -105,8 +105,8 @@ jobs:
       - name: Get dependencies
         run: go mod download
       - name: Build Docker Images
-        run: make docker
-      - name: Scan controller Image
+        run: make clean docker
+      - name: Scan driver Image
         uses: Azure/container-scan@v0
         with:
           image-name: localhost/sample_registry/csi-vxflexos:v2.1.0
