@@ -107,7 +107,6 @@ Feature: VxFlex OS CSI interface
       | "integration7"               |
       | "alt_system_id_integration8" |
 
-  @wip
   Scenario: Create, publish, unpublish, and delete basic vol, change name of array and specify wrong allSystemNames , this will pass if volume because handle has id
     Given a VxFlexOS service
     And I set another systemID "altSystem"
