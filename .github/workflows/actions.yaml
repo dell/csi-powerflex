@@ -105,7 +105,7 @@ jobs:
       - name: Get dependencies
         run: go mod download
       - name: Build Docker Images
-        run: make docker-build
+        run: make docker
       - name: Scan controller Image
         uses: Azure/container-scan@v0
         with:
