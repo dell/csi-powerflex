@@ -28,14 +28,14 @@ clean:
 # Dependencies
 dependencies:
 	go generate
-	# go run core/semver/semver.go -f mk >semver.mk
+	go run core/semver/semver.go -f mk >semver.mk
 
 # Build the driver locally
 build: dependencies
 	CGO_ENABLED=0 GOOS=linux GO111MODULE=on go build
 
 # Generates the docker container (but does not push)
-docker: dependencies
+docker: #dependencies
 	make -f docker.mk docker
 
 # Pushes container to the repository
