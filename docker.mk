@@ -2,7 +2,7 @@
 #
 
 # Includes the following generated file to get semantic version information
-include semver.mk
+# include semver.mk
 
 ifdef NOTES
 	RELNOTE="-$(NOTES)"
@@ -11,7 +11,7 @@ else
 endif
 
 ifeq ($(IMAGETAG),)
-IMAGETAG="v$(MAJOR).$(MINOR).$(PATCH)$(RELNOTE)"
+IMAGETAG="v2.2.0"
 endif
 
 
