@@ -28,7 +28,7 @@ clean:
 # Dependencies
 dependencies:
 	go generate
-	go run core/semver/semver.go -f mk >semver.mk
+	# go run core/semver/semver.go -f mk >semver.mk
 
 # Build the driver locally
 build: dependencies
