@@ -17,8 +17,8 @@ RUN CGO_ENABLED=0 \
 FROM $BASEIMAGE@${DIGEST} AS final
 # install necessary packages
 # alphabetical order for easier maintenance
-RUN microdnf update -y && \
-    microdnf install -y \
+RUN microdnf update -y --noplugins && \
+    microdnf install -y --noplugins \
         e4fsprogs \
         kmod \
         libaio \
