@@ -90,6 +90,8 @@ jobs:
         id: go
       - name: Checkout the code
         uses: actions/checkout@v2
+        with: 
+          fetch-depth: 0
       - name: Checkout gofsutil
         uses: actions/checkout@v2
         with:
