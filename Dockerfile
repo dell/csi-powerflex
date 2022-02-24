@@ -18,13 +18,13 @@ FROM $BASEIMAGE@${DIGEST} AS final
 # install necessary packages
 # alphabetical order for easier maintenance
 RUN microdnf update -y && \
-    microdnf install -y \
+    microdnf install -y  \
         e4fsprogs \
         kmod \
         libaio \
         numactl \
         xfsprogs && \
-    microdnf clean all 
+    microdnf clean all
 ENTRYPOINT ["/csi-vxflexos.sh"]
 # copy in the driver
 COPY --from=builder /go/src/csi-vxflexos /
