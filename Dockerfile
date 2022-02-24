@@ -24,7 +24,7 @@ RUN microdnf update -y && \
         libaio \
         numactl \
         xfsprogs && \
-    microdnf clean all
+    microdnf clean all 
 ENTRYPOINT ["/csi-vxflexos.sh"]
 # copy in the driver
 COPY --from=builder /go/src/csi-vxflexos /
