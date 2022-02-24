@@ -77,39 +77,3 @@ jobs:
         with:
           directories: .
           options: -ri
-  image_security_scan:
-    name: Image Scanner
-    runs-on: ubuntu-latest
-    env:
-      BASE_IMG : ubuntu:latest
-    steps:
-      - name: Set up Go 1.17+
-        uses: actions/setup-go@v2
-        with:
-          go-version: ^1.17
-        id: go
-      - name: Checkout the code
-        uses: actions/checkout@v2
-        with: 
-          fetch-depth: 0
-      - name: Checkout gofsutil
-        uses: actions/checkout@v2
-        with:
-          repository: 'dell/gofsutil'
-          path: 'gofsutil'
-      - name: Checkout gocsi
-        uses: actions/checkout@v2
-        with:
-          repository: 'dell/gocsi'
-          path: 'gocsi'
-      - name: Install Mockgen
-        run: go get github.com/golang/mock/mockgen@v1.4.4
-      - name: Get dependencies
-        run: go mod download
-      - name: Build Docker Images
-        run: make docker
-      - name: Scan driver Image
-        uses: Azure/container-scan@v0
-        with:
-          image-name: localhost/sample_registry/csi-vxflexos:v2.1.0
-          severity-threshold: HIGH
