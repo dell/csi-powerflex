@@ -90,6 +90,16 @@ jobs:
         id: go
       - name: Checkout the code
         uses: actions/checkout@v2
+      - name: Checkout gofsutil
+        uses: actions/checkout@v2
+        with:
+          repository: 'dell/gofsutil'
+          path: 'gofsutil'
+      - name: Checkout gocsi
+        uses: actions/checkout@v2
+        with:
+          repository: 'dell/gocsi'
+          path: 'gocsi'
       - name: Install Mockgen
         run: go get github.com/golang/mock/mockgen@v1.4.4
       - name: Get dependencies
