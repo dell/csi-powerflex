@@ -17,5 +17,6 @@ if [ -f ./csi-sanity ] ; then
     sleep 5
     ./csi-sanity --csi.endpoint=./unix_sock --csi.testvolumeparameters=./pool.yml --csi.testvolumesize 8589934592
 fi
+mv /tmp/datafilexml.xml /root/PowerFlex_Int_test_results.xml
 wait
 
