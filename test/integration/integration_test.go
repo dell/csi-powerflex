@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	datafile   = "/tmp/datafile"
+	datafile   = "/tmp/datafilexml.xml"
 	datadir    = "/tmp/datadir"
 	configFile = "../../config.json"
 )
@@ -88,7 +88,8 @@ func TestMain(m *testing.M) {
 	}
 
 	opts := godog.Options{
-		Format: "pretty",
+		Output: write,
+		Format: "junit",
 		Paths:  []string{"features"},
 		// Tags:   "wip",
 	}
