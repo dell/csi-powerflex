@@ -17,6 +17,7 @@ if [ -f ./csi-sanity ] ; then
     sleep 5
     ./csi-sanity --csi.endpoint=./unix_sock --csi.testvolumeparameters=./pool.yml --csi.testvolumesize 8589934592
 fi
+echo "copying integration.xml from " `pwd`
 mv integration.xml /root/vxflexos/logs/PowerFlex_Int_test_results.xml
 wait
 
