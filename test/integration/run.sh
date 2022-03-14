@@ -4,6 +4,8 @@
 # on this system. This will make real calls to the SIO.
 # NOTE: you must run this as root, as the plugin cannot retrieve the SdcGUID without being root!
 
+set -x
+
 sh validate_http_unauthorized.sh
 rc=$?
 if [ $rc -ne 0 ]; then echo "failed http unauthorized test"; exit $rc; fi
