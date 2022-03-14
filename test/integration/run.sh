@@ -14,7 +14,7 @@ rm -f unix.sock
 source ../../env.sh
 echo $SDC_GUID
 # go get github.com/tebeka/go2xunit
-go install github.com/jstemmer/go-junit-report@latest
+# go install github.com/jstemmer/go-junit-report@latest
 GOOS=linux CGO_ENABLED=0 GO111MODULE=on go test -v -coverprofile=c.linux.out -timeout 60m -coverpkg=github.com/dell/csi-vxflexos/service *test.go &
 if [ -f ./csi-sanity ] ; then
     sleep 5
