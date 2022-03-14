@@ -22,6 +22,6 @@ if [ -f ./csi-sanity ] ; then
 fi
 echo "copying integration.xml from " `pwd`
 #| /root/go/bin/go-junit-report > integration.xml&
-# mv integration.xml /root/vxflexos/logs/PowerFlex_Int_test_results.xml
+mv integration*.xml /root/vxflexos/logs/
 wait
 
