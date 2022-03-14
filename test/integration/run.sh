@@ -11,8 +11,9 @@ if [ $rc -ne 0 ]; then echo "failed http unauthorized test"; exit $rc; fi
 rm -f unix.sock
 source ../../env.sh
 echo $SDC_GUID
-go get github.com/tebeka/go2xunit
-GOOS=linux CGO_ENABLED=0 GO111MODULE=on go test -v -coverprofile=c.linux.out -timeout 60m -coverpkg=github.com/dell/csi-vxflexos/service *test.go | /root/go/bin/go2xunit -output integration.xml&
+# go get github.com/tebeka/go2xunit
+go install github.com/jstemmer/go-junit-report@latest
+GOOS=linux CGO_ENABLED=0 GO111MODULE=on go test -v -coverprofile=c.linux.out -timeout 60m -coverpkg=github.com/dell/csi-vxflexos/service *test.go | /root/go/bin/go-junit-report > integration.xml&
 if [ -f ./csi-sanity ] ; then
     sleep 5
     ./csi-sanity --csi.endpoint=./unix_sock --csi.testvolumeparameters=./pool.yml --csi.testvolumesize 8589934592
