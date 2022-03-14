@@ -20,8 +20,8 @@ if [ -f ./csi-sanity ] ; then
     sleep 5
     ./csi-sanity --csi.endpoint=./unix_sock --csi.testvolumeparameters=./pool.yml --csi.testvolumesize 8589934592
 fi
+wait
+
 echo "copying integration.xml from " `pwd`
 #| /root/go/bin/go-junit-report > integration.xml&
 mv integration*.xml /root/vxflexos/logs/
-wait
-
