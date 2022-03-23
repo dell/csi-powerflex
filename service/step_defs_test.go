@@ -44,6 +44,8 @@ const (
 	goodVolumeName             = "vol1"
 	altVolumeID                = "222"
 	goodNodeID                 = "9E56672F-2F4B-4A42-BFF4-88B6846FBFDA"
+	goodArrayConfig            = "./features/array-config/config"
+	goodDriverConfig           = "./features/driver-config/logConfig.yaml"
 	altNodeID                  = "7E012974-3651-4DCB-9954-25975A3C3CDF"
 	datafile                   = "test/tmp/datafile"
 	datadir                    = "test/tmp/datadir"
@@ -257,11 +259,11 @@ func (f *feature) getService() *service {
 	svc.volumePrefixToSystems = map[string][]string{}
 	svc.connectedSystemNameToID = map[string]string{}
 	svc.privDir = "./features"
-	if ArrayConfigFile == "" {
-		ArrayConfigFile = "./features/array-config/config"
+	if ArrayConfigFile != goodArrayConfig {
+		ArrayConfigFile = goodArrayConfig
 	}
-	if DriverConfigParamsFile == "" {
-		DriverConfigParamsFile = "./features/driver-config/logConfig.yaml"
+	if DriverConfigParamsFile != goodDriverConfig {
+		DriverConfigParamsFile = goodDriverConfig
 	}
 
 	if f.service != nil {
