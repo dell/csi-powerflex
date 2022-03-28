@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-  <testsuite name="CSI Driver End-to-End Tests" tests="1" failures="0" errors="0" time="46.602">
-      <testcase name="[csi-fsg][csi-fsg] Volume Filesystem Group Test Verify Pod Creation works when SecurityContext has FSGroup" classname="CSI Driver End-to-End Tests" time="46.601615291"></testcase>
+  <testsuite name="CSI Driver End-to-End Tests" tests="1" failures="0" errors="0" time="40.594">
+      <testcase name="[csi-fsg][csi-fsg] Volume Filesystem Group Test [csi-fsg] Verify Pod FSGroup" classname="CSI Driver End-to-End Tests" time="40.593427361"></testcase>
+      <testcase name="[csi-adv-fsg] Nodes Scale-up and Scale-down [csi-adv-fsg] Statefulset with Nodes Scale-up and Scale-down" classname="CSI Driver End-to-End Tests" time="0">
+          <skipped></skipped>
+      </testcase>
   </testsuite>

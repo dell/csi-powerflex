@@ -36,48 +36,62 @@ var kubeconfigEnvVar = "KUBECONFIG"
 var busyBoxImageOnGcr = "gcr.io/google_containers/busybox:1.27"
 var envStoragePolicyNameForSharedDatastores = "shared-ds-policy"
 var envSharedDatastoreURL = "shared-ds-url"
-var vanillaCluster = true
 
 //  storagepool=pool2,systemID=4d4a2e5a36080e0f
-var scParamStoragePool = "storagepool"
-var scParamStorageSystem = "systemID"
+var scParamStoragePoolKey = "storagepool"
+var scParamStoragePoolValue = "pool1"
+
+var scParamStorageSystemKey = "systemID"
+var scParamStorageSystemValue = "4d4a2e5a36080e0f"
+
 var e2eCSIDriverName = "csi-vxflexos.dellemc.com"
 var diskSize = "8Gi"
 
 var execCommand = "/bin/df -T /mnt/volume1 | " + "/bin/awk 'FNR == 2 {print $2}' > /mnt/volume1/fstype && while true ; do sleep 2 ; done"
 
-var execRWXCommandPod1 = "echo 'Hello message from Pod1' > /mnt/volume1/Pod1.html  && " +
-	"chmod o+rX /mnt /mnt/volume1/Pod1.html && while true ; do sleep 2 ; done"
-
-var execRWXCommandPod2 = "echo 'Hello message from Pod2' > /mnt/volume1/Pod2.html  && " +
-	"chmod o+rX /mnt /mnt/volume1/Pod2.html && while true ; do sleep 2 ; done"
-
 var _ = ginkgo.Describe("[csi-fsg]"+
 	"[csi-fsg] Volume Filesystem Group Test", func() {
+
+	//  Building a namespace api object, basename volume-fsgroup
 	f := framework.NewDefaultFramework("volume-fsgroup")
+
+	// prevent annoying psp warning
+	f.SkipPrivilegedPSPBinding = true
+
 	var (
 		client       clientset.Interface
 		namespace    string
 		scParameters map[string]string
-		envArray     string
-		envPool      string
 	)
+
+	framework.Logf("run e2e test default timeouts  %#v ", f.Timeouts)
+
 	ginkgo.BeforeEach(func() {
 		client = f.ClientSet
+
 		namespace = getNamespaceToRunTests(f)
+
 		scParameters = make(map[string]string)
-		envArray = GetAndExpectStringEnvVar(scParamStorageSystem)
-		envPool = GetAndExpectStringEnvVar(scParamStoragePool)
+
+		// setup other exteral environment for example array server
 		bootstrap()
+
 		nodeList, err := fnodes.GetReadySchedulableNodes(f.ClientSet)
+
 		framework.ExpectNoError(err, "Unable to find ready and schedulable Node")
+
 		if !(len(nodeList.Items) > 0) {
 			framework.Failf("Unable to find ready and schedulable Node")
 		}
+		for _, node := range nodeList.Items {
+			framework.Logf("ready nodes %s", node.Name)
+		}
 	})
 
+	// in case you want to log and exit	framework.Fail("stop test")
+
 	// Test for Pod creation works when SecurityContext has FSGroup
-	ginkgo.It("Verify Pod Creation works when SecurityContext has FSGroup", func() {
+	ginkgo.It("[csi-fsg] Verify Pod FSGroup", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
@@ -90,26 +104,27 @@ var _ = ginkgo.Describe("[csi-fsg]"+
 		ginkgo.By("Creating a PVC")
 
 		// Create a StorageClass
-		ginkgo.By("CSI_TEST: Running for vanilla k8s setup")
+		ginkgo.By("CSI_TEST: Running for k8s setup")
 
 		// storagepool=pool2,systemID=4d4a2e5a36080e0f
-		scParameters[scParamStoragePool] = envPool
-		scParameters[scParamStorageSystem] = envArray
+
+		scParameters[scParamStoragePoolKey] = scParamStoragePoolValue
+		scParameters[scParamStorageSystemKey] = scParamStorageSystemValue
+
 		storageclasspvc, pvclaim, err = createPVCAndStorageClass(client,
 			namespace, nil, scParameters, diskSize, nil, "", false, "")
 
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 		defer func() {
-			if vanillaCluster {
-				err = client.StorageV1().StorageClasses().Delete(ctx, storageclasspvc.Name, *metav1.NewDeleteOptions(0))
-				gomega.Expect(err).NotTo(gomega.HaveOccurred())
-			}
+			err = client.StorageV1().StorageClasses().Delete(ctx, storageclasspvc.Name, *metav1.NewDeleteOptions(0))
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		}()
 
 		ginkgo.By("Expect claim status to be in Pending state")
 		err = fpv.WaitForPersistentVolumeClaimPhase(v1.ClaimPending, client,
 			pvclaim.Namespace, pvclaim.Name, framework.Poll, time.Minute)
+
 		gomega.Expect(err).NotTo(gomega.HaveOccurred(),
 			fmt.Sprintf("Failed to find the volume in pending state with err: %v", err))
 
@@ -121,8 +136,15 @@ var _ = ginkgo.Describe("[csi-fsg]"+
 
 		fsGroupInt64 := &fsGroup
 		runAsUserInt64 := &runAsUser
+
 		pod, err := createPodForFSGroup(client, namespace, nil, []*v1.PersistentVolumeClaim{pvclaim},
 			true, execCommand, fsGroupInt64, runAsUserInt64)
+
+		// in case of error help debug by showing events
+		if err != nil {
+			getEvents(client, pvclaim.Namespace, pvclaim.Name, "PersistentVolumeClaim")
+		}
+
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 		ginkgo.By("Expect claim to provision volume bound successfully")
@@ -130,20 +152,23 @@ var _ = ginkgo.Describe("[csi-fsg]"+
 		ginkgo.By("Expect claim to be in Bound state and provisioning volume passes")
 		err = fpv.WaitForPersistentVolumeClaimPhase(v1.ClaimBound, client,
 			pvclaim.Namespace, pvclaim.Name, framework.Poll, time.Minute)
+
 		gomega.Expect(err).NotTo(gomega.HaveOccurred(), fmt.Sprintf("Failed to provision volume with err: %v", err))
 
 		persistentvolumes, err := fpv.WaitForPVClaimBoundPhase(client,
 			[]*v1.PersistentVolumeClaim{pvclaim}, framework.ClaimProvisionTimeout)
+
 		gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to provision volume")
 
 		volHandle := persistentvolumes[0].Spec.CSI.VolumeHandle
 		gomega.Expect(volHandle).NotTo(gomega.BeEmpty())
 
 		/*
-		   defer func() {
-		           err = fpv.DeletePersistentVolumeClaim(client, pvclaim.Name, pvclaim.Namespace)
-		           gomega.Expect(err).NotTo(gomega.HaveOccurred())
-		   }()
+				//not needed
+			   defer func() {
+			           err = fpv.DeletePersistentVolumeClaim(client, pvclaim.Name, pvclaim.Namespace)
+			           gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			   }()
 		*/
 
 		pv := persistentvolumes[0]
@@ -151,10 +176,8 @@ var _ = ginkgo.Describe("[csi-fsg]"+
 		var exists bool
 		ginkgo.By(fmt.Sprintf("Verify volume: %s is attached to the node: %s",
 			pv.Spec.CSI.VolumeHandle, pod.Spec.NodeName))
-		if vanillaCluster {
-			annotations := pod.Annotations
-			gomega.Expect(exists).NotTo(gomega.BeTrue(), fmt.Sprintf("Pod %s %s annotation", annotations, volumeID))
-		}
+		annotations := pod.Annotations
+		gomega.Expect(exists).NotTo(gomega.BeTrue(), fmt.Sprintf("Pod %s %s annotation", annotations, volumeID))
 
 		ginkgo.By("Verify the volume is accessible and filegroup type is as expected")
 		cmd := []string{"exec", pod.Name, "--namespace=" + namespace, "--", "/bin/sh", "-c",
@@ -168,11 +191,9 @@ var _ = ginkgo.Describe("[csi-fsg]"+
 		err = fpod.DeletePodWithWait(client, pod)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
-		if vanillaCluster {
-			//isDiskDetached, err := e2eVSphere.waitForVolumeDetachedFromNode(client, volumeID, pod.Spec.NodeName)
-			gomega.Expect(err).NotTo(gomega.HaveOccurred())
-			//gomega.Expect(isDiskDetached).To(gomega.BeTrue(),
-			//fmt.Sprintf("Volume %q is not detached from the node %q", pv.Spec.CSI.VolumeHandle, pod.Spec.NodeName))
-		}
+		//isDiskDetached, err := e2eVSphere.waitForVolumeDetachedFromNode(client, volumeID, pod.Spec.NodeName)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		//gomega.Expect(isDiskDetached).To(gomega.BeTrue(),
+		//fmt.Sprintf("Volume %q is not detached from the node %q", pv.Spec.CSI.VolumeHandle, pod.Spec.NodeName))
 	})
 })

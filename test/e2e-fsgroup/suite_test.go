@@ -20,19 +20,12 @@ func init() {
 		kubeconfig := filepath.Join(os.Getenv("HOME"), ".kube", "config")
 		os.Setenv(kubeconfigEnvVar, kubeconfig)
 	}
-	os.Setenv(scParamStoragePool, "pool1")
-	os.Setenv(scParamStorageSystem, "4d4a2e5a36080e0f")
 
 	framework.TestContext.Provider = "local"
 
-	framework.TestContext.MaxNodesToGather = 0
-
 	t := framework.TestContextType{
-		Host:             "https://10.247.98.123:6443",
-		MaxNodesToGather: 0,
+		Host: "https://10.247.98.123:6443",
 	}
-
-	//timeouts := framework.NewTimeoutContextWithDefaults()
 
 	framework.AfterReadingAllFlags(&t)
 }
@@ -40,7 +33,15 @@ func init() {
 func TestE2E(t *testing.T) {
 	handleFlags()
 	RegisterFailHandler(Fail)
+
+	// pass/fail/skip results summarized to this file
+
 	junitReporter := reporters.NewJUnitReporter("junit.xml")
+
+	// dont dump huge logs of node / pods on error
+	framework.TestContext.DumpLogsOnFailure = false
+
+	// runs all ginkgo tests in go files
 	RunSpecsWithDefaultAndCustomReporters(t, "CSI Driver End-to-End Tests", []Reporter{junitReporter})
 }
 
