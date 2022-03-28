@@ -109,7 +109,7 @@ var _ = ginkgo.Describe("[csi-adv-fsg] Nodes Scale-up and Scale-down", func() {
 
 		statefulset := GetStatefulSetFromManifest(namespace)
 		ginkgo.By("Creating statefulset")
-		// Check if it is file volumes setups
+
 		statefulset.Spec.VolumeClaimTemplates[len(statefulset.Spec.VolumeClaimTemplates)-1].Spec.AccessModes[0] =
 			v1.ReadWriteOnce
 
@@ -141,7 +141,6 @@ var _ = ginkgo.Describe("[csi-adv-fsg] Nodes Scale-up and Scale-down", func() {
 			for _, volumespec := range sspod.Spec.Volumes {
 				if volumespec.PersistentVolumeClaim != nil {
 					pv := getPvFromClaim(client, statefulset.Namespace, volumespec.PersistentVolumeClaim.ClaimName)
-					// Verify the attached volume match the one in CNS cache
 					gomega.Expect(pv).NotTo(gomega.BeNil())
 				}
 			}
@@ -196,7 +195,7 @@ var _ = ginkgo.Describe("[csi-adv-fsg] Nodes Scale-up and Scale-down", func() {
 			}
 		}
 
-		// After scale down, verify the attached volumes match those in CNS Cache
+		// After scale down, verify the attached volumes match
 		for _, sspod := range ssPodsAfterScaleDown.Items {
 			_, err := client.CoreV1().Pods(namespace).Get(ctx, sspod.Name, metav1.GetOptions{})
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
