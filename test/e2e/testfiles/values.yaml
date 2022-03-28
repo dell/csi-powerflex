@@ -1,0 +1,12 @@
+# List of E2E Tests Scenarios
+- scenario: "Verify fsGroup for driver"
+  path: "/root/test-e2e/csi-powerflex/test/e2e/testfiles/values-Pflex.yaml" 
+  steps:
+    - "Given an environment with k8s or openshift, and driver installed"
+    - "Create a pod with fsGroup"
+#    - "Validate custom resources"
+#    - "Validate [powerscale] driver is installed"
+#    - "Run custom test"
+     # Last two steps perform Clean Up
+#    - "Enable forceRemoveDriver on CR"
+#    - "Delete resources"
