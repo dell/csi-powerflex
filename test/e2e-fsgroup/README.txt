@@ -1,4 +1,14 @@
 
+# install ginkgo version 1
+go get -u github.com/onsi/ginkgo/ginkgo
+
+/root/go/bin/ginkgo version
+
+Ginkgo Version 1.16.5
+
+mv /root/go/bin/ginkgo /usr/bin/ginkgo
+
+
 run.sh executes gingo  tests
 
 # ginkgo -mod=mod --focus=FSGroup ./...
