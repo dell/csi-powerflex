@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/onsi/gomega"
 	apps "k8s.io/api/apps/v1"
@@ -23,6 +24,112 @@ import (
 
 	"github.com/onsi/ginkgo"
 )
+
+// return csidriver object with different fsgroup values
+func getCSIDriver(name string, noFsGroup bool) *storagev1.CSIDriver {
+	enabled := true
+	disabled := false
+	driver := &storagev1.CSIDriver{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+		Spec: storagev1.CSIDriverSpec{
+			AttachRequired:    &enabled,
+			PodInfoOnMount:    &enabled,
+			StorageCapacity:   &disabled,
+			RequiresRepublish: &disabled,
+			VolumeLifecycleModes: []storagev1.VolumeLifecycleMode{
+				storagev1.VolumeLifecyclePersistent,
+				storagev1.VolumeLifecycleEphemeral,
+			},
+		},
+	}
+
+	if !noFsGroup {
+		fsGroupPolicy := storagev1.ReadWriteOnceWithFSTypeFSGroupPolicy
+		driver.Spec = storagev1.CSIDriverSpec{
+			AttachRequired:    &enabled,
+			PodInfoOnMount:    &enabled,
+			StorageCapacity:   &disabled,
+			RequiresRepublish: &disabled,
+			FSGroupPolicy:     &fsGroupPolicy,
+			VolumeLifecycleModes: []storagev1.VolumeLifecycleMode{
+				storagev1.VolumeLifecyclePersistent,
+				storagev1.VolumeLifecycleEphemeral,
+			},
+		}
+	}
+	return driver
+}
+
+// update fsGroupPolicy in CSIDriver
+func updateCsiDriver(client clientset.Interface, e2eCSIDriverName, fsPolicy string) error {
+	_, err := client.StorageV1().CSIDrivers().Get(context.TODO(), e2eCSIDriverName, metav1.GetOptions{})
+	if err != nil {
+		framework.Logf("debug csidriver not found %s, %s", e2eCSIDriverName, fsPolicy)
+	} else {
+
+		framework.Logf("csidriver delete %s, %s", e2eCSIDriverName, fsPolicy)
+
+		err = client.StorageV1().CSIDrivers().Delete(context.TODO(), e2eCSIDriverName, metav1.DeleteOptions{})
+		if err != nil {
+			framework.Logf("Error deleting driver %s: %v", e2eCSIDriverName, err)
+			return err
+		}
+	}
+
+	driver := getCSIDriver(e2eCSIDriverName, false)
+	framework.Logf("csidriver make %s, %s", driver.Name, fsPolicy)
+	parts := strings.Split(fsPolicy, "=")
+	if len(parts) == 2 && len(parts[1]) > 0 {
+		policy := parts[1]
+		switch policy {
+		case "None":
+			*driver.Spec.FSGroupPolicy = storagev1.NoneFSGroupPolicy
+		default:
+			*driver.Spec.FSGroupPolicy = storagev1.ReadWriteOnceWithFSTypeFSGroupPolicy
+		}
+	} else if len(parts) == 1 {
+		driver = getCSIDriver(e2eCSIDriverName, true)
+		framework.Logf("default csidriver create %s, %s", e2eCSIDriverName, "no fsgroup policy")
+	}
+
+	driver, err = client.StorageV1().CSIDrivers().Create(context.TODO(), driver, metav1.CreateOptions{})
+	if err != nil {
+		framework.Logf("Error creating driver %s: %v", e2eCSIDriverName, err)
+		return err
+	}
+	framework.Logf("csidriver created ok %s, %s", e2eCSIDriverName, fsPolicy)
+	return err
+}
+
+// delete pods in a given namespace
+func restartDriverPods(client clientset.Interface, ns string) error {
+	// for given namespace delete each pod
+	pods, err := fpod.GetPodsInNamespace(client, ns, map[string]string{})
+	framework.Logf("debug pod list %s %d", ns, len(pods))
+	for i := range pods {
+		p := pods[i]
+		err = fpod.DeletePodWithWait(client, p)
+		err := client.CoreV1().Pods(ns).Delete(context.TODO(), p.Name, metav1.DeleteOptions{})
+		if err != nil {
+			framework.Logf("debug pod delete %s", err.Error())
+		}
+
+		time.Sleep(10 * time.Second)
+		podslist, err := fpod.GetPodsInNamespace(client, ns, map[string]string{})
+
+		for j := range podslist {
+			po := podslist[j]
+			framework.Logf("debug check pod %s, %s", po.Name, ns)
+			err = fpod.WaitTimeoutForPodReadyInNamespace(client, po.Name, ns, framework.PodStartTimeout)
+			if err != nil {
+				return fmt.Errorf("pod is not Running: %s %v", po.Name, err)
+			}
+		}
+	}
+	return err
+}
 
 func getEvents(client clientset.Interface, ns string, name string, objtype string) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -275,12 +382,19 @@ func createPodForFSGroup(client clientset.Interface, namespace string,
 			return &i
 		}(2000)
 	}
+	// set group id to non root id
+	runAsGroup := func(i int64) *int64 {
+		return &i
+	}(3000)
 
 	pod := fpod.MakePod(namespace, nodeSelector, pvclaims, isPrivileged, command)
 	pod.Spec.Containers[0].Image = busyBoxImageOnGcr
+	nonRoot := true
 	pod.Spec.SecurityContext = &v1.PodSecurityContext{
-		RunAsUser: runAsUser,
-		FSGroup:   fsGroup,
+		RunAsNonRoot: &nonRoot,
+		RunAsUser:    runAsUser,
+		RunAsGroup:   runAsGroup,
+		FSGroup:      fsGroup,
 	}
 	var err error
 	pod, err = client.CoreV1().Pods(namespace).Create(context.TODO(), pod, metav1.CreateOptions{})
@@ -288,10 +402,17 @@ func createPodForFSGroup(client clientset.Interface, namespace string,
 		return nil, fmt.Errorf("pod Create API error: %v", err)
 	}
 	// Waiting for pod to be running.
+
 	err = fpod.WaitForPodNameRunningInNamespace(client, pod.Name, namespace)
 	if err != nil {
-		return pod, fmt.Errorf("pod %q is not Running: %v", pod.Name, err)
+		return pod, fmt.Errorf("pod %q is not Running: %s", pod.Name, err.Error())
 	}
+
+	err = fpod.WaitTimeoutForPodReadyInNamespace(client, pod.Name, namespace, framework.PodStartTimeout)
+	if err != nil {
+		return pod, fmt.Errorf("pod is not Running: %s %s", pod.Name, err.Error())
+	}
+
 	// Get fresh pod info.
 	pod, err = client.CoreV1().Pods(namespace).Get(context.TODO(), pod.Name, metav1.GetOptions{})
 	if err != nil {

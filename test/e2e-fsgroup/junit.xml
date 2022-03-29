@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-  <testsuite name="CSI Driver End-to-End Tests" tests="1" failures="0" errors="0" time="40.594">
-      <testcase name="[csi-fsg][csi-fsg] Volume Filesystem Group Test [csi-fsg] Verify Pod FSGroup" classname="CSI Driver End-to-End Tests" time="40.593427361"></testcase>
+  <testsuite name="CSI Driver End-to-End Tests" tests="3" failures="0" errors="0" time="293.773">
+      <testcase name="[Serial] [csi-fsg][csi-fsg] Volume Filesystem Group Test [csi-fsg] Verify Pod FSGroup" classname="CSI Driver End-to-End Tests" time="98.615868912"></testcase>
+      <testcase name="[Serial] [csi-fsg][csi-fsg] Volume Filesystem Group Test [csi-fsg] Verify Pod FSGroup" classname="CSI Driver End-to-End Tests" time="94.579754088"></testcase>
       <testcase name="[csi-adv-fsg] Nodes Scale-up and Scale-down [csi-adv-fsg] Statefulset with Nodes Scale-up and Scale-down" classname="CSI Driver End-to-End Tests" time="0">
           <skipped></skipped>
       </testcase>
+      <testcase name="[Serial] [csi-fsg][csi-fsg] Volume Filesystem Group Test [csi-fsg] Verify Pod FSGroup" classname="CSI Driver End-to-End Tests" time="100.576608461"></testcase>
   </testsuite>
