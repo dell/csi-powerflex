@@ -3,6 +3,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -174,8 +175,8 @@ func CreateStatefulSet(ns string, ss *apps.StatefulSet, c clientset.Interface) {
 // GetStatefulSetFromManifest creates a StatefulSet from the statefulset.yaml
 // file present in the manifest path.
 func GetStatefulSetFromManifest(ns string) *apps.StatefulSet {
-
-	manifestPath := "/root/csm-operator/tests/e2e/testing-manifests/statefulset/"
+	pwd, _ := os.Getwd()
+	manifestPath := pwd + "/testing-manifests/statefulset/"
 
 	ssManifestFilePath := filepath.Join(manifestPath, "statefulset.yaml")
 	framework.Logf("Parsing statefulset from %v", ssManifestFilePath)
@@ -184,6 +185,7 @@ func GetStatefulSetFromManifest(ns string) *apps.StatefulSet {
 	return ss
 }
 
+// not usedgit git
 // bootstrap function takes care of initializing necessary tests context for e2e tests
 func bootstrap(withoutDc ...bool) {
 	var err error
@@ -248,10 +250,11 @@ func getStorageClassSpec(scName string, scParameters map[string]string,
 	bindingMode storagev1.VolumeBindingMode, allowVolumeExpansion bool) *storagev1.StorageClass {
 
 	vals := make([]string, 0)
-	vals = append(vals, "csi-vxflexos.dellemc.com")
+	vals = append(vals, e2eCSIDriverName)
 
 	topo := v1.TopologySelectorLabelRequirement{
-		Key:    "csi-vxflexos.dellemc.com/4d4a2e5a36080e0f",
+		// 4d4a2e5a36080e0f"
+		Key:    e2eCSIDriverName + "/" + scParamStorageSystemValue,
 		Values: vals,
 	}
 
