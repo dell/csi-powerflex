@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: fsgroup 
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: fsgroup
+  template:
+    metadata:
+      labels:
+        app: fsgroup
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 54321
+        fsGroup: 54321
+      containers:
+      - name: busybox
+        image: gcr.io/google_containers/busybox:1.27
+        command: ["/bin/sh", "-c", "sleep 3600"]
+        volumeMounts:
+        - name: www
+          mountPath: /data
+        securityContext:
+          runAsUser: 54321
+          allowPrivilegeEscalation: false
+  volumeClaimTemplates:
+  - metadata:
+      name: www
+      annotations:
+        volume.beta.kubernetes.io/storage-class: fsgroup-sc
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 8Gi
