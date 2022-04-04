@@ -121,7 +121,8 @@ var _ = ginkgo.Describe("[Serial] [csi-fsg]"+
 		doOneCyclePVCTest(ctx, "None", v1.ReadOnlyMany)
 
 	})
-
+	// Test for ROX volume and  CSIDriver Fs Group Policy: File THIS WILL FAIL FOR NOW
+	//Ask Jacob for more details if needed
 	ginkgo.It("[csi-fsg] Verify Pod FSGroup ROX fsPolicy=File", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -139,8 +140,6 @@ var _ = ginkgo.Describe("[Serial] [csi-fsg]"+
 		restartDriverPods(client, driverNamespace)
 		doOneCyclePVCTest(ctx, "None", "")
 	})
-	// Test for ROX volume and  CSIDriver Fs Group Policy: File THIS WILL FAIL FOR NOW
-	//Ask Jacob for more details if needed
 	ginkgo.It("[csi-fsg] Verify Pod FSGroup with fsPolicy=File WIP", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
