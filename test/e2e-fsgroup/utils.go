@@ -87,6 +87,8 @@ func updateCsiDriver(client clientset.Interface, e2eCSIDriverName, fsPolicy stri
 		switch policy {
 		case "None":
 			*driver.Spec.FSGroupPolicy = storagev1.NoneFSGroupPolicy
+	        case "File":
+		        *driver.Spec.FSGroupPolicy = storagev1.FileFSGroupPolicy
 		default:
 			*driver.Spec.FSGroupPolicy = storagev1.ReadWriteOnceWithFSTypeFSGroupPolicy
 		}
