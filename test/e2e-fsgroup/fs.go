@@ -55,6 +55,33 @@ var (
 	scParameters map[string]string
 )
 
+// ginkgo suite is kicked off in suite_test.go  RunSpecsWithDefaultAndCustomReporters
+
+// ginkgo.Describe is a ginkgo spec , runs a set of scenarios , like one happy path and several error tests
+
+// ginkgo.BeforeEach defines a method that will run once 
+
+// followed bg ginkgo.It() that defines one scenario
+
+// below we run 3 scenarios , 
+//	each one changes the fsGroupPolicy in csiDriver , 
+//		restarts all driver pods , 
+//			creates a new pod similar to helm test , with pvc/pv which used the fsGroup value (non root )
+
+// 	each It method verifies expected results using gomega Matcher library
+
+// 	each It method deletes the pv/pvc/pod --cleanup
+
+// 	framework.Logf --will stop and not cleaup if we want to exit due to unexpected match , manual cleanup is expected
+
+// notice the imports from framework, e2e test framework from kubernetes that provided methods to create/delete/list pv/pvc/pod 
+
+// utils.go calls these framework methods
+
+// we can also create a pod or statefulset from a yaml file in
+
+// testing-manifests folder. see GetStatefulSetFromManifest() in utils 
+
 var _ = ginkgo.Describe("[Serial] [csi-fsg]"+
 	"[csi-fsg] Volume Filesystem Group Test", func() {
 
