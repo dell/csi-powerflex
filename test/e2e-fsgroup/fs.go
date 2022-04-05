@@ -41,8 +41,11 @@ var e2eCSIDriverName = "csi-vxflexos.dellemc.com"
 var scParamStoragePoolKey = "storagepool"
 var scParamStoragePoolValue = "pool1"
 
+var scParamFsTypeKey = "FsType"
+var scParamFsTypeValue = "ext4"
+
 var scParamStorageSystemKey = "systemID"
-var scParamStorageSystemValue = "4d4a2e5a36080e0f"
+var scParamStorageSystemValue = "60462e7c4ecaa90f"
 
 var diskSize = "8Gi"
 
@@ -123,10 +126,38 @@ var _ = ginkgo.Describe("[Serial] [csi-fsg]"+
 		defer cancel()
 		updateCsiDriver(client, e2eCSIDriverName, "fsPolicy=ReadWriteOnceWithFSType")
 		restartDriverPods(client, driverNamespace)
-		doOneCyclePVCTest(ctx, "ReadWriteOnceWithFSType")
+		doOneCyclePVCTest(ctx, "ReadWriteOnceWithFSType", "")
 
 	})
 
+	//Test for pod creation with security context with access mode ROX and CSIDriver has Fs Group Policy: ReadWriteOnceWithFSType
+	ginkgo.It("[csi-fsg] Verify Pod FSGroup ROX ReadWriteOnceWithFSType", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		updateCsiDriver(client, e2eCSIDriverName, "fsPolicy=ReadWriteOnceWithFSType")
+		restartDriverPods(client, driverNamespace)
+		doOneCyclePVCTest(ctx, "ReadWriteOnceWithFSType", v1.ReadOnlyMany)
+
+	})
+
+	ginkgo.It("[csi-fsg] Verify Pod FSGroup ROX fsPolicy=None", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		updateCsiDriver(client, e2eCSIDriverName, "fsPolicy=None")
+		restartDriverPods(client, driverNamespace)
+		doOneCyclePVCTest(ctx, "None", v1.ReadOnlyMany)
+
+	})
+	// Test for ROX volume and  CSIDriver Fs Group Policy: File THIS WILL FAIL FOR NOW
+	//Ask Jacob for more details if needed
+	ginkgo.It("[csi-fsg] Verify Pod FSGroup ROX fsPolicy=File", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		updateCsiDriver(client, e2eCSIDriverName, "fsPolicy=File")
+		restartDriverPods(client, driverNamespace)
+		doOneCyclePVCTest(ctx, "File", v1.ReadOnlyMany)
+
+	})
 	// Test for Pod creation works when SecurityContext has  CSIDriver Fs Group Policy:  None
 	ginkgo.It("[csi-fsg] Verify Pod FSGroup", func() {
 		ctx, cancel := context.WithCancel(context.Background())
@@ -134,7 +165,15 @@ var _ = ginkgo.Describe("[Serial] [csi-fsg]"+
 
 		updateCsiDriver(client, e2eCSIDriverName, "fsPolicy=None")
 		restartDriverPods(client, driverNamespace)
-		doOneCyclePVCTest(ctx, "None")
+		doOneCyclePVCTest(ctx, "None", "")
+	})
+	ginkgo.It("[csi-fsg] Verify Pod FSGroup with fsPolicy=File WIP", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		updateCsiDriver(client, e2eCSIDriverName, "fsPolicy=File")
+		restartDriverPods(client, driverNamespace)
+		doOneCyclePVCTest(ctx, "File", "")
 	})
 
 	// Test for Pod creation works when SecurityContext has  CSIDriver without Fs Group Policy:
@@ -144,13 +183,13 @@ var _ = ginkgo.Describe("[Serial] [csi-fsg]"+
 
 		updateCsiDriver(client, e2eCSIDriverName, "fsPolicy=")
 		restartDriverPods(client, driverNamespace)
-		doOneCyclePVCTest(ctx, "")
+		doOneCyclePVCTest(ctx, "", "")
 
 	})
 
 })
 
-func doOneCyclePVCTest(ctx context.Context, policy string) {
+func doOneCyclePVCTest(ctx context.Context, policy string, accessMode v1.PersistentVolumeAccessMode) {
 	ginkgo.By("Creating a PVC")
 
 	// Create a StorageClass
@@ -186,7 +225,6 @@ func doOneCyclePVCTest(ctx context.Context, policy string) {
 
 	fsGroup = 54321
 	runAsUser = 54321
-
 	fsGroupInt64 := &fsGroup
 	runAsUserInt64 := &runAsUser
 
@@ -247,6 +285,9 @@ func doOneCyclePVCTest(ctx context.Context, policy string) {
 	case "":
 		gomega.Expect(strings.Contains(output, strconv.Itoa(int(fsGroup)))).NotTo(gomega.BeFalse())
 		gomega.Expect(strings.Contains(output, strconv.Itoa(int(runAsUser)))).NotTo(gomega.BeFalse())
+	case "File":
+		gomega.Expect(strings.Contains(output, strconv.Itoa(int(fsGroup)))).NotTo(gomega.BeFalse())
+		gomega.Expect(strings.Contains(output, strconv.Itoa(int(runAsUser)))).NotTo(gomega.BeFalse())
 	default:
 		exists = false
 		gomega.Expect(exists).NotTo(gomega.BeTrue(), "Failed to test policy")
@@ -256,5 +297,65 @@ func doOneCyclePVCTest(ctx context.Context, policy string) {
 	ginkgo.By(fmt.Sprintf("Deleting the pod %s in namespace %s", pod.Name, namespace))
 	err = fpod.DeletePodWithWait(client, pod)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+	//if we need a ROX volume to mount, we need to take the RWO one, alter it, then publish it to another pod
+	if accessMode == v1.ReadOnlyMany {
+
+		ginkgo.By("Changing PV to be ROX")
+		pv.Spec.AccessModes = []v1.PersistentVolumeAccessMode{v1.ReadOnlyMany}
+
+		accessChange := "{\"spec\": {\"accessModes\":[\"ReadOnlyMany\"]}}"
+
+		cmd := []string{"patch", "pv", pv.Name, "-p", accessChange}
+
+		output := framework.RunKubectlOrDie(namespace, cmd...)
+
+		fmt.Printf("output: %s\n", output)
+
+		ginkgo.By("Creating Pod to use ROX volume")
+
+		fsGroup = 12345
+		runAsUser = 12345
+		newFsGroupInt64 := &fsGroup
+		newRunAsUserInt64 := &runAsUser
+
+		pod, err = createPodForFSGroup(client, namespace, nil, []*v1.PersistentVolumeClaim{pvclaim},
+			true, execCommand, newFsGroupInt64, newRunAsUserInt64)
+
+		// in case of error help debug by showing events
+		if err != nil {
+			getEvents(client, pvclaim.Namespace, pvclaim.Name, "PersistentVolumeClaim")
+			framework.Failf("stop tests pod failed to start policy %s", policy)
+
+		}
+
+		cmd = []string{"exec", pod.Name, "--namespace=" + namespace, "--", "/bin/sh", "-c",
+			"ls -l /mnt/volume1"}
+
+		output = framework.RunKubectlOrDie(namespace, cmd...)
+
+		fmt.Printf("output: %s\n", output)
+
+		//check output again, ROX means everything but file should not include the fsGroup change
+		switch policy {
+		case "ReadWriteOnceWithFSType":
+			gomega.Expect(strings.Contains(output, strconv.Itoa(int(fsGroup)))).To(gomega.BeFalse())
+		case "None":
+			gomega.Expect(strings.Contains(output, strconv.Itoa(int(fsGroup)))).To(gomega.BeFalse())
+		case "":
+			gomega.Expect(strings.Contains(output, strconv.Itoa(int(fsGroup)))).To(gomega.BeFalse())
+		case "File":
+			gomega.Expect(strings.Contains(output, strconv.Itoa(int(fsGroup)))).NotTo(gomega.BeFalse())
+		default:
+			exists = false
+			gomega.Expect(exists).NotTo(gomega.BeTrue(), "Failed to test policy")
+		}
+
+		// Delete POD
+		ginkgo.By(fmt.Sprintf("Deleting the pod %s in namespace %s", pod.Name, namespace))
+		err = fpod.DeletePodWithWait(client, pod)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+	}
 
 }
