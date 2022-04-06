@@ -174,6 +174,58 @@ func CreateStatefulSet(ns string, ss *apps.StatefulSet, c clientset.Interface) {
 	fss.WaitForRunningAndReady(c, *ss.Spec.Replicas, ss)
 }
 
+// create pod from yaml manifest
+func createPod(namespace string, pod *v1.Pod, client clientset.Interface) (*v1.Pod, error) {
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	_, err := client.CoreV1().Pods(namespace).Create(ctx, pod, metav1.CreateOptions{})
+	framework.ExpectNoError(err)
+
+	// Waiting for pod to be running.
+
+	err = fpod.WaitForPodNameRunningInNamespace(client, pod.Name, namespace)
+	if err != nil {
+		return pod, fmt.Errorf("pod %q is not Running: %s", pod.Name, err.Error())
+	}
+
+	err = fpod.WaitTimeoutForPodReadyInNamespace(client, pod.Name, namespace, framework.PodStartTimeout)
+	if err != nil {
+		return pod, fmt.Errorf("pod is not Running: %s %s", pod.Name, err.Error())
+	}
+
+	// Get fresh pod info.
+	p, err := client.CoreV1().Pods(namespace).Get(context.TODO(), pod.Name, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("pod Get API error: %v", err)
+	}
+	return p, nil
+}
+
+// GetPodFromManifest creates a Pod from the yaml
+// file present in the manifest path. eg. ephemeral.yaml
+func getPodFromManifest(filename string) *v1.Pod {
+	pwd, _ := os.Getwd()
+	manifestPath := pwd + "/testing-manifests/pod/"
+
+	podManifestFilePath := filepath.Join(manifestPath, filename)
+	framework.Logf("Parsing pod from %v", podManifestFilePath)
+
+	pod, err := manifest.PodFromManifest(podManifestFilePath)
+
+	framework.ExpectNoError(err)
+
+	for _, v := range pod.Spec.Volumes {
+		framework.Logf("setting volume array info %s", v.Name)
+		v.CSI.VolumeAttributes["storagepool"] = scParamStoragePoolValue
+		v.CSI.VolumeAttributes["systemID"] = scParamStorageSystemValue
+	}
+	framework.Logf("debug pod details %+v", pod.Spec.Volumes[0].CSI.VolumeAttributes)
+
+	return pod
+}
+
 // GetStatefulSetFromManifest creates a StatefulSet from the statefulset.yaml
 // file present in the manifest path.
 func GetStatefulSetFromManifest(ns string) *apps.StatefulSet {

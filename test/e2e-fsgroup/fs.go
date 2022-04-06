@@ -37,7 +37,7 @@ var busyBoxImageOnGcr = "gcr.io/google_containers/busybox:1.27"
 var driverNamespace = "vxflexos"
 var e2eCSIDriverName = "csi-vxflexos.dellemc.com"
 
-//  storagepool=pool2,systemID=4d4a2e5a36080e0f
+//storagepool=pool2,systemID=4d4a2e5a36080e0f
 var scParamStoragePoolKey = "storagepool"
 var scParamStoragePoolValue = "pool1"
 
@@ -45,7 +45,9 @@ var scParamFsTypeKey = "FsType"
 var scParamFsTypeValue = "ext4"
 
 var scParamStorageSystemKey = "systemID"
-var scParamStorageSystemValue = "60462e7c4ecaa90f"
+
+//var scParamStorageSystemValue = "60462e7c4ecaa90f"
+var scParamStorageSystemValue = "4d4a2e5a36080e0f"
 
 var diskSize = "8Gi"
 
@@ -62,13 +64,13 @@ var (
 
 // ginkgo.Describe is a ginkgo spec , runs a set of scenarios , like one happy path and several error tests
 
-// ginkgo.BeforeEach defines a method that will run once 
+// ginkgo.BeforeEach defines a method that will run once
 
 // followed bg ginkgo.It() that defines one scenario
 
-// below we run 3 scenarios , 
-//	each one changes the fsGroupPolicy in csiDriver , 
-//		restarts all driver pods , 
+// below we run 3 scenarios ,
+//	each one changes the fsGroupPolicy in csiDriver ,
+//		restarts all driver pods ,
 //			creates a new pod similar to helm test , with pvc/pv which used the fsGroup value (non root )
 
 // 	each It method verifies expected results using gomega Matcher library
@@ -77,13 +79,13 @@ var (
 
 // 	framework.Logf --will stop and not cleaup if we want to exit due to unexpected match , manual cleanup is expected
 
-// notice the imports from framework, e2e test framework from kubernetes that provided methods to create/delete/list pv/pvc/pod 
+// notice the imports from framework, e2e test framework from kubernetes that provided methods to create/delete/list pv/pvc/pod
 
 // utils.go calls these framework methods
 
 // we can also create a pod or statefulset from a yaml file in
 
-// testing-manifests folder. see GetStatefulSetFromManifest() in utils 
+// testing-manifests folder. see GetStatefulSetFromManifest() in utils
 
 var _ = ginkgo.Describe("[Serial] [csi-fsg]"+
 	"[csi-fsg] Volume Filesystem Group Test", func() {
@@ -314,8 +316,8 @@ func doOneCyclePVCTest(ctx context.Context, policy string, accessMode v1.Persist
 
 		ginkgo.By("Creating Pod to use ROX volume")
 
-		fsGroup = 12345
-		runAsUser = 12345
+		fsGroup = 54321
+		runAsUser = 54321
 		newFsGroupInt64 := &fsGroup
 		newRunAsUserInt64 := &runAsUser
 
