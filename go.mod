@@ -7,7 +7,7 @@ module github.com/dell/csi-vxflexos/v2
 
 //replace github.com/dell/goscaleio => ./goscaleio
 
-//replace github.com/dell/gocsi => ./gocsi
+replace github.com/dell/gocsi => ./gocsi
 
 //replace github.com/dell/dell-csi-extensions/podmon => ./dell-csi-extensions/podmon
 
