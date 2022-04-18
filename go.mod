@@ -7,11 +7,11 @@ module github.com/dell/csi-vxflexos/v2
 
 //replace github.com/dell/goscaleio => ./goscaleio
 
-replace github.com/dell/gocsi => ./gocsi
+// replace github.com/dell/gocsi => ./gocsi
 
 //replace github.com/dell/dell-csi-extensions/podmon => ./dell-csi-extensions/podmon
 
-//replace github.com/dell/dell-csi-extensions/volumeGroupSnapshot => ./dell-csi-extensions/volumeGroupSnapshot
+// replace github.com/dell/dell-csi-extensions/volumeGroupSnapshot => ./dell-csi-extensions/volumeGroupSnapshot
 
 go 1.17
 
@@ -19,8 +19,9 @@ require (
 	github.com/akutz/memconn v0.1.0
 	github.com/container-storage-interface/spec v1.5.0
 	github.com/cucumber/godog v0.12.1
-	github.com/dell/dell-csi-extensions/podmon v1.0.0
-	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.0.0
+	github.com/dell/dell-csi-extensions/common v1.0.1-0.20220418113927-d5623b98b6d5
+	github.com/dell/dell-csi-extensions/podmon v1.0.1-0.20220418113927-d5623b98b6d5
+	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.1.1-0.20220418113927-d5623b98b6d5
 	github.com/dell/gocsi v1.5.1
 	github.com/dell/gofsutil v1.8.0
 	github.com/dell/goscaleio v1.6.0

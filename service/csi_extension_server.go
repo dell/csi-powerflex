@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -433,4 +434,15 @@ func (s *service) buildCreateVGSResponse(ctx context.Context, snapResponse *siot
 
 	return groupSnapshots, nil
 
+}
+
+func (s *service) ParseVolumeHandle(ctx context.Context, request *volumeGroupSnapshot.VolumeHandleRequest) (*volumeGroupSnapshot.VolumeHandleResponse, error) {
+	if request.VolumeHandle == "" {
+		return nil, errors.New("volume handle should not be empty")
+	}
+	volHandle := strings.Split(request.VolumeHandle, "-")
+	return &volumeGroupSnapshot.VolumeHandleResponse{
+		VolumeID: volHandle[1],
+		ArrayID:  volHandle[0],
+	}, nil
 }

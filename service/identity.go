@@ -2,11 +2,12 @@ package service
 
 import (
 	"fmt"
-	"golang.org/x/net/context"
 	"strings"
 
+	"golang.org/x/net/context"
+
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
-	csiext "github.com/dell/dell-csi-extensions/volumeGroupSnapshot"
+	commonext "github.com/dell/dell-csi-extensions/common"
 	wrappers "github.com/golang/protobuf/ptypes/wrappers"
 
 	"github.com/dell/csi-vxflexos/v2/core"
@@ -88,8 +89,8 @@ func (s *service) Probe(
 }
 
 func (s *service) ProbeController(ctx context.Context,
-	req *csiext.ProbeControllerRequest) (
-	*csiext.ProbeControllerResponse, error) {
+	req *commonext.ProbeControllerRequest) (
+	*commonext.ProbeControllerResponse, error) {
 
 	if !strings.EqualFold(s.mode, "node") {
 		Log.Debug("systemProbe")
@@ -99,7 +100,7 @@ func (s *service) ProbeController(ctx context.Context,
 		}
 	}
 
-	rep := new(csiext.ProbeControllerResponse)
+	rep := new(commonext.ProbeControllerResponse)
 	rep.Name = Name
 	rep.VendorVersion = core.SemVer
 	rep.Manifest = Manifest
