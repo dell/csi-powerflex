@@ -440,9 +440,8 @@ func (s *service) ParseVolumeHandle(ctx context.Context, request *volumeGroupSna
 	if request.VolumeHandle == "" {
 		return nil, errors.New("volume handle should not be empty")
 	}
-	volHandle := strings.Split(request.VolumeHandle, "-")
 	return &volumeGroupSnapshot.VolumeHandleResponse{
-		VolumeID: volHandle[1],
-		ArrayID:  volHandle[0],
+		VolumeID: getVolumeIDFromCsiVolumeID(request.GetVolumeHandle()),
+		ArrayID:  s.getSystemIDFromCsiVolumeID(request.GetVolumeHandle()),
 	}, nil
 }
