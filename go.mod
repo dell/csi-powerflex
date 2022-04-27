@@ -5,7 +5,7 @@ module github.com/dell/csi-vxflexos/v2
 
 //replace github.com/dell/gofsutil => ./gofsutil
 
-//replace github.com/dell/goscaleio => ./goscaleio
+replace github.com/dell/goscaleio => ./goscaleio
 
 replace github.com/dell/gocsi => ./gocsi
 
@@ -13,7 +13,7 @@ replace github.com/dell/gocsi => ./gocsi
 
 //replace github.com/dell/dell-csi-extensions/volumeGroupSnapshot => ./dell-csi-extensions/volumeGroupSnapshot
 
-go 1.17
+go 1.18
 
 require (
 	github.com/akutz/memconn v0.1.0
@@ -53,7 +53,7 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/google/go-cmp v0.5.6 // indirect
 	github.com/google/gofuzz v1.1.0 // indirect
-	github.com/google/uuid v1.1.2 // indirect
+	github.com/google/uuid v1.3.0 // indirect
 	github.com/googleapis/gnostic v0.5.5 // indirect
 	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
 	github.com/hashicorp/go-memdb v1.3.0 // indirect
