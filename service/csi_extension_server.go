@@ -32,7 +32,7 @@ func (s *service) ValidateVolumeHostConnectivity(ctx context.Context, req *podmo
 		return rep, nil
 	}
 
-	// The NodeID for the VxFlex OS is the SdcGuid field.
+	// The NodeID for the VxFlex OS is the SdcGUID field.
 	if req.GetNodeId() == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "The NodeID is a required field")
 	}
@@ -54,7 +54,7 @@ func (s *service) ValidateVolumeHostConnectivity(ctx context.Context, req *podmo
 
 	// First- check to see if the SDC is Connected or Disconnected.
 	// Then retrieve the SDC and seet the connection state
-	sdc, err := s.systems[systemID].FindSdc("SdcGuid", req.GetNodeId())
+	sdc, err := s.systems[systemID].FindSdc("SdcGUID", req.GetNodeId())
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "NodeID is invalid: %s - there is no corresponding SDC", req.GetNodeId())
 	}

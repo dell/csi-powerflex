@@ -169,7 +169,7 @@ func getRouter() http.Handler {
 	scaleioRouter.HandleFunc("/api/types/StoragePool/instances", handleStoragePoolInstances)
 	scaleioRouter.HandleFunc("{Volume}/relationship/Statistics", handleVolumeStatistics)
 	scaleioRouter.HandleFunc("/api/Volume/relationship/Statistics", handleVolumeStatistics)
-	scaleioRouter.HandleFunc("{SdcGuid}/relationships/Sdc", handleSystemSdc)
+	scaleioRouter.HandleFunc("{SdcGUID}/relationships/Sdc", handleSystemSdc)
 	return scaleioRouter
 }
 
@@ -618,7 +618,7 @@ func handleQueryVolumeIDByKey(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "induced error", http.StatusRequestTimeout, codes.Internal)
 		return
 	}
-	req := new(types.VolumeQeryIdByKeyParam)
+	req := new(types.VolumeQeryIDByKeyParam)
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(&req)
 	if err != nil {

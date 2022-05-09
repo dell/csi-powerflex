@@ -480,7 +480,7 @@ func (s *service) getSDCID(sdcGUID string, systemID string) (string, error) {
 	if s.systems[systemID] == nil {
 		return "", fmt.Errorf("getSDCID error systemID not found: %s", systemID)
 	}
-	id, err := s.systems[systemID].FindSdc("SdcGuid", sdcGUID)
+	id, err := s.systems[systemID].FindSdc("SdcGUID", sdcGUID)
 	if err != nil {
 		return "", fmt.Errorf("error finding SDC from GUID: %s, err: %s",
 			sdcGUID, err.Error())
