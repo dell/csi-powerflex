@@ -21,6 +21,11 @@ jobs:
         with:
           repository: 'dell/gocsi'
           path: 'gocsi'
+      - name: Checkout goscaleio
+        uses: actions/checkout@v2
+        with:
+          repository: 'dell/goscaleio'
+          path: 'goscaleio'
       - name: Run the formatter, linter, and vetter
         uses: dell/common-github-actions/go-code-formatter-linter-vetter@main
         with:
