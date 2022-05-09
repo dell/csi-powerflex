@@ -46,6 +46,11 @@ jobs:
         with:
           repository: 'dell/gocsi'
           path: 'gocsi'
+      - name: Checkout goscaleio
+        uses: actions/checkout@v2
+        with:
+          repository: 'dell/goscaleio'
+          path: 'goscaleio'
       - name: Run unit tests and check package coverage
         uses: dell/common-github-actions/go-code-tester@main
         with:
@@ -67,6 +72,11 @@ jobs:
         with:
           repository: 'dell/gocsi'
           path: 'gocsi'
+      - name: Checkout goscaleio
+        uses: actions/checkout@v2
+        with:
+          repository: 'dell/goscaleio'
+          path: 'goscaleio'
       - name: Run Go Security
         uses: securego/gosec@master
         with:
