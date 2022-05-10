@@ -1728,13 +1728,8 @@ func (s *service) CreateSnapshot(
 			vol.Name, req.Name, ancestor, volID, vol.VTreeID, vol.StoragePoolID)
 		if vol.Name == req.Name && vol.AncestorVolumeID == volID {
 			// populate response structure
-			creationTimeUnix := time.Unix(int64(vol.CreationTime), 0)
-			creationTimeStamp, _ := ptypes.TimestampProto(creationTimeUnix)
-			Log.Printf("Idempotent request, snapshot %s ancestor %s already exists\n", req.Name, volID)
-			snapshot := &csi.Snapshot{SizeBytes: int64(vol.SizeInKb) * bytesInKiB,
-				SnapshotId:     vol.ID,
-				SourceVolumeId: csiVolID, ReadyToUse: true,
-				CreationTime: creationTimeStamp}
+			Log.Printf("Idempotent request, snapshot id %s for source vol %s in system %s already exists\n", vol.ID, vol.AncestorVolumeID, systemID)
+			snapshot := s.getCSISnapshot(vol, systemID)
 			resp := &csi.CreateSnapshotResponse{Snapshot: snapshot}
 			return resp, nil
 		}
