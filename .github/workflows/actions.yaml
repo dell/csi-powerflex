@@ -80,7 +80,7 @@ jobs:
       - name: Run Go Security
         uses: securego/gosec@master
         with:
-          args: -exclude-dir gocsi -exclude=G304 ./...
+          args: -exclude-dir gocsi -exclude-dir goscaleio -exclude=G304 ./...
   malware_security_scan:
     name: Malware Scanner
     runs-on: ubuntu-latest
