@@ -4,8 +4,6 @@
 # on this system. This will make real calls to the SIO.
 # NOTE: you must run this as root, as the plugin cannot retrieve the SdcGUID without being root!
 
-set -x
-
 sh validate_http_unauthorized.sh
 rc=$?
 if [ $rc -ne 0 ]; then echo "failed http unauthorized test"; exit $rc; fi
@@ -13,8 +11,7 @@ if [ $rc -ne 0 ]; then echo "failed http unauthorized test"; exit $rc; fi
 rm -f unix.sock
 source ../../env.sh
 echo $SDC_GUID
-# go get github.com/tebeka/go2xunit
-# go install github.com/jstemmer/go-junit-report@latest
+
 GOOS=linux CGO_ENABLED=0 GO111MODULE=on go test -v -coverprofile=c.linux.out -timeout 60m -coverpkg=github.com/dell/csi-vxflexos/service *test.go &
 if [ -f ./csi-sanity ] ; then
     sleep 5
@@ -23,5 +20,4 @@ fi
 wait
 
 echo "copying integration.xml from " `pwd`
-#| /root/go/bin/go-junit-report > integration.xml&
 mv integration*.xml /root/vxflexos/logs/
