@@ -46,8 +46,8 @@ var scParamFsTypeValue = "ext4"
 
 var scParamStorageSystemKey = "systemID"
 
-//var scParamStorageSystemValue = "60462e7c4ecaa90f"
-var scParamStorageSystemValue = "4d4a2e5a36080e0f"
+var scParamStorageSystemValue = "60462e7c4ecaa90f"
+//var scParamStorageSystemValue = "1a99af710210af0f"
 
 var diskSize = "8Gi"
 
@@ -122,69 +122,39 @@ var _ = ginkgo.Describe("[Serial] [csi-fsg]"+
 
 	// in case you want to log and exit	framework.Fail("stop test")
 
-	// Test for Pod creation works when SecurityContext has CSIDriver Fs Group Policy:     ReadWriteOnceWithFSType
-	ginkgo.It("[csi-fsg] Verify Pod FSGroup", func() {
+	// Test for Pod creation works when SecurityContext has CSIDriver Fs Group Policy: ReadWriteOnceWithFSType
+	ginkgo.It("[csi-fsg] Verify Pod FSGroup with fsPolicy=ReadWriteOnceWithFSType", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		updateCsiDriver(client, e2eCSIDriverName, "fsPolicy=ReadWriteOnceWithFSType")
-		restartDriverPods(client, driverNamespace)
 		doOneCyclePVCTest(ctx, "ReadWriteOnceWithFSType", "")
-
-	})
-
-	//Test for pod creation with security context with access mode ROX and CSIDriver has Fs Group Policy: ReadWriteOnceWithFSType
-	ginkgo.It("[csi-fsg] Verify Pod FSGroup ROX ReadWriteOnceWithFSType", func() {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		updateCsiDriver(client, e2eCSIDriverName, "fsPolicy=ReadWriteOnceWithFSType")
-		restartDriverPods(client, driverNamespace)
 		doOneCyclePVCTest(ctx, "ReadWriteOnceWithFSType", v1.ReadOnlyMany)
 
 	})
 
-	ginkgo.It("[csi-fsg] Verify Pod FSGroup ROX fsPolicy=None", func() {
+	ginkgo.It("[csi-fsg] Verify Pod FSGroup with  fsPolicy=None", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		updateCsiDriver(client, e2eCSIDriverName, "fsPolicy=None")
-		restartDriverPods(client, driverNamespace)
 		doOneCyclePVCTest(ctx, "None", v1.ReadOnlyMany)
-
-	})
-	// Test for ROX volume and  CSIDriver Fs Group Policy: File THIS WILL FAIL FOR NOW
-	//Ask Jacob for more details if needed
-	ginkgo.It("[csi-fsg] Verify Pod FSGroup ROX fsPolicy=File", func() {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		updateCsiDriver(client, e2eCSIDriverName, "fsPolicy=File")
-		restartDriverPods(client, driverNamespace)
-		doOneCyclePVCTest(ctx, "File", v1.ReadOnlyMany)
-
-	})
-	// Test for Pod creation works when SecurityContext has  CSIDriver Fs Group Policy:  None
-	ginkgo.It("[csi-fsg] Verify Pod FSGroup", func() {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-
-		updateCsiDriver(client, e2eCSIDriverName, "fsPolicy=None")
-		restartDriverPods(client, driverNamespace)
 		doOneCyclePVCTest(ctx, "None", "")
+
 	})
-	ginkgo.It("[csi-fsg] Verify Pod FSGroup with fsPolicy=File WIP", func() {
+	// Test for ROX volume and  CSIDriver Fs Group Policy: File 
+	ginkgo.It("[csi-fsg] Verify Pod FSGroup with fsPolicy=File", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-
 		updateCsiDriver(client, e2eCSIDriverName, "fsPolicy=File")
-		restartDriverPods(client, driverNamespace)
+		doOneCyclePVCTest(ctx, "File", v1.ReadOnlyMany)
 		doOneCyclePVCTest(ctx, "File", "")
+
 	})
 
 	// Test for Pod creation works when SecurityContext has  CSIDriver without Fs Group Policy:
-	ginkgo.It("[csi-fsg] Verify Pod FSGroup", func() {
+	ginkgo.It("[csi-fsg] Verify Pod FSGroup with fsPolicy not set (should default)", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-
 		updateCsiDriver(client, e2eCSIDriverName, "fsPolicy=")
-		restartDriverPods(client, driverNamespace)
 		doOneCyclePVCTest(ctx, "", "")
 
 	})
@@ -338,10 +308,10 @@ func doOneCyclePVCTest(ctx context.Context, policy string, accessMode v1.Persist
 
 		fmt.Printf("output: %s\n", output)
 
-		//check output again, ROX means everything but file should not include the fsGroup change
+		//check output again, ROX means means file should not be modified 
 		switch policy {
 		case "ReadWriteOnceWithFSType":
-			gomega.Expect(strings.Contains(output, strconv.Itoa(int(fsGroup)))).To(gomega.BeFalse())
+			gomega.Expect(strings.Contains(output, strconv.Itoa(int(fsGroup)))).NotTo(gomega.BeFalse())
 		case "None":
 			gomega.Expect(strings.Contains(output, strconv.Itoa(int(fsGroup)))).To(gomega.BeFalse())
 		case "":

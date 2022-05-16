@@ -66,6 +66,7 @@ var _ = ginkgo.Describe("[Serial] [csi-fsg]"+
 	ginkgo.It("[csi-fsg] Verify Pod Ephemeral FSGroup", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
+		updateCsiDriver(client, e2eCSIDriverName, "fsPolicy=File")
 		doOneCycleEphemeralTest(ctx, "ReadWriteOnceWithFSType", "")
 
 	})
