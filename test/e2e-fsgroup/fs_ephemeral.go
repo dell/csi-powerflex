@@ -43,7 +43,7 @@ var _ = ginkgo.Describe("[Serial] [csi-fsg]"+
 
 		namespace = getNamespaceToRunTests(f)
 
-		scParameters = make(map[string]string)
+		//scParameters = make(map[string]string)
 
 		// setup other exteral environment for example array server
 		bootstrap()
@@ -66,7 +66,7 @@ var _ = ginkgo.Describe("[Serial] [csi-fsg]"+
 	ginkgo.It("[csi-fsg] Verify Pod Ephemeral FSGroup", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		updateCsiDriver(client, e2eCSIDriverName, "fsPolicy=File")
+		updateCsiDriver(client, testParameters["e2eCSIDriverName"], "fsPolicy=File")
 		doOneCycleEphemeralTest(ctx, "ReadWriteOnceWithFSType", "")
 
 	})

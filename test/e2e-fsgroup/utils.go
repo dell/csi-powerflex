@@ -218,8 +218,8 @@ func getPodFromManifest(filename string) *v1.Pod {
 
 	for _, v := range pod.Spec.Volumes {
 		framework.Logf("setting volume array info %s", v.Name)
-		v.CSI.VolumeAttributes["storagepool"] = scParamStoragePoolValue
-		v.CSI.VolumeAttributes["systemID"] = scParamStorageSystemValue
+		v.CSI.VolumeAttributes["storagepool"] = testParameters["scParamStoragePoolValue"]
+		v.CSI.VolumeAttributes["systemID"] = testParameters["scParamStorageSystemValue"]
 	}
 	framework.Logf("debug pod details %+v", pod.Spec.Volumes[0].CSI.VolumeAttributes)
 
@@ -264,7 +264,7 @@ func getNamespaceToRunTests(f *framework.Framework) string {
 // spec with specified storage class.
 func getPersistentVolumeClaimSpecWithStorageClass(namespace string, ds string, storageclass *storagev1.StorageClass,
 	pvclaimlabels map[string]string, accessMode v1.PersistentVolumeAccessMode) *v1.PersistentVolumeClaim {
-	disksize := diskSize
+	disksize := testParameters["diskSize"]
 	if ds != "" {
 		disksize = ds
 	}
@@ -299,16 +299,16 @@ func getPersistentVolumeClaimSpecWithStorageClass(namespace string, ds string, s
 
 // getStorageClassSpec returns Storage Class Spec with supplied storage
 // class parameters.
-func getStorageClassSpec(scName string, scParameters map[string]string,
+func getStorageClassSpec(scName string, testParameters map[string]string,
 	allowedTopologies []v1.TopologySelectorLabelRequirement, scReclaimPolicy v1.PersistentVolumeReclaimPolicy,
 	bindingMode storagev1.VolumeBindingMode, allowVolumeExpansion bool) *storagev1.StorageClass {
 
 	vals := make([]string, 0)
-	vals = append(vals, e2eCSIDriverName)
+	vals = append(vals, testParameters["e2eCSIDriverName"])
 
 	topo := v1.TopologySelectorLabelRequirement{
 		// 4d4a2e5a36080e0f"
-		Key:    e2eCSIDriverName + "/" + scParamStorageSystemValue,
+		Key:    testParameters["e2eCSIDriverName"] + "/" + testParameters["scParamStorageSystemValue"],
 		Values: vals,
 	}
 
@@ -325,7 +325,7 @@ func getStorageClassSpec(scName string, scParameters map[string]string,
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "sc-",
 		},
-		Provisioner:          e2eCSIDriverName,
+		Provisioner:          testParameters["e2eCSIDriverName"],
 		VolumeBindingMode:    &bindingMode,
 		AllowVolumeExpansion: &allowVolumeExpansion,
 	}
@@ -338,8 +338,8 @@ func getStorageClassSpec(scName string, scParameters map[string]string,
 		}
 	}
 
-	if scParameters != nil {
-		sc.Parameters = scParameters
+	if testParameters != nil {
+		sc.Parameters = testParameters
 	}
 	if allowedTopologies != nil {
 		sc.AllowedTopologies = []v1.TopologySelectorTerm{
@@ -358,7 +358,7 @@ func getStorageClassSpec(scName string, scParameters map[string]string,
 // createPVCAndStorageClass helps creates a storage class with specified name,
 // storageclass parameters and PVC using storage class.
 func createPVCAndStorageClass(client clientset.Interface, pvcnamespace string,
-	pvclaimlabels map[string]string, scParameters map[string]string, ds string,
+	pvclaimlabels map[string]string, testParameters map[string]string, ds string,
 	allowedTopologies []v1.TopologySelectorLabelRequirement, bindingMode storagev1.VolumeBindingMode,
 	allowVolumeExpansion bool, accessMode v1.PersistentVolumeAccessMode,
 	names ...string) (*storagev1.StorageClass, *v1.PersistentVolumeClaim, error) {
@@ -366,7 +366,7 @@ func createPVCAndStorageClass(client clientset.Interface, pvcnamespace string,
 	if len(names) > 0 {
 		scName = names[0]
 	}
-	storageclass, err := createStorageClass(client, scParameters,
+	storageclass, err := createStorageClass(client, testParameters,
 		allowedTopologies, "", bindingMode, allowVolumeExpansion, scName)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
@@ -378,7 +378,7 @@ func createPVCAndStorageClass(client clientset.Interface, pvcnamespace string,
 
 // createStorageClass helps creates a storage class with specified name,
 // storageclass parameters.
-func createStorageClass(client clientset.Interface, scParameters map[string]string,
+func createStorageClass(client clientset.Interface, testParameters map[string]string,
 	allowedTopologies []v1.TopologySelectorLabelRequirement,
 	scReclaimPolicy v1.PersistentVolumeReclaimPolicy, bindingMode storagev1.VolumeBindingMode,
 	allowVolumeExpansion bool, scName string) (*storagev1.StorageClass, error) {
@@ -389,7 +389,7 @@ func createStorageClass(client clientset.Interface, scParameters map[string]stri
 	isStorageClassPresent := false
 	ginkgo.By(fmt.Sprintf("Creating StorageClass %s with scParameters: %+v and allowedTopologies: %+v "+
 		"and ReclaimPolicy: %+v and allowVolumeExpansion: %t",
-		scName, scParameters, allowedTopologies, scReclaimPolicy, allowVolumeExpansion))
+		scName, testParameters, allowedTopologies, scReclaimPolicy, allowVolumeExpansion))
 
 	storageclass, err = client.StorageV1().StorageClasses().Get(ctx, scName, metav1.GetOptions{})
 	if !apierrors.IsNotFound(err) {
@@ -402,7 +402,7 @@ func createStorageClass(client clientset.Interface, scParameters map[string]stri
 
 	if !isStorageClassPresent {
 		storageclass, err = client.StorageV1().StorageClasses().Create(ctx, getStorageClassSpec(scName,
-			scParameters, allowedTopologies, scReclaimPolicy, bindingMode, allowVolumeExpansion), metav1.CreateOptions{})
+			testParameters, allowedTopologies, scReclaimPolicy, bindingMode, allowVolumeExpansion), metav1.CreateOptions{})
 		gomega.Expect(err).NotTo(gomega.HaveOccurred(), fmt.Sprintf("Failed to create storage class with err: %v", err))
 	}
 
@@ -445,7 +445,7 @@ func createPodForFSGroup(client clientset.Interface, namespace string,
 	}(3000)
 
 	pod := fpod.MakePod(namespace, nodeSelector, pvclaims, isPrivileged, command)
-	pod.Spec.Containers[0].Image = busyBoxImageOnGcr
+	pod.Spec.Containers[0].Image = testParameters["busyBoxImageOnGcr"]
 	nonRoot := true
 	pod.Spec.SecurityContext = &v1.PodSecurityContext{
 		RunAsNonRoot: &nonRoot,

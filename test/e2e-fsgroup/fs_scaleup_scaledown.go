@@ -91,9 +91,9 @@ var _ = ginkgo.Describe("[csi-adv-fsg] Nodes Scale-up and Scale-down", func() {
 		nodes, err := client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
-		scParameters[scParamStoragePoolKey] = scParamStoragePoolValue
-		scParameters[scParamStorageSystemKey] = scParamStorageSystemValue
-		scParameters["FsType"] = "ext4"
+		//scParameters[scParamStoragePoolKey] = scParamStoragePoolValue
+		//scParameters[scParamStorageSystemKey] = scParamStorageSystemValue
+		//testParameters["FsType"] = "ext4"
 
 		//  allowedTopologies []v1.TopologySelectorLabelRequirement,
 		// scReclaimPolicy v1.PersistentVolumeReclaimPolicy,

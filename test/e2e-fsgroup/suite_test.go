@@ -14,11 +14,14 @@ import (
 )
 
 func init() {
+
+	testParameters,_ = readYaml("e2e-values.yaml")
+	
 	// k8s.io/kubernetes/tests/e2e/framework requires env KUBECONFIG to be set
 	// it does not fall back to defaults
-	if os.Getenv(kubeconfigEnvVar) == "" {
+	if os.Getenv(testParameters["kubeconfigEnvVar"]) == "" {
 		kubeconfig := filepath.Join(os.Getenv("HOME"), ".kube", "config")
-		os.Setenv(kubeconfigEnvVar, kubeconfig)
+		os.Setenv(testParameters["kubeconfigEnvVar"], kubeconfig)
 	}
 
 	framework.TestContext.Provider = "local"

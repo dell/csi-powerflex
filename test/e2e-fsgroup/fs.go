@@ -6,6 +6,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"io/ioutil"
+	yaml "gopkg.in/yaml.v3"
+
+
 
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
@@ -31,34 +35,13 @@ Steps
 8. Delete PVC, PV and Storage Class.
 */
 
-var kubeconfigEnvVar = "KUBECONFIG"
-var busyBoxImageOnGcr = "gcr.io/google_containers/busybox:1.27"
-
-var driverNamespace = "vxflexos"
-var e2eCSIDriverName = "csi-vxflexos.dellemc.com"
-
-//storagepool=pool2,systemID=4d4a2e5a36080e0f
-var scParamStoragePoolKey = "storagepool"
-var scParamStoragePoolValue = "pool1"
-
-var scParamFsTypeKey = "FsType"
-var scParamFsTypeValue = "ext4"
-
-var scParamStorageSystemKey = "systemID"
-
-var scParamStorageSystemValue = "60462e7c4ecaa90f"
-//var scParamStorageSystemValue = "1a99af710210af0f"
-
-var diskSize = "8Gi"
-
-// this is used in test container start up
-var execCommand = "while true ; do sleep 2 ; done"
-
 var (
 	client       clientset.Interface
 	namespace    string
-	scParameters map[string]string
+	testParameters map[string]string
 )
+
+
 
 // ginkgo suite is kicked off in suite_test.go  RunSpecsWithDefaultAndCustomReporters
 
@@ -103,7 +86,11 @@ var _ = ginkgo.Describe("[Serial] [csi-fsg]"+
 
 		namespace = getNamespaceToRunTests(f)
 
-		scParameters = make(map[string]string)
+		testParameters,_ = readYaml("e2e-values.yaml")
+
+
+		//var e2eCSIDriverName = testParameters["e2eCSIDriverName"]
+
 
 		// setup other exteral environment for example array server
 		bootstrap()
@@ -126,7 +113,7 @@ var _ = ginkgo.Describe("[Serial] [csi-fsg]"+
 	ginkgo.It("[csi-fsg] Verify Pod FSGroup with fsPolicy=ReadWriteOnceWithFSType", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		updateCsiDriver(client, e2eCSIDriverName, "fsPolicy=ReadWriteOnceWithFSType")
+		updateCsiDriver(client, testParameters["e2eCSIDriverName"], "fsPolicy=ReadWriteOnceWithFSType")
 		doOneCyclePVCTest(ctx, "ReadWriteOnceWithFSType", "")
 		doOneCyclePVCTest(ctx, "ReadWriteOnceWithFSType", v1.ReadOnlyMany)
 
@@ -135,7 +122,7 @@ var _ = ginkgo.Describe("[Serial] [csi-fsg]"+
 	ginkgo.It("[csi-fsg] Verify Pod FSGroup with  fsPolicy=None", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		updateCsiDriver(client, e2eCSIDriverName, "fsPolicy=None")
+		updateCsiDriver(client, testParameters["e2eCSIDriverName"], "fsPolicy=None")
 		doOneCyclePVCTest(ctx, "None", v1.ReadOnlyMany)
 		doOneCyclePVCTest(ctx, "None", "")
 
@@ -144,7 +131,7 @@ var _ = ginkgo.Describe("[Serial] [csi-fsg]"+
 	ginkgo.It("[csi-fsg] Verify Pod FSGroup with fsPolicy=File", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		updateCsiDriver(client, e2eCSIDriverName, "fsPolicy=File")
+		updateCsiDriver(client, testParameters["e2eCSIDriverName"], "fsPolicy=File")
 		doOneCyclePVCTest(ctx, "File", v1.ReadOnlyMany)
 		doOneCyclePVCTest(ctx, "File", "")
 
@@ -154,7 +141,7 @@ var _ = ginkgo.Describe("[Serial] [csi-fsg]"+
 	ginkgo.It("[csi-fsg] Verify Pod FSGroup with fsPolicy not set (should default)", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		updateCsiDriver(client, e2eCSIDriverName, "fsPolicy=")
+		updateCsiDriver(client, testParameters["e2eCSIDriverName"], "fsPolicy=")
 		doOneCyclePVCTest(ctx, "", "")
 
 	})
@@ -167,13 +154,11 @@ func doOneCyclePVCTest(ctx context.Context, policy string, accessMode v1.Persist
 	// Create a StorageClass
 	ginkgo.By("CSI_TEST: Running for k8s setup")
 
-	// storagepool=pool2,systemID=4d4a2e5a36080e0f
-
-	scParameters[scParamStoragePoolKey] = scParamStoragePoolValue
-	scParameters[scParamStorageSystemKey] = scParamStorageSystemValue
+	testParameters[testParameters["scParamStoragePoolKey"]] = testParameters["scParamStoragePoolValue"]
+	testParameters[testParameters["scParamStorageSystemKey"]] = testParameters["scParamStorageSystemValue"]
 
 	storageclasspvc, pvclaim, err := createPVCAndStorageClass(client,
-		namespace, nil, scParameters, diskSize, nil, "", false, "")
+		namespace, nil, testParameters, testParameters["diskSize"], nil, "", false, "")
 
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
@@ -201,7 +186,7 @@ func doOneCyclePVCTest(ctx context.Context, policy string, accessMode v1.Persist
 	runAsUserInt64 := &runAsUser
 
 	pod, err := createPodForFSGroup(client, namespace, nil, []*v1.PersistentVolumeClaim{pvclaim},
-		true, execCommand, fsGroupInt64, runAsUserInt64)
+		true, testParameters["execCommand"], fsGroupInt64, runAsUserInt64)
 
 	// in case of error help debug by showing events
 	if err != nil {
@@ -292,7 +277,7 @@ func doOneCyclePVCTest(ctx context.Context, policy string, accessMode v1.Persist
 		newRunAsUserInt64 := &runAsUser
 
 		pod, err = createPodForFSGroup(client, namespace, nil, []*v1.PersistentVolumeClaim{pvclaim},
-			true, execCommand, newFsGroupInt64, newRunAsUserInt64)
+			true, testParameters["execCommand"], newFsGroupInt64, newRunAsUserInt64)
 
 		// in case of error help debug by showing events
 		if err != nil {
@@ -329,5 +314,25 @@ func doOneCyclePVCTest(ctx context.Context, policy string, accessMode v1.Persist
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 	}
+
+}
+
+func readYaml(values string) (map[string]string, error) {
+
+	yfile, err := ioutil.ReadFile(values)
+	
+	if err != nil {
+          return nil, err
+     	}
+
+	data := make(map[string]string)
+
+	err = yaml.Unmarshal(yfile, &data)
+
+	 if err != nil {
+         	return nil, err
+	 }
+
+	return data, nil
 
 }
