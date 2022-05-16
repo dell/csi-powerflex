@@ -11,16 +11,6 @@ jobs:
     steps:
       - name: Checkout the code
         uses: actions/checkout@v2
-      - name: Checkout gofsutil
-        uses: actions/checkout@v2
-        with:
-          repository: 'dell/gofsutil'
-          path: 'gofsutil'
-      - name: Checkout gocsi
-        uses: actions/checkout@v2
-        with:
-          repository: 'dell/gocsi'
-          path: 'gocsi'
       - name: Run the formatter, linter, and vetter
         uses: dell/common-github-actions/go-code-formatter-linter-vetter@main
         with:
@@ -31,16 +21,6 @@ jobs:
     steps:
       - name: Checkout csi-powerflex
         uses: actions/checkout@v2
-      - name: Checkout gofsutil
-        uses: actions/checkout@v2
-        with:
-          repository: 'dell/gofsutil'
-          path: 'gofsutil'
-      - name: Checkout gocsi
-        uses: actions/checkout@v2
-        with:
-          repository: 'dell/gocsi'
-          path: 'gocsi'
       - name: Run unit tests and check package coverage
         uses: dell/common-github-actions/go-code-tester@main
         with:
@@ -52,20 +32,10 @@ jobs:
     steps:
       - name: Checkout the code
         uses: actions/checkout@v2
-      - name: Checkout gofsutil
-        uses: actions/checkout@v2
-        with:
-          repository: 'dell/gofsutil'
-          path: 'gofsutil'
-      - name: Checkout gocsi
-        uses: actions/checkout@v2
-        with:
-          repository: 'dell/gocsi'
-          path: 'gocsi'
       - name: Run Go Security
         uses: securego/gosec@master
         with:
-          args: -exclude-dir gocsi -exclude=G304 ./...
+          args: -exclude=G304 ./...
   malware_security_scan:
     name: Malware Scanner
     runs-on: ubuntu-latest

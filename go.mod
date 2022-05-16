@@ -5,15 +5,11 @@ module github.com/dell/csi-vxflexos/v2
 
 //replace github.com/dell/gofsutil => ./gofsutil
 
-//replace github.com/dell/goscaleio => ./goscaleio
-
-replace github.com/dell/gocsi => ./gocsi
-
 //replace github.com/dell/dell-csi-extensions/podmon => ./dell-csi-extensions/podmon
 
 //replace github.com/dell/dell-csi-extensions/volumeGroupSnapshot => ./dell-csi-extensions/volumeGroupSnapshot
 
-go 1.17
+go 1.18
 
 require (
 	github.com/akutz/memconn v0.1.0
@@ -21,9 +17,9 @@ require (
 	github.com/cucumber/godog v0.12.1
 	github.com/dell/dell-csi-extensions/podmon v1.0.0
 	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.0.0
-	github.com/dell/gocsi v1.5.1
+	github.com/dell/gocsi v1.5.2-0.20220411181555-d22551293a5b
 	github.com/dell/gofsutil v1.8.0
-	github.com/dell/goscaleio v1.6.0
+	github.com/dell/goscaleio v1.6.1-0.20220511153147-778f32bf28a3
 	github.com/fsnotify/fsnotify v1.5.1
 	github.com/golang/protobuf v1.5.2
 	github.com/gorilla/mux v1.8.0
@@ -53,7 +49,7 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/google/go-cmp v0.5.6 // indirect
 	github.com/google/gofuzz v1.1.0 // indirect
-	github.com/google/uuid v1.1.2 // indirect
+	github.com/google/uuid v1.3.0 // indirect
 	github.com/googleapis/gnostic v0.5.5 // indirect
 	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
 	github.com/hashicorp/go-memdb v1.3.0 // indirect
