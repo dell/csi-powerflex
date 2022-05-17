@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	datafile   = "/tmp/datafilexml.xml"
+	datafile   = "/tmp/datafile"
 	datadir    = "/tmp/datadir"
 	configFile = "../../config.json"
 )
