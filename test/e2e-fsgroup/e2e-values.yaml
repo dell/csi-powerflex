@@ -18,6 +18,5 @@ scParamStorageSystemValue: "60462e7c4ecaa90f"
 
 diskSize : "8Gi"
 
-// this is used in test container start up
 execCommand : "while true ; do sleep 2 ; done"
 
