@@ -90,7 +90,7 @@ func TestMain(m *testing.M) {
 	outputfile, err := os.Create("integration.xml")
 
 	opts := godog.Options{		
-		Format: "progress, junit",
+		Format: "junit",
 		Output: outputfile,
 		Paths:  []string{"features"},
 		// Tags:   "wip",
