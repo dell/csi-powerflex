@@ -1,6 +1,6 @@
-module github.com/dell/csm-operator/tests/e2e
+module github.com/dell/csi-powerflex/tests/e2e-fsgroup
 
-go 1.17
+go 1.18
 
 require (
 	github.com/onsi/ginkgo v1.16.5
