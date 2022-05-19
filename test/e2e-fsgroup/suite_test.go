@@ -15,8 +15,14 @@ import (
 
 func init() {
 
-	testParameters,_ = readYaml("e2e-values.yaml")
-	
+	var yamlError error
+
+	testParameters, yamlError = readYaml("e2e-values.yaml")
+	if yamlError != nil {
+
+		framework.Failf("Unable to read yaml e2e-values.yaml: %s", yamlError.Error())
+	}
+
 	// k8s.io/kubernetes/tests/e2e/framework requires env KUBECONFIG to be set
 	// it does not fall back to defaults
 	if os.Getenv(testParameters["kubeconfigEnvVar"]) == "" {

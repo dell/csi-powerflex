@@ -3,13 +3,11 @@ package e2e
 import (
 	"context"
 	"fmt"
+	yaml "gopkg.in/yaml.v3"
+	"io/ioutil"
 	"strconv"
 	"strings"
 	"time"
-	"io/ioutil"
-	yaml "gopkg.in/yaml.v3"
-
-
 
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
@@ -36,12 +34,10 @@ Steps
 */
 
 var (
-	client       clientset.Interface
-	namespace    string
+	client         clientset.Interface
+	namespace      string
 	testParameters map[string]string
 )
-
-
 
 // ginkgo suite is kicked off in suite_test.go  RunSpecsWithDefaultAndCustomReporters
 
@@ -86,12 +82,6 @@ var _ = ginkgo.Describe("[Serial] [csi-fsg]"+
 
 		namespace = getNamespaceToRunTests(f)
 
-		testParameters,_ = readYaml("e2e-values.yaml")
-
-
-		//var e2eCSIDriverName = testParameters["e2eCSIDriverName"]
-
-
 		// setup other exteral environment for example array server
 		bootstrap()
 
@@ -127,7 +117,7 @@ var _ = ginkgo.Describe("[Serial] [csi-fsg]"+
 		doOneCyclePVCTest(ctx, "None", "")
 
 	})
-	// Test for ROX volume and  CSIDriver Fs Group Policy: File 
+	// Test for ROX volume and  CSIDriver Fs Group Policy: File
 	ginkgo.It("[csi-fsg] Verify Pod FSGroup with fsPolicy=File", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -293,7 +283,7 @@ func doOneCyclePVCTest(ctx context.Context, policy string, accessMode v1.Persist
 
 		fmt.Printf("output: %s\n", output)
 
-		//check output again, ROX means means file should not be modified 
+		//check output again, ROX means means file should not be modified
 		switch policy {
 		case "ReadWriteOnceWithFSType":
 			gomega.Expect(strings.Contains(output, strconv.Itoa(int(fsGroup)))).NotTo(gomega.BeFalse())
@@ -320,18 +310,18 @@ func doOneCyclePVCTest(ctx context.Context, policy string, accessMode v1.Persist
 func readYaml(values string) (map[string]string, error) {
 
 	yfile, err := ioutil.ReadFile(values)
-	
+
 	if err != nil {
-          return nil, err
-     	}
+		return nil, err
+	}
 
 	data := make(map[string]string)
 
 	err = yaml.Unmarshal(yfile, &data)
 
-	 if err != nil {
-         	return nil, err
-	 }
+	if err != nil {
+		return nil, err
+	}
 
 	return data, nil
 

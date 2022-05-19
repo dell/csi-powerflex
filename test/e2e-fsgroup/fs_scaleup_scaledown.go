@@ -31,15 +31,13 @@ var _ = ginkgo.Describe("[csi-adv-fsg] Nodes Scale-up and Scale-down", func() {
 	f.SkipPrivilegedPSPBinding = true
 
 	var (
-		namespace    string
-		client       clientset.Interface
-		scParameters map[string]string
+		namespace string
+		client    clientset.Interface
 	)
 	ginkgo.BeforeEach(func() {
 		namespace = getNamespaceToRunTests(f)
 		client = f.ClientSet
 		bootstrap()
-		scParameters = make(map[string]string)
 	})
 
 	ginkgo.AfterEach(func() {
@@ -95,9 +93,7 @@ var _ = ginkgo.Describe("[csi-adv-fsg] Nodes Scale-up and Scale-down", func() {
 		testParameters[testParameters["scParamStorageSystemKey"]] = testParameters["scParamStorageSystemValue"]
 		testParameters[testParameters["scParamFsTypeKey"]] = testParameters["scParamFsTypeValue"]
 
-		//  allowedTopologies []v1.TopologySelectorLabelRequirement,
-		// scReclaimPolicy v1.PersistentVolumeReclaimPolicy,
-		sc, err := createStorageClass(client, scParameters, nil, "",
+		sc, err := createStorageClass(client, testParameters, nil, "",
 			storagev1.VolumeBindingWaitForFirstConsumer,
 			false, scName)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
