@@ -91,7 +91,7 @@ func TestMain(m *testing.M) {
 
 	opts := godog.Options{
 		//Output: outputfile,
-		Format: "progress, junit:outfile",
+		Format: "progress, junit:outputfile",
 		Paths:  []string{"features"},
 		// Tags:   "wip",
 	}
