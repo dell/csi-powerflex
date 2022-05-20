@@ -6,14 +6,14 @@ driverNamespace : "vxflexos"
 e2eCSIDriverName : "csi-vxflexos.dellemc.com"
 
 scParamStoragePoolKey : "storagepool"
-scParamStoragePoolValue : "pool1"
+scParamStoragePoolValue : "sample"
 
 scParamFsTypeKey : "FsType"
 scParamFsTypeValue : "ext4"
 
 scParamStorageSystemKey : "systemID"
 
-scParamStorageSystemValue: "60462e7c4ecaa90f"
+scParamStorageSystemValue: "sample"
 
 diskSize : "8Gi"
 
