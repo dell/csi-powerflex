@@ -20,8 +20,8 @@ spec:
       volumeAttributes:
         volumeName: "my-csi-volume"
         size: "8Gi"
-        storagepool: pool1
-        systemID: 4d4a2e5a36080e0f
+        storagepool: sample
+        systemID: sample
   - name: my-csi-volume-xfs
     csi:
       driver: csi-vxflexos.dellemc.com
@@ -29,6 +29,6 @@ spec:
       volumeAttributes:
         volumeName: "my-csi-volume-xfs"
         size: "10Gi"
-        storagepool: pool1
-        systemID: 4d4a2e5a36080e0f
+        storagepool: sample
+        systemID: sample
  
