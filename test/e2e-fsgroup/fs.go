@@ -47,9 +47,8 @@ var (
 
 // followed bg ginkgo.It() that defines one scenario
 
-// below we run 3 scenarios ,
+// below we run 4 scenarios ,
 //	each one changes the fsGroupPolicy in csiDriver ,
-//		restarts all driver pods ,
 //			creates a new pod similar to helm test , with pvc/pv which used the fsGroup value (non root )
 
 // 	each It method verifies expected results using gomega Matcher library

@@ -20,8 +20,7 @@ focus looks for string match in It() ginkgo node
 
 fs.go -- creates a StorageClass sc , PVC with this sc , Pod that mounts this PVC , and sets fsgroup as given
 
- - all variables are declared as go  var 
-	todo: put these in a yaml file , then fetch and use per ginkgo test
+ - all variables are declared in e2e-values.yaml
 
  - utils.go has helper methods to call into k8s using e2e framework
 
