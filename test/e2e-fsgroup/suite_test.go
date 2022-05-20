@@ -32,9 +32,7 @@ func init() {
 
 	framework.TestContext.Provider = "local"
 
-	t := framework.TestContextType{
-		Host: "https://10.247.98.123:6443",
-	}
+	t := framework.TestContextType{}
 
 	framework.AfterReadingAllFlags(&t)
 }
