@@ -17,7 +17,7 @@ require (
 	github.com/cucumber/godog v0.12.1
 	github.com/dell/dell-csi-extensions/podmon v1.0.0
 	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.0.0
-	github.com/dell/gocsi v1.5.2-0.20220411181555-d22551293a5b
+	github.com/dell/gocsi v1.5.2-0.20220523053849-2bf3d53bf42f
 	github.com/dell/gofsutil v1.8.0
 	github.com/dell/goscaleio v1.6.1-0.20220511153147-778f32bf28a3
 	github.com/fsnotify/fsnotify v1.5.1
