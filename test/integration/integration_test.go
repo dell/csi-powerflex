@@ -86,9 +86,12 @@ func TestMain(m *testing.M) {
 	if file != nil {
 		file.Close()
 	}
+	
+	outputfile, err := os.Create("integration.xml")
 
 	opts := godog.Options{
-		Format: "pretty",
+		Format: "junit",
+		Output: outputfile,
 		Paths:  []string{"features"},
 		// Tags:   "wip",
 	}
