@@ -1,0 +1,21 @@
+
+kubeconfigEnvVar : "KUBECONFIG"
+busyBoxImageOnGcr : "gcr.io/google_containers/busybox:1.27"
+
+driverNamespace : "vxflexos"
+e2eCSIDriverName : "csi-vxflexos.dellemc.com"
+
+scParamStoragePoolKey : "storagepool"
+scParamStoragePoolValue : "sample"
+
+scParamFsTypeKey : "FsType"
+scParamFsTypeValue : "ext4"
+
+scParamStorageSystemKey : "systemID"
+
+scParamStorageSystemValue: "sample"
+
+diskSize : "8Gi"
+
+execCommand : "while true ; do sleep 2 ; done"
+
