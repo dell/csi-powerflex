@@ -1217,7 +1217,7 @@ func (f *feature) iWriteBlockData() error {
 	}
 	fp, err := os.OpenFile("/tmp/datafile", os.O_RDWR, 0666)
 	if err != nil {
-		return nil
+		return err
 	}
 	var nrecords int
 	for err == nil {
