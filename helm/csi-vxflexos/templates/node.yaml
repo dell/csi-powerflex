@@ -73,13 +73,13 @@ spec:
   selector:
     matchLabels:
       app: {{ .Release.Name }}-node
-{{- if eq .Values.podmon.enabled true }}
-      driver.dellemc.com: dell-storage
-{{- end }}
   template:
     metadata:
       labels:
         app: {{ .Release.Name }}-node
+{{- if eq .Values.podmon.enabled true }}
+        driver.dellemc.com: dell-storage
+{{- end }}
     spec:
       {{- if .Values.node.nodeSelector }}
       nodeSelector:
