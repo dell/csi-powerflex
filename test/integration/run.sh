@@ -18,3 +18,5 @@ if [ -f ./csi-sanity ] ; then
 fi
 wait
 
+echo "copying integration.xml from " `pwd`
+mv integration*.xml /root/vxflexos/logs/
