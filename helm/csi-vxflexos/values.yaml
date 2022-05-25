@@ -127,26 +127,29 @@ controller:
   # Allowed values: map of key-value pairs
   # Default value: None
   # Examples:
-  # for k8s 1.21
+  # Uncomment if nodes you wish to use have the node-role.kubernetes.io/master taint
   #  node-role.kubernetes.io/master
-  # for K8s 1.22+
+  # Uncomment if nodes you wish to use have the node-role.kubernetes.io/control-plane taint
   #  node-role.kubernetes.io/control-plane
   nodeSelector:
-  # for k8s 1.21
+  # Uncomment if nodes you wish to use have the node-role.kubernetes.io/master taint
   #  node-role.kubernetes.io/master
-  # for K8s 1.22+
+  # Uncomment if nodes you wish to use have the node-role.kubernetes.io/control-plane taint
   #  node-role.kubernetes.io/control-plane
 
   # "controller.tolerations" defines tolerations that would be applied to controller deployment
   # Leave as blank to install controller on worker nodes
   # Default value: None
+  # Uncomment if nodes you wish to use have the node-role.kubernetes.io/master taint 
   tolerations:
+  # - key: "node-role.kubernetes.io/master"   
   #   operator: "Exists"
   #   effect: "NoSchedule"
-  # for k8s 1.21
-  # - key: "node-role.kubernetes.io/master"
-  # for k8s 1.22+
-  # - key: "node-role.kubernetes.io/control-plane"
+  # Uncomment if nodes you wish to use have the node-role.kubernetes.io/control-plane taint 
+  tolerations:
+  # - key: "node-role.kubernetes.io/control-plane"   
+  #   operator: "Exists"
+  #   effect: "NoSchedule"
 
 # "node" allows to configure node specific parameters
 node:
@@ -163,21 +166,25 @@ node:
   # Allowed values: map of key-value pairs
   # Default value: None
   nodeSelector:
-  # for k8s 1.21
+  # Uncomment if nodes you wish to use have the node-role.kubernetes.io/master taint 
   #  node-role.kubernetes.io/master
-  # for K8s 1.22+
+  # Uncomment if nodes you wish to use have the node-role.kubernetes.io/control-plane taint 
   #  node-role.kubernetes.io/control-plane
 
   # "node.tolerations" defines tolerations that would be applied to node daemonset
   # Leave as blank to install node driver only on worker nodes
   # Default value: None
   tolerations:
+  # Uncomment if nodes you wish to use have the node-role.kubernetes.io/master taint 
+  tolerations:
+  # - key: "node-role.kubernetes.io/master"   
   #   operator: "Exists"
   #   effect: "NoSchedule"
-  # for k8s 1.21
-  # - key: "node-role.kubernetes.io/master"
-  # for k8s 1.22+
-  # - key: "node-role.kubernetes.io/control-plane"
+  # Uncomment if nodes you wish to use have the node-role.kubernetes.io/control-plane taint 
+  tolerations:
+  # - key: "node-role.kubernetes.io/control-plane"   
+  #   operator: "Exists"
+  #   effect: "NoSchedule"
 
 # monitoring pod details
 # These options control the running of the monitoring container
