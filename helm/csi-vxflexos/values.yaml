@@ -127,14 +127,14 @@ controller:
   # Allowed values: map of key-value pairs
   # Default value: None
   # Examples:
-  # for k8s 1.22+
+  # for k8s 1.21
   #  node-role.kubernetes.io/master
-  # for K8s 1.21
+  # for K8s 1.22+
   #  node-role.kubernetes.io/control-plane
   nodeSelector:
-  # for k8s 1.22+
+  # for k8s 1.21
   #  node-role.kubernetes.io/master
-  # for K8s 1.21
+  # for K8s 1.22+
   #  node-role.kubernetes.io/control-plane
 
   # "controller.tolerations" defines tolerations that would be applied to controller deployment
@@ -163,9 +163,9 @@ node:
   # Allowed values: map of key-value pairs
   # Default value: None
   nodeSelector:
-  # for k8s 1.22+
+  # for k8s 1.21
   #  node-role.kubernetes.io/master
-  # for K8s 1.21
+  # for K8s 1.22+
   #  node-role.kubernetes.io/control-plane
 
   # "node.tolerations" defines tolerations that would be applied to node daemonset
