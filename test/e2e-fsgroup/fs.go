@@ -145,6 +145,7 @@ func doOneCyclePVCTest(ctx context.Context, policy string, accessMode v1.Persist
 
 	testParameters[testParameters["scParamStoragePoolKey"]] = testParameters["scParamStoragePoolValue"]
 	testParameters[testParameters["scParamStorageSystemKey"]] = testParameters["scParamStorageSystemValue"]
+	testParameters[testParameters["scParamFsTypeKey"]] = testParameters["scParamFsTypeValue"]
 
 	storageclasspvc, pvclaim, err := createPVCAndStorageClass(client,
 		namespace, nil, testParameters, testParameters["diskSize"], nil, "", false, "")
