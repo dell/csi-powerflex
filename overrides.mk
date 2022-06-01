@@ -4,7 +4,7 @@
 
 # DEFAULT values
 DEFAULT_BASEIMAGE="registry.access.redhat.com/ubi8/ubi-minimal"
-# digest for 8.5-230.1645809059
+# digest for 8.6-751
 DEFAULT_DIGEST="sha256:9a81cce19ae2a962269d4a7fecd38aec60b852118ad798a265c3f6c4be0df610"
 DEFAULT_GOVERSION="1.18.1"
 DEFAULT_REGISTRY="sample_registry"
