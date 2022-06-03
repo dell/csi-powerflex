@@ -127,26 +127,19 @@ controller:
   # Allowed values: map of key-value pairs
   # Default value: None
   # Examples:
-  # Uncomment if nodes you wish to use have the node-role.kubernetes.io/master taint
-  #  node-role.kubernetes.io/master
-  # Uncomment if nodes you wish to use have the node-role.kubernetes.io/control-plane taint
-  #  node-role.kubernetes.io/control-plane
+  #  node-role.kubernetes.io/control-plane: ""
   nodeSelector:
-  # Uncomment if nodes you wish to use have the node-role.kubernetes.io/master taint
-  #  node-role.kubernetes.io/master
-  # Uncomment if nodes you wish to use have the node-role.kubernetes.io/control-plane taint
-  #  node-role.kubernetes.io/control-plane
+  #  node-role.kubernetes.io/control-plane: ""
 
   # "controller.tolerations" defines tolerations that would be applied to controller deployment
   # Leave as blank to install controller on worker nodes
   # Default value: None
-  # Uncomment if nodes you wish to use have the node-role.kubernetes.io/master taint 
   tolerations:
+  # Uncomment if nodes you wish to use have the node-role.kubernetes.io/master taint 
   # - key: "node-role.kubernetes.io/master"   
   #   operator: "Exists"
   #   effect: "NoSchedule"
   # Uncomment if nodes you wish to use have the node-role.kubernetes.io/control-plane taint 
-  tolerations:
   # - key: "node-role.kubernetes.io/control-plane"   
   #   operator: "Exists"
   #   effect: "NoSchedule"
@@ -165,46 +158,42 @@ node:
   # Leave as blank to use all nodes
   # Allowed values: map of key-value pairs
   # Default value: None
+  # Examples:
+  #  node-role.kubernetes.io/control-plane: ""
   nodeSelector:
-  # Uncomment if nodes you wish to use have the node-role.kubernetes.io/master taint 
-  #  node-role.kubernetes.io/master
-  # Uncomment if nodes you wish to use have the node-role.kubernetes.io/control-plane taint 
-  #  node-role.kubernetes.io/control-plane
+  #  node-role.kubernetes.io/control-plane: ""
 
   # "node.tolerations" defines tolerations that would be applied to node daemonset
   # Leave as blank to install node driver only on worker nodes
   # Default value: None
   tolerations:
-  # Uncomment if nodes you wish to use have the node-role.kubernetes.io/master taint 
-  tolerations:
+  # Uncomment if nodes you wish to use have the node-role.kubernetes.io/master taint
   # - key: "node-role.kubernetes.io/master"   
   #   operator: "Exists"
   #   effect: "NoSchedule"
   # Uncomment if nodes you wish to use have the node-role.kubernetes.io/control-plane taint 
-  tolerations:
   # - key: "node-role.kubernetes.io/control-plane"   
   #   operator: "Exists"
   #   effect: "NoSchedule"
   # Uncomment if CSM for Resiliency and CSI Driver pods monitor is enabled 
-  tolerations:
-  #  - key: "offline.vxflexos.storage.dell.com"
-  #    operator: "Exists"
-  #    effect: "NoSchedule"
+  # - key: "offline.vxflexos.storage.dell.com"
+  #   operator: "Exists"
+  #   effect: "NoSchedule"
   # - key: "vxflexos.podmon.storage.dell.com"
-  #    operator: "Exists"
-  #    effect: "NoSchedule"
-  #  - key: "offline.unity.storage.dell.com"
-  #    operator: "Exists"
-  #    effect: "NoSchedule"
-  #  - key: "unity.podmon.storage.dell.com"
-  #    operator: "Exists"
-  #    effect: "NoSchedule"
-  #  - key: "offline.isilon.storage.dell.com"
-  #    operator: "Exists"
-  #    effect: "NoSchedule"
-  #  - key: "isilon.podmon.storage.dell.com"
-  #    operator: "Exists"
-  #    effect: "NoSchedule"
+  #   operator: "Exists"
+  #   effect: "NoSchedule"
+  # - key: "offline.unity.storage.dell.com"
+  #   operator: "Exists"
+  #   effect: "NoSchedule"
+  # - key: "unity.podmon.storage.dell.com"
+  #   operator: "Exists"
+  #   effect: "NoSchedule"
+  # - key: "offline.isilon.storage.dell.com"
+  #   operator: "Exists"
+  #   effect: "NoSchedule"
+  # - key: "isilon.podmon.storage.dell.com"
+  #   operator: "Exists"
+  #   effect: "NoSchedule"
 # monitoring pod details
 # These options control the running of the monitoring container
 # This container gather diagnostic information in case of failure
