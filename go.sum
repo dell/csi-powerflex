@@ -121,8 +121,8 @@ github.com/dell/dell-csi-extensions/podmon v1.0.0 h1:QoxioaFfjIP6cJ4s166A1JhgxIX
 github.com/dell/dell-csi-extensions/podmon v1.0.0/go.mod h1:Jjt+zHbLIZ3qJMug17WBYdz7wu90+hd65kgJwv8ZOec=
 github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.0.0 h1:a/feoPax/F05B991FIQXhFBWPi6YIK3U2dxKotJo3DY=
 github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.0.0/go.mod h1:5yDbA4Whm93zqgYSEdf2dgntm0JZLW60Eu7ABeZEhE4=
-github.com/dell/gocsi v1.5.2-0.20220523053849-2bf3d53bf42f h1:cPR/93yvvyyYjUbIoVoa59oGNPcKRmvQQ7jAiWztJH8=
-github.com/dell/gocsi v1.5.2-0.20220523053849-2bf3d53bf42f/go.mod h1:cGd8QtRfAWgyyZcf59VMADoXLfGNkJuhUqSdyW/XNQ0=
+github.com/dell/gocsi v1.5.2-0.20220531192019-e4c422bf5161 h1:ol0I0yJjwLwlStTAlprlYjvRTjBjfwjvWG2mHK1wQMg=
+github.com/dell/gocsi v1.5.2-0.20220531192019-e4c422bf5161/go.mod h1:+ihwgNYeFTv69Ym2X2Ij1idK72JYoNR8CeiWYJrrbho=
 github.com/dell/gofsutil v1.8.1-0.20220603165832-7fb3d7a36bc8 h1:AFAwx1ONbnr7tTtcjv8F/jo7Xxu7ahQWSjYhpJEOBaQ=
 github.com/dell/gofsutil v1.8.1-0.20220603165832-7fb3d7a36bc8/go.mod h1:oebB2eaWWF1jniBQpsMGP6qeZcOPjgeWS0WwShS2KWY=
 github.com/dell/goscaleio v1.6.1-0.20220511153147-778f32bf28a3 h1:aAnLGLh+1OpOvbf2BdtDVZ/oNrkc3tJt6TNISj1m7lE=
