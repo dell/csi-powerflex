@@ -123,8 +123,8 @@ github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.0.0 h1:a/feoPax/F05B9
 github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.0.0/go.mod h1:5yDbA4Whm93zqgYSEdf2dgntm0JZLW60Eu7ABeZEhE4=
 github.com/dell/gocsi v1.5.2-0.20220523053849-2bf3d53bf42f h1:cPR/93yvvyyYjUbIoVoa59oGNPcKRmvQQ7jAiWztJH8=
 github.com/dell/gocsi v1.5.2-0.20220523053849-2bf3d53bf42f/go.mod h1:cGd8QtRfAWgyyZcf59VMADoXLfGNkJuhUqSdyW/XNQ0=
-github.com/dell/gofsutil v1.8.0 h1:YqsTQF3n6GAlCLVjxLkD6GmHG4mKX2SLpD64mpsAdY8=
-github.com/dell/gofsutil v1.8.0/go.mod h1:oWLiV7FmBurEie3An11SNqQ1ReyOiqjSZaXDRhm7tMc=
+github.com/dell/gofsutil v1.8.1-0.20220603165832-7fb3d7a36bc8 h1:AFAwx1ONbnr7tTtcjv8F/jo7Xxu7ahQWSjYhpJEOBaQ=
+github.com/dell/gofsutil v1.8.1-0.20220603165832-7fb3d7a36bc8/go.mod h1:oebB2eaWWF1jniBQpsMGP6qeZcOPjgeWS0WwShS2KWY=
 github.com/dell/goscaleio v1.6.1-0.20220511153147-778f32bf28a3 h1:aAnLGLh+1OpOvbf2BdtDVZ/oNrkc3tJt6TNISj1m7lE=
 github.com/dell/goscaleio v1.6.1-0.20220511153147-778f32bf28a3/go.mod h1:TJbQ8N6hk48w5rEyBa+pRtrRJbPVnCTsYM3mmUyPNaY=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible/go.mod h1:E3ru+11k8xSBh+hMPgOLZmtrrCbhqsmaPHjLKYnJCaQ=
@@ -638,8 +638,8 @@ golang.org/x/sys v0.0.0-20210510120138-977fb7262007/go.mod h1:oPkhp1MJrh7nUepCBc
 golang.org/x/sys v0.0.0-20210603081109-ebe580a85c40/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.0.0-20210616094352-59db8d763f22/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
-golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e h1:fLOSk5Q00efkSvAm+4xcoXD+RRmLmmulPn5I3Y9F2EM=
-golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a h1:dGzPydgVsqGcTRVwiLJ1jVbufYwmzD3LfVPLKsKg+0k=
+golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/term v0.0.0-20201117132131-f5c789dd3221/go.mod h1:Nr5EML6q2oocZ2LXRh80K7BxOlk5/8JxuGnuhpl+muw=
 golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1/go.mod h1:bj7SfCRtBDWHUb9snDiAeCFNEtKQo2Wmx5Cou7ajbmo=
 golang.org/x/term v0.0.0-20210220032956-6a3ed077a48d h1:SZxvLBoTP5yHO3Frd4z4vrF+DBX9vMVanchswa69toE=

@@ -18,7 +18,7 @@ require (
 	github.com/dell/dell-csi-extensions/podmon v1.0.0
 	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.0.0
 	github.com/dell/gocsi v1.5.2-0.20220523053849-2bf3d53bf42f
-	github.com/dell/gofsutil v1.8.0
+	github.com/dell/gofsutil v1.8.1-0.20220603165832-7fb3d7a36bc8
 	github.com/dell/goscaleio v1.6.1-0.20220511153147-778f32bf28a3
 	github.com/fsnotify/fsnotify v1.5.1
 	github.com/golang/protobuf v1.5.2
@@ -75,7 +75,7 @@ require (
 	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.17.0 // indirect
 	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8 // indirect
-	golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e // indirect
+	golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a // indirect
 	golang.org/x/term v0.0.0-20210220032956-6a3ed077a48d // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/time v0.0.0-20210723032227-1f47c861a9ac // indirect
