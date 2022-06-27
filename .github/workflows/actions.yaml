@@ -32,6 +32,9 @@ jobs:
     steps:
       - name: Checkout the code
         uses: actions/checkout@v2
+      - name: Work around https://github.com/actions/checkout/issues/766
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Run Go Security
         uses: securego/gosec@master
         with:
