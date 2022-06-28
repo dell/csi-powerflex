@@ -1,6 +1,3 @@
-GO_FLAGS ?= -buildvcs=false
-GO_FLAGS += -buildvcs=false
-
 # default target
 all: help
 
@@ -35,7 +32,7 @@ dependencies:
 
 # Build the driver locally
 build: dependencies
-	CGO_ENABLED=0 GOOS=linux GO111MODULE=on go build $(GO_FLAGS)
+	CGO_ENABLED=0 GOOS=linux GO111MODULE=on go build
 
 # Generates the docker container (but does not push)
 docker: dependencies
