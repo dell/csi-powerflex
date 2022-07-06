@@ -255,8 +255,8 @@ authorization:
   enabled: false
 
   # sidecarProxyImage: the container image used for the csm-authorization-sidecar.
-  # Default value: dellemc/csm-authorization-sidecar:v1.2.0
-  sidecarProxyImage: dellemc/csm-authorization-sidecar:v1.2.0
+  # Default value: dellemc/csm-authorization-sidecar:v1.3.0
+  sidecarProxyImage: dellemc/csm-authorization-sidecar:v1.3.0
 
   # proxyHost: hostname of the csm-authorization server
   # Default value: None
