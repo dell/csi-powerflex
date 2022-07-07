@@ -87,8 +87,8 @@ build_image_manifest() {
 
   # Forming this only for drivers supporting standalone helm charts
   if [ ! -z ${DRIVERREPO} ]; then 
-   echo "${DRIVERREPO}/${DRIVERNAME}\:${DRIVERVERSIONVALUESYAML}"
-   echo "${DRIVERREPO}/${DRIVERNAME}:${DRIVERVERSIONVALUESYAML}" >> "${IMAGEMANIFEST}.tmp"
+   echo "${DRIVERREPO}/${DRIVERNAME}\:v${DRIVERVERSIONVALUESYAML}"
+   echo "${DRIVERREPO}/${DRIVERNAME}:v${DRIVERVERSIONVALUESYAML}" >> "${IMAGEMANIFEST}.tmp"
   fi
   # sort and uniqify the list
   cat "${IMAGEMANIFEST}.tmp" | sort | uniq > "${IMAGEMANIFEST}"
