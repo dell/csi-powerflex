@@ -1,9 +1,9 @@
 name: Workflow
 on:
   push:
-    branches: [ main ]
+    branches: [ change-go-version-gosec ]
   pull_request:
-    branches: [ main ]
+    branches: [ change-go-version-gosec ]
 jobs:
   code-check:
     name: Check Go formatting, linting, vetting
