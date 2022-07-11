@@ -32,10 +32,14 @@ jobs:
     steps:
       - name: Checkout the code
         uses: actions/checkout@v2
-      - name: Set -buildvcs to false
+      - name: Set weird git flag to false
         run: echo "{GOFLAGS}={-buildvcs=false}" >> $GITHUB_ENV
+      - name: Set -buildvcs=false to false
+        run: echo "-buildvcs=false" >> $GOFLAGS
       - name: print GITHUB_ENV
         run: echo ${{ env.GITHUB_ENV }}
+      - name: print GOFLAGS
+        run: echo ${{ env.GOFLAGS }}
       - name: Run Go Security
         uses: securego/gosec@master
         with:
