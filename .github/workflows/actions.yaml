@@ -32,12 +32,12 @@ jobs:
     steps:
       - name: Checkout csi-powerflex
         uses: actions/checkout@v2
-#      - name: Set goflags
-#        uses: dell/common-github-actions/gosec-runner@gosec-temp-fix
-      - name: Run Go Security
-        uses: jooseppi-luna/gosec@add-goflags
-        with:
-          args: -exclude=G304 ./...
+      - name: Run gosec with script
+        uses: dell/common-github-actions/gosec-runner@gosec-temp-fix
+#      - name: Run Go Security
+#        uses: jooseppi-luna/gosec@add-goflags
+#        with:
+#          args: -exclude=G304 ./...
 #  go_security_scan:
 #    name: Go security
 #    runs-on: ubuntu-latest
