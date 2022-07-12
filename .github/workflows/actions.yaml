@@ -26,24 +26,32 @@ jobs:
         with:
           threshold: 90
           test-folder: "./service"
-  go_security_scan:
-    name: Go security
+  gosec:
+    name: Run gosec
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout the code
+      - name: Checkout csi-powerflex
         uses: actions/checkout@v2
-      - name: Set weird git flag to false
-        run: echo "{GOFLAGS}={-buildvcs=false}" >> $GITHUB_ENV
-      - name: Set -buildvcs=false to false
-        run: echo "-buildvcs=false" >> $GOFLAGS
-      - name: print GITHUB_ENV
-        run: echo ${{ env.GITHUB_ENV }}
-      - name: print GOFLAGS
-        run: echo ${{ env.GOFLAGS }}
-      - name: Run Go Security
-        uses: securego/gosec@master
-        with:
-          args: -exclude=G304 ./...
+      - name: Run gosec with arguments
+        uses: dell/common-github-actions/gosec-runner@gosec-temp-fix
+#  go_security_scan:
+#    name: Go security
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Checkout the code
+#        uses: actions/checkout@v2
+#      - name: Set weird git flag to false
+#        run: echo "{GOFLAGS}={-buildvcs=false}" >> $GITHUB_ENV
+#      - name: Set -buildvcs=false to false
+#        run: echo "-buildvcs=false" >> $GOFLAGS
+#      - name: print GITHUB_ENV
+#        run: echo ${{ env.GITHUB_ENV }}
+#      - name: print GOFLAGS
+#        run: echo ${{ env.GOFLAGS }}
+#      - name: Run Go Security
+#        uses: securego/gosec@master
+#        with:
+#          args: -exclude=G304 ./...
   malware_security_scan:
     name: Malware Scanner
     runs-on: ubuntu-latest
