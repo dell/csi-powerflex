@@ -1,9 +1,9 @@
 name: Workflow
 on:
   push:
-    branches: [ change-go-version-gosec ]
+    branches: [ main ]
   pull_request:
-    branches: [ change-go-version-gosec ]
+    branches: [ main ]
 jobs:
   code-check:
     name: Check Go formatting, linting, vetting
@@ -32,8 +32,8 @@ jobs:
     steps:
       - name: Checkout csi-powerflex
         uses: actions/checkout@v2
-      - name: Run gosec with script
-        uses: dell/common-github-actions/gosec-runner@gosec-temp-fix
+      - name: Run gosec to check for security vulnerabilities
+        uses: dell/common-github-actions/gosec-runner@main
         with:
           directories: "./..."
           excludes: "G304"
