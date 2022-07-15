@@ -26,16 +26,17 @@ jobs:
         with:
           threshold: 90
           test-folder: "./service"
-  go_security_scan:
-    name: Go security
+  gosec:
+    name: Run gosec
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout the code
+      - name: Checkout csi-powerflex
         uses: actions/checkout@v2
-      - name: Run Go Security
-        uses: securego/gosec@master
+      - name: Run gosec to check for security vulnerabilities
+        uses: dell/common-github-actions/gosec-runner@main
         with:
-          args: -exclude=G304 ./...
+          directories: "./..."
+          excludes: "G304"
   malware_security_scan:
     name: Malware Scanner
     runs-on: ubuntu-latest
