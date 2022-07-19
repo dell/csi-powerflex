@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -1704,7 +1705,8 @@ func (s *service) CreateSnapshot(
 	if req.Name != "" && len(req.Name) > 31 {
 		name := req.Name
 		name = strings.Replace(name, "snapshot-", "sn-", 1)
-		name = name[0:31]
+		length := int(math.Min(float64(len(name)), 31))
+		name = name[0:length]
 		Log.Printf("Requested name %s longer than 31 character max, truncated to %s\n", req.Name, name)
 		req.Name = name
 	}
