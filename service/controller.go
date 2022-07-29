@@ -26,6 +26,10 @@ const (
 	// volume create parameters map
 	KeyStoragePool = "storagepool"
 
+	// KeyProtectionDomain is the key used to get the StoragePool's Protection Domain name from the
+	// volume create parameters map. This pramater is optional.
+	KeyProtectionDomain = "protectiondomain"
+
 	// KeySystemID is the key used to get the array ID from the volume
 	// create parameters map
 	KeySystemID = "systemID"
@@ -180,6 +184,17 @@ func (s *service) CreateVolume(
 			"%s is a required parameter", KeyStoragePool)
 	}
 
+	pdId := ""
+	pd, ok := params[KeyProtectionDomain]
+	if !ok {
+		Log.Printf("Protection Domain name not provided; there could be conflicts if two storage pools share a name")
+	} else {
+		pdId, err = s.getProtectionDomainIdFromName(systemID, pd)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	volType := s.getVolProvisionType(params) // Thick or Thin
 
 	name := req.GetName()
@@ -241,7 +256,7 @@ func (s *service) CreateVolume(
 		Log.Println("warning: goscaleio.VolumeParam: no MetaData method exists, consider updating goscaleio library.")
 	}
 
-	createResp, err := s.adminClients[systemID].CreateVolume(volumeParam, sp)
+	createResp, err := s.adminClients[systemID].CreateVolume(volumeParam, sp, pdId)
 	if err != nil {
 		// handle case where volume already exists
 		if !strings.EqualFold(err.Error(), sioGatewayVolumeNameInUse) {
@@ -272,7 +287,7 @@ func (s *service) CreateVolume(
 
 	// since the volume could have already exists, double check that the
 	// volume has the expected parameters
-	spID, err := s.getStoragePoolID(sp, systemID)
+	spID, err := s.getStoragePoolID(sp, systemID, pdId)
 	if err != nil {
 		return nil, status.Errorf(codes.Unavailable,
 			"volume exists, but could not verify parameters: %s",
@@ -1324,7 +1339,7 @@ func (s *service) listVolumes(systemID string, startToken int, maxEntries int, d
 }
 
 // Gets capacity of a given storage system. When storage pool name is provided, gets capcity of this storage pool only.
-func (s *service) getSystemCapacity(ctx context.Context, systemID string, spName ...string) (int64, error) {
+func (s *service) getSystemCapacity(ctx context.Context, systemID, protectionDomain string, spName ...string) (int64, error) {
 
 	Log.Infof("Get capacity for system: %s, pool %s", systemID, spName)
 
@@ -1342,7 +1357,11 @@ func (s *service) getSystemCapacity(ctx context.Context, systemID string, spName
 
 	if len(spName) > 0 {
 		// if storage pool is given, get capacity of storage pool
-		sp, err := adminClient.FindStoragePool("", spName[0], "")
+		pdId, err := s.getProtectionDomainIdFromName(systemID, protectionDomain)
+		if err != nil {
+			return 0, err
+		}
+		sp, err := adminClient.FindStoragePool("", spName[0], "", pdId)
 		if err != nil {
 			return 0, status.Errorf(codes.Internal,
 				"unable to look up storage pool: %s on system: %s, err: %s",
@@ -1362,7 +1381,7 @@ func (s *service) getSystemCapacity(ctx context.Context, systemID string, spName
 
 // Gets capacity for all systems known to controller.
 // When storage pool name is provided, gets capacity of this storage pool name from all systems
-func (s *service) getCapacityForAllSystems(ctx context.Context, spName ...string) (int64, error) {
+func (s *service) getCapacityForAllSystems(ctx context.Context, protectionDomain string, spName ...string) (int64, error) {
 
 	var capacity int64
 
@@ -1371,9 +1390,9 @@ func (s *service) getCapacityForAllSystems(ctx context.Context, spName ...string
 		var err error
 
 		if len(spName) > 0 {
-			systemCapacity, err = s.getSystemCapacity(ctx, array.SystemID, spName[0])
+			systemCapacity, err = s.getSystemCapacity(ctx, array.SystemID, protectionDomain, spName[0])
 		} else {
-			systemCapacity, err = s.getSystemCapacity(ctx, array.SystemID)
+			systemCapacity, err = s.getSystemCapacity(ctx, array.SystemID, "")
 		}
 
 		if err != nil {
@@ -1400,9 +1419,13 @@ func (s *service) GetCapacity(
 	params := req.GetParameters()
 	if params == nil || len(params) == 0 {
 		// Get capacity of all systems
-		capacity, err = s.getCapacityForAllSystems(ctx)
+		capacity, err = s.getCapacityForAllSystems(ctx, "")
 	} else {
 		spname := params[KeyStoragePool]
+		pd, ok := params[KeyProtectionDomain]
+		if !ok {
+			Log.Printf("Protection Domain name not provided; there could be conflicts if two storage pools share a name")
+		}
 		systemID := ""
 		for key, value := range params {
 			if strings.EqualFold(key, KeySystemID) {
@@ -1413,9 +1436,9 @@ func (s *service) GetCapacity(
 
 		if systemID == "" {
 			// Get capacity of storage pool spname in all systems, return total capacity
-			capacity, err = s.getCapacityForAllSystems(ctx, spname)
+			capacity, err = s.getCapacityForAllSystems(ctx, "", spname)
 		} else {
-			capacity, err = s.getSystemCapacity(ctx, systemID, spname)
+			capacity, err = s.getSystemCapacity(ctx, systemID, pd, spname)
 		}
 	}
 
