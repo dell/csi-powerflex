@@ -184,12 +184,12 @@ func (s *service) CreateVolume(
 			"%s is a required parameter", KeyStoragePool)
 	}
 
-	pdId := ""
+	pdID := ""
 	pd, ok := params[KeyProtectionDomain]
 	if !ok {
 		Log.Printf("Protection Domain name not provided; there could be conflicts if two storage pools share a name")
 	} else {
-		pdId, err = s.getProtectionDomainIdFromName(systemID, pd)
+		pdID, err = s.getProtectionDomainIDFromName(systemID, pd)
 		if err != nil {
 			return nil, err
 		}
@@ -256,7 +256,7 @@ func (s *service) CreateVolume(
 		Log.Println("warning: goscaleio.VolumeParam: no MetaData method exists, consider updating goscaleio library.")
 	}
 
-	createResp, err := s.adminClients[systemID].CreateVolume(volumeParam, sp, pdId)
+	createResp, err := s.adminClients[systemID].CreateVolume(volumeParam, sp, pdID)
 	if err != nil {
 		// handle case where volume already exists
 		if !strings.EqualFold(err.Error(), sioGatewayVolumeNameInUse) {
@@ -287,7 +287,7 @@ func (s *service) CreateVolume(
 
 	// since the volume could have already exists, double check that the
 	// volume has the expected parameters
-	spID, err := s.getStoragePoolID(sp, systemID, pdId)
+	spID, err := s.getStoragePoolID(sp, systemID, pdID)
 	if err != nil {
 		return nil, status.Errorf(codes.Unavailable,
 			"volume exists, but could not verify parameters: %s",
@@ -1357,11 +1357,11 @@ func (s *service) getSystemCapacity(ctx context.Context, systemID, protectionDom
 
 	if len(spName) > 0 {
 		// if storage pool is given, get capacity of storage pool
-		pdId, err := s.getProtectionDomainIdFromName(systemID, protectionDomain)
+		pdID, err := s.getProtectionDomainIDFromName(systemID, protectionDomain)
 		if err != nil {
 			return 0, err
 		}
-		sp, err := adminClient.FindStoragePool("", spName[0], "", pdId)
+		sp, err := adminClient.FindStoragePool("", spName[0], "", pdID)
 		if err != nil {
 			return 0, status.Errorf(codes.Internal,
 				"unable to look up storage pool: %s on system: %s, err: %s",

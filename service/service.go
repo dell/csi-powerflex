@@ -490,10 +490,10 @@ func (s *service) getSDCID(sdcGUID string, systemID string) (string, error) {
 }
 
 // getStoragePoolID returns pool ID from the given name, system ID, and protectionDomain name
-func (s *service) getStoragePoolID(name, systemID, pdId string) (string, error) {
+func (s *service) getStoragePoolID(name, systemID, pdID string) (string, error) {
 
 	// Need to lookup ID from the gateway, with respect to PD if provided
-	pool, err := s.adminClients[systemID].FindStoragePool("", name, "", pdId)
+	pool, err := s.adminClients[systemID].FindStoragePool("", name, "", pdID)
 	if err != nil {
 		return "", err
 	}
@@ -807,7 +807,7 @@ func (s *service) calcKeyForMap(volumeID string) string {
 
 }
 
-func (s *service) getProtectionDomainIdFromName(systemID, protectionDomainName string) (string, error) {
+func (s *service) getProtectionDomainIDFromName(systemID, protectionDomainName string) (string, error) {
 	if protectionDomainName == "" {
 		Log.Printf("Protection Domain not provided; there could be conflicts if two storage pools share a name")
 		return "", nil
