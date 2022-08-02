@@ -33,7 +33,7 @@ parameters:
   # Filesytem type for volumes created by storageclass
   # Allowed values: "ext4" or "xfs"
   # Optional: true
-  # default: "ext4"
+  # default: None
   FsType: xfs
 # volumeBindingMode determines how volume binding and dynamic provisioning should occur
 # Allowed values:
