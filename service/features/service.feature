@@ -903,14 +903,12 @@ Feature: VxFlex OS CSI interface
     When I call getProtectionDomainIDFromName "15dbbf5617523655" ""
     Then the error contains "none"
 
-#  @wip
-#  Scenario: getProtectionDomainIDFromName, bad systemID
-#    Given a VxFlexOS service
-#    And I call Probe
-#    And I induce error "WrongSysNameError"
-#    When I invalidate the Probe cache
-#    And I call getProtectionDomainIDFromName "15dbbf5617523655" "mocksystem"
-#    Then the error contains "oops"
+  Scenario: getProtectionDomainIDFromName, bad systemID
+    Given a VxFlexOS service
+    And I call Probe
+    And I induce error "WrongSysNameError"
+    And I call getProtectionDomainIDFromName "15dbbf5617523655" "mocksystem"
+    Then the error contains "systemid or systemname not found"
 
 
 

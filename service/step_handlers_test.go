@@ -228,12 +228,12 @@ func handleSystemInstances(w http.ResponseWriter, r *http.Request) {
 	if stepHandlersErrors.systemNameMatchingError {
 		count++
 	}
-	if count == 2 {
+	if count == 2 || stepHandlersErrors.WrongSysNameError {
 		fmt.Printf("DEBUG send bad system\n")
 		returnJSONFile("features", "bad_system.json", w, nil)
 		count = 0
 	} else {
-		returnJSONFile("features", "get_system_instances.json", w, nil)
+		returnJSONFile("features", "get_system_instances.json", w, nil) 
 	}
 }
 

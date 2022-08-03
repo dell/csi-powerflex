@@ -426,14 +426,8 @@ func (f *feature) iCallcheckVolumesMap(id string) error {
 
 func (f *feature) iCallgetProtectionDomainIDFromName(systemID, protectionDomainName string) error {
 	id := ""
-
-	if stepHandlersErrors.WrongSysNameError {
-		f.service.opts.arrays[arrayID].SystemID = ""
-		f.service.opts.arrays[arrayID2].SystemID = ""
-	}
-
 	id, f.err = f.service.getProtectionDomainIDFromName(systemID, protectionDomainName)
-	fmt.Printf("PD ID is: %s", id)
+	fmt.Printf("Protection Domain ID is: %s\n", id)
 	return nil
 }
 
