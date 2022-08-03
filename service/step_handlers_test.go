@@ -233,7 +233,7 @@ func handleSystemInstances(w http.ResponseWriter, r *http.Request) {
 		returnJSONFile("features", "bad_system.json", w, nil)
 		count = 0
 	} else {
-		returnJSONFile("features", "get_system_instances.json", w, nil) 
+		returnJSONFile("features", "get_system_instances.json", w, nil)
 	}
 }
 
