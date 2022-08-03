@@ -881,4 +881,36 @@ Feature: VxFlex OS CSI interface
     And I induce error "NoVolumeIDError"
     When I call ControllerGetVolume
     Then the error contains "volume ID is required"
+  
+  
+  Scenario: getProtectionDomainIDFromName, everything works
+    Given a VxFlexOS service
+    And I call Probe
+    When I call getProtectionDomainIDFromName "15dbbf5617523655" "mocksystem"
+    Then the error contains "none"
+
+   
+  Scenario: getProtectionDomainIDFromName, bad name
+    Given a VxFlexOS service
+    And I call Probe
+    When I call getProtectionDomainIDFromName "15dbbf5617523655" "DoesNotExist"
+    Then the error contains "Couldn't find protection domain"
+ 
+   
+  Scenario: getProtectionDomainIDFromName, no name provided
+    Given a VxFlexOS service
+    And I call Probe
+    When I call getProtectionDomainIDFromName "15dbbf5617523655" ""
+    Then the error contains "none"
+
+#  @wip
+#  Scenario: getProtectionDomainIDFromName, bad systemID
+#    Given a VxFlexOS service
+#    And I call Probe
+#    And I induce error "WrongSysNameError"
+#    When I invalidate the Probe cache
+#    And I call getProtectionDomainIDFromName "15dbbf5617523655" "mocksystem"
+#    Then the error contains "oops"
+
+
 

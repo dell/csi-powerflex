@@ -812,7 +812,6 @@ func (s *service) getProtectionDomainIDFromName(systemID, protectionDomainName s
 		Log.Printf("Protection Domain not provided; there could be conflicts if two storage pools share a name")
 		return "", nil
 	}
-
 	system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
 	if err != nil {
 		return "", err

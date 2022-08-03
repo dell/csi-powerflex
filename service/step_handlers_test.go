@@ -544,6 +544,10 @@ func handleRelationships(w http.ResponseWriter, r *http.Request) {
 		} else {
 			writeError(w, "Unsupported relationship from type", http.StatusRequestTimeout, codes.Internal)
 		}
+	case "ProtectionDomain":
+		if from == "System" {
+			returnJSONFile("features", "get_system_instances.json", w, nil)
+		}
 	default:
 		writeError(w, "Unsupported relationship to type", http.StatusRequestTimeout, codes.Internal)
 	}
