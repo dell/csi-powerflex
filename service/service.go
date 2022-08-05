@@ -152,6 +152,8 @@ type service struct {
 	//maps the first 24 bits of a volume ID to the volume's systemID
 	volumePrefixToSystems   map[string][]string
 	connectedSystemNameToID map[string]string
+	// temp map
+	remoteVolumeCache string
 }
 
 // Process dynamic changes to configMap or Secret.
@@ -586,6 +588,33 @@ func (s *service) getStoragePoolNameFromID(systemID, id string) string {
 		}
 	}
 	return storagePoolName
+}
+
+func (s *service) getPeerMdms(systemID string) ([]*siotypes.PeerMDM, error) {
+	adminClient := s.adminClients[systemID]
+	if adminClient == nil {
+		return nil, fmt.Errorf("can't find adminClient by id %s", systemID)
+	}
+
+	mdms, err := adminClient.GetPeerMDMs()
+	if err != nil {
+		return nil, err
+	}
+	return mdms, nil
+}
+
+func (s *service) getSystem(systemID string) ([]*siotypes.System, error) {
+	adminClient := s.adminClients[systemID]
+	if adminClient == nil {
+		return nil, fmt.Errorf("can't find adminClient by id %s", systemID)
+	}
+
+	// Gets the desired system content. Needed for remote replication.
+	system, err := adminClient.GetSystems()
+	if err != nil {
+		return nil, err
+	}
+	return system, nil
 }
 
 // Provide periodic logging of statistics like goroutines and memory
