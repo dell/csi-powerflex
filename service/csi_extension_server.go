@@ -236,7 +236,7 @@ func (s *service) buildSnapshotDefs(req *volumeGroupSnapshot.CreateVolumeGroupSn
 
 	snapshotDefs := make([]*siotypes.SnapshotDef, 0)
 
-	for _, id := range req.SourceVolumeIDs {
+	for index, id := range req.SourceVolumeIDs {
 		snapSystemID := strings.TrimSpace(s.getSystemIDFromCsiVolumeID(id))
 		if snapSystemID != "" && snapSystemID != systemID {
 			err := status.Errorf(codes.Internal, "Source volumes for volume group snapshot should be on the same system but vol %s is not on system: %s", id, systemID)
@@ -261,7 +261,9 @@ func (s *service) buildSnapshotDefs(req *volumeGroupSnapshot.CreateVolumeGroupSn
 			return nil, err
 		}
 
-		snapDef := siotypes.SnapshotDef{VolumeID: volID, SnapshotName: ""}
+		snapName := req.Name + "-" + strconv.Itoa(index)
+
+		snapDef := siotypes.SnapshotDef{VolumeID: volID, SnapshotName: snapName}
 		snapshotDefs = append(snapshotDefs, &snapDef)
 	}
 
@@ -294,19 +296,20 @@ func (s *service) checkIdempotency(ctx context.Context, snapshotsToMake *siotype
 	//go through the existing vols, and update maps as needed
 	//check that all idempotent snapshots belong to the same consistency group.
 	//this check verifies criteria #2
-	consitencyGroupValue := snapGrpID
+	consitencyGroupValue := ""
 	var idempotencyValue bool
 	for _, snap := range snapshotsToMake.SnapshotDefs {
 		//snapshots will always have a  consistency group ID, so setting it to "", means no snapshot was found
-		existingSnaps, _ := s.adminClients[systemID].GetVolume("", "", snap.VolumeID, "", true)
-		idempotencyMap[snap.VolumeID] = false
+		existingSnaps, _ := s.adminClients[systemID].GetVolume("", "", snap.VolumeID, snap.SnapshotName, true)
+		idempotencyMap[snap.SnapshotName] = false
 		for _, existingSnap := range existingSnaps {
 			consistencyGroupMap[existingSnap.Name] = ""
 			//a snapshot in snapshotsToMake already exists in array, update maps
 			foundGrpID := systemID + "-" + existingSnap.ConsistencyGroupID
-			if snap.VolumeID == existingSnap.AncestorVolumeID && systemID+"-"+snapGrpID == foundGrpID {
-				Log.Infof("Snapshot for %s exists on array for group id %s", snap.VolumeID, foundGrpID)
-				idempotencyMap[snap.VolumeID] = true
+			consitencyGroupValue = existingSnap.ConsistencyGroupID
+			if snap.VolumeID == existingSnap.AncestorVolumeID && snap.SnapshotName == existingSnap.Name {
+				Log.Infof("Snapshot for %s exists on array for group id %s", snap.VolumeID, existingSnap.ConsistencyGroupID)
+				idempotencyMap[snap.SnapshotName] = true
 				idempotencyValue = true
 				consistencyGroupMap[existingSnap.Name] = foundGrpID
 				IDsForResponse[existingSnap.Name] = existingSnap.ID
