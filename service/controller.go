@@ -489,6 +489,36 @@ func (s *service) createVolumeFromSnapshot(req *csi.CreateVolumeRequest,
 	return &csi.CreateVolumeResponse{Volume: csiVolume}, nil
 }
 
+func (s *service) CreateReplicationConsistencyGroup(systemID string, name string,
+	rpo string, locatProtectionDomain string, remoteProtectionDomain string,
+	peerMdmId string, remoteSystemId string) (*siotypes.ReplicationConsistencyGroupResp, error) {
+	adminClient := s.adminClients[systemID]
+	if adminClient == nil {
+		return nil, fmt.Errorf("can't find adminClient by id %s", systemID)
+	}
+
+	// One or the other, not both
+	if peerMdmId != "" && remoteSystemId != "" {
+		return nil, fmt.Errorf("PeerMdmID and RemoteSystemID cannot be present. One or the other.")
+	}
+
+	rcgPayload := &siotypes.ReplicationConsistencyGroupCreatePayload{
+		Name:                     name,
+		RpoInSeconds:             rpo,
+		ProtectionDomainId:       locatProtectionDomain,
+		RemoteProtectionDomainId: remoteProtectionDomain,
+		PeerMdmId:                peerMdmId,
+		DestinationSystemId:      remoteSystemId,
+	}
+
+	rcgResp, err := adminClient.CreateReplicationConsistencyGroup(rcgPayload)
+	if err != nil {
+		return nil, err
+	}
+
+	return rcgResp, nil
+}
+
 func (s *service) clearCache() {
 	s.volCacheRWL.Lock()
 	defer s.volCacheRWL.Unlock()

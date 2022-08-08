@@ -97,8 +97,94 @@ func (s *service) GetReplicationCapabilities(ctx context.Context, req *replicati
 }
 
 func (s *service) CreateStorageProtectionGroup(ctx context.Context, req *replication.CreateStorageProtectionGroupRequest) (*replication.CreateStorageProtectionGroupResponse, error) {
-	Log.Printf("rep CreateStorageProtectionGroup %+v", req)
-	return nil, nil
+	Log.Printf("[CreateStorageProtectionGroup] - req %+v", req)
+	Log.Printf("[CreateStorageProtectionGroup] - ctx %+v", ctx)
+
+	volHandleCtx := req.GetVolumeHandle()
+	if volHandleCtx == "" {
+		return nil, status.Error(codes.InvalidArgument, "volume ID is required")
+	}
+
+	parameters := req.GetParameters()
+	if len(parameters) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "empty parameters list")
+	}
+
+	volumeID := getVolumeIDFromCsiVolumeID(volHandleCtx)
+	systemID := s.getSystemIDFromCsiVolumeID(volHandleCtx)
+
+	Log.Printf("[CreateStorageProtectionGroup] - Volume ID: %s System ID: %s", volumeID, systemID)
+
+	if volumeID == "" || systemID == "" {
+		return nil, status.Error(codes.InvalidArgument, "failed to provide system ID or volume ID")
+	}
+
+	if err := s.requireProbe(ctx, systemID); err != nil {
+		return nil, err
+	}
+
+	localSystem, err := s.getSystem(systemID)
+	if err != nil {
+		return nil, err
+	}
+	Log.Printf("[CreateStorageProtectionGroup] - Local System Content: %+v", localSystem[0])
+
+	localProtectionDomain, err := s.getProtectionDomain(systemID, localSystem[0])
+	if err != nil {
+		return nil, err
+	}
+	Log.Printf("[CreateStorageProtectionGroup] - Local Protection Domain: %+v", localProtectionDomain[0])
+
+	remoteSystem, err := s.getSystem(parameters["replication.storage.dell.com/remoteSystem"])
+	rs := remoteSystem[0]
+	if err != nil {
+		return nil, err
+	}
+	Log.Printf("[CreateStorageProtectionGroup] - Remote System Content: %+v", rs)
+
+	remoteProtectionDomain, err := s.getProtectionDomain(parameters["replication.storage.dell.com/remoteSystem"], rs)
+	if err != nil {
+		return nil, err
+	}
+	Log.Printf("[CreateStorageProtectionGroup] - Remote Protection Domain: %+v", remoteProtectionDomain[0])
+
+	mdms, err := s.getPeerMdms(systemID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "can't query volume: %s", err.Error())
+	}
+
+	Log.Printf("MDMs: %+v", mdms[0])
+
+	rcg, err := s.CreateReplicationConsistencyGroup(systemID, "replica-rcg",
+		parameters["replication.storage.dell.com/rpo"], localProtectionDomain[0].ID,
+		remoteProtectionDomain[0].ID, "", rs.ID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "invalid rcg response: %s", err.Error())
+	}
+
+	Log.Printf("RemoteConsistencyGroup: %+v", rcg)
+
+	// localParams := map[string]string{
+	// 	s.replicationContextPrefix + "systemName":              localSystem.Name,
+	// 	s.replicationContextPrefix + "managementAddress":       localSystem.ManagementAddress,
+	// 	s.replicationContextPrefix + "remoteSystemName":        remoteSystem.Name,
+	// 	s.replicationContextPrefix + "remoteManagementAddress": remoteSystem.ManagementAddress,
+	// 	s.replicationContextPrefix + "globalID":                arrayID,
+	// 	s.replicationContextPrefix + "remoteGlobalID":          remoteSystem.SerialNumber,
+	// 	s.replicationContextPrefix + "VolumeGroupName":         vg.Name,
+	// }
+
+	// What is needed for the parameters?
+	remoteParams := map[string]string{
+		"systemName": rs.ID,
+	}
+
+	return &replication.CreateStorageProtectionGroupResponse{
+		// LocalProtectionGroupId:          rs.LocalResourceId,
+		RemoteProtectionGroupId: rcg.ID,
+		// LocalProtectionGroupAttributes:  localParams,
+		RemoteProtectionGroupAttributes: remoteParams,
+	}, nil
 }
 
 // CreateRemoteVolume creates replica of volume in remote cluster
@@ -155,11 +241,9 @@ func (s *service) CreateRemoteVolume(ctx context.Context, req *replication.Creat
 		return nil, status.Errorf(codes.Internal, "can't query volume: %s", err.Error())
 	}
 
-	Log.Printf("MDMs: %+v", mdms)
+	Log.Printf("MDMs: %+v", mdms[0])
 
 	// Create a volume on the remote system?
-	// Generate a UUID for the name?
-	// id := uuid.New()
 	name := "replica-" + volHandleCtx
 	Log.Printf("[CreateRemoteVolume] - Name: %s", name)
 
@@ -168,18 +252,6 @@ func (s *service) CreateRemoteVolume(ctx context.Context, req *replication.Creat
 
 	Log.Printf("[CreateRemoteVolume] - Remote volReq:%+v", volReq)
 
-	// crvolresp, err := s.CreateVolume(ctx, &csi.CreateVolumeRequest{
-	// 	Name: name,
-	// 	CapacityRange: &csi.CapacityRange{
-	// 		RequiredBytes: int64(vol.SizeInKb),
-	// 		LimitBytes:    0,
-	// 	},
-	// 	VolumeCapabilities: []*csi.VolumeCapability{req.VolumeCapability},
-	// 	Parameters:         req.VolumeContext,
-	// 	Secrets:            req.Secrets,
-	// })
-
-	// Try to create?
 	createVolumeResponse, err := s.CreateVolume(ctx, volReq)
 	if err != nil {
 		log.Printf("CreateVolume called failed: %s", err.Error())
@@ -188,8 +260,9 @@ func (s *service) CreateRemoteVolume(ctx context.Context, req *replication.Creat
 	}
 
 	remoteParams := map[string]string{
-		"storagePool":  parameters["replication.storage.dell.com/remoteStoragePool"],
-		"remoteSystem": remoteSystem[0].ID,
+		"storagePool":    parameters["replication.storage.dell.com/remoteStoragePool"],
+		"remoteSystem":   remoteSystem[0].ID,
+		"remoteVolumeID": createVolumeResponse.Volume.VolumeId,
 	}
 	remoteVolume := getRemoteCSIVolume(createVolumeResponse.GetVolume().VolumeId, vol.SizeInKb)
 	remoteVolume.VolumeContext = remoteParams
@@ -209,7 +282,7 @@ func (s *service) ExecuteAction(ctx context.Context, req *replication.ExecuteAct
 }
 
 func (s *service) GetStorageProtectionGroupStatus(ctx context.Context, req *replication.GetStorageProtectionGroupStatusRequest) (*replication.GetStorageProtectionGroupStatusResponse, error) {
-	Log.Printf("rep GetStorageProtectionGroupStatus %+v", req)
+	Log.Printf("[GetStorageProtectionGroupStatus] - %+v", req)
 	return nil, nil
 }
 

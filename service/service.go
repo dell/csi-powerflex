@@ -31,6 +31,7 @@ import (
 	"github.com/dell/csi-vxflexos/v2/core"
 	"github.com/dell/csi-vxflexos/v2/k8sutils"
 	"github.com/dell/dell-csi-extensions/podmon"
+	"github.com/dell/dell-csi-extensions/replication"
 	volumeGroupSnapshot "github.com/dell/dell-csi-extensions/volumeGroupSnapshot"
 	"github.com/dell/gocsi"
 	csictx "github.com/dell/gocsi/context"
@@ -152,8 +153,6 @@ type service struct {
 	//maps the first 24 bits of a volume ID to the volume's systemID
 	volumePrefixToSystems   map[string][]string
 	connectedSystemNameToID map[string]string
-	// temp map
-	remoteVolumeCache string
 }
 
 // Process dynamic changes to configMap or Secret.
@@ -444,6 +443,7 @@ func (s *service) doProbe(ctx context.Context) error {
 func (s *service) RegisterAdditionalServers(server *grpc.Server) {
 	Log.Info("Registering additional GRPC servers")
 	podmon.RegisterPodmonServer(server, s)
+	replication.RegisterReplicationServer(server, s)
 	volumeGroupSnapshot.RegisterVolumeGroupSnapshotServer(server, s)
 }
 
@@ -615,6 +615,26 @@ func (s *service) getSystem(systemID string) ([]*siotypes.System, error) {
 		return nil, err
 	}
 	return system, nil
+}
+
+func (s *service) getProtectionDomain(systemID string, system *siotypes.System) ([]*siotypes.ProtectionDomain, error) {
+	adminClient := s.adminClients[systemID]
+	if adminClient == nil {
+		return nil, fmt.Errorf("can't find adminClient by id %s", systemID)
+	}
+
+	// Gets the desired system content. Needed for remote replication.
+	theSystem, err := adminClient.FindSystem(system.ID, "", "")
+	if err != nil {
+		return nil, err
+	}
+
+	pd, err := theSystem.GetProtectionDomain("")
+	if err != nil {
+		return nil, err
+	}
+
+	return pd, nil
 }
 
 // Provide periodic logging of statistics like goroutines and memory
