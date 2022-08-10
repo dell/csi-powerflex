@@ -273,7 +273,7 @@ func (s *service) buildSnapshotDefs(req *volumeGroupSnapshot.CreateVolumeGroupSn
 
 //A VolumeGroupSnapshot request is idempotent if the following criteria is met:
 //1. For each snapshot we intend to make, there is a snapshot with the same name and ancestor ID on array
-//2. Each snapshot that we find to satisfy criteria 1 all belong to the same consitency group
+//2. Each snapshot that we find to satisfy criteria 1 all belong to the same consistency group
 //3. The consistency group that satisfies criteria 2 contain no other snapshots
 func (s *service) checkIdempotency(ctx context.Context, snapshotsToMake *siotypes.SnapshotVolumesParam, systemID string, snapGrpID string) (*volumeGroupSnapshot.CreateVolumeGroupSnapshotResponse, error) {
 	Log.Infof("CheckIdempotency called")
@@ -296,7 +296,7 @@ func (s *service) checkIdempotency(ctx context.Context, snapshotsToMake *siotype
 	//go through the existing vols, and update maps as needed
 	//check that all idempotent snapshots belong to the same consistency group.
 	//this check verifies criteria #2
-	consitencyGroupValue := ""
+	consistencyGroupValue := ""
 	var idempotencyValue bool
 	for _, snap := range snapshotsToMake.SnapshotDefs {
 		//snapshots will always have a  consistency group ID, so setting it to "", means no snapshot was found
@@ -306,7 +306,7 @@ func (s *service) checkIdempotency(ctx context.Context, snapshotsToMake *siotype
 			consistencyGroupMap[existingSnap.Name] = ""
 			//a snapshot in snapshotsToMake already exists in array, update maps
 			foundGrpID := systemID + "-" + existingSnap.ConsistencyGroupID
-			consitencyGroupValue = existingSnap.ConsistencyGroupID
+			consistencyGroupValue = existingSnap.ConsistencyGroupID
 			if snap.VolumeID == existingSnap.AncestorVolumeID && snap.SnapshotName == existingSnap.Name {
 				Log.Infof("Snapshot for %s exists on array for group id %s", snap.VolumeID, existingSnap.ConsistencyGroupID)
 				idempotencyMap[snap.SnapshotName] = true
@@ -342,8 +342,8 @@ func (s *service) checkIdempotency(ctx context.Context, snapshotsToMake *siotype
 	existingVols, _ := s.adminClients[systemID].GetVolume("", "", "", "", true)
 	for _, vol := range existingVols {
 		grpID := systemID + "-" + vol.ConsistencyGroupID
-		if grpID == systemID+"-"+consitencyGroupValue {
-			Log.Infof("Checking  %s: Snapshot %s found in consistency group.", consitencyGroupValue, vol.Name)
+		if grpID == systemID+"-"+consistencyGroupValue {
+			Log.Infof("Checking  %s: Snapshot %s found in consistency group.", consistencyGroupValue, vol.Name)
 			consistencyGroupOnArray = append(consistencyGroupOnArray, vol.Name)
 		}
 	}
@@ -352,7 +352,7 @@ func (s *service) checkIdempotency(ctx context.Context, snapshotsToMake *siotype
 	//the only snaps in the consistency group.
 	//this check verifies criteria #3
 	if len(consistencyGroupOnArray) != len(IDsForResponse) {
-		err := status.Errorf(codes.Internal, "CG: %s contains more snapshots than requested. Cannot create VolumeGroupSnapshot", consitencyGroupValue)
+		err := status.Errorf(codes.Internal, "CG: %s contains more snapshots than requested. Cannot create VolumeGroupSnapshot", consistencyGroupValue)
 		Log.Errorf("Error from checkIdempotency: %v ", err)
 		return nil, err
 	}
@@ -381,7 +381,7 @@ func (s *service) checkIdempotency(ctx context.Context, snapshotsToMake *siotype
 		}
 		groupSnapshots = append(groupSnapshots, &snap)
 	}
-	resp := &volumeGroupSnapshot.CreateVolumeGroupSnapshotResponse{SnapshotGroupID: systemID + "-" + consitencyGroupValue, Snapshots: groupSnapshots, CreationTime: groupSnapshots[0].CreationTime}
+	resp := &volumeGroupSnapshot.CreateVolumeGroupSnapshotResponse{SnapshotGroupID: systemID + "-" + consistencyGroupValue, Snapshots: groupSnapshots, CreationTime: groupSnapshots[0].CreationTime}
 	Log.Infof("Returning Idempotent response: %v", resp)
 	return resp, nil
 }
