@@ -424,6 +424,13 @@ func (f *feature) iCallcheckVolumesMap(id string) error {
 
 }
 
+func (f *feature) iCallgetProtectionDomainIDFromName(systemID, protectionDomainName string) error {
+	id := ""
+	id, f.err = f.service.getProtectionDomainIDFromName(systemID, protectionDomainName)
+	fmt.Printf("Protection Domain ID is: %s\n", id)
+	return nil
+}
+
 func (f *feature) iCallgetMappedVolsWithVolIDAndSysID(volID, sysID string) error {
 	f.getMappedVolResponse, f.err = getMappedVol(volID, sysID)
 
@@ -3378,6 +3385,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^remove a volume from VolumeGroupSnapshotRequest$`, f.iRemoveAVolumeFromVolumeGroupSnapshotRequest)
 	s.Step(`^I call DynamicLogChange "([^"]*)"$`, f.iCallDynamicLogChange)
 	s.Step(`^a valid DynamicLogChange occurs "([^"]*)" "([^"]*)"$`, f.aValidDynamicLogChange)
+	s.Step(`^I call getProtectionDomainIDFromName "([^"]*)" "([^"]*)"$`, f.iCallgetProtectionDomainIDFromName)
 
 	s.After(func(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
 		if f.server != nil {

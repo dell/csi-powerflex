@@ -489,11 +489,11 @@ func (s *service) getSDCID(sdcGUID string, systemID string) (string, error) {
 	return id.Sdc.ID, nil
 }
 
-// getStoragePoolID returns pool ID from the given name and system ID.
-func (s *service) getStoragePoolID(name string, systemID string) (string, error) {
+// getStoragePoolID returns pool ID from the given name, system ID, and protectionDomain name
+func (s *service) getStoragePoolID(name, systemID, pdID string) (string, error) {
 
-	// Need to lookup ID from the gateway
-	pool, err := s.adminClients[systemID].FindStoragePool("", name, "")
+	// Need to lookup ID from the gateway, with respect to PD if provided
+	pool, err := s.adminClients[systemID].FindStoragePool("", name, "", pdID)
 	if err != nil {
 		return "", err
 	}
@@ -546,11 +546,11 @@ func (s *service) getCSISnapshot(vol *siotypes.Volume, systemID string) *csi.Sna
 }
 
 // Returns storage pool name from the given storage pool ID and system ID
-func (s *service) getStoragePoolNameFromID(systemID string, id string) string {
+func (s *service) getStoragePoolNameFromID(systemID, id string) string {
 	storagePoolName := s.storagePoolIDToName[id]
 	if storagePoolName == "" {
 		adminClient := s.adminClients[systemID]
-		pool, err := adminClient.FindStoragePool(id, "", "")
+		pool, err := adminClient.FindStoragePool(id, "", "", "")
 		if err == nil {
 			storagePoolName = pool.Name
 			s.storagePoolIDToName[id] = pool.Name
@@ -805,4 +805,20 @@ func (s *service) calcKeyForMap(volumeID string) string {
 	key := string(bytes[0:3])
 	return key
 
+}
+
+func (s *service) getProtectionDomainIDFromName(systemID, protectionDomainName string) (string, error) {
+	if protectionDomainName == "" {
+		Log.Printf("Protection Domain not provided; there could be conflicts if two storage pools share a name")
+		return "", nil
+	}
+	system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
+	if err != nil {
+		return "", err
+	}
+	pd, err := system.FindProtectionDomain("", protectionDomainName, "")
+	if err != nil {
+		return "", err
+	}
+	return pd.ID, nil
 }
