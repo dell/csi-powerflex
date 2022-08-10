@@ -93,6 +93,9 @@ const (
 	TRUE = "TRUE"
 	//FALSE means "false" (comment put in for lint check)
 	FALSE = "FALSE"
+
+	sioReplicationGroupExists = "The Replication Consistency Group already exists"
+	sioReplicationPairExists  = "A Replication Pair for the specified local volume already exists"
 )
 
 // Extra metadata field names for propagating to goscaleio and beyond.
@@ -513,10 +516,87 @@ func (s *service) CreateReplicationConsistencyGroup(systemID string, name string
 
 	rcgResp, err := adminClient.CreateReplicationConsistencyGroup(rcgPayload)
 	if err != nil {
+		// Handle the case where it already exists.
+		if !strings.EqualFold(err.Error(), sioReplicationGroupExists) {
+			Log.Printf("Replication Creation Error: %s", err.Error())
+			return nil, err
+		}
+	}
+
+	rcgs, err := adminClient.GetReplicationConsistencyGroups("")
+	if err != nil {
 		return nil, err
 	}
 
-	return rcgResp, nil
+	var id string
+	if rcgResp == nil {
+		for _, rcg := range rcgs {
+			if rcg.Name == name && rcg.ProtectionDomainId == locatProtectionDomain && rcg.RemoteProtectionDomainId == remoteProtectionDomain {
+				Log.Printf("Replication Group Found: %s, %s", rcg.ID, rcg.RemoteID)
+				id = rcg.ID
+				break
+			}
+		}
+
+		if id == "" {
+			return nil, status.Errorf(codes.Internal, "couldn't find replication consistency group")
+		}
+	} else {
+		id = rcgResp.ID
+	}
+
+	// Delay needed?
+
+	return &siotypes.ReplicationConsistencyGroupResp{
+		ID: id,
+	}, nil
+}
+
+func (s *service) CreateReplicationPair(systemID string, name string,
+	localVolumeID string, remoteVolumeID string, replicationGroupID string) (*siotypes.ReplicationPair, error) {
+	adminClient := s.adminClients[systemID]
+	if adminClient == nil {
+		return nil, fmt.Errorf("can't find adminClient by id %s", systemID)
+	}
+
+	payload := &siotypes.QueryReplicationPair{
+		Name:                          name,
+		SourceVolumeID:                localVolumeID,
+		DestinationVolumeID:           remoteVolumeID,
+		ReplicationConsistencyGroupID: replicationGroupID,
+		CopyType:                      "OnlineCopy",
+	}
+
+	response, err := adminClient.CreateReplicationPair(payload)
+	if err != nil {
+		// Handle the case where it already exists.
+		if !strings.EqualFold(err.Error(), sioReplicationPairExists) {
+			Log.Printf("Replication Pair Creation Error: %s", err.Error())
+			return nil, err
+		}
+	}
+
+	Log.Printf("Replication Pair: %+v", response)
+	pairs, err := adminClient.GetReplicationPairs("")
+	if err != nil {
+		return nil, err
+	}
+
+	if response == nil {
+		for _, pair := range pairs {
+			if pair.Name == name {
+				Log.Printf("Replication Pair Found: %+v", pair)
+				response = pair
+				break
+			}
+		}
+
+		if response == nil {
+			return nil, status.Errorf(codes.Internal, "couldn't find replication pair")
+		}
+	}
+
+	return response, nil
 }
 
 func (s *service) clearCache() {

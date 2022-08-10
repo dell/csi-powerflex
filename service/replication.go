@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"log"
 
 	//"fmt"
@@ -14,8 +15,9 @@ import (
 	"github.com/dell/dell-csi-extensions/replication"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
 	//sio "github.com/dell/goscaleio"
-	//siotypes "github.com/dell/goscaleio/types/v1"
+	siotypes "github.com/dell/goscaleio/types/v1"
 	//"google.golang.org/grpc/codes"
 	//"google.golang.org/grpc/status"
 )
@@ -162,7 +164,7 @@ func (s *service) CreateStorageProtectionGroup(ctx context.Context, req *replica
 		return nil, status.Errorf(codes.Internal, "invalid rcg response: %s", err.Error())
 	}
 
-	Log.Printf("RemoteConsistencyGroup: %+v", rcg)
+	Log.Printf("[CreateStorageProtectionGroup] - RCGRESP %+v", rcg)
 
 	// localParams := map[string]string{
 	// 	s.replicationContextPrefix + "systemName":              localSystem.Name,
@@ -174,9 +176,39 @@ func (s *service) CreateStorageProtectionGroup(ctx context.Context, req *replica
 	// 	s.replicationContextPrefix + "VolumeGroupName":         vg.Name,
 	// }
 
+	// Create the Replication Pair
+
+	// Get remote volume ID
+	vol, err := s.getVolByID(volumeID, systemID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "can't query volume: %s", err.Error())
+	}
+
+	remoteVolumeName := "replica-" + vol.Name
+
+	adminClient := s.adminClients[rs.ID]
+	if adminClient == nil {
+		return nil, fmt.Errorf("can't find adminClient by id %s", systemID)
+	}
+
+	remoteVolumeID, err := adminClient.FindVolumeID(remoteVolumeName)
+	if err != nil {
+		return nil, fmt.Errorf("can't find volume by name %s", remoteVolumeName)
+	}
+
+	Log.Printf("[CreateStorageProtectionGroup] - vol.id %s, rmVolId %s, rcgId %s", vol.ID, remoteVolumeID, rcg.ID)
+
+	rpResp, err := s.CreateReplicationPair(systemID, "pair-"+vol.Name, vol.ID, remoteVolumeID, rcg.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	Log.Printf("[CreateStorageProtectionGroup] - rpResp %+v", rpResp)
+
 	// What is needed for the parameters?
 	remoteParams := map[string]string{
-		"systemName": rs.ID,
+		"systemName":        rs.ID,
+		"replicationPairID": rpResp.ID,
 	}
 
 	return &replication.CreateStorageProtectionGroupResponse{
@@ -244,7 +276,7 @@ func (s *service) CreateRemoteVolume(ctx context.Context, req *replication.Creat
 	Log.Printf("MDMs: %+v", mdms[0])
 
 	// Create a volume on the remote system?
-	name := "replica-" + volHandleCtx
+	name := "replica-" + vol.Name
 	Log.Printf("[CreateRemoteVolume] - Name: %s", name)
 
 	volReq := createRemoteCreateVolumeRequest(name, parameters["replication.storage.dell.com/remoteStoragePool"], remoteSystem[0].ID)
@@ -282,8 +314,60 @@ func (s *service) ExecuteAction(ctx context.Context, req *replication.ExecuteAct
 }
 
 func (s *service) GetStorageProtectionGroupStatus(ctx context.Context, req *replication.GetStorageProtectionGroupStatusRequest) (*replication.GetStorageProtectionGroupStatusResponse, error) {
-	Log.Printf("[GetStorageProtectionGroupStatus] - %+v", req)
-	return nil, nil
+	Log.Printf("[GetStorageProtectionGroupStatus] - req %+v", req)
+
+	protectionGroupSystem := req.ProtectionGroupAttributes["systemName"]
+
+	rcgs, err := s.getReplicationConsistencyGroup(protectionGroupSystem, req.ProtectionGroupId)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "No replication consistency groups found: %s", err.Error())
+	}
+
+	rcg := rcgs[0]
+
+	Log.Printf("[GetStorageProtectionGroupStatus] - RCG: %+v", rcg)
+
+	if rcg.Error != 65 {
+		return &replication.GetStorageProtectionGroupStatusResponse{
+			Status: &replication.StorageProtectionGroupStatus{
+				State: replication.StorageProtectionGroupStatus_INVALID,
+			},
+		}, nil
+	}
+
+	var state replication.StorageProtectionGroupStatus_State
+	switch rcg.CurrConsistMode {
+	case "PartiallyConsistent":
+		state = replication.StorageProtectionGroupStatus_SYNC_IN_PROGRESS
+		break
+	case "Consistent":
+		state = replication.StorageProtectionGroupStatus_SYNCHRONIZED
+		break
+	default:
+		Log.Printf("The status (%s) does not match with known protection group states", rcg.CurrConsistMode)
+		state = replication.StorageProtectionGroupStatus_UNKNOWN
+		break
+	}
+
+	return &replication.GetStorageProtectionGroupStatusResponse{
+		Status: &replication.StorageProtectionGroupStatus{
+			State: state,
+		},
+	}, nil
+}
+
+func (s *service) getReplicationConsistencyGroup(systemID string, groupId string) ([]*siotypes.ReplicationConsistencyGroup, error) {
+	adminClient := s.adminClients[systemID]
+	if adminClient == nil {
+		return nil, fmt.Errorf("can't find adminClient by id %s", systemID)
+	}
+
+	rcgs, err := adminClient.GetReplicationConsistencyGroups(groupId)
+	if err != nil {
+		return nil, err
+	}
+
+	return rcgs, nil
 }
 
 func getRemoteCSIVolume(volumeID string, size int) *replication.Volume {
