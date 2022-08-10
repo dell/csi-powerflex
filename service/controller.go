@@ -27,7 +27,7 @@ const (
 	KeyStoragePool = "storagepool"
 
 	// KeyProtectionDomain is the key used to get the StoragePool's Protection Domain name from the
-	// volume create parameters map. This pramater is optional.
+	// volume create parameters map. This parameter is optional.
 	KeyProtectionDomain = "protectiondomain"
 
 	// KeySystemID is the key used to get the array ID from the volume

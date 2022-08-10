@@ -22,7 +22,7 @@ parameters:
   # Optional: false
   storagepool: <STORAGE_POOL> # Insert Storage pool
   # Protection domain that storage pool above belongs to
-  # Needed if array has two storagepools that share the same name, but belong to different domains
+  # Needed if array has two storagepools that share the same name, but belong to different protection domains
   # Optional: true
   protectiondomain: # Insert Protection domain name
   # System you would like this storage class to use
