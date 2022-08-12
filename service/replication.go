@@ -304,8 +304,16 @@ func (s *service) CreateRemoteVolume(ctx context.Context, req *replication.Creat
 }
 
 func (s *service) DeleteStorageProtectionGroup(ctx context.Context, req *replication.DeleteStorageProtectionGroupRequest) (*replication.DeleteStorageProtectionGroupResponse, error) {
-	Log.Printf("rep DeleteStorageProtectionGroup %+v", req)
-	return nil, nil
+	Log.Printf("[DeleteStorageProtectionGroup] %+v", req)
+
+	protectionGroupSystem := req.ProtectionGroupAttributes["systemName"]
+
+	err := s.DeleteReplicationConsistencyGroup(protectionGroupSystem, req.ProtectionGroupId)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "error deleting the replication consistency group: %s", err.Error())
+	}
+
+	return &replication.DeleteStorageProtectionGroupResponse{}, nil
 }
 
 func (s *service) ExecuteAction(ctx context.Context, req *replication.ExecuteActionRequest) (*replication.ExecuteActionResponse, error) {
@@ -364,6 +372,7 @@ func (s *service) getReplicationConsistencyGroup(systemID string, groupId string
 
 	rcgs, err := adminClient.GetReplicationConsistencyGroups(groupId)
 	if err != nil {
+		// If not found...
 		return nil, err
 	}
 

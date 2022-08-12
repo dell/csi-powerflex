@@ -94,8 +94,9 @@ const (
 	//FALSE means "false" (comment put in for lint check)
 	FALSE = "FALSE"
 
-	sioReplicationGroupExists = "The Replication Consistency Group already exists"
-	sioReplicationPairExists  = "A Replication Pair for the specified local volume already exists"
+	sioReplicationGroupExists   = "The Replication Consistency Group already exists"
+	sioReplicationGroupNotFound = "The Replication Consistency Group was not found"
+	sioReplicationPairExists    = "A Replication Pair for the specified local volume already exists"
 )
 
 // Extra metadata field names for propagating to goscaleio and beyond.
@@ -550,6 +551,38 @@ func (s *service) CreateReplicationConsistencyGroup(systemID string, name string
 	return &siotypes.ReplicationConsistencyGroupResp{
 		ID: id,
 	}, nil
+}
+
+func (s *service) DeleteReplicationConsistencyGroup(systemID string, groupId string) error {
+	adminClient := s.adminClients[systemID]
+	if adminClient == nil {
+		return status.Errorf(codes.InvalidArgument, "can't find adminClient by id %s", systemID)
+	}
+
+	// no group id provided.
+	if groupId == "" {
+		return status.Errorf(codes.InvalidArgument, "group id wasn't provided")
+	}
+
+	group, err := adminClient.GetReplicationConsistencyGroups(groupId)
+	if err != nil {
+		// Handle the case where it doesn't exist. Already deleted.
+		if strings.EqualFold(err.Error(), sioReplicationGroupNotFound) {
+			Log.WithFields(logrus.Fields{"id": groupId}).Debug("replication group is already deleted", groupId)
+			return nil
+		}
+
+		Log.Printf("Replication Deletion Error: %s", err.Error())
+		return err
+
+	}
+
+	rcg := goscaleio.NewReplicationConsistencyGroup(adminClient)
+	rcg.ReplicationConsistencyGroup = group[0]
+
+	err = rcg.RemoveReplicationConsistencyGroup(false)
+
+	return err
 }
 
 func (s *service) CreateReplicationPair(systemID string, name string,
