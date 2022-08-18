@@ -910,5 +910,15 @@ Feature: VxFlex OS CSI interface
     And I call getProtectionDomainIDFromName "15dbbf5617523655" "mocksystem"
     Then the error contains "systemid or systemname not found"
 
+  Scenario: getArrayInstallationID, everything works
+    Given a VxFlexOS service
+    And I call Probe
+    When I call getArrayInstallationID "15dbbf5617523655"
+    Then the error contains "none"
 
-
+  Scenario: getArrayInstallationID, bad systemID
+    Given a VxFlexOS service
+    And I call Probe
+    And I induce error "WrongSysNameError"
+    When I call getArrayInstallationID "abcd12345"
+    Then the error contains "systemid or systemname not found"

@@ -3233,6 +3233,13 @@ func (f *feature) iCallGetArrayConfig() error {
 	return nil
 }
 
+func (f *feature) iCallgetArrayInstallationID(systemID string) error {
+	id := ""
+	id, f.err = f.service.getArrayInstallationID(systemID)
+	fmt.Printf("Installation ID is: %s\n", id)
+	return nil
+}
+
 func FeatureContext(s *godog.ScenarioContext) {
 	f := &feature{}
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
@@ -3386,6 +3393,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call DynamicLogChange "([^"]*)"$`, f.iCallDynamicLogChange)
 	s.Step(`^a valid DynamicLogChange occurs "([^"]*)" "([^"]*)"$`, f.aValidDynamicLogChange)
 	s.Step(`^I call getProtectionDomainIDFromName "([^"]*)" "([^"]*)"$`, f.iCallgetProtectionDomainIDFromName)
+	s.Step(`^I call getArrayInstallationID "([^"]*)"$`, f.iCallgetArrayInstallationID)
 
 	s.After(func(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
 		if f.server != nil {
