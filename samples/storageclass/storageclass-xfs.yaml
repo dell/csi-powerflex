@@ -35,10 +35,10 @@ parameters:
   # Uncomment the line below if you want to use mkfsFormatOption
   # mkfsFormatOption: "<mkfs_format_option>" # Insert file system format option
   # Filesytem type for volumes created by storageclass
-  # Allowed values: "ext4" or "xfs"
-  # Optional: true
-  # default: "ext4"
-  FsType: xfs
+  # Default value: None if defaultFsType is not mentioned in values.yaml
+  # Else defaultFsType value mentioned in values.yaml
+  # will be used as default value
+  csi.storage.k8s.io/fstype: xfs
 # volumeBindingMode determines how volume binding and dynamic provisioning should occur
 # Allowed values:
 #  Immediate: volume binding and dynamic provisioning occurs once PVC is created
