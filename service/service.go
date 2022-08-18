@@ -506,6 +506,10 @@ func (s *service) getCSIVolume(vol *siotypes.Volume, systemID string) *csi.Volum
 
 	// Get storage pool name; add to cache of ID to Name if not present
 	storagePoolName := s.getStoragePoolNameFromID(systemID, vol.StoragePoolID)
+	installationID, err := s.getArrayInstallationID(systemID)
+	if err != nil {
+		Log.Printf("getCSIVolume error system not found: %s with error: %v\n", systemID, err)
+	}
 
 	// Make the additional volume attributes
 	attributes := map[string]string{
@@ -514,6 +518,7 @@ func (s *service) getCSIVolume(vol *siotypes.Volume, systemID string) *csi.Volum
 		"StoragePoolName": storagePoolName,
 		"StorageSystem":   systemID,
 		"CreationTime":    time.Unix(int64(vol.CreationTime), 0).String(),
+		"InstallationID":  installationID,
 	}
 	dash := "-"
 	vi := &csi.Volume{
@@ -523,6 +528,15 @@ func (s *service) getCSIVolume(vol *siotypes.Volume, systemID string) *csi.Volum
 	}
 
 	return vi
+}
+
+// getArryaInstallationID returns installation ID for the given system ID
+func (s *service) getArrayInstallationID(systemID string) (string, error) {
+	system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
+	if err != nil {
+		return "", err
+	}
+	return system.System.InstallID, nil
 }
 
 // Convert an SIO Volume into a CSI Snapshot object suitable for return.
