@@ -15,8 +15,9 @@ package service
 
 import (
 	"fmt"
-	"golang.org/x/net/context"
 	"strings"
+
+	"golang.org/x/net/context"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	commonext "github.com/dell/dell-csi-extensions/common"

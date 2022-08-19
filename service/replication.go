@@ -16,10 +16,16 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	//sio "github.com/dell/goscaleio"
+	sio "github.com/dell/goscaleio"
 	siotypes "github.com/dell/goscaleio/types/v1"
 	//"google.golang.org/grpc/codes"
 	//"google.golang.org/grpc/status"
+)
+
+type ErrorCode int
+
+const (
+	ErrSuccess ErrorCode = 65
 )
 
 func (s *service) GetReplicationCapabilities(ctx context.Context, req *replication.GetReplicationCapabilityRequest) (*replication.GetReplicationCapabilityResponse, error) {
@@ -157,34 +163,22 @@ func (s *service) CreateStorageProtectionGroup(ctx context.Context, req *replica
 
 	Log.Printf("MDMs: %+v", mdms[0])
 
-	rcg, err := s.CreateReplicationConsistencyGroup(systemID, "replica-rcg",
+	consistencyGroupName := "replica-rcg"
+	localRcg, err := s.CreateReplicationConsistencyGroup(systemID, consistencyGroupName,
 		parameters["replication.storage.dell.com/rpo"], localProtectionDomain[0].ID,
 		remoteProtectionDomain[0].ID, "", rs.ID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "invalid rcg response: %s", err.Error())
 	}
 
-	Log.Printf("[CreateStorageProtectionGroup] - RCGRESP %+v", rcg)
+	Log.Printf("[CreateStorageProtectionGroup] - RCGRESP %+v", localRcg)
 
-	// localParams := map[string]string{
-	// 	s.replicationContextPrefix + "systemName":              localSystem.Name,
-	// 	s.replicationContextPrefix + "managementAddress":       localSystem.ManagementAddress,
-	// 	s.replicationContextPrefix + "remoteSystemName":        remoteSystem.Name,
-	// 	s.replicationContextPrefix + "remoteManagementAddress": remoteSystem.ManagementAddress,
-	// 	s.replicationContextPrefix + "globalID":                arrayID,
-	// 	s.replicationContextPrefix + "remoteGlobalID":          remoteSystem.SerialNumber,
-	// 	s.replicationContextPrefix + "VolumeGroupName":         vg.Name,
-	// }
-
-	// Create the Replication Pair
-
-	// Get remote volume ID
 	vol, err := s.getVolByID(volumeID, systemID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "can't query volume: %s", err.Error())
 	}
 
-	remoteVolumeName := "replica-" + vol.Name
+	remoteVolumeName := "replicated-" + vol.Name
 
 	adminClient := s.adminClients[rs.ID]
 	if adminClient == nil {
@@ -196,25 +190,60 @@ func (s *service) CreateStorageProtectionGroup(ctx context.Context, req *replica
 		return nil, fmt.Errorf("can't find volume by name %s", remoteVolumeName)
 	}
 
-	Log.Printf("[CreateStorageProtectionGroup] - vol.id %s, rmVolId %s, rcgId %s", vol.ID, remoteVolumeID, rcg.ID)
+	Log.Printf("[CreateStorageProtectionGroup] - vol.id %s, rmVolId %s, rcgId %s", vol.ID, remoteVolumeID, localRcg.ID)
 
-	rpResp, err := s.CreateReplicationPair(systemID, "pair-"+vol.Name, vol.ID, remoteVolumeID, rcg.ID)
+	replicationPairName := "pair-" + vol.Name
+	rpResp, err := s.CreateReplicationPair(systemID, replicationPairName, vol.ID, remoteVolumeID, localRcg.ID)
 	if err != nil {
 		return nil, err
 	}
 
 	Log.Printf("[CreateStorageProtectionGroup] - rpResp %+v", rpResp)
 
+	// Get Remote Content
+	groups, err := adminClient.GetReplicationConsistencyGroups()
+	if err != nil {
+		return nil, err
+	}
+
+	var remoteGroupId string
+	for _, rcg := range groups {
+		if rcg.Name == consistencyGroupName {
+			remoteGroupId = rcg.ID
+		}
+	}
+
+	if remoteGroupId == "" {
+		return nil, status.Errorf(codes.Internal, "remote replication consistency group not found")
+	}
+
+	pairs, err := adminClient.GetReplicationPairs(remoteGroupId)
+	if err != nil {
+		return nil, err
+	}
+
+	var remotePairId string
+	for _, pair := range pairs {
+		if pair.Name == replicationPairName {
+			remotePairId = pair.ID
+		}
+	}
+
 	// What is needed for the parameters?
-	remoteParams := map[string]string{
-		"systemName":        rs.ID,
+	localParams := map[string]string{
+		"systemName":        systemID,
 		"replicationPairID": rpResp.ID,
 	}
 
+	remoteParams := map[string]string{
+		"systemName":        rs.ID,
+		"replicationPairID": remotePairId,
+	}
+
 	return &replication.CreateStorageProtectionGroupResponse{
-		// LocalProtectionGroupId:          rs.LocalResourceId,
-		RemoteProtectionGroupId: rcg.ID,
-		// LocalProtectionGroupAttributes:  localParams,
+		LocalProtectionGroupId:          localRcg.ID,
+		RemoteProtectionGroupId:         remoteGroupId,
+		LocalProtectionGroupAttributes:  localParams,
 		RemoteProtectionGroupAttributes: remoteParams,
 	}, nil
 }
@@ -276,7 +305,7 @@ func (s *service) CreateRemoteVolume(ctx context.Context, req *replication.Creat
 	Log.Printf("MDMs: %+v", mdms[0])
 
 	// Create a volume on the remote system?
-	name := "replica-" + vol.Name
+	name := "replicated-" + vol.Name
 	Log.Printf("[CreateRemoteVolume] - Name: %s", name)
 
 	volReq := createRemoteCreateVolumeRequest(name, parameters["replication.storage.dell.com/remoteStoragePool"], remoteSystem[0].ID)
@@ -326,16 +355,14 @@ func (s *service) GetStorageProtectionGroupStatus(ctx context.Context, req *repl
 
 	protectionGroupSystem := req.ProtectionGroupAttributes["systemName"]
 
-	rcgs, err := s.getReplicationConsistencyGroup(protectionGroupSystem, req.ProtectionGroupId)
+	group, err := s.getReplicationConsistencyGroupById(protectionGroupSystem, req.ProtectionGroupId)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "No replication consistency groups found: %s", err.Error())
 	}
 
-	rcg := rcgs[0]
+	Log.Printf("[GetStorageProtectionGroupStatus] - RCG: %+v", group)
 
-	Log.Printf("[GetStorageProtectionGroupStatus] - RCG: %+v", rcg)
-
-	if rcg.Error != 65 {
+	if ErrorCode(group.Error) != ErrSuccess {
 		return &replication.GetStorageProtectionGroupStatusResponse{
 			Status: &replication.StorageProtectionGroupStatus{
 				State: replication.StorageProtectionGroupStatus_INVALID,
@@ -344,15 +371,15 @@ func (s *service) GetStorageProtectionGroupStatus(ctx context.Context, req *repl
 	}
 
 	var state replication.StorageProtectionGroupStatus_State
-	switch rcg.CurrConsistMode {
-	case "PartiallyConsistent":
+	switch group.CurrConsistMode {
+	case sio.PARTIALLY_CONSISTENT:
 		state = replication.StorageProtectionGroupStatus_SYNC_IN_PROGRESS
 		break
-	case "Consistent":
+	case sio.CONSISTENT:
 		state = replication.StorageProtectionGroupStatus_SYNCHRONIZED
 		break
 	default:
-		Log.Printf("The status (%s) does not match with known protection group states", rcg.CurrConsistMode)
+		Log.Printf("The status (%s) does not match with known protection group states", group.CurrConsistMode)
 		state = replication.StorageProtectionGroupStatus_UNKNOWN
 		break
 	}
@@ -364,19 +391,19 @@ func (s *service) GetStorageProtectionGroupStatus(ctx context.Context, req *repl
 	}, nil
 }
 
-func (s *service) getReplicationConsistencyGroup(systemID string, groupId string) ([]*siotypes.ReplicationConsistencyGroup, error) {
+func (s *service) getReplicationConsistencyGroupById(systemID string, groupId string) (*siotypes.ReplicationConsistencyGroup, error) {
 	adminClient := s.adminClients[systemID]
 	if adminClient == nil {
 		return nil, fmt.Errorf("can't find adminClient by id %s", systemID)
 	}
 
-	rcgs, err := adminClient.GetReplicationConsistencyGroups(groupId)
+	group, err := adminClient.GetReplicationConsistencyGroupById(groupId)
 	if err != nil {
 		// If not found...
 		return nil, err
 	}
 
-	return rcgs, nil
+	return group, nil
 }
 
 func getRemoteCSIVolume(volumeID string, size int) *replication.Volume {

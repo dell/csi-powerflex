@@ -524,7 +524,7 @@ func (s *service) CreateReplicationConsistencyGroup(systemID string, name string
 		}
 	}
 
-	rcgs, err := adminClient.GetReplicationConsistencyGroups("")
+	rcgs, err := adminClient.GetReplicationConsistencyGroups()
 	if err != nil {
 		return nil, err
 	}
@@ -564,7 +564,7 @@ func (s *service) DeleteReplicationConsistencyGroup(systemID string, groupId str
 		return status.Errorf(codes.InvalidArgument, "group id wasn't provided")
 	}
 
-	group, err := adminClient.GetReplicationConsistencyGroups(groupId)
+	group, err := adminClient.GetReplicationConsistencyGroupById(groupId)
 	if err != nil {
 		// Handle the case where it doesn't exist. Already deleted.
 		if strings.EqualFold(err.Error(), sioReplicationGroupNotFound) {
@@ -578,7 +578,7 @@ func (s *service) DeleteReplicationConsistencyGroup(systemID string, groupId str
 	}
 
 	rcg := goscaleio.NewReplicationConsistencyGroup(adminClient)
-	rcg.ReplicationConsistencyGroup = group[0]
+	rcg.ReplicationConsistencyGroup = group
 
 	err = rcg.RemoveReplicationConsistencyGroup(false)
 
