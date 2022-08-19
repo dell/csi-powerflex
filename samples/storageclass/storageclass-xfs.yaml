@@ -24,7 +24,8 @@ parameters:
   # Protection domain that storage pool above belongs to
   # Needed if array has two storagepools that share the same name, but belong to different protection domains
   # Optional: true
-  protectiondomain: # Insert Protection domain name
+  # Uncomment the line below if you want to use protectiondomain
+  # protectiondomain: # Insert Protection domain name
   # System you would like this storage class to use
   # Allowed values: one string for system ID
   # Optional: false
