@@ -920,5 +920,5 @@ Feature: VxFlex OS CSI interface
     Given a VxFlexOS service
     And I call Probe
     And I induce error "WrongSysNameError"
-    When I call getArrayInstallationID "abcd12345"
+    When I call getArrayInstallationID "15dbbf5617523655"
     Then the error contains "systemid or systemname not found"
