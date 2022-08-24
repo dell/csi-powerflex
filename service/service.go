@@ -637,6 +637,38 @@ func (s *service) getProtectionDomain(systemID string, system *siotypes.System) 
 	return pd, nil
 }
 
+func (s *service) removeVolumeFromReplicationPair(systemID string, volumeID string) (*siotypes.ReplicationPair, error) {
+	adminClient := s.adminClients[systemID]
+	if adminClient == nil {
+		return nil, fmt.Errorf("can't find adminClient by id %s", systemID)
+	}
+
+	// Gets a list of all replication pairs.
+	pairs, err := adminClient.GetReplicationPairs("")
+	if err != nil {
+		return nil, err
+	}
+
+	var replicationPairId string
+	for _, pair := range pairs {
+		if volumeID == pair.LocalVolumeID {
+			replicationPairId = pair.ID
+			break
+		}
+	}
+
+	if replicationPairId == "" {
+		return nil, fmt.Errorf("replication pair for volume ID: %s, not found", volumeID)
+	}
+
+	resp, err := adminClient.RemoveReplicationPair(replicationPairId, true)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp, nil
+}
+
 // Provide periodic logging of statistics like goroutines and memory
 func (s *service) logStatistics() {
 	if s.statisticsCounter = s.statisticsCounter + 1; (s.statisticsCounter % 100) == 0 {

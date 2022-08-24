@@ -5,12 +5,6 @@ import (
 	"fmt"
 	"log"
 
-	//"fmt"
-	//"strings"
-
-	//common "github.com/dell/dell-csi-extensions/common"
-	//csi "github.com/container-storage-interface/spec/lib/go/csi"
-
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/dell/dell-csi-extensions/replication"
 	"google.golang.org/grpc/codes"
@@ -18,8 +12,6 @@ import (
 
 	sio "github.com/dell/goscaleio"
 	siotypes "github.com/dell/goscaleio/types/v1"
-	//"google.golang.org/grpc/codes"
-	//"google.golang.org/grpc/status"
 )
 
 type ErrorCode int
@@ -374,14 +366,11 @@ func (s *service) GetStorageProtectionGroupStatus(ctx context.Context, req *repl
 	switch group.CurrConsistMode {
 	case sio.PARTIALLY_CONSISTENT:
 		state = replication.StorageProtectionGroupStatus_SYNC_IN_PROGRESS
-		break
 	case sio.CONSISTENT:
 		state = replication.StorageProtectionGroupStatus_SYNCHRONIZED
-		break
 	default:
 		Log.Printf("The status (%s) does not match with known protection group states", group.CurrConsistMode)
 		state = replication.StorageProtectionGroupStatus_UNKNOWN
-		break
 	}
 
 	return &replication.GetStorageProtectionGroupStatusResponse{
