@@ -331,7 +331,16 @@ func (s *service) DeleteStorageProtectionGroup(ctx context.Context, req *replica
 
 	protectionGroupSystem := req.ProtectionGroupAttributes["systemName"]
 
-	err := s.DeleteReplicationConsistencyGroup(protectionGroupSystem, req.ProtectionGroupId)
+	pairs, err := s.getReplicationPair(protectionGroupSystem, req.ProtectionGroupId)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(pairs) != 0 {
+		return nil, status.Errorf(codes.Internal, "unable to delete protection group, pairs exist")
+	}
+
+	err = s.DeleteReplicationConsistencyGroup(protectionGroupSystem, req.ProtectionGroupId)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "error deleting the replication consistency group: %s", err.Error())
 	}
