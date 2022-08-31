@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/dell/dell-csi-extensions/replication"
@@ -89,6 +90,16 @@ func (s *service) GetReplicationCapabilities(ctx context.Context, req *replicati
 		{
 			Actions: &replication.SupportedActions_Type{
 				Type: replication.ActionTypes_SYNC,
+			},
+		},
+		{
+			Actions: &replication.SupportedActions_Type{
+				Type: replication.ActionTypes_CREATE_SNAPSHOT,
+			},
+		},
+		{
+			Actions: &replication.SupportedActions_Type{
+				Type: replication.ActionTypes_ABORT_SNAPSHOT,
 			},
 		},
 	}
@@ -349,8 +360,56 @@ func (s *service) DeleteStorageProtectionGroup(ctx context.Context, req *replica
 }
 
 func (s *service) ExecuteAction(ctx context.Context, req *replication.ExecuteActionRequest) (*replication.ExecuteActionResponse, error) {
-	Log.Printf("rep ExecuteAction %+v", req)
-	return nil, nil
+	Log.Printf("[ExecuteAction] - req %+v", req)
+
+	action := req.GetAction().GetActionTypes().String()
+	protectionGroupID := req.GetProtectionGroupId()
+	localParams := req.GetProtectionGroupAttributes()
+	remoteParams := req.GetRemoteProtectionGroupAttributes()
+	actionAttributes := make(map[string]string)
+	remoteSystem := remoteParams["systemName"]
+	localSystem := localParams["systemName"]
+
+	switch action {
+	case replication.ActionTypes_CREATE_SNAPSHOT.String():
+		resp, err := s.CreateReplicationConsistencyGroupSnapshot(localSystem, req.GetProtectionGroupId())
+		if err != nil {
+			return nil, err
+		}
+
+		counter := 0
+
+		// Needs a delay for the array to create the snap volumes.
+		for len(actionAttributes) == 0 && counter < 10 {
+			actionAttributes, err = s.getConsistencyGroupSnapshotContent(localSystem, remoteSystem, protectionGroupID, resp.SnapshotGroupID)
+			if err != nil {
+				return nil, err
+			}
+			time.Sleep(1 * time.Second)
+			counter++
+		}
+	default:
+		return nil, status.Errorf(codes.Unknown, "The requested action does not match with supported actions")
+	}
+
+	statusResp, err := s.GetStorageProtectionGroupStatus(ctx, &replication.GetStorageProtectionGroupStatusRequest{
+		ProtectionGroupId:         protectionGroupID,
+		ProtectionGroupAttributes: localParams,
+	})
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "unable to get storage protection group status: %s", err.Error())
+	}
+
+	resp := &replication.ExecuteActionResponse{
+		Success: true,
+		ActionTypes: &replication.ExecuteActionResponse_Action{
+			Action: req.GetAction(),
+		},
+		Status:           statusResp.Status,
+		ActionAttributes: actionAttributes,
+	}
+
+	return resp, nil
 }
 
 func (s *service) GetStorageProtectionGroupStatus(ctx context.Context, req *replication.GetStorageProtectionGroupStatusRequest) (*replication.GetStorageProtectionGroupStatusResponse, error) {
@@ -460,4 +519,28 @@ func createRemoteCreateVolumeRequest(name string, storagePool string, systemID s
 	capabilities = append(capabilities, capability)
 	req.VolumeCapabilities = capabilities
 	return req
+}
+
+func (s *service) getConsistencyGroupSnapshotContent(localSystem, remoteSystem, protectionGroup, snapshotGroup string) (map[string]string, error) {
+	actionAttributes := make(map[string]string)
+
+	pairs, err := s.getReplicationPair(localSystem, protectionGroup)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, pair := range pairs {
+		existingSnaps, _, err := s.listVolumes(remoteSystem, 0, 0, false, false, "", pair.RemoteVolumeID)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, snap := range existingSnaps {
+			if snapshotGroup == snap.ConsistencyGroupID {
+				actionAttributes[remoteSystem+"-"+snap.AncestorVolumeID] = remoteSystem + "-" + snap.ID
+			}
+		}
+	}
+
+	return actionAttributes, nil
 }

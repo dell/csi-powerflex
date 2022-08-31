@@ -632,6 +632,21 @@ func (s *service) CreateReplicationPair(systemID string, name string,
 	return response, nil
 }
 
+func (s *service) CreateReplicationConsistencyGroupSnapshot(systemID string, replicationGroupID string) (*siotypes.CreateReplicationConsistencyGroupSnapshotResp, error) {
+	adminClient := s.adminClients[systemID]
+	if adminClient == nil {
+		return nil, fmt.Errorf("can't find adminClient by id %s", systemID)
+	}
+
+	response, err := adminClient.CreateReplicationConsistencyGroupSnapshot(replicationGroupID, false)
+	// TODO: Handle duplicate snapshots.
+	if err != nil {
+		return nil, err
+	}
+
+	return response, nil
+}
+
 func (s *service) clearCache() {
 	s.volCacheRWL.Lock()
 	defer s.volCacheRWL.Unlock()
