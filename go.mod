@@ -13,8 +13,8 @@ require (
 	github.com/dell/dell-csi-extensions/podmon v1.0.0
 	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.2.0
 	github.com/dell/gocsi v1.6.0
-	github.com/dell/gofsutil v1.9.1-0.20220826112338-7e76776fb6cb
-	github.com/dell/goscaleio v1.7.1-0.20220809193611-f43f45ec203c
+	github.com/dell/gofsutil v1.10.0
+	github.com/dell/goscaleio v1.8.0
 	github.com/fsnotify/fsnotify v1.5.1
 	github.com/golang/protobuf v1.5.2
 	github.com/gorilla/mux v1.8.0
