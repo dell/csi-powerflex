@@ -201,6 +201,34 @@ spec:
           volumeMounts:
             - name: socket-dir
               mountPath: /var/run/csi
+        {{- if hasKey .Values.controller "replication" }}
+        {{- if eq .Values.controller.replication.enabled true}}
+        - name: dell-csi-replicator
+          image: {{ required "Must provide the Dell CSI Replicator image." .Values.controller.replication.image}}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          args:
+            - "--csi-address=$(ADDRESS)"
+            - "--leader-election=true"
+            - "--worker-threads=2"
+            - "--retry-interval-start=1s"
+            - "--retry-interval-max=300s"
+            - "--timeout=300s"
+            - "--context-prefix={{ .Values.controller.replication.replicationContextPrefix}}"
+            - "--prefix=replication.storage.dell.com"
+          env:
+            - name: ADDRESS
+              value: /var/run/csi/csi.sock
+            - name: X_CSI_REPLICATION_CONFIG_DIR
+              value: /vxflexos-config-params
+            - name: X_CSI_REPLICATION_CONFIG_FILE_NAME
+              value: driver-config-params.yaml
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /var/run/csi
+            - name: vxflexos-config-params
+              mountPath: /vxflexos-config-params
+        {{- end }}
+        {{- end }}
         - name: provisioner
           image: {{ required "Must provide the CSI provisioner container image." ( include "csi-vxflexos.provisionerImage" . ) }}	
           imagePullPolicy: {{ .Values.imagePullPolicy }}
@@ -339,6 +367,14 @@ spec:
               value: "{{ required "Enable this to have CSI ListVolumes include snapshots" .Values.enablelistvolumesnapshot }}"
             - name: SSL_CERT_DIR
               value: /certs
+            {{- if hasKey .Values.controller "replication" }}
+            {{- if eq .Values.controller.replication.enabled true}}
+            - name: X_CSI_REPLICATION_CONTEXT_PREFIX
+              value: {{ .Values.controller.replication.replicationContextPrefix | default "powerflex"}}
+            - name: X_CSI_REPLICATION_PREFIX
+              value: {{ .Values.controller.replication.replicationPrefix | default "replication.storage.dell.com"}}
+            {{- end }}
+            {{- end }}
             {{- if hasKey .Values.controller "healthMonitor" }}
             {{- if eq .Values.controller.healthMonitor.enabled true}}
             - name: X_CSI_HEALTH_MONITOR_ENABLED
