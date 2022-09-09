@@ -530,8 +530,7 @@ func (s *service) getConsistencyGroupSnapshotContent(localSystem, remoteSystem, 
 
 		for _, snap := range existingSnaps {
 			if snapshotGroup == snap.ConsistencyGroupID {
-				// TODO: Change to local volume
-				actionAttributes[remoteSystem+"-"+snap.AncestorVolumeID] = remoteSystem + "-" + snap.ID
+				actionAttributes[localSystem+"-"+pair.LocalVolumeID] = remoteSystem + "-" + snap.ID
 			}
 		}
 	}
