@@ -125,10 +125,10 @@ github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.2.0 h1:uFt9JnQ/Wdvka3
 github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.2.0/go.mod h1:etLWwS1G2IqHDuArHqB0OWQvpdcztuBxopWrRE+mpk0=
 github.com/dell/gocsi v1.6.0 h1:ZmoMi17v1jK0RE0OGEivu52/RqHbOhP5cqs9SHExqa0=
 github.com/dell/gocsi v1.6.0/go.mod h1:+ihwgNYeFTv69Ym2X2Ij1idK72JYoNR8CeiWYJrrbho=
-github.com/dell/gofsutil v1.9.1-0.20220826112338-7e76776fb6cb h1:hB4ISAHP2lf14j4McCDfB0L4ejzEYdroInTcssVSe2Y=
-github.com/dell/gofsutil v1.9.1-0.20220826112338-7e76776fb6cb/go.mod h1:oebB2eaWWF1jniBQpsMGP6qeZcOPjgeWS0WwShS2KWY=
-github.com/dell/goscaleio v1.7.1-0.20220809193611-f43f45ec203c h1:upBNsXjDfYfJ2meBM+8OVC7Un6lLY4pzx2I6EY/j5EY=
-github.com/dell/goscaleio v1.7.1-0.20220809193611-f43f45ec203c/go.mod h1:TJbQ8N6hk48w5rEyBa+pRtrRJbPVnCTsYM3mmUyPNaY=
+github.com/dell/gofsutil v1.10.0 h1:BDEZj5/xeUugwyXftYTH8Xjc0kT5dvIXofQr7CGWMho=
+github.com/dell/gofsutil v1.10.0/go.mod h1:oebB2eaWWF1jniBQpsMGP6qeZcOPjgeWS0WwShS2KWY=
+github.com/dell/goscaleio v1.8.0 h1:a5wxvUwqvsr1KGUoHkY5Ol1jsNkQ8VKyTGdFeI5RVLQ=
+github.com/dell/goscaleio v1.8.0/go.mod h1:TJbQ8N6hk48w5rEyBa+pRtrRJbPVnCTsYM3mmUyPNaY=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible/go.mod h1:E3ru+11k8xSBh+hMPgOLZmtrrCbhqsmaPHjLKYnJCaQ=
 github.com/dgryski/go-sip13 v0.0.0-20181026042036-e10d5fee7954/go.mod h1:vAd38F8PWV+bWy6jNmig1y/TA+kYO4g3RSRF0IAv0no=
 github.com/docker/spdystream v0.0.0-20160310174837-449fdfce4d96/go.mod h1:Qh8CwZgvJUkLughtfhJv5dyTYa91l1fOUCrgjqmcifM=
