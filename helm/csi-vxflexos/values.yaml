@@ -94,7 +94,7 @@ controller:
     # Allowed values: Number followed by unit (s,m,h)
     # Examples: 60s, 5m, 1h
     # Default value: 60s
-    volumeHealthMonitorInterval: 60s
+    interval: 60s
 
   # volumeNamePrefix- defines a string prepended to each volume created by the CSI driver.
   # Default value: none
