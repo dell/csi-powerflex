@@ -360,6 +360,14 @@ func (s *service) ExecuteAction(ctx context.Context, req *replication.ExecuteAct
 	remoteSystem := remoteParams["systemName"]
 	localSystem := localParams["systemName"]
 
+	statusResp, err := s.GetStorageProtectionGroupStatus(ctx, &replication.GetStorageProtectionGroupStatusRequest{
+		ProtectionGroupId:         protectionGroupID,
+		ProtectionGroupAttributes: localParams,
+	})
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "unable to get storage protection group status: %s", err.Error())
+	}
+
 	switch action {
 	case replication.ActionTypes_CREATE_SNAPSHOT.String():
 		resp, err := s.CreateReplicationConsistencyGroupSnapshot(localSystem, req.GetProtectionGroupId())
@@ -378,11 +386,34 @@ func (s *service) ExecuteAction(ctx context.Context, req *replication.ExecuteAct
 			time.Sleep(1 * time.Second)
 			counter++
 		}
+	case replication.ActionTypes_FAILOVER_REMOTE.String():
+		err := s.ExecuteFailoverOnReplicationGroup(localSystem, req.GetProtectionGroupId())
+		if err != nil {
+			return nil, err
+		}
+
+	case replication.ActionTypes_UNPLANNED_FAILOVER_LOCAL.String():
+		err := s.ExecuteSwitchoverOnReplicationGroup(localSystem, req.GetProtectionGroupId())
+		if err != nil {
+			return nil, err
+		}
+
+	case replication.ActionTypes_REPROTECT_LOCAL.String():
+		if err := s.ExecuteReverseOnReplicationGroup(localSystem, req.GetProtectionGroupId()); err != nil {
+			return nil, err
+		}
+
+	case replication.ActionTypes_RESUME.String():
+		failover := statusResp.Status.State == replication.StorageProtectionGroupStatus_FAILEDOVER
+		if err := s.ExecuteResumeOnReplicationGroup(localSystem, req.GetProtectionGroupId(), failover); err != nil {
+			return nil, err
+		}
+
 	default:
 		return nil, status.Errorf(codes.Unknown, "The requested action does not match with supported actions")
 	}
 
-	statusResp, err := s.GetStorageProtectionGroupStatus(ctx, &replication.GetStorageProtectionGroupStatusRequest{
+	statusResp, err = s.GetStorageProtectionGroupStatus(ctx, &replication.GetStorageProtectionGroupStatusRequest{
 		ProtectionGroupId:         protectionGroupID,
 		ProtectionGroupAttributes: localParams,
 	})
@@ -421,17 +452,11 @@ func (s *service) GetStorageProtectionGroupStatus(ctx context.Context, req *repl
 		return nil, status.Errorf(codes.Internal, "no replication pairs exist")
 	}
 
-	if ErrorCode(group.Error) != ErrSuccess {
-		return &replication.GetStorageProtectionGroupStatusResponse{
-			Status: &replication.StorageProtectionGroupStatus{
-				State: replication.StorageProtectionGroupStatus_INVALID,
-			},
-		}, nil
-	}
+	Log.Printf("[GetStorageProtectionGroupStatus] - group %+v", group)
 
 	var state replication.StorageProtectionGroupStatus_State
 	switch group.CurrConsistMode {
-	case sio.PARTIALLY_CONSISTENT:
+	case sio.PARTIALLY_CONSISTENT, sio.CONSISTENT_PENDING:
 		state = replication.StorageProtectionGroupStatus_SYNC_IN_PROGRESS
 	case sio.CONSISTENT:
 		state = replication.StorageProtectionGroupStatus_SYNCHRONIZED
@@ -440,9 +465,18 @@ func (s *service) GetStorageProtectionGroupStatus(ctx context.Context, req *repl
 		state = replication.StorageProtectionGroupStatus_UNKNOWN
 	}
 
+	if group.AbstractState == "StoppedByUser" {
+		if isFailover(group) {
+			state = replication.StorageProtectionGroupStatus_FAILEDOVER
+		} else if isPaused(group) {
+			state = replication.StorageProtectionGroupStatus_SUSPENDED
+		}
+	}
+
 	return &replication.GetStorageProtectionGroupStatusResponse{
 		Status: &replication.StorageProtectionGroupStatus{
-			State: state,
+			State:    state,
+			IsSource: group.ReplicationDirection == "LocalToRemote",
 		},
 	}, nil
 }
@@ -512,6 +546,14 @@ func createRemoteCreateVolumeRequest(name string, storagePool string, systemID s
 	capabilities = append(capabilities, capability)
 	req.VolumeCapabilities = capabilities
 	return req
+}
+
+func isFailover(group *siotypes.ReplicationConsistencyGroup) bool {
+	return group.CurrConsistMode == "Consistent" && group.FailoverType != "None"
+}
+
+func isPaused(group *siotypes.ReplicationConsistencyGroup) bool {
+	return group.CurrConsistMode == "Consistent" && group.PauseMode != "None"
 }
 
 func (s *service) getConsistencyGroupSnapshotContent(localSystem, remoteSystem, protectionGroup, snapshotGroup string) (map[string]string, error) {
