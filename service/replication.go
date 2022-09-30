@@ -387,14 +387,12 @@ func (s *service) ExecuteAction(ctx context.Context, req *replication.ExecuteAct
 			counter++
 		}
 	case replication.ActionTypes_FAILOVER_REMOTE.String():
-		err := s.ExecuteFailoverOnReplicationGroup(localSystem, req.GetProtectionGroupId())
-		if err != nil {
+		if err := s.ExecuteFailoverOnReplicationGroup(localSystem, req.GetProtectionGroupId()); err != nil {
 			return nil, err
 		}
 
 	case replication.ActionTypes_UNPLANNED_FAILOVER_LOCAL.String():
-		err := s.ExecuteSwitchoverOnReplicationGroup(localSystem, req.GetProtectionGroupId())
-		if err != nil {
+		if err := s.ExecuteSwitchoverOnReplicationGroup(localSystem, req.GetProtectionGroupId()); err != nil {
 			return nil, err
 		}
 
@@ -406,6 +404,11 @@ func (s *service) ExecuteAction(ctx context.Context, req *replication.ExecuteAct
 	case replication.ActionTypes_RESUME.String():
 		failover := statusResp.Status.State == replication.StorageProtectionGroupStatus_FAILEDOVER
 		if err := s.ExecuteResumeOnReplicationGroup(localSystem, req.GetProtectionGroupId(), failover); err != nil {
+			return nil, err
+		}
+
+	case replication.ActionTypes_SUSPEND.String():
+		if err := s.ExecutePauseOnReplicationGroup(localSystem, req.GetProtectionGroupId()); err != nil {
 			return nil, err
 		}
 
