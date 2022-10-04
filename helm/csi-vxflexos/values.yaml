@@ -3,7 +3,7 @@
 
 # "version" is used to verify the values file matches driver version
 # Not recommend to change
-version: 2.4.0
+version: v2.4.0
 
 images:
   # "driver" defines the container image, used for the driver container.
