@@ -879,12 +879,14 @@ func (s *service) checkVolumesMap(volumeID string) error {
 		}
 
 		key := s.calcKeyForMap(volumeID)
+		Log.Printf("checkVolumesMap key %s value %v\n", key, s.volumePrefixToSystems[key]) // TWXX
 
 		if _, ok := s.volumePrefixToSystems[key]; ok {
 
 			// key found, make sure vol isn't on non-default system
 			// For each systemID in s.volumePrefixToSystems[key], read all volumes from the system
 			for _, systemID := range s.volumePrefixToSystems[key] {
+				Log.Printf("calling listVolumes systemID %s\n", systemID) // TWXX
 				vols, _, err := s.listVolumes(systemID, 0, 0, true, false, "", "")
 				if err != nil {
 					Log.WithError(err).Errorf("failed to list vols for array %s : %s ", systemID, err.Error())

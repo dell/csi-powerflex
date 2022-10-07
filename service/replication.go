@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -160,8 +161,13 @@ func (s *service) CreateStorageProtectionGroup(ctx context.Context, req *replica
 		return nil, status.Errorf(codes.Internal, "can't query peer mdms: %s", err.Error())
 	}
 
-	// Truncate ID to name to fit correctly
-	consistencyGroupName := "rcg-" + systemID[:12] + "-" + remoteSystem.ID[:12]
+	var consistencyGroupName string
+	if parameters["replication.storage.dell.com/consistencyGroupName"] != "" {
+		consistencyGroupName = parameters["replication.storage.dell.com/consistencyGroupName"]
+	} else {
+		consistencyGroupName = "rcg-" + systemID[:12] + "-" + remoteSystem.ID[:12]
+	}
+
 	localRcg, err := s.CreateReplicationConsistencyGroup(systemID, consistencyGroupName,
 		parameters["replication.storage.dell.com/rpo"], localProtectionDomain[0].ID,
 		remoteProtectionDomain[0].ID, "", remoteSystem.ID)
@@ -191,57 +197,33 @@ func (s *service) CreateStorageProtectionGroup(ctx context.Context, req *replica
 	}
 
 	replicationPairName := "rp-" + vol.ID[:12] + "-" + remoteVolumeID[:12]
-	rpResp, err := s.CreateReplicationPair(systemID, replicationPairName, vol.ID, remoteVolumeID, localRcg.ID)
+	_, err = s.CreateReplicationPair(systemID, replicationPairName, vol.ID, remoteVolumeID, localRcg.ID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "can't createReplicationPair: %s", err.Error())
 	}
 
-	groups, err := adminClient.GetReplicationConsistencyGroups()
+	group, err := s.getReplicationConsistencyGroupById(systemID, localRcg.ID)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "can't GetReplicationConsistencyGroups: %s", err.Error())
+		return nil, status.Errorf(codes.Internal, "No replication consistency groups found: %s", err.Error())
 	}
 
-	var remoteGroupId string
-	for _, rcg := range groups {
-		if rcg.Name == consistencyGroupName {
-			remoteGroupId = rcg.ID
-		}
-	}
-
-	if remoteGroupId == "" {
-		return nil, status.Errorf(codes.Internal, "remote replication consistency group not found")
-	}
-
-	pairs, err := adminClient.GetReplicationPairs(remoteGroupId)
-	if err != nil {
-		return nil, err
-	}
-
-	var remotePairId string
-	for _, pair := range pairs {
-		if pair.Name == replicationPairName {
-			remotePairId = pair.ID
-		}
-	}
-
-	// What is needed for the parameters?
 	localParams := map[string]string{
-		"replicationPairID": rpResp.ID,
-		"systemName":        systemID,
+		"systemName":     localSystem.ID,
+		"remoteSystemID": remoteSystem.ID,
 	}
 
 	remoteParams := map[string]string{
-		"replicationPairID": remotePairId,
-		"systemName":        remoteSystem.ID,
+		"systemName":     remoteSystem.ID,
+		"remoteSystemID": localSystem.ID,
 	}
 
-	Log.Printf("[CreateStorageProtectionGroup] - RCGRESP %+v", localRcg)
+	Log.Printf("[CreateStorageProtectionGroup] - localRcg: %+s, group.ID: %s", localRcg.ID, group.ID)
 
 	return &replication.CreateStorageProtectionGroupResponse{
-		LocalProtectionGroupId:         localRcg.ID,
+		LocalProtectionGroupId:         group.ID,
 		LocalProtectionGroupAttributes: localParams,
 
-		RemoteProtectionGroupId:         remoteGroupId,
+		RemoteProtectionGroupId:         group.RemoteID,
 		RemoteProtectionGroupAttributes: remoteParams,
 	}, nil
 }
@@ -370,14 +352,14 @@ func (s *service) ExecuteAction(ctx context.Context, req *replication.ExecuteAct
 
 	switch action {
 	case replication.ActionTypes_CREATE_SNAPSHOT.String():
-		resp, err := s.CreateReplicationConsistencyGroupSnapshot(localSystem, req.GetProtectionGroupId())
+		// TODO: Add delay for duplicate snapshots.
+		resp, err := s.CreateReplicationConsistencyGroupSnapshot(localSystem, protectionGroupID)
 		if err != nil {
 			return nil, err
 		}
 
 		counter := 0
 
-		// Needs a delay for the array to create the snap volumes.
 		for len(actionAttributes) == 0 && counter < 10 {
 			actionAttributes, err = s.getConsistencyGroupSnapshotContent(localSystem, remoteSystem, protectionGroupID, resp.SnapshotGroupID)
 			if err != nil {
@@ -387,31 +369,47 @@ func (s *service) ExecuteAction(ctx context.Context, req *replication.ExecuteAct
 			counter++
 		}
 	case replication.ActionTypes_FAILOVER_REMOTE.String():
-		if err := s.ExecuteFailoverOnReplicationGroup(localSystem, req.GetProtectionGroupId()); err != nil {
+		if _, err := s.waitForConsistency(localSystem, protectionGroupID); err != nil {
+			return nil, err
+		}
+
+		if err := s.ExecuteSwitchoverOnReplicationGroup(localSystem, protectionGroupID); err != nil {
 			return nil, err
 		}
 
 	case replication.ActionTypes_UNPLANNED_FAILOVER_LOCAL.String():
-		if err := s.ExecuteSwitchoverOnReplicationGroup(localSystem, req.GetProtectionGroupId()); err != nil {
+		if _, err := s.waitForConsistency(localSystem, protectionGroupID); err != nil {
+			return nil, err
+		}
+
+		if err := s.ExecuteFailoverOnReplicationGroup(localSystem, protectionGroupID); err != nil {
 			return nil, err
 		}
 
 	case replication.ActionTypes_REPROTECT_LOCAL.String():
-		if err := s.ExecuteReverseOnReplicationGroup(localSystem, req.GetProtectionGroupId()); err != nil {
+		if err := s.ensureFailover(localSystem, protectionGroupID); err != nil {
+			return nil, err
+		}
+
+		if err := s.ExecuteReverseOnReplicationGroup(localSystem, protectionGroupID); err != nil {
 			return nil, err
 		}
 
 	case replication.ActionTypes_RESUME.String():
 		failover := statusResp.Status.State == replication.StorageProtectionGroupStatus_FAILEDOVER
-		if err := s.ExecuteResumeOnReplicationGroup(localSystem, req.GetProtectionGroupId(), failover); err != nil {
-			return nil, err
+		paused := statusResp.Status.State == replication.StorageProtectionGroupStatus_SUSPENDED
+		if paused || failover {
+			if err := s.ExecuteResumeOnReplicationGroup(localSystem, protectionGroupID, failover); err != nil {
+				return nil, err
+			}
 		}
-
 	case replication.ActionTypes_SUSPEND.String():
-		if err := s.ExecutePauseOnReplicationGroup(localSystem, req.GetProtectionGroupId()); err != nil {
-			return nil, err
+		paused := statusResp.Status.State == replication.StorageProtectionGroupStatus_SUSPENDED
+		if !paused {
+			if err := s.ExecutePauseOnReplicationGroup(localSystem, protectionGroupID); err != nil {
+				return nil, err
+			}
 		}
-
 	default:
 		return nil, status.Errorf(codes.Unknown, "The requested action does not match with supported actions")
 	}
@@ -492,7 +490,6 @@ func (s *service) getReplicationConsistencyGroupById(systemID string, groupId st
 
 	group, err := adminClient.GetReplicationConsistencyGroupById(groupId)
 	if err != nil {
-		// TODO: If not found, do something.
 		return nil, err
 	}
 
@@ -552,11 +549,13 @@ func createRemoteCreateVolumeRequest(name string, storagePool string, systemID s
 }
 
 func isFailover(group *siotypes.ReplicationConsistencyGroup) bool {
-	return group.CurrConsistMode == "Consistent" && group.FailoverType != "None"
+	// return group.CurrConsistMode == "Consistent" && group.FailoverType != "None"
+	return group.FailoverType != "None"
 }
 
 func isPaused(group *siotypes.ReplicationConsistencyGroup) bool {
-	return group.CurrConsistMode == "Consistent" && group.PauseMode != "None"
+	// return group.CurrConsistMode == "Consistent" && group.PauseMode != "None"
+	return group.PauseMode != "None"
 }
 
 func (s *service) getConsistencyGroupSnapshotContent(localSystem, remoteSystem, protectionGroup, snapshotGroup string) (map[string]string, error) {
@@ -581,4 +580,45 @@ func (s *service) getConsistencyGroupSnapshotContent(localSystem, remoteSystem, 
 	}
 
 	return actionAttributes, nil
+}
+
+func (s *service) ensureFailover(systemID string, replicationGroupID string) error {
+	for i := 0; i < 30; i++ {
+		group, err := s.getReplicationConsistencyGroupById(systemID, replicationGroupID)
+		if err != nil {
+			return status.Errorf(codes.Internal, "No replication consistency groups found: %s", err.Error())
+		}
+
+		Log.Printf("[ensureFailover] - %+v", group)
+
+		if isFailover(group) && group.FailoverState == "Done" && group.DisasterRecoveryState == "Neutral" && group.RemoteDisasterRecoveryState == "Neutral" {
+			Log.Printf("[ensureFailover] - Failover achieved...slight delay...")
+			time.Sleep(5 * time.Second)
+			return nil
+		}
+
+		time.Sleep(1 * time.Second)
+	}
+
+	return status.Errorf(codes.Internal, "unable to reach failover consistency")
+}
+
+func (s *service) waitForConsistency(systemID string, replicationGroupID string) (*siotypes.ReplicationConsistencyGroup, error) {
+	for i := 0; i < 20; i++ {
+		group, err := s.getReplicationConsistencyGroupById(systemID, replicationGroupID)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "No replication consistency groups found: %s", err.Error())
+		}
+
+		if group.CurrConsistMode == "Consistent" {
+			Log.Printf("Consistency Group %s - Reached Consistency.", group.Name)
+			return group, nil
+		}
+
+		Log.Printf("[waitForConsistency] - Not consistent.")
+
+		time.Sleep(3 * time.Second)
+	}
+
+	return nil, errors.New("consistency group did not reach consistency.")
 }

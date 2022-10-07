@@ -701,9 +701,22 @@ func (s *service) ExecutePauseOnReplicationGroup(systemID string, replicationGro
 		return fmt.Errorf("can't find adminClient by id %s", systemID)
 	}
 
-	Log.Printf("[ExecutePauseOnReplicationGroup]: Resuming Replication Group")
+	Log.Printf("[ExecutePauseOnReplicationGroup]: Pause Replication Group")
 
 	return adminClient.ExecutePauseOnReplicationGroup(replicationGroupID, siotypes.ONLY_TRACK_CHANGES)
+}
+
+func (s *service) ExecuteSyncOnReplicationGroup(systemID string, replicationGroupID string) error {
+	adminClient := s.adminClients[systemID]
+	if adminClient == nil {
+		return fmt.Errorf("can't find adminClient by id %s", systemID)
+	}
+
+	Log.Printf("[ExecuteSyncOnReplicationGroup]: Executing Sync?")
+
+	_, err := adminClient.ExecuteSyncOnReplicationGroup(replicationGroupID)
+
+	return err
 }
 
 func (s *service) clearCache() {
@@ -1728,6 +1741,9 @@ func (s *service) getCapacityForAllSystems(ctx context.Context, protectionDomain
 	for _, array := range s.opts.arrays {
 		var systemCapacity int64
 		var err error
+		if array.SystemID == "" {
+			Log.Errorf("array %+v has no SystemID", array)
+		}
 
 		if len(spName) > 0 {
 			systemCapacity, err = s.getSystemCapacity(ctx, array.SystemID, protectionDomain, spName[0])
