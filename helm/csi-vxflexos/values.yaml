@@ -235,6 +235,7 @@ podmon:
   #    - "--skipArrayConnectionValidation=false"
   #    - "--driver-config-params=/vxflexos-config-params/driver-config-params.yaml"
   #    - "--driverPodLabelValue=dell-storage"
+  #    - "--ignoreVolumelessPods=false"
   #node:
   #  args:
   #    - "--csisock=unix:/var/lib/kubelet/plugins/vxflexos.emc.dell.com/csi_sock"
@@ -243,6 +244,7 @@ podmon:
   #    - "--leaderelection=false"
   #    - "--driver-config-params=/vxflexos-config-params/driver-config-params.yaml"
   #    - "--driverPodLabelValue=dell-storage"
+  #    - "--ignoreVolumelessPods=false"
 
 # CSM module attributes
 # authorization: enable csm-authorization for RBAC
