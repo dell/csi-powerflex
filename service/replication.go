@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -15,12 +14,6 @@ import (
 
 	sio "github.com/dell/goscaleio"
 	siotypes "github.com/dell/goscaleio/types/v1"
-)
-
-type ErrorCode int
-
-const (
-	ErrSuccess ErrorCode = 65
 )
 
 const (
@@ -146,12 +139,13 @@ func (s *service) CreateStorageProtectionGroup(ctx context.Context, req *replica
 	}
 	Log.Printf("[CreateStorageProtectionGroup] - Local Protection Domain: %+v", localProtectionDomain)
 
-	remoteSystem, err := s.getSystem(parameters["replication.storage.dell.com/remoteSystem"])
+	remoteSystemID := parameters["replication.storage.dell.com/remoteSystem"]
+	remoteSystem, err := s.getSystem(remoteSystemID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "couldn't getSystem (remote): %s", err.Error())
 	}
 
-	remoteProtectionDomain, err := s.getProtectionDomain(parameters["replication.storage.dell.com/remoteSystem"], remoteSystem)
+	remoteProtectionDomain, err := s.getProtectionDomain(remoteSystemID, remoteSystem)
 	if err != nil {
 		return nil, err
 	}
@@ -233,6 +227,7 @@ func (s *service) CreateRemoteVolume(ctx context.Context, req *replication.Creat
 
 	volHandleCtx := req.GetVolumeHandle()
 	parameters := req.GetParameters()
+
 	if volHandleCtx == "" {
 		return nil, status.Error(codes.InvalidArgument, "volume ID is required")
 	}
@@ -284,9 +279,9 @@ func (s *service) CreateRemoteVolume(ctx context.Context, req *replication.Creat
 		return nil, status.Errorf(codes.Internal, "can't getPeerMDMs: %s", err.Error())
 	}
 
+	remoteStoragePool := parameters["replication.storage.dell.com/remoteStoragePool"]
 	name := "replicated-" + vol.Name
-	volReq := createRemoteCreateVolumeRequest(name, parameters["replication.storage.dell.com/remoteStoragePool"], remoteSystem.ID)
-	volReq.CapacityRange.RequiredBytes = int64(vol.SizeInKb)
+	volReq := createRemoteCreateVolumeRequest(name, remoteStoragePool, remoteSystem.ID, int64(vol.SizeInKb))
 
 	createVolumeResponse, err := s.CreateVolume(ctx, volReq)
 	if err != nil {
@@ -297,7 +292,7 @@ func (s *service) CreateRemoteVolume(ctx context.Context, req *replication.Creat
 	}
 
 	remoteParams := map[string]string{
-		"storagePool":    parameters["replication.storage.dell.com/remoteStoragePool"],
+		"storagePool":    remoteStoragePool,
 		"remoteSystem":   remoteSystem.ID,
 		"remoteVolumeID": createVolumeResponse.Volume.VolumeId,
 	}
@@ -369,28 +364,16 @@ func (s *service) ExecuteAction(ctx context.Context, req *replication.ExecuteAct
 			counter++
 		}
 	case replication.ActionTypes_FAILOVER_REMOTE.String():
-		if _, err := s.waitForConsistency(localSystem, protectionGroupID); err != nil {
-			return nil, err
-		}
-
 		if err := s.ExecuteSwitchoverOnReplicationGroup(localSystem, protectionGroupID); err != nil {
 			return nil, err
 		}
 
 	case replication.ActionTypes_UNPLANNED_FAILOVER_LOCAL.String():
-		if _, err := s.waitForConsistency(localSystem, protectionGroupID); err != nil {
-			return nil, err
-		}
-
 		if err := s.ExecuteFailoverOnReplicationGroup(localSystem, protectionGroupID); err != nil {
 			return nil, err
 		}
 
 	case replication.ActionTypes_REPROTECT_LOCAL.String():
-		if err := s.ensureFailover(localSystem, protectionGroupID); err != nil {
-			return nil, err
-		}
-
 		if err := s.ExecuteReverseOnReplicationGroup(localSystem, protectionGroupID); err != nil {
 			return nil, err
 		}
@@ -524,7 +507,7 @@ func getRemoteCSIVolume(volumeID string, size int) *replication.Volume {
 	return volume
 }
 
-func createRemoteCreateVolumeRequest(name string, storagePool string, systemID string) *csi.CreateVolumeRequest {
+func createRemoteCreateVolumeRequest(name, storagePool, systemID string, sizeInKb int64) *csi.CreateVolumeRequest {
 	req := new(csi.CreateVolumeRequest)
 	params := make(map[string]string)
 	params["storagepool"] = storagePool
@@ -532,7 +515,7 @@ func createRemoteCreateVolumeRequest(name string, storagePool string, systemID s
 	req.Parameters = params
 	req.Name = name
 	capacityRange := new(csi.CapacityRange)
-	capacityRange.RequiredBytes = 32 * 1024 * 1024 * 1024
+	capacityRange.RequiredBytes = sizeInKb * 1024
 	req.CapacityRange = capacityRange
 	block := new(csi.VolumeCapability_BlockVolume)
 	capability := new(csi.VolumeCapability)
@@ -549,12 +532,10 @@ func createRemoteCreateVolumeRequest(name string, storagePool string, systemID s
 }
 
 func isFailover(group *siotypes.ReplicationConsistencyGroup) bool {
-	// return group.CurrConsistMode == "Consistent" && group.FailoverType != "None"
-	return group.FailoverType != "None"
+	return group.FailoverType != "None" && group.FailoverState == "Done"
 }
 
 func isPaused(group *siotypes.ReplicationConsistencyGroup) bool {
-	// return group.CurrConsistMode == "Consistent" && group.PauseMode != "None"
 	return group.PauseMode != "None"
 }
 
@@ -580,45 +561,4 @@ func (s *service) getConsistencyGroupSnapshotContent(localSystem, remoteSystem, 
 	}
 
 	return actionAttributes, nil
-}
-
-func (s *service) ensureFailover(systemID string, replicationGroupID string) error {
-	for i := 0; i < 30; i++ {
-		group, err := s.getReplicationConsistencyGroupById(systemID, replicationGroupID)
-		if err != nil {
-			return status.Errorf(codes.Internal, "No replication consistency groups found: %s", err.Error())
-		}
-
-		Log.Printf("[ensureFailover] - %+v", group)
-
-		if isFailover(group) && group.FailoverState == "Done" && group.DisasterRecoveryState == "Neutral" && group.RemoteDisasterRecoveryState == "Neutral" {
-			Log.Printf("[ensureFailover] - Failover achieved...slight delay...")
-			time.Sleep(5 * time.Second)
-			return nil
-		}
-
-		time.Sleep(1 * time.Second)
-	}
-
-	return status.Errorf(codes.Internal, "unable to reach failover consistency")
-}
-
-func (s *service) waitForConsistency(systemID string, replicationGroupID string) (*siotypes.ReplicationConsistencyGroup, error) {
-	for i := 0; i < 20; i++ {
-		group, err := s.getReplicationConsistencyGroupById(systemID, replicationGroupID)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "No replication consistency groups found: %s", err.Error())
-		}
-
-		if group.CurrConsistMode == "Consistent" {
-			Log.Printf("Consistency Group %s - Reached Consistency.", group.Name)
-			return group, nil
-		}
-
-		Log.Printf("[waitForConsistency] - Not consistent.")
-
-		time.Sleep(3 * time.Second)
-	}
-
-	return nil, errors.New("consistency group did not reach consistency.")
 }
