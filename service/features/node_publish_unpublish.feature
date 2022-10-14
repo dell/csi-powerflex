@@ -151,7 +151,7 @@ Feature: VxFlex OS CSI interface
 
     Examples:
       | voltype | access            | fstype | errormsg                                            |
-      | "block" | "multiple-reader" | "none" | "read only not supported for Block Volume"          |
+      | "block" | "multiple-reader" | "none" | "none"                                              |
       | "mount" | "single-reader"   | "none" | "none"                                              |
       | "mount" | "single-reader"   | "xfs"  | "none"                                              |
       | "mount" | "multiple-reader" | "ext4" | "none"                                              |
@@ -186,7 +186,7 @@ Feature: VxFlex OS CSI interface
       | voltype | access            | fstype | errormsg                                            |
       | "mount" | "single-reader"   | "none" | "none"                                              |
       | "mount" | "single-reader"   | "xfs"  | "none"                                              |
-      | "block" | "multiple-reader" | "none" | "read only not supported for Block Volume"          |
+      | "block" | "multiple-reader" | "none" | "none"                                              |
       | "mount" | "multiple-reader" | "ext4" | "none"                                              |
       #| "mount" | "single-writer"   | "ext4" | "Access mode conflicts with existing mounts"        |
       | "mount" | "multiple-writer" | "ext4" | "do not support AccessMode MULTI_NODE_MULTI_WRITER" |
