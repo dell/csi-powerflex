@@ -622,7 +622,7 @@ func validateVolumeCapability(volCap *csi.VolumeCapability, readOnly bool) (bool
 			multiAccessFlag = "rw"
 		}
 		if readOnly {
-			return true, mntVol, accMode, "", status.Error(codes.InvalidArgument, "read only not supported for Block Volume")
+			Log.Warnf("read only for Block Volume is not recommended")
 		}
 	}
 	mntVol = volCap.GetMount()
