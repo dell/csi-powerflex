@@ -203,6 +203,9 @@ func publishVolume(
 			if fs == "xfs" {
 				mntFlags = append(mntFlags, "nouuid")
 			}
+			if ro {
+				mntFlags = append(mntFlags, "ro")
+			}
 			fsFormatOption := req.GetVolumeContext()[KeyMkfsFormatOption]
 			if err := handlePrivFSMount(
 				ctx, accMode, sysDevice, mntFlags, fs, privTgt, fsFormatOption); err != nil {

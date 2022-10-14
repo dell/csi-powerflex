@@ -155,8 +155,20 @@ Feature: VxFlex OS CSI interface
       | "mount" | "single-reader"   | "none" | "none"                                              |
       | "mount" | "single-reader"   | "xfs"  | "none"                                              |
       | "mount" | "multiple-reader" | "ext4" | "none"                                              |
-      | "mount" | "single-writer"   | "ext4" | "Access mode conflicts with existing mounts"        |
       | "mount" | "multiple-writer" | "ext4" | "do not support AccessMode MULTI_NODE_MULTI_WRITER" |
+
+
+  Scenario: Node publish but access modes conflicts 
+   Given a VxFlexOS service
+    And a controller published volume
+    And a capability with voltype "mount" access "single-writer" fstype "ext4"
+    And get Node Publish Volume Request
+    When I call Probe
+    And I call NodePublishVolume "SDC_GUID"
+    And I mark request read only
+    And I call NodePublishVolume "SDC_GUID"
+    Then the error contains "Access mode conflicts with existing mounts"
+
 
   Scenario Outline: Node publish various use cases from examples when read-only mount volume already published and I change the target path
     Given a VxFlexOS service
@@ -176,8 +188,24 @@ Feature: VxFlex OS CSI interface
       | "mount" | "single-reader"   | "xfs"  | "none"                                              |
       | "block" | "multiple-reader" | "none" | "read only not supported for Block Volume"          |
       | "mount" | "multiple-reader" | "ext4" | "none"                                              |
-      | "mount" | "single-writer"   | "ext4" | "Access mode conflicts with existing mounts"        |
+      #| "mount" | "single-writer"   | "ext4" | "Access mode conflicts with existing mounts"        |
       | "mount" | "multiple-writer" | "ext4" | "do not support AccessMode MULTI_NODE_MULTI_WRITER" |
+
+
+  Scenario:  Node publish when read-only mount volume already published and I change the target path, access mode conflicts
+   Given a VxFlexOS service
+   And a controller published volume
+   And a capability with voltype "mount" access "single-writer" fstype "ext4"
+   And get Node Publish Volume Request
+   When I call Probe
+   And I call NodePublishVolume "SDC_GUID"
+   #And I change the target path
+   And I mark request read only
+   And I call NodePublishVolume "SDC_GUID"
+   Then the error contains "Access mode conflicts with existing mounts"
+
+
+
 
   Scenario: Node publish volume with volume context
     Given a VxFlexOS service
