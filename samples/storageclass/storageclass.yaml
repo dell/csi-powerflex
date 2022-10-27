@@ -43,6 +43,18 @@ parameters:
   # Else defaultFsType value mentioned in values.yaml
   # will be used as default value
   csi.storage.k8s.io/fstype: ext4
+  # Limit the volume network bandwidth
+  # Value is a positive number in granularity of 1024 Kbps; 0 = unlimited
+  # Allowed values: one string for bandwidth limit in Kbps
+  # Optional: false
+  # Uncomment the line below if you want to use bandwidthLimitInKbps
+  # bandwidthLimitInKbps: <BANDWIDTH_LIMIT_IN_KBPS> # Insert bandwidth limit in Kbps
+  # Limit the volume IOPS
+  # The number of IOPS must be greater than 10; 0 = unlimited
+  # Allowed values: one string for iops limit
+  # Optional: false
+  # Uncomment the line below if you want to use iopsLimit
+  # iopsLimit: <IOPS_LIMIT> # Insert iops limit
 # volumeBindingMode determines how volume binding and dynamic provisioning should occur
 # Allowed values: 
 #  Immediate: volume binding and dynamic provisioning occurs once PVC is created
