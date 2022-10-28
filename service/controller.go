@@ -29,6 +29,9 @@ const (
 	// KeyProtectionDomain is the key used to get the StoragePool's Protection Domain name from the
 	// volume create parameters map. This parameter is optional.
 	KeyProtectionDomain = "protectiondomain"
+	
+	KeyBandwidthLimitInKbps = "bandwidthLimitInKbps"
+	KeyIopsLimit = "iopsLimit"
 
 	// KeySystemID is the key used to get the array ID from the volume
 	// create parameters map
@@ -90,7 +93,7 @@ const (
 )
 
 var (
-	interestingParameters = [...]string{0: "FsType", 1: KeyMkfsFormatOption}
+	interestingParameters = [...]string{0: "FsType", 1: KeyMkfsFormatOption, 2: KeyBandwidthLimitInKbps, 3: KeyIopsLimit}
 )
 
 func (s *service) CreateVolume(
@@ -711,13 +714,34 @@ func (s *service) ControllerPublishVolume(
 	allowMultipleMappings := "FALSE"
 	vcs := []*csi.VolumeCapability{req.GetVolumeCapability()}
 	isBlock := accTypeIsBlock(vcs)
-
+	
 	if len(vol.MappedSdcInfo) > 0 {
 		for _, sdc := range vol.MappedSdcInfo {
 			if sdc.SdcID == sdcID {
 				// TODO check if published volume is compatible with this request
 				// volume already mapped
 				Log.Debug("volume already mapped")
+
+				// check for QoS limits of mapped volume
+				bandwidthLimit := volumeContext[KeyBandwidthLimitInKbps]
+				iopsLimit := volumeContext[KeyIopsLimit]
+				
+				// validate requested QoS parameters
+				if err := validateQoSParameters(bandwidthLimit, iopsLimit, vol.Name); err != nil {
+					return nil, err
+				}
+									
+				// check if volume QoS is same as requested QoS settings
+				if len(bandwidthLimit)>0 && strconv.Itoa(sdc.LimitBwInMbps*1024) != bandwidthLimit {
+					return nil, status.Errorf(codes.InvalidArgument,
+						"volume %s already published with bandwidth limit: %d, but does not match the requested bandwidth limit: %s", vol.Name, sdc.LimitBwInMbps*1024, bandwidthLimit)
+				} else if len(iopsLimit)>0 && strconv.Itoa(sdc.LimitIops) != iopsLimit {
+					return nil, status.Errorf(codes.InvalidArgument,
+						"volume %s already published with IOPS limit: %d, but does not match the requested IOPS limits: %s", vol.Name, sdc.LimitIops, iopsLimit)
+				} else {
+					return &csi.ControllerPublishVolumeResponse{}, nil
+				}
+
 				return &csi.ControllerPublishVolumeResponse{}, nil
 			}
 		}
@@ -769,10 +793,66 @@ func (s *service) ControllerPublishVolume(
 		return nil, status.Errorf(codes.Internal,
 			"error mapping volume to node: %s", err.Error())
 	}
+	
+	bandwidthLimit := volumeContext[KeyBandwidthLimitInKbps]
+	iopsLimit := volumeContext[KeyIopsLimit]
+	
+	// validate requested QoS parameters
+	if err := validateQoSParameters(bandwidthLimit, iopsLimit, vol.Name); err != nil {
+		return nil, err
+	}
+	
+	// for the mapped SDC, set QoS limits
+	if err := s.setQoSLimits(adminClient, vol, sdcID, bandwidthLimit, iopsLimit); err != nil {
+		return nil, err
+	}
+
+	vol, err = s.getVolByID(vol.ID, systemID)
+	if err != nil {
+		return nil, status.Errorf(codes.Unavailable,
+			"error retrieving volume details: %s", err.Error())
+	}
 
 	return &csi.ControllerPublishVolumeResponse{}, nil
 }
 
+// validate the requested QoS parameters.
+func validateQoSParameters(bandwidthLimit string, iopsLimit string, volumeName string) error {
+	if len(bandwidthLimit)>0 {
+		_, err := strconv.ParseInt(bandwidthLimit,10,64)
+		if err != nil {
+			return status.Errorf(codes.InvalidArgument, "requested Bandwidth limit: %s is not numeric for volume %s, error: %s", bandwidthLimit, volumeName, err.Error())
+		}
+	}
+
+	if len(iopsLimit)>0 {
+		_, err := strconv.ParseInt(iopsLimit,10,64)
+		if err != nil {
+			return status.Errorf(codes.InvalidArgument, "requested IOPS limit: %s is not numeric for volume, error: %s", iopsLimit, volumeName, err.Error())
+		}
+	}
+
+	return nil
+}
+
+// Set QoS limits for mapped SDC of volume
+func (s *service) setQoSLimits(adminClient *goscaleio.Client, vol *siotypes.Volume, sdcID string, bandwidthLimit string, iopsLimit string) error{
+	
+	Log.Infof("Setting QoS limits for volume %s, mapped to SDC %s", vol.Name, sdcID)
+	tgtVol := goscaleio.NewVolume(adminClient)
+	tgtVol.Volume = vol
+	settings := siotypes.SetMappedSdcLimitsParam{
+		SdcID:                sdcID,
+		BandwidthLimitInKbps: bandwidthLimit,
+		IopsLimit:            iopsLimit,
+	}
+	err := tgtVol.SetMappedSdcLimits(&settings)
+	if err != nil {
+		return status.Errorf(codes.Internal,
+			"error setting QoS parameters for volume: %s", err.Error())
+	}
+	return nil
+}
 // Determine when the multiple mappings flag should be set when calling MapVolumeSdc
 func shouldAllowMultipleMappings(isBlock bool, accessMode *csi.VolumeCapability_AccessMode) (string, error) {
 	switch accessMode.Mode {
