@@ -798,28 +798,31 @@ func (s *service) ControllerPublishVolume(
 	if err := validateQoSParameters(bandwidthLimit, iopsLimit, vol.Name); err != nil {
 		return nil, err
 	} else {
-		Log.Infof("Setting QoS limits for volume %s, mapped to SDC %s", vol.Name, sdcID)
-		tgtVol := goscaleio.NewVolume(adminClient)
-		tgtVol.Volume = vol
-		settings := siotypes.SetMappedSdcLimitsParam{
-			SdcID:                sdcID,
-			BandwidthLimitInKbps: bandwidthLimit,
-			IopsLimit:            iopsLimit,
-		}
-		err := tgtVol.SetMappedSdcLimits(&settings)
-		if err != nil {
-			// unpublish the volume
-			Log.Errorf("error setting QoS parameters for volume: %s, unpublishing volume, error: %s", vol.Name, err.Error())
-			_, newErr := s.ControllerUnpublishVolume(ctx, &csi.ControllerUnpublishVolumeRequest{
-				VolumeId: csiVolID,
-				NodeId:   nodeID,
-			})
-			if newErr != nil {
-				return nil, status.Errorf(codes.Internal,
-					"controller unpublish failed, error: %s", newErr.Error())
+		// check for atleast one of the QoS params should exist in storage class
+		if len(bandwidthLimit) > 0 || len(iopsLimit) > 0 {
+			Log.Infof("Setting QoS limits for volume %s, mapped to SDC %s", vol.Name, sdcID)
+			tgtVol := goscaleio.NewVolume(adminClient)
+			tgtVol.Volume = vol
+			settings := siotypes.SetMappedSdcLimitsParam{
+				SdcID:                sdcID,
+				BandwidthLimitInKbps: bandwidthLimit,
+				IopsLimit:            iopsLimit,
 			}
-			return nil, status.Errorf(codes.Internal,
-				"error setting QoS parameters, error: %s", err.Error())
+			err := tgtVol.SetMappedSdcLimits(&settings)
+			if err != nil {
+				// unpublish the volume
+				Log.Errorf("error setting QoS parameters for volume: %s, unpublishing volume, error: %s", vol.Name, err.Error())
+				_, newErr := s.ControllerUnpublishVolume(ctx, &csi.ControllerUnpublishVolumeRequest{
+					VolumeId: csiVolID,
+					NodeId:   nodeID,
+				})
+				if newErr != nil {
+					return nil, status.Errorf(codes.Internal,
+						"controller unpublish failed, error: %s", newErr.Error())
+				}
+				return nil, status.Errorf(codes.Internal,
+					"error setting QoS parameters, error: %s", err.Error())
+			}
 		}
 	}
 
