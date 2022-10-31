@@ -6,6 +6,8 @@ import (
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	siotypes "github.com/dell/goscaleio/types/v1"
 	"github.com/stretchr/testify/assert"
+	"fmt"
+	"errors"
 )
 
 func TestGetVolSize(t *testing.T) {
@@ -360,6 +362,61 @@ func TestVolumeCaps(t *testing.T) {
 			s, _ := valVolumeCaps(tt.caps, tt.vol)
 
 			assert.Equal(st, tt.supported, s)
+		})
+	}
+}
+
+func TestValidateQoSParameters(t *testing.T) {
+	tests := []struct {
+		bandwidthLimit	string
+		iopsLimit		string
+		volumeName		string
+		expectedError	error
+	}{
+		// requesting for valid values for both bandwidth and iops limit
+		{
+			bandwidthLimit: "10240",
+			iopsLimit: "12",
+			volumeName: "k8s-a031818af5",
+			expectedError: nil,
+		},
+		// requesting for invalid value bandwidth limit and valid value iops limit
+		{
+			bandwidthLimit: "10240kbps",
+			iopsLimit: "12",
+			volumeName: "k8s-a031818af5",
+			expectedError: errors.New("rpc error: code = InvalidArgument desc = requested Bandwidth limit: 10240kbps is not numeric for volume k8s-a031818af5, error: strconv.ParseInt: parsing \"10240kbps\": invalid syntax"),
+		},
+		// requesting for valid value bandwidth limit and invalid value iops limit
+		{
+			bandwidthLimit: "10240",
+			iopsLimit: "12iops",
+			volumeName: "k8s-a031818af5",
+			expectedError: errors.New("rpc error: code = InvalidArgument desc = requested IOPS limit: 12iops is not numeric for volume k8s-a031818af5, error: strconv.ParseInt: parsing \"12iops\": invalid syntax"),
+		},
+		// requesting for invalid values for both bandwidth and iops limit
+		{
+			bandwidthLimit: "10240kbps",
+			iopsLimit: "12iops",
+			volumeName: "k8s-a031818af5",
+			expectedError: errors.New("rpc error: code = InvalidArgument desc = requested Bandwidth limit: 10240kbps is not numeric for volume k8s-a031818af5, error: strconv.ParseInt: parsing \"10240kbps\": invalid syntax"),
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run("", func(st *testing.T) {
+			st.Parallel()
+			err := validateQoSParameters(tt.bandwidthLimit, tt.iopsLimit, tt.volumeName)
+			// fmt.Printf(err.Error())
+			if err == tt.expectedError {
+				fmt.Printf("Requested parameters are valid")
+			} else if err != nil {
+				if err.Error() != tt.expectedError.Error() {
+					t.Errorf("Requested parameters are invalid, \n\tgot: %s \n\twant: %s",
+						err, tt.expectedError)
+				}
+			}
 		})
 	}
 }
