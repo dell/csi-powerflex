@@ -811,7 +811,7 @@ func (s *service) ControllerPublishVolume(
 			err := tgtVol.SetMappedSdcLimits(&settings)
 			if err != nil {
 				// unpublish the volume
-				Log.Errorf("error setting QoS parameters for volume: %s, unpublishing volume, error: %s", vol.Name, err.Error())
+				Log.Errorf("unpublishing volume since error in setting QoS parameters for volume: %s, error: %s", vol.Name, err.Error())
 				_, newErr := s.ControllerUnpublishVolume(ctx, &csi.ControllerUnpublishVolumeRequest{
 					VolumeId: csiVolID,
 					NodeId:   nodeID,
