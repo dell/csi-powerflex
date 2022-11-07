@@ -802,12 +802,11 @@ func (s *service) ControllerPublishVolume(
 	// validate requested QoS parameters
 	if err := validateQoSParameters(bandwidthLimit, iopsLimit, vol.Name); err != nil {
 		return nil, err
-	} else {
-		// check for atleast one of the QoS params should exist in storage class
-		if len(bandwidthLimit) > 0 || len(iopsLimit) > 0 {
-			if err = s.setQoSParameters(ctx, systemID, sdcID, bandwidthLimit, iopsLimit, vol.Name, csiVolID, nodeID); err != nil {
-				return nil, err
-			}
+	}
+	// check for atleast one of the QoS params should exist in storage class
+	if len(bandwidthLimit) > 0 || len(iopsLimit) > 0 {
+		if err = s.setQoSParameters(ctx, systemID, sdcID, bandwidthLimit, iopsLimit, vol.Name, csiVolID, nodeID); err != nil {
+			return nil, err
 		}
 	}
 
@@ -845,6 +844,9 @@ func (s *service) setQoSParameters(
 	tgtVol := goscaleio.NewVolume(adminClient)
 	volID := getVolumeIDFromCsiVolumeID(csiVolID)
 	vol, err := s.getVolByID(volID, systemID)
+	if err != nil {
+		return status.Errorf(codes.NotFound, "volume %s was not found", volID)
+	}
 	tgtVol.Volume = vol
 	settings := siotypes.SetMappedSdcLimitsParam{
 		SdcID:                sdcID,
