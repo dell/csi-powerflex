@@ -317,7 +317,7 @@ MDM-ID 14dbbf5617523654 SDC ID d0f33bd700000004 INSTALLATION ID 1c078b073d75512c
 	return svc
 }
 
-//CreateCSINode uses fakeclient to make csinode with topology key
+// CreateCSINode uses fakeclient to make csinode with topology key
 func (f *feature) CreateCSINode() (*storage.CSINode, error) {
 
 	K8sClientset = fake.NewSimpleClientset()
@@ -3240,6 +3240,16 @@ func (f *feature) iCallgetArrayInstallationID(systemID string) error {
 	return nil
 }
 
+func (f *feature) iCallSetQoSParameters(systemID string, sdcID string, bandwidthLimit string, iopsLimit string, volumeName string, csiVolID string, nodeID string) error {
+	ctx := new(context.Context)
+	fmt.Println("Calling setQoSParameters")
+	f.err = f.service.setQoSParameters(*ctx, systemID, sdcID, bandwidthLimit, iopsLimit, volumeName, csiVolID, nodeID)
+	if f.err != nil {
+		fmt.Printf("Error on validating QoS parameters: %s\n", f.err.Error())
+	}
+	return nil
+}
+
 func FeatureContext(s *godog.ScenarioContext) {
 	f := &feature{}
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
@@ -3394,6 +3404,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^a valid DynamicLogChange occurs "([^"]*)" "([^"]*)"$`, f.aValidDynamicLogChange)
 	s.Step(`^I call getProtectionDomainIDFromName "([^"]*)" "([^"]*)"$`, f.iCallgetProtectionDomainIDFromName)
 	s.Step(`^I call getArrayInstallationID "([^"]*)"$`, f.iCallgetArrayInstallationID)
+	s.Step(`^I call setQoSParameters with systemID "([^"]*)" sdcID "([^"]*)" bandwidthLimit "([^"]*)" iopsLimit "([^"]*)" volumeName "([^"]*)" csiVolID "([^"]*)" nodeID "([^"]*)"$`, f.iCallSetQoSParameters)
 
 	s.After(func(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
 		if f.server != nil {

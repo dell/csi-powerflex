@@ -922,3 +922,10 @@ Feature: VxFlex OS CSI interface
     And I induce error "WrongSysNameError"
     When I call getArrayInstallationID "15dbbf5617523655"
     Then the error contains "systemid or systemname not found"
+
+  Scenario: Calls for setting QoS parameters
+    Given a VxFlexOS service
+    And a valid volume
+    And I call Probe
+    When I call setQoSParameters with systemID "15dbbf5617523655" sdcID "c42425cc00000013" bandwidthLimit "10240" iopsLimit "11" volumeName "k8s-a031818af5" csiVolID "0e7a082862fedf0f-456ca4fc00000009" nodeID "9351DD32-41D8-4003-9E91-EF8240C84B70"
+    Then the error contains "none"

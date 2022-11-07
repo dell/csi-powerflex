@@ -800,28 +800,9 @@ func (s *service) ControllerPublishVolume(
 	} else {
 		// check for atleast one of the QoS params should exist in storage class
 		if len(bandwidthLimit) > 0 || len(iopsLimit) > 0 {
-			Log.Infof("Setting QoS limits for volume %s, mapped to SDC %s", vol.Name, sdcID)
-			tgtVol := goscaleio.NewVolume(adminClient)
-			tgtVol.Volume = vol
-			settings := siotypes.SetMappedSdcLimitsParam{
-				SdcID:                sdcID,
-				BandwidthLimitInKbps: bandwidthLimit,
-				IopsLimit:            iopsLimit,
-			}
-			err := tgtVol.SetMappedSdcLimits(&settings)
+			err = s.setQoSParameters(ctx, systemID, sdcID, bandwidthLimit, iopsLimit, vol.Name, csiVolID, nodeID)
 			if err != nil {
-				// unpublish the volume
-				Log.Errorf("unpublishing volume since error in setting QoS parameters for volume: %s, error: %s", vol.Name, err.Error())
-				_, newErr := s.ControllerUnpublishVolume(ctx, &csi.ControllerUnpublishVolumeRequest{
-					VolumeId: csiVolID,
-					NodeId:   nodeID,
-				})
-				if newErr != nil {
-					return nil, status.Errorf(codes.Internal,
-						"controller unpublish failed, error: %s", newErr.Error())
-				}
-				return nil, status.Errorf(codes.Internal,
-					"error setting QoS parameters, error: %s", err.Error())
+				return nil, status.Errorf(codes.Internal, err.Error())
 			}
 		}
 	}
@@ -845,6 +826,43 @@ func validateQoSParameters(bandwidthLimit string, iopsLimit string, volumeName s
 		}
 	}
 
+	return nil
+}
+
+// setQoSParameters to set QoS parameters
+func (s *service) setQoSParameters(
+	ctx context.Context,
+	systemID string, sdcID string, bandwidthLimit string,
+	iopsLimit string, volumeName string, csiVolID string,
+	nodeID string) error {
+
+	Log.Infof("Setting QoS limits for volume %s, mapped to SDC %s", volumeName, sdcID)
+	adminClient := s.adminClients[systemID]
+	tgtVol := goscaleio.NewVolume(adminClient)
+	volID := getVolumeIDFromCsiVolumeID(csiVolID)
+	vol, err := s.getVolByID(volID, systemID)
+	tgtVol.Volume = vol
+	settings := siotypes.SetMappedSdcLimitsParam{
+		SdcID:                sdcID,
+		BandwidthLimitInKbps: bandwidthLimit,
+		IopsLimit:            iopsLimit,
+	}
+	err = tgtVol.SetMappedSdcLimits(&settings)
+	if err != nil {
+		// unpublish the volume
+		Log.Errorf("unpublishing volume since error in setting QoS parameters for volume: %s, error: %s", volumeName, err.Error())
+
+		_, newErr := s.ControllerUnpublishVolume(ctx, &csi.ControllerUnpublishVolumeRequest{
+			VolumeId: csiVolID,
+			NodeId:   nodeID,
+		})
+		if newErr != nil {
+			return status.Errorf(codes.Internal,
+				"controller unpublish failed, error: %s", newErr.Error())
+		}
+		return status.Errorf(codes.Internal,
+			"error setting QoS parameters, error: %s", err.Error())
+	}
 	return nil
 }
 
