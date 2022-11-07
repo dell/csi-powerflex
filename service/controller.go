@@ -805,9 +805,8 @@ func (s *service) ControllerPublishVolume(
 	} else {
 		// check for atleast one of the QoS params should exist in storage class
 		if len(bandwidthLimit) > 0 || len(iopsLimit) > 0 {
-			err = s.setQoSParameters(ctx, systemID, sdcID, bandwidthLimit, iopsLimit, vol.Name, csiVolID, nodeID)
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, err.Error())
+			if err = s.setQoSParameters(ctx, systemID, sdcID, bandwidthLimit, iopsLimit, vol.Name, csiVolID, nodeID); err != nil {
+				return nil, err
 			}
 		}
 	}
