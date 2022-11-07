@@ -925,21 +925,20 @@ Feature: VxFlex OS CSI interface
 
   Scenario: Call for setting QoS parameters, everything works
     Given a VxFlexOS service
-    And a valid volume
     And I call Probe
-    When I call setQoSParameters with systemID "15dbbf5617523655" sdcID "c42425cc00000013" bandwidthLimit "10240" iopsLimit "11" volumeName "k8s-a031818af5" csiVolID "0e7a082862fedf0f-456ca4fc00000009" nodeID "9351DD32-41D8-4003-9E91-EF8240C84B70"
+    When I call setQoSParameters with systemID "15dbbf5617523655" sdcID "d0f055a700000000" bandwidthLimit "10240" iopsLimit "11" volumeName "k8s-a031818af5" csiVolID "15dbbf5617523655-456ca4fc00000009" nodeID "9E56672F-2F4B-4A42-BFF4-88B6846FBFDA"
     Then the error contains "none"
 
   Scenario: Call for setting QoS parameters, invalid bandwidthLimit
     Given a VxFlexOS service
-    And a valid volume
-    And I call Probe
-    When I call setQoSParameters with systemID "15dbbf5617523655" sdcID "c42425cc00000013" bandwidthLimit "1023" iopsLimit "11" volumeName "k8s-a031818af5" csiVolID "0e7a082862fedf0f-456ca4fc00000009" nodeID "9351DD32-41D8-4003-9E91-EF8240C84B70"
-    Then the error contains "error setting QoS parameters bandwidthLimitInKbps (1023) must be a positive number in granularity of 1024 Kbps."
+    And I induce error "SDCLimitsError"
+    When I call Probe
+    And I call setQoSParameters with systemID "15dbbf5617523655" sdcID "d0f055a700000000" bandwidthLimit "1023" iopsLimit "11" volumeName "k8s-a031818af5" csiVolID "15dbbf5617523655-456ca4fc00000009" nodeID "9E56672F-2F4B-4A42-BFF4-88B6846FBFDA"
+    Then the error contains "error setting QoS parameters"
 
   Scenario: Call for setting QoS parameters, invalid iopsLimit
     Given a VxFlexOS service
-    And a valid volume
-    And I call Probe
-    When I call setQoSParameters with systemID "15dbbf5617523655" sdcID "c42425cc00000013" bandwidthLimit "10240" iopsLimit "10" volumeName "k8s-a031818af5" csiVolID "0e7a082862fedf0f-456ca4fc00000009" nodeID "9351DD32-41D8-4003-9E91-EF8240C84B70"
-    Then the error contains "error setting QoS parameters iopsLimit (10) must be a number larger than 10 or 0."
+    And I induce error "SDCLimitsError"
+    When I call Probe
+    And I call setQoSParameters with systemID "15dbbf5617523655" sdcID "d0f055a700000000" bandwidthLimit "10240" iopsLimit "10" volumeName "k8s-a031818af5" csiVolID "15dbbf5617523655-456ca4fc00000009" nodeID "9E56672F-2F4B-4A42-BFF4-88B6846FBFDA"
+    Then the error contains "error setting QoS parameters"

@@ -36,6 +36,7 @@ var (
 		GetSdcInstancesError          bool
 		MapSdcError                   bool
 		RemoveMappedSdcError          bool
+		SDCLimitsError                bool
 		SIOGatewayVolumeNotFoundError bool
 		GetStatisticsError            bool
 		CreateSnapshotError           bool
@@ -113,6 +114,7 @@ func getHandler() http.Handler {
 	stepHandlersErrors.GetSdcInstancesError = false
 	stepHandlersErrors.MapSdcError = false
 	stepHandlersErrors.RemoveMappedSdcError = false
+	stepHandlersErrors.SDCLimitsError = false
 	stepHandlersErrors.GetStatisticsError = false
 	stepHandlersErrors.GetSystemSdcError = false
 	stepHandlersErrors.CreateSnapshotError = false
@@ -414,6 +416,29 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 				copy(sdcMappings[i:], sdcMappings[i+1:])
 				sdcMappings = sdcMappings[:len(sdcMappings)-1]
 			}
+		}
+	case "setMappedSdcLimits":
+		if stepHandlersErrors.SDCLimitsError {
+			writeError(w, "induced error", http.StatusRequestTimeout, codes.Internal)
+			return
+		}
+		req := types.SetMappedSdcLimitsParam{}
+		decoder := json.NewDecoder(r.Body)
+		err := decoder.Decode(&req)
+		if err != nil {
+			log.Printf("error decoding json: %s\n", err.Error())
+		}
+		fmt.Printf("SdcID: %s\n", req.SdcID)
+		if req.SdcID == "d0f055a700000000" {
+			sdcMappings = append(sdcMappings, types.MappedSdcInfo{SdcID: req.SdcID})
+		}
+		fmt.Printf("BandwidthLimitInKbps: %s\n", req.BandwidthLimitInKbps)
+		if req.BandwidthLimitInKbps == "10240" {
+			sdcMappings = append(sdcMappings, types.MappedSdcInfo{SdcID: req.SdcID, LimitBwInMbps: 10})
+		}
+		fmt.Printf("IopsLimit: %s\n", req.IopsLimit)
+		if req.IopsLimit == "11" {
+			sdcMappings = append(sdcMappings, types.MappedSdcInfo{SdcID: req.SdcID, LimitIops: 11})
 		}
 	case "snapshotVolumes":
 		if stepHandlersErrors.CreateSnapshotError {

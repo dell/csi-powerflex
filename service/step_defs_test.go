@@ -916,6 +916,8 @@ func (f *feature) iInduceError(errtype string) error {
 		stepHandlersErrors.MapSdcError = true
 	case "RemoveMappedSdcError":
 		stepHandlersErrors.RemoveMappedSdcError = true
+	case "SDCLimitsError":
+		stepHandlersErrors.SDCLimitsError = true
 	case "require-probe":
 		f.service.opts.SdcGUID = ""
 		f.service.opts.arrays = make(map[string]*ArrayConnectionData)
@@ -3242,10 +3244,9 @@ func (f *feature) iCallgetArrayInstallationID(systemID string) error {
 
 func (f *feature) iCallSetQoSParameters(systemID string, sdcID string, bandwidthLimit string, iopsLimit string, volumeName string, csiVolID string, nodeID string) error {
 	ctx := new(context.Context)
-	fmt.Println("Calling setQoSParameters")
 	f.err = f.service.setQoSParameters(*ctx, systemID, sdcID, bandwidthLimit, iopsLimit, volumeName, csiVolID, nodeID)
 	if f.err != nil {
-		fmt.Printf("Error on validating QoS parameters: %s\n", f.err.Error())
+		fmt.Printf("error in setting QoS parameters for volume %s : %s\n", volumeName, f.err.Error())
 	}
 	return nil
 }
