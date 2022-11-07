@@ -30,8 +30,13 @@ const (
 	// volume create parameters map. This parameter is optional.
 	KeyProtectionDomain = "protectiondomain"
 
+	// KeyBandwidthLimitInKbps is the key used to get the bandwidth limit from the volume
+	// create parameters map
 	KeyBandwidthLimitInKbps = "bandwidthLimitInKbps"
-	KeyIopsLimit            = "iopsLimit"
+
+	// KeyIopsLimit is the key used to get the IOPS limit from the volume
+	// create parameters map
+	KeyIopsLimit = "iopsLimit"
 
 	// KeySystemID is the key used to get the array ID from the volume
 	// create parameters map
