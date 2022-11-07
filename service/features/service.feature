@@ -923,9 +923,23 @@ Feature: VxFlex OS CSI interface
     When I call getArrayInstallationID "15dbbf5617523655"
     Then the error contains "systemid or systemname not found"
 
-  Scenario: Calls for setting QoS parameters
+  Scenario: Call for setting QoS parameters, everything works
     Given a VxFlexOS service
     And a valid volume
     And I call Probe
     When I call setQoSParameters with systemID "15dbbf5617523655" sdcID "c42425cc00000013" bandwidthLimit "10240" iopsLimit "11" volumeName "k8s-a031818af5" csiVolID "0e7a082862fedf0f-456ca4fc00000009" nodeID "9351DD32-41D8-4003-9E91-EF8240C84B70"
     Then the error contains "none"
+
+  Scenario: Call for setting QoS parameters, invalid bandwidthLimit
+    Given a VxFlexOS service
+    And a valid volume
+    And I call Probe
+    When I call setQoSParameters with systemID "15dbbf5617523655" sdcID "c42425cc00000013" bandwidthLimit "1023" iopsLimit "11" volumeName "k8s-a031818af5" csiVolID "0e7a082862fedf0f-456ca4fc00000009" nodeID "9351DD32-41D8-4003-9E91-EF8240C84B70"
+    Then the error contains "error setting QoS parameters bandwidthLimitInKbps (1023) must be a positive number in granularity of 1024 Kbps."
+
+  Scenario: Call for setting QoS parameters, invalid iopsLimit
+    Given a VxFlexOS service
+    And a valid volume
+    And I call Probe
+    When I call setQoSParameters with systemID "15dbbf5617523655" sdcID "c42425cc00000013" bandwidthLimit "10240" iopsLimit "10" volumeName "k8s-a031818af5" csiVolID "0e7a082862fedf0f-456ca4fc00000009" nodeID "9351DD32-41D8-4003-9E91-EF8240C84B70"
+    Then the error contains "error setting QoS parameters iopsLimit (10) must be a number larger than 10 or 0."
