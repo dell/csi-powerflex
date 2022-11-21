@@ -10,7 +10,7 @@ images:
   driverRepository: dellemc
 
   # "powerflexSdc" defines the SDC image for init container.
-  powerflexSdc: dellemc/sdc:3.6
+  powerflexSdc: dellemc/sdc:3.6.0.6
 
 
 # Represents number of certificate secrets, which user is going to create for ssl authentication. (vxflexos-cert-0..vxflexos-cert-n)
