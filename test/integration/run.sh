@@ -23,7 +23,7 @@ if [ $rc -ne 0 ]; then echo "failed http unauthorized test"; exit $rc; fi
 rm -f unix.sock
 source ../../env.sh
 echo $SDC_GUID
-GOOS=linux CGO_ENABLED=0 GO111MODULE=on go test -v -coverprofile=c.linux.out -timeout 60m -coverpkg=github.com/dell/csi-vxflexos/service *test.go &
+GOOS=linux CGO_ENABLED=0 GO111MODULE=on go test -v -coverprofile=c.linux.out -timeout 600m -coverpkg=github.com/dell/csi-vxflexos/service *test.go &
 if [ -f ./csi-sanity ] ; then
     sleep 5
     ./csi-sanity --csi.endpoint=./unix_sock --csi.testvolumeparameters=./pool.yml --csi.testvolumesize 8589934592
