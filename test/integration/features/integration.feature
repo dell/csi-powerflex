@@ -66,46 +66,47 @@ Feature: VxFlex OS CSI interface
     Then there are no errors
 
   #note: only run if secret has systemID
-  # Scenario: Create, publish, unpublish, and delete basic vol, but sc has name, and secret has id
-  # Given a VxFlexOS service
-  #  And a capability with voltype "mount" access "single-writer" fstype "ext4"
-  # And a volume request "alt_system_id_integration7" "8"
-  #  When I call CreateVolume
-  #  And there are no errors
-  #  And when I call PublishVolume "SDC_GUID"
-  #  And there are no errors
-  #  And when I call NodePublishVolume "SDC_GUID"
-  #  And when I call NodeUnpublishVolume "SDC_GUID"
-  #  And when I call UnpublishVolume "SDC_GUID"
-  #  And there are no errors
-  #  And when I call DeleteVolume
-  # Then there are no errors
-  #  Examples:
-  #    | access                      |
-  #    | "single-writer"             |
-  #    | "single-node-single-writer" |
-  #    | "single-node-multi-writer"  |
+  @wip
+  Scenario: Create, publish, unpublish, and delete basic vol, but sc has name, and secret has id
+  Given a VxFlexOS service
+   And a capability with voltype "mount" access "single-writer" fstype "ext4"
+  And a volume request "alt_system_id_integration7" "8"
+   When I call CreateVolume
+   And there are no errors
+   And when I call PublishVolume "SDC_GUID"
+   And there are no errors
+   And when I call NodePublishVolume "SDC_GUID"
+   And when I call NodeUnpublishVolume "SDC_GUID"
+   And when I call UnpublishVolume "SDC_GUID"
+   And there are no errors
+   And when I call DeleteVolume
+  Then there are no errors
+   Examples:
+     | access                      |
+     | "single-writer"             |
+     | "single-node-single-writer" |
+     | "single-node-multi-writer"  |
+  @wip
+  Scenario Outline: Create, publish, unpublish, and delete basic vol, using systemName. Second run: sc has ID, but secret has name
+   Given a VxFlexOS service
+    And a capability with voltype "mount" access "single-writer" fstype "ext4"
+    And I set another systemName "altSystem"
+    And a volume request <name> "8"
+    When I call CreateVolume
+    And there are no errors
+    And when I call PublishVolume "SDC_GUID"
+    And there are no errors
+    And when I call NodePublishVolume "SDC_GUID"
+    And when I call NodeUnpublishVolume "SDC_GUID"
+    And when I call UnpublishVolume "SDC_GUID"
+    And there are no errors
+    And when I call DeleteVolume
+    Then there are no errors
 
-  # Scenario Outline: Create, publish, unpublish, and delete basic vol, using systemName. Second run: sc has ID, but secret has name
-  #  Given a VxFlexOS service
-  #   And a capability with voltype "mount" access "single-writer" fstype "ext4"
-  #   And I set another systemName "altSystem"
-  #   And a volume request <name> "8"
-  #   When I call CreateVolume
-  #   And there are no errors
-  #   And when I call PublishVolume "SDC_GUID"
-  #   And there are no errors
-  #   And when I call NodePublishVolume "SDC_GUID"
-  #   And when I call NodeUnpublishVolume "SDC_GUID"
-  #   And when I call UnpublishVolume "SDC_GUID"
-  #   And there are no errors
-  #   And when I call DeleteVolume
-  #   Then there are no errors
-
-  #   Examples:
-  #     | name                         |
-  #     | "integration7"               |
-  #     | "alt_system_id_integration8" |
+    Examples:
+      | name                         |
+      | "integration7"               |
+      | "alt_system_id_integration8" |
 
   Scenario: Create, publish, unpublish, and delete basic vol, change name of array and specify wrong allSystemNames , this will pass if volume because handle has id
     Given a VxFlexOS service
