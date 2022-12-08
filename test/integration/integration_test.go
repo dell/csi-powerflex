@@ -103,7 +103,7 @@ func TestMain(m *testing.M) {
 	opts := godog.Options{
 		Format: "pretty",
 		Paths:  []string{"features"},
-		Tags:   "wip",
+		//Tags:   "wip",
 	}
 
 	exitVal := godog.TestSuite{
