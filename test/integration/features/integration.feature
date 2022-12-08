@@ -171,7 +171,8 @@ Feature: VxFlex OS CSI interface
       | "16" |
       | "32" |
       | "64" |
-      
+   
+  @wip   
   Scenario: Create volume, create snapshot, create volume from snapshot, delete original volume, delete new volume
     Given a VxFlexOS service
     And I set another systemID "altSystem"
