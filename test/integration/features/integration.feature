@@ -187,7 +187,7 @@ Feature: VxFlex OS CSI interface
     And when I call DeleteVolume
     And there are no errors
 
-
+  @wip
   Scenario: Create volume, create snapshot, create volume from snapshot, delete original volume, delete new volume
     Given a VxFlexOS service
     And I set another systemID <id>
