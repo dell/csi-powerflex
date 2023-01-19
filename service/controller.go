@@ -509,10 +509,10 @@ func (s *service) CreateReplicationConsistencyGroup(systemID string, name string
 	rcgPayload := &siotypes.ReplicationConsistencyGroupCreatePayload{
 		Name:                     name,
 		RpoInSeconds:             rpo,
-		ProtectionDomainId:       locatProtectionDomain,
-		RemoteProtectionDomainId: remoteProtectionDomain,
-		PeerMdmId:                peerMdmId,
-		DestinationSystemId:      remoteSystemId,
+		ProtectionDomainID:       locatProtectionDomain,
+		RemoteProtectionDomainID: remoteProtectionDomain,
+		PeerMdmID:                peerMdmId,
+		DestinationSystemID:      remoteSystemId,
 	}
 
 	rcgResp, err := adminClient.CreateReplicationConsistencyGroup(rcgPayload)
@@ -532,7 +532,7 @@ func (s *service) CreateReplicationConsistencyGroup(systemID string, name string
 	var id string
 	if rcgResp == nil {
 		for _, rcg := range rcgs {
-			if rcg.Name == name && rcg.ProtectionDomainId == locatProtectionDomain && rcg.RemoteProtectionDomainId == remoteProtectionDomain {
+			if rcg.Name == name && rcg.ProtectionDomainID == locatProtectionDomain && rcg.RemoteProtectionDomainID == remoteProtectionDomain {
 				Log.Printf("Replication Group Found: %s, %s", rcg.ID, rcg.RemoteID)
 				id = rcg.ID
 				break
@@ -564,7 +564,7 @@ func (s *service) DeleteReplicationConsistencyGroup(systemID string, groupId str
 		return status.Errorf(codes.InvalidArgument, "group id wasn't provided")
 	}
 
-	group, err := adminClient.GetReplicationConsistencyGroupById(groupId)
+	group, err := adminClient.GetReplicationConsistencyGroupByID(groupId)
 	if err != nil {
 		// Handle the case where it doesn't exist. Already deleted.
 		if strings.EqualFold(err.Error(), sioReplicationGroupNotFound) {
@@ -610,7 +610,7 @@ func (s *service) CreateReplicationPair(systemID string, name string,
 	}
 
 	Log.Printf("Replication Pair: %+v", response)
-	pairs, err := adminClient.GetReplicationPairs("")
+	pairs, err := adminClient.GetAllReplicationPairs()
 	if err != nil {
 		return nil, err
 	}
@@ -638,7 +638,15 @@ func (s *service) CreateReplicationConsistencyGroupSnapshot(systemID string, rep
 		return nil, fmt.Errorf("can't find adminClient by id %s", systemID)
 	}
 
-	response, err := adminClient.CreateReplicationConsistencyGroupSnapshot(replicationGroupID, false)
+	group, err := adminClient.GetReplicationConsistencyGroupByID(replicationGroupID)
+	if err != nil {
+		return nil, err
+	}
+
+	rcg := goscaleio.NewReplicationConsistencyGroup(adminClient)
+	rcg.ReplicationConsistencyGroup = group
+
+	response, err := rcg.CreateReplicationConsistencyGroupSnapshot(false)
 	if err != nil {
 		return nil, err
 	}
@@ -652,9 +660,17 @@ func (s *service) ExecuteFailoverOnReplicationGroup(systemID string, replication
 		return fmt.Errorf("can't find adminClient by id %s", systemID)
 	}
 
+	group, err := adminClient.GetReplicationConsistencyGroupByID(replicationGroupID)
+	if err != nil {
+		return err
+	}
+
+	rcg := goscaleio.NewReplicationConsistencyGroup(adminClient)
+	rcg.ReplicationConsistencyGroup = group
+
 	Log.Printf("[ExecuteFailoverOnReplicationGroup]: Executing Failover command")
 
-	return adminClient.ExecuteFailoverOnReplicationGroup(replicationGroupID)
+	return rcg.ExecuteFailoverOnReplicationGroup()
 }
 
 func (s *service) ExecuteSwitchoverOnReplicationGroup(systemID string, replicationGroupID string) error {
@@ -663,9 +679,17 @@ func (s *service) ExecuteSwitchoverOnReplicationGroup(systemID string, replicati
 		return fmt.Errorf("can't find adminClient by id %s", systemID)
 	}
 
+	group, err := adminClient.GetReplicationConsistencyGroupByID(replicationGroupID)
+	if err != nil {
+		return err
+	}
+
+	rcg := goscaleio.NewReplicationConsistencyGroup(adminClient)
+	rcg.ReplicationConsistencyGroup = group
+
 	Log.Printf("[ExecuteSwitchoverOnReplicationGroup]: Executing Switchover (Unplanned Failover)")
 
-	return adminClient.ExecuteSwitchoverOnReplicationGroup(replicationGroupID, false)
+	return rcg.ExecuteSwitchoverOnReplicationGroup(false)
 }
 
 func (s *service) ExecuteReverseOnReplicationGroup(systemID string, replicationGroupID string) error {
@@ -674,9 +698,17 @@ func (s *service) ExecuteReverseOnReplicationGroup(systemID string, replicationG
 		return fmt.Errorf("can't find adminClient by id %s", systemID)
 	}
 
+	group, err := adminClient.GetReplicationConsistencyGroupByID(replicationGroupID)
+	if err != nil {
+		return err
+	}
+
+	rcg := goscaleio.NewReplicationConsistencyGroup(adminClient)
+	rcg.ReplicationConsistencyGroup = group
+
 	Log.Printf("[ExecuteReverseOnReplicationGroup]: Executing Reverse (Reprotect Local)")
 
-	return adminClient.ExecuteReverseOnReplicationGroup(replicationGroupID)
+	return rcg.ExecuteReverseOnReplicationGroup()
 }
 
 func (s *service) ExecuteResumeOnReplicationGroup(systemID string, replicationGroupID string, failover bool) error {
@@ -685,14 +717,22 @@ func (s *service) ExecuteResumeOnReplicationGroup(systemID string, replicationGr
 		return fmt.Errorf("can't find adminClient by id %s", systemID)
 	}
 
+	group, err := adminClient.GetReplicationConsistencyGroupByID(replicationGroupID)
+	if err != nil {
+		return err
+	}
+
+	rcg := goscaleio.NewReplicationConsistencyGroup(adminClient)
+	rcg.ReplicationConsistencyGroup = group
+
 	Log.Printf("[ExecuteReverseOnReplicationGroup]: Resuming Replication Group")
 
 	if failover {
 		Log.Printf("[ExecuteReverseOnReplicationGroup]: In Failover, Restoring...")
-		return adminClient.ExecuteRestoreOnReplicationGroup(replicationGroupID)
+		return rcg.ExecuteRestoreOnReplicationGroup()
 	}
 
-	return adminClient.ExecuteResumeOnReplicationGroup(replicationGroupID)
+	return rcg.ExecuteResumeOnReplicationGroup()
 }
 
 func (s *service) ExecutePauseOnReplicationGroup(systemID string, replicationGroupID string) error {
@@ -701,9 +741,17 @@ func (s *service) ExecutePauseOnReplicationGroup(systemID string, replicationGro
 		return fmt.Errorf("can't find adminClient by id %s", systemID)
 	}
 
+	group, err := adminClient.GetReplicationConsistencyGroupByID(replicationGroupID)
+	if err != nil {
+		return err
+	}
+
+	rcg := goscaleio.NewReplicationConsistencyGroup(adminClient)
+	rcg.ReplicationConsistencyGroup = group
+
 	Log.Printf("[ExecutePauseOnReplicationGroup]: Pause Replication Group")
 
-	return adminClient.ExecutePauseOnReplicationGroup(replicationGroupID, siotypes.ONLY_TRACK_CHANGES)
+	return rcg.ExecutePauseOnReplicationGroup(siotypes.OnlyTrackChanges)
 }
 
 func (s *service) ExecuteSyncOnReplicationGroup(systemID string, replicationGroupID string) error {
@@ -712,9 +760,17 @@ func (s *service) ExecuteSyncOnReplicationGroup(systemID string, replicationGrou
 		return fmt.Errorf("can't find adminClient by id %s", systemID)
 	}
 
-	Log.Printf("[ExecuteSyncOnReplicationGroup]: Executing Sync?")
+	group, err := adminClient.GetReplicationConsistencyGroupByID(replicationGroupID)
+	if err != nil {
+		return err
+	}
 
-	_, err := adminClient.ExecuteSyncOnReplicationGroup(replicationGroupID)
+	rcg := goscaleio.NewReplicationConsistencyGroup(adminClient)
+	rcg.ReplicationConsistencyGroup = group
+
+	Log.Printf("[ExecuteSyncOnReplicationGroup]: Executing Sync")
+
+	_, err = rcg.ExecuteSyncOnReplicationGroup()
 
 	return err
 }

@@ -35,6 +35,7 @@ import (
 	volumeGroupSnapshot "github.com/dell/dell-csi-extensions/volumeGroupSnapshot"
 	"github.com/dell/gocsi"
 	csictx "github.com/dell/gocsi/context"
+	"github.com/dell/goscaleio"
 	sio "github.com/dell/goscaleio"
 	siotypes "github.com/dell/goscaleio/types/v1"
 	"github.com/fsnotify/fsnotify"
@@ -85,8 +86,8 @@ var KubeConfig string
 // K8sClientset is the client to query k8s
 var K8sClientset kubernetes.Interface
 
-//Log controlls the logger
-//give default value, will be overwritten by configmap
+// Log controlls the logger
+// give default value, will be overwritten by configmap
 var Log = logrus.New()
 
 // ArrayConnectionData contains data required to connect to array
@@ -266,7 +267,7 @@ func (s *service) logCsiNodeTopologyKeys() error {
 
 }
 
-//New returns a handle to service
+// New returns a handle to service
 func New() Service {
 	return &service{
 		storagePoolIDToName:     map[string]string{},
@@ -648,30 +649,41 @@ func (s *service) removeVolumeFromReplicationPair(systemID string, volumeID stri
 		return nil, fmt.Errorf("can't find adminClient by id %s", systemID)
 	}
 
-	// Gets a list of all replication pairs.
-	pairs, err := adminClient.GetReplicationPairs("")
+	repPair, err := s.findReplicationPairByVolId(systemID, volumeID)
 	if err != nil {
 		return nil, err
 	}
 
-	var replicationPairId string
-	for _, pair := range pairs {
-		if volumeID == pair.LocalVolumeID {
-			replicationPairId = pair.ID
-			break
-		}
-	}
+	pair := goscaleio.NewReplicationPair(adminClient)
+	pair.ReplicaitonPair = repPair
 
-	if replicationPairId == "" {
-		return nil, fmt.Errorf("replication pair for volume ID: %s, not found", volumeID)
-	}
-
-	resp, err := adminClient.RemoveReplicationPair(replicationPairId, true)
+	resp, err := pair.RemoveReplicationPair(true)
 	if err != nil {
 		return nil, err
 	}
 
 	return resp, nil
+}
+
+func (s *service) findReplicationPairByVolId(systemID, volumeID string) (*siotypes.ReplicationPair, error) {
+	adminClient := s.adminClients[systemID]
+	if adminClient == nil {
+		return nil, fmt.Errorf("can't find adminClient by id %s", systemID)
+	}
+
+	// Gets a list of all replication pairs.
+	pairs, err := adminClient.GetAllReplicationPairs()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, pair := range pairs {
+		if volumeID == pair.LocalVolumeID {
+			return pair, nil
+		}
+	}
+
+	return nil, fmt.Errorf("replication pair for volume ID: %s, not found", volumeID)
 }
 
 // Provide periodic logging of statistics like goroutines and memory
@@ -812,9 +824,9 @@ func (s *service) getSystemIDFromCsiVolumeID(csiVolID string) string {
 	return ""
 }
 
-//this function updates volumePrefixToSystems, a map of volume ID prefixes -> system IDs
-//this is needed for checkSystemVolumes, a function that verifies that any legacy vol ID
-//is found on the default system, only
+// this function updates volumePrefixToSystems, a map of volume ID prefixes -> system IDs
+// this is needed for checkSystemVolumes, a function that verifies that any legacy vol ID
+// is found on the default system, only
 func (s *service) UpdateVolumePrefixToSystemsMap(systemID string) error {
 	//get one vol from system
 	vols, _, err := s.listVolumes(systemID, 0, 1, true, false, "", "")

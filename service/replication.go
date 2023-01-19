@@ -9,6 +9,7 @@ import (
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/dell/dell-csi-extensions/replication"
+	"github.com/dell/goscaleio"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -440,9 +441,9 @@ func (s *service) GetStorageProtectionGroupStatus(ctx context.Context, req *repl
 
 	var state replication.StorageProtectionGroupStatus_State
 	switch group.CurrConsistMode {
-	case sio.PARTIALLY_CONSISTENT, sio.CONSISTENT_PENDING:
+	case sio.PartiallyConsistent, sio.ConsistentPending:
 		state = replication.StorageProtectionGroupStatus_SYNC_IN_PROGRESS
-	case sio.CONSISTENT:
+	case sio.Consistent:
 		state = replication.StorageProtectionGroupStatus_SYNCHRONIZED
 	default:
 		Log.Printf("The status (%s) does not match with known protection group states", group.CurrConsistMode)
@@ -471,7 +472,7 @@ func (s *service) getReplicationConsistencyGroupById(systemID string, groupId st
 		return nil, fmt.Errorf("can't find adminClient by id %s", systemID)
 	}
 
-	group, err := adminClient.GetReplicationConsistencyGroupById(groupId)
+	group, err := adminClient.GetReplicationConsistencyGroupByID(groupId)
 	if err != nil {
 		return nil, err
 	}
@@ -485,7 +486,15 @@ func (s *service) getReplicationPair(systemID string, groupId string) ([]*siotyp
 		return nil, fmt.Errorf("can't find adminClient by id %s", systemID)
 	}
 
-	pairs, err := adminClient.GetReplicationPairs(groupId)
+	group, err := adminClient.GetReplicationConsistencyGroupByID(groupId)
+	if err != nil {
+		return nil, err
+	}
+
+	rcg := goscaleio.NewReplicationConsistencyGroup(adminClient)
+	rcg.ReplicationConsistencyGroup = group
+
+	pairs, err := rcg.GetReplicationPairs()
 	if err != nil {
 		if !strings.EqualFold(err.Error(), sioReplicationPairsDoesNotExist) {
 			Log.Printf("Error getting replication pairs: %s", err.Error())
