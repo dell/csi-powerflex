@@ -197,7 +197,7 @@ func (s *service) CreateStorageProtectionGroup(ctx context.Context, req *replica
 		return nil, status.Errorf(codes.Internal, "can't createReplicationPair: %s", err.Error())
 	}
 
-	group, err := s.getReplicationConsistencyGroupById(systemID, localRcg.ID)
+	group, err := s.getReplicationConsistencyGroupByID(systemID, localRcg.ID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "No replication consistency groups found: %s", err.Error())
 	}
@@ -288,9 +288,9 @@ func (s *service) CreateRemoteVolume(ctx context.Context, req *replication.Creat
 	if err != nil {
 		log.Printf("CreateVolume called failed: %s", err.Error())
 		return nil, err
-	} else {
-		log.Printf("Potentially created a remote volume: %+v", createVolumeResponse)
 	}
+
+	log.Printf("Potentially created a remote volume: %+v", createVolumeResponse)
 
 	remoteParams := map[string]string{
 		"storagePool":    remoteStoragePool,
@@ -423,7 +423,7 @@ func (s *service) GetStorageProtectionGroupStatus(ctx context.Context, req *repl
 
 	protectionGroupSystem := req.ProtectionGroupAttributes["systemName"]
 
-	group, err := s.getReplicationConsistencyGroupById(protectionGroupSystem, req.ProtectionGroupId)
+	group, err := s.getReplicationConsistencyGroupByID(protectionGroupSystem, req.ProtectionGroupId)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "No replication consistency groups found: %s", err.Error())
 	}
@@ -466,13 +466,13 @@ func (s *service) GetStorageProtectionGroupStatus(ctx context.Context, req *repl
 	}, nil
 }
 
-func (s *service) getReplicationConsistencyGroupById(systemID string, groupId string) (*siotypes.ReplicationConsistencyGroup, error) {
+func (s *service) getReplicationConsistencyGroupByID(systemID string, groupID string) (*siotypes.ReplicationConsistencyGroup, error) {
 	adminClient := s.adminClients[systemID]
 	if adminClient == nil {
 		return nil, fmt.Errorf("can't find adminClient by id %s", systemID)
 	}
 
-	group, err := adminClient.GetReplicationConsistencyGroupByID(groupId)
+	group, err := adminClient.GetReplicationConsistencyGroupByID(groupID)
 	if err != nil {
 		return nil, err
 	}
@@ -480,13 +480,13 @@ func (s *service) getReplicationConsistencyGroupById(systemID string, groupId st
 	return group, nil
 }
 
-func (s *service) getReplicationPair(systemID string, groupId string) ([]*siotypes.ReplicationPair, error) {
+func (s *service) getReplicationPair(systemID string, groupID string) ([]*siotypes.ReplicationPair, error) {
 	adminClient := s.adminClients[systemID]
 	if adminClient == nil {
 		return nil, fmt.Errorf("can't find adminClient by id %s", systemID)
 	}
 
-	group, err := adminClient.GetReplicationConsistencyGroupByID(groupId)
+	group, err := adminClient.GetReplicationConsistencyGroupByID(groupID)
 	if err != nil {
 		return nil, err
 	}

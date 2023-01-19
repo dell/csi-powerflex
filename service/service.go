@@ -649,7 +649,7 @@ func (s *service) removeVolumeFromReplicationPair(systemID string, volumeID stri
 		return nil, fmt.Errorf("can't find adminClient by id %s", systemID)
 	}
 
-	repPair, err := s.findReplicationPairByVolId(systemID, volumeID)
+	repPair, err := s.findReplicationPairByVolID(systemID, volumeID)
 	if err != nil {
 		return nil, err
 	}
@@ -665,7 +665,7 @@ func (s *service) removeVolumeFromReplicationPair(systemID string, volumeID stri
 	return resp, nil
 }
 
-func (s *service) findReplicationPairByVolId(systemID, volumeID string) (*siotypes.ReplicationPair, error) {
+func (s *service) findReplicationPairByVolID(systemID, volumeID string) (*siotypes.ReplicationPair, error) {
 	adminClient := s.adminClients[systemID]
 	if adminClient == nil {
 		return nil, fmt.Errorf("can't find adminClient by id %s", systemID)

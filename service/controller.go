@@ -495,15 +495,14 @@ func (s *service) createVolumeFromSnapshot(req *csi.CreateVolumeRequest,
 
 func (s *service) CreateReplicationConsistencyGroup(systemID string, name string,
 	rpo string, locatProtectionDomain string, remoteProtectionDomain string,
-	peerMdmId string, remoteSystemId string) (*siotypes.ReplicationConsistencyGroupResp, error) {
+	peerMdmID string, remoteSystemID string) (*siotypes.ReplicationConsistencyGroupResp, error) {
 	adminClient := s.adminClients[systemID]
 	if adminClient == nil {
 		return nil, fmt.Errorf("can't find adminClient by id %s", systemID)
 	}
 
-	// One or the other, not both
-	if peerMdmId != "" && remoteSystemId != "" {
-		return nil, fmt.Errorf("PeerMdmID and RemoteSystemID cannot be present. One or the other.")
+	if peerMdmID != "" && remoteSystemID != "" {
+		return nil, fmt.Errorf("peerMdmID and remoteSystemID cannot both be present")
 	}
 
 	rcgPayload := &siotypes.ReplicationConsistencyGroupCreatePayload{
@@ -511,8 +510,8 @@ func (s *service) CreateReplicationConsistencyGroup(systemID string, name string
 		RpoInSeconds:             rpo,
 		ProtectionDomainID:       locatProtectionDomain,
 		RemoteProtectionDomainID: remoteProtectionDomain,
-		PeerMdmID:                peerMdmId,
-		DestinationSystemID:      remoteSystemId,
+		PeerMdmID:                peerMdmID,
+		DestinationSystemID:      remoteSystemID,
 	}
 
 	rcgResp, err := adminClient.CreateReplicationConsistencyGroup(rcgPayload)
@@ -553,22 +552,22 @@ func (s *service) CreateReplicationConsistencyGroup(systemID string, name string
 	}, nil
 }
 
-func (s *service) DeleteReplicationConsistencyGroup(systemID string, groupId string) error {
+func (s *service) DeleteReplicationConsistencyGroup(systemID string, groupID string) error {
 	adminClient := s.adminClients[systemID]
 	if adminClient == nil {
 		return status.Errorf(codes.InvalidArgument, "can't find adminClient by id %s", systemID)
 	}
 
 	// no group id provided.
-	if groupId == "" {
+	if groupID == "" {
 		return status.Errorf(codes.InvalidArgument, "group id wasn't provided")
 	}
 
-	group, err := adminClient.GetReplicationConsistencyGroupByID(groupId)
+	group, err := adminClient.GetReplicationConsistencyGroupByID(groupID)
 	if err != nil {
 		// Handle the case where it doesn't exist. Already deleted.
 		if strings.EqualFold(err.Error(), sioReplicationGroupNotFound) {
-			Log.WithFields(logrus.Fields{"id": groupId}).Debug("replication group is already deleted", groupId)
+			Log.WithFields(logrus.Fields{"id": groupID}).Debug("replication group is already deleted", groupID)
 			return nil
 		}
 
