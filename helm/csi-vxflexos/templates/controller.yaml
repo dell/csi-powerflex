@@ -228,7 +228,7 @@ spec:
             - "--retry-interval-max=300s"
             - "--timeout=300s"
             - "--context-prefix={{ .Values.controller.replication.replicationContextPrefix}}"
-            - "--prefix=replication.storage.dell.com"
+            - "--prefix={{ .Values.controller.replication.replicationPrefix}}"
           env:
             - name: ADDRESS
               value: /var/run/csi/csi.sock

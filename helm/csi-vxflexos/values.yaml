@@ -99,8 +99,13 @@ controller:
 
     # replicationContextPrefix: prefix to use for naming of resources created by replication feature
     # Allowed values: string
-    # Default value: powerstore
-    replicationContextPrefix: 
+    # Default value: powerflex
+    replicationContextPrefix: "powerflex"
+
+    # replicationPrefix: prefix to prepend to storage classes parameters
+    # Allowed values: string
+    # Default value: replication.storage.dell.com
+    replicationPrefix: "replication.storage.dell.com"
 
   healthMonitor:
     # enabled: Enable/Disable health monitor of CSI volumes

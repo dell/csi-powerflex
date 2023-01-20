@@ -18,6 +18,15 @@ import (
 )
 
 const (
+	// KeyReplicationRemoteSystem represents key for replication remote system
+	KeyReplicationRemoteSystem = "remoteSystem"
+	// KeyReplicationRPO represents key for replication RPO
+	KeyReplicationRPO = "rpo"
+	// KeyReplicationRemoteStoragePool represents key for replication remote storage pool
+	KeyReplicationRemoteStoragePool = "remoteStoragePool"
+	// KeyReplicationConsistencyGroupName represents key for replication consistency group name
+	KeyReplicationConsistencyGroupName = "consistencyGroupName"
+
 	sioReplicationPairsDoesNotExist = "Error in get relationship ReplicationPair"
 )
 
@@ -140,7 +149,7 @@ func (s *service) CreateStorageProtectionGroup(ctx context.Context, req *replica
 	}
 	Log.Printf("[CreateStorageProtectionGroup] - Local Protection Domain: %+v", localProtectionDomain)
 
-	remoteSystemID := parameters["replication.storage.dell.com/remoteSystem"]
+	remoteSystemID := parameters[s.WithRP(KeyReplicationRemoteSystem)]
 	remoteSystem, err := s.getSystem(remoteSystemID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "couldn't getSystem (remote): %s", err.Error())
@@ -157,14 +166,14 @@ func (s *service) CreateStorageProtectionGroup(ctx context.Context, req *replica
 	}
 
 	var consistencyGroupName string
-	if parameters["replication.storage.dell.com/consistencyGroupName"] != "" {
-		consistencyGroupName = parameters["replication.storage.dell.com/consistencyGroupName"]
+	if name, ok := parameters[s.WithRP(KeyReplicationConsistencyGroupName)]; ok {
+		consistencyGroupName = name
 	} else {
 		consistencyGroupName = "rcg-" + systemID[:12] + "-" + remoteSystem.ID[:12]
 	}
 
 	localRcg, err := s.CreateReplicationConsistencyGroup(systemID, consistencyGroupName,
-		parameters["replication.storage.dell.com/rpo"], localProtectionDomain[0].ID,
+		parameters[s.WithRP(KeyReplicationRPO)], localProtectionDomain[0].ID,
 		remoteProtectionDomain[0].ID, "", remoteSystem.ID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "invalid rcg response: %s", err.Error())
@@ -203,13 +212,13 @@ func (s *service) CreateStorageProtectionGroup(ctx context.Context, req *replica
 	}
 
 	localParams := map[string]string{
-		"systemName":     localSystem.ID,
-		"remoteSystemID": remoteSystem.ID,
+		s.opts.replicationContextPrefix + "systemName":     localSystem.ID,
+		s.opts.replicationContextPrefix + "remoteSystemID": remoteSystem.ID,
 	}
 
 	remoteParams := map[string]string{
-		"systemName":     remoteSystem.ID,
-		"remoteSystemID": localSystem.ID,
+		s.opts.replicationContextPrefix + "systemName":     remoteSystem.ID,
+		s.opts.replicationContextPrefix + "remoteSystemID": localSystem.ID,
 	}
 
 	Log.Printf("[CreateStorageProtectionGroup] - localRcg: %+s, group.ID: %s", localRcg.ID, group.ID)
@@ -263,8 +272,12 @@ func (s *service) CreateRemoteVolume(ctx context.Context, req *replication.Creat
 		return nil, status.Errorf(codes.Internal, "could not get (local) system %s: %s", systemID, err.Error())
 	}
 
+	remoteSystemID, ok := parameters[s.WithRP(KeyReplicationRemoteSystem)]
+	if !ok {
+		return nil, status.Errorf(codes.InvalidArgument, "replication enabled but no remote system specified in storage class")
+	}
+
 	// Probe the remote system
-	remoteSystemID := parameters["replication.storage.dell.com/remoteSystem"]
 	if err := s.requireProbe(ctx, remoteSystemID); err != nil {
 		Log.Infof("Remote probe failed: %s", err)
 		return nil, err
@@ -280,7 +293,11 @@ func (s *service) CreateRemoteVolume(ctx context.Context, req *replication.Creat
 		return nil, status.Errorf(codes.Internal, "can't getPeerMDMs: %s", err.Error())
 	}
 
-	remoteStoragePool := parameters["replication.storage.dell.com/remoteStoragePool"]
+	remoteStoragePool, ok := parameters[s.WithRP(KeyReplicationRemoteStoragePool)]
+	if !ok {
+		return nil, status.Errorf(codes.InvalidArgument, "replication enabled but no remote storage pool specified in storage class")
+	}
+
 	name := "replicated-" + vol.Name
 	volReq := createRemoteCreateVolumeRequest(name, remoteStoragePool, remoteSystem.ID, int64(vol.SizeInKb))
 
@@ -307,8 +324,9 @@ func (s *service) CreateRemoteVolume(ctx context.Context, req *replication.Creat
 
 func (s *service) DeleteStorageProtectionGroup(ctx context.Context, req *replication.DeleteStorageProtectionGroupRequest) (*replication.DeleteStorageProtectionGroupResponse, error) {
 	Log.Printf("[DeleteStorageProtectionGroup] %+v", req)
+	localParams := req.GetProtectionGroupAttributes()
 
-	protectionGroupSystem := req.ProtectionGroupAttributes["systemName"]
+	protectionGroupSystem := localParams[s.opts.replicationContextPrefix+"systemName"]
 
 	pairs, err := s.getReplicationPair(protectionGroupSystem, req.ProtectionGroupId)
 	if err != nil {
@@ -335,8 +353,9 @@ func (s *service) ExecuteAction(ctx context.Context, req *replication.ExecuteAct
 	localParams := req.GetProtectionGroupAttributes()
 	remoteParams := req.GetRemoteProtectionGroupAttributes()
 	actionAttributes := make(map[string]string)
-	remoteSystem := remoteParams["systemName"]
-	localSystem := localParams["systemName"]
+
+	remoteSystem := remoteParams[s.opts.replicationContextPrefix+"systemName"]
+	localSystem := localParams[s.opts.replicationContextPrefix+"systemName"]
 
 	statusResp, err := s.GetStorageProtectionGroupStatus(ctx, &replication.GetStorageProtectionGroupStatusRequest{
 		ProtectionGroupId:         protectionGroupID,
@@ -421,7 +440,12 @@ func (s *service) ExecuteAction(ctx context.Context, req *replication.ExecuteAct
 func (s *service) GetStorageProtectionGroupStatus(ctx context.Context, req *replication.GetStorageProtectionGroupStatusRequest) (*replication.GetStorageProtectionGroupStatusResponse, error) {
 	Log.Printf("[GetStorageProtectionGroupStatus] - req %+v", req)
 
-	protectionGroupSystem := req.ProtectionGroupAttributes["systemName"]
+	localParams := req.GetProtectionGroupAttributes()
+
+	protectionGroupSystem, ok := localParams[s.opts.replicationContextPrefix+"systemName"]
+	if !ok {
+		return nil, status.Errorf(codes.InvalidArgument, "Error: can't find `systemName` in replication group")
+	}
 
 	group, err := s.getReplicationConsistencyGroupByID(protectionGroupSystem, req.ProtectionGroupId)
 	if err != nil {

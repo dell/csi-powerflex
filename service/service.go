@@ -135,6 +135,8 @@ type Opts struct {
 	EnableListVolumesSnapshots bool   // when listing volumes, include snapshots and volumes
 	AllowRWOMultiPodAccess     bool   // allow multiple pods to access a RWO volume on the same node
 	IsHealthMonitorEnabled     bool   // allow driver to make use of the alpha feature gate, CSIVolumeHealth
+	replicationContextPrefix   string
+	replicationPrefix          string
 }
 
 type service struct {
@@ -378,6 +380,14 @@ func (s *service) BeforeServe(
 	}
 	if s.privDir == "" {
 		s.privDir = defaultPrivDir
+	}
+
+	if replicationContextPrefix, ok := csictx.LookupEnv(ctx, EnvReplicationContextPrefix); ok {
+		opts.replicationContextPrefix = replicationContextPrefix + "/"
+	}
+
+	if replicationPrefix, ok := csictx.LookupEnv(ctx, EnvReplicationPrefix); ok {
+		opts.replicationPrefix = replicationPrefix
 	}
 
 	// log csiNode topology keys
@@ -946,4 +956,9 @@ func (s *service) getProtectionDomainIDFromName(systemID, protectionDomainName s
 		return "", err
 	}
 	return pd.ID, nil
+}
+
+// WithRP appends Replication Prefix to provided string
+func (s *service) WithRP(key string) string {
+	return s.opts.replicationPrefix + "/" + key
 }
