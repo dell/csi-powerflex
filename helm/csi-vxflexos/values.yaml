@@ -194,6 +194,21 @@ node:
   # - key: "isilon.podmon.storage.dell.com"
   #   operator: "Exists"
   #   effect: "NoSchedule"
+
+  # "renameSDC" defines the rename operation for SDC
+  # Default value: None
+  renameSDC:
+    # enabled: Enable/Disable rename of SDC
+    # Allowed values:
+    #   true: enable renaming
+    #   false: disable renaming
+    # Default value: "false"
+    enabled: false
+    # "prefix" defines a string for the new name of the SDC.
+    # Default value: none
+    # Examples: "rhel-sdc", "sdc-test"
+    prefix: "sdc-test"
+
 # monitoring pod details
 # These options control the running of the monitoring container
 # This container gather diagnostic information in case of failure
