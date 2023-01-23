@@ -132,12 +132,14 @@ Feature: VxFlex OS CSI interface
   Scenario: Identity Probe call node probe SdcGUID error
     Given a VxFlexOS service
     And there is a Node Probe SdcGUID error
+    And I setup Get SystemID to fail
     When I call Node Probe
     Then the possible error contains "unable to get SDC GUID"
 
   Scenario: Identity Probe call node probe drvCfg error
     Given a VxFlexOS service
     And there is a Node Probe drvCfg error
+    And I setup Get SystemID to fail
     When I call Node Probe
     Then the possible error contains "unable to get System Name via config or drv_cfg binary"
 
@@ -145,6 +147,7 @@ Feature: VxFlex OS CSI interface
   Scenario: Identity Probe call node probe RenameSDC error
     Given a VxFlexOS service
     And there is a Node Probe RenameSDC error
+    And I setup Get SystemID to fail
     When I call Node Probe
     Then the possible error contains "Failed to rename SDC"
 
@@ -669,14 +672,14 @@ Feature: VxFlex OS CSI interface
       | "GetVolByIDError"    | 64 | "induced error"         |
 
   Scenario Outline: Call NodeExpandVolume with non sysID and no defaultSysID
-    Given setup Get SystemID to fail
-    And a VxFlexOS service
+    Given a VxFlexOS service
     And I call CreateVolumeSize "volume4" "32"
     And a controller published volume
     And a capability with voltype "mount" access "single-writer" fstype "xfs"
     And get Node Publish Volume Request
     And I call NodePublishVolume "SDC_GUID"
     And I induce error "EmptySysIDInNodeExpand"
+    And I setup Get SystemID to fail
     When I call NodeExpandVolume with volumePath as "test/tmp/datadir"
     Then the error contains "systemID is not found in the request and there is no default system"
 

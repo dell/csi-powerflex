@@ -367,7 +367,7 @@ func (f *feature) CreateCSINode() (*storage.CSINode, error) {
 				{
 					Name:         "csi-vxflexos.dellemc.com",
 					NodeID:       "9E56672F-2F4B-4A42-BFF4-88B6846FBFDA",
-					TopologyKeys: []string{"csi-vxflexos.dellemc.com/000000000001"},
+					TopologyKeys: []string{"csi-vxflexos.dellemc.com/14dbbf5617523654"},
 				},
 			},
 		},
@@ -590,6 +590,7 @@ func (f *feature) thereIsANodeProbeDrvCfgError() error {
 }
 
 func (f *feature) thereIsANodeProbeRenameSDCError() error {
+	f.service.opts.IsSdcRenameEnabled = true
 	f.service.opts.SdcPrefix = "sdc-prefix-value-greater-than-31-characters"
 	return nil
 }
