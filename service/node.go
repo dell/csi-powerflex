@@ -425,7 +425,6 @@ func (s *service) nodeProbe(ctx context.Context) error {
 				newName := s.opts.SdcPrefix + "-" + hostName
 				if sdc.Sdc.Name == newName {
 					Log.Infof("SDC is already named: %s.", newName)
-					return nil
 				} else {
 					Log.Infof("Assigning name: %s to SDC with GUID %s on system %s", newName, s.opts.SdcGUID,
 						systemID)
@@ -438,7 +437,6 @@ func (s *service) nodeProbe(ctx context.Context) error {
 				// case2: if IsSdcRenameEnabled=true and prefix not given then set worker_node_name for sdc name.
 				if sdc.Sdc.Name == hostName {
 					Log.Infof("SDC is already named: %s.", sdc.Sdc.Name)
-					return nil
 				} else {
 					Log.Infof("Assigning name: %s to SDC with GUID %s on system %s", hostName, s.opts.SdcGUID, systemID)
 					err = s.adminClients[systemID].RenameSdc(sdcID, hostName)
@@ -451,7 +449,6 @@ func (s *service) nodeProbe(ctx context.Context) error {
 			// case3: if IsSdcRenameEnabled=false and no prefix given then use the SDC ID for sdc name.
 			if sdc.Sdc.Name == sdcID {
 				Log.Infof("SDC is already named: %s.", sdc.Sdc.Name)
-				return nil
 			} else {
 				Log.Infof("Assigning name: %s to SDC with GUID %s on system %s", sdcID, s.opts.SdcGUID, systemID)
 				err = s.adminClients[systemID].RenameSdc(sdcID, sdcID)
