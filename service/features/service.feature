@@ -141,6 +141,13 @@ Feature: VxFlex OS CSI interface
     When I call Node Probe
     Then the possible error contains "unable to get System Name via config or drv_cfg binary"
 
+  # This injected error fails on Windows with no SDC but passes on Linux with SDC
+  Scenario: Identity Probe call node probe RenameSDC error
+    Given a VxFlexOS service
+    And there is a Node Probe RenameSDC error
+    When I call Node Probe
+    Then the possible error contains "Failed to rename SDC"
+
   Scenario Outline: Create volume good scenario
     Given a VxFlexOS service
     When I call Probe

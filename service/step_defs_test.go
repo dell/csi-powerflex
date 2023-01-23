@@ -589,6 +589,11 @@ func (f *feature) thereIsANodeProbeDrvCfgError() error {
 	return nil
 }
 
+func (f *feature) thereIsANodeProbeRenameSDCError() error {
+	f.service.opts.SdcPrefix = "sdc-prefix-value-greater-than-31-characters"
+	return nil
+}
+
 func getTypicalCreateVolumeRequest() *csi.CreateVolumeRequest {
 	req := new(csi.CreateVolumeRequest)
 	params := make(map[string]string)
@@ -3392,6 +3397,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^there is a Node Probe Lsmod error$`, f.thereIsANodeProbeLsmodError)
 	s.Step(`^there is a Node Probe SdcGUID error$`, f.thereIsANodeProbeSdcGUIDError)
 	s.Step(`^there is a Node Probe drvCfg error$`, f.thereIsANodeProbeDrvCfgError)
+	s.Step(`^there is a Node Probe RenameSDC error$`, f.thereIsANodeProbeRenameSDCError)
 	s.Step(`^I call CreateVolume "([^"]*)"$`, f.iCallCreateVolume)
 	s.Step(`^I call ValidateConnectivity$`, f.iCallValidateVolumeHostConnectivity)
 	s.Step(`^a valid CreateVolumeResponse is returned$`, f.aValidCreateVolumeResponseIsReturned)
