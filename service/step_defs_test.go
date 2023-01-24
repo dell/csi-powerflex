@@ -146,7 +146,13 @@ func (f *feature) checkGoRoutines(tag string) {
 }
 
 func (f *feature) aVxFlexOSService() error {
+	return f.aVxFlexOSServiceWithTimeoutMilliseconds(50)
+}
+
+func (f *feature) aVxFlexOSServiceWithTimeoutMilliseconds(millis int) error {
 	f.checkGoRoutines("start aVxFlexOSService")
+	goscaleio.ClientConnectTimeout = time.Duration(millis) * time.Millisecond
+
 	// Save off the admin client and the system
 	if f.service != nil {
 		adminClient := f.service.adminClients[arrayID]
@@ -226,6 +232,7 @@ func (f *feature) aVxFlexOSService() error {
 
 	// configure variables in the driver
 	publishGetMappedVolMaxRetry = 2
+	getMappedVolDelay = 10 * time.Millisecond
 
 	// Get or reuse the cached service
 	f.getService()
@@ -3365,6 +3372,7 @@ func (f *feature) aReplicationCapabilitiesStructureIsReturned(arg1 string) error
 func FeatureContext(s *godog.ScenarioContext) {
 	f := &feature{}
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
+	s.Step(`^a VxFlexOS service with timeout (\d+) milliseconds$`, f.aVxFlexOSServiceWithTimeoutMilliseconds)
 	s.Step(`^I call GetPluginInfo$`, f.iCallGetPluginInfo)
 	s.Step(`^I call DynamicArrayChange$`, f.iCallDynamicArrayChange)
 	s.Step(`^a valid DynamicArrayChange occurs$`, f.aValidDynamicArrayChange)

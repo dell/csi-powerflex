@@ -39,6 +39,7 @@ var (
 	connectedSystemID             = make([]string, 0)
 	publishGetMappedVolMaxRetry   = 30
 	unpublishGetMappedVolMaxRetry = 5
+	getMappedVolDelay             = (1 * time.Second)
 )
 
 func (s *service) NodeStageVolume(
@@ -315,7 +316,7 @@ func (s *service) getSDCMappedVol(volumeID string, systemID string, maxRetry int
 			break
 		}
 		Log.Printf("Node publish getMappedVol retry: %d", i)
-		time.Sleep(1 * time.Second)
+		time.Sleep(getMappedVolDelay)
 	}
 	if err != nil {
 		Log.Printf("SDC returned volume %s on system %s not published to node", volumeID, systemID)
