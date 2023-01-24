@@ -396,9 +396,15 @@ func (s *service) nodeProbe(ctx context.Context) error {
 	}
 
 	// rename SDC
-	err = s.renameSDC(s.opts)
-	if err != nil {
-		return err
+	/*
+		case1: if IsSdcRenameEnabled=true and prefix given then set the prefix+worker_node_name for sdc name.
+		case2: if IsSdcRenameEnabled=true and prefix not given then set worker_node_name for sdc name.
+	*/
+	if s.opts.IsSdcRenameEnabled {
+		err = s.renameSDC(s.opts)
+		if err != nil {
+			return err
+		}
 	}
 
 	// get all the system names and IDs.
@@ -415,11 +421,6 @@ func (s *service) nodeProbe(ctx context.Context) error {
 }
 
 func (s *service) renameSDC(opts Opts) error {
-	/*
-		if IsSdcRenameEnabled=true and prefix given then set the prefix+worker_node_name for sdc name.
-		if IsSdcRenameEnabled=true and prefix not given then set worker_node_name for sdc name.
-		if IsSdcRenameEnabled=false and no prefix given then use the SDC ID for sdc name.
-	*/
 	// fetch hostname
 	hostName, ok := os.LookupEnv("HOSTNAME")
 	if !ok {
@@ -436,56 +437,27 @@ func (s *service) renameSDC(opts Opts) error {
 		if err != nil {
 			return status.Errorf(codes.FailedPrecondition, "%s", err)
 		}
-		Log.Infof("SDC approval status: %v", sdc.Sdc.SdcApproved)
 
-		// case1: if IsSdcRenameEnabled=true and prefix given then set the prefix+worker_node_name for sdc name.
-		if s.opts.IsSdcRenameEnabled {
-			if len(opts.SdcPrefix) > 0 {
-				newName := opts.SdcPrefix + "-" + hostName
-				if sdc.Sdc.Name == newName {
-					Log.Infof("SDC is already named: %s.", newName)
-				} else {
-					Log.Infof("Assigning name: %s to SDC with GUID %s on system %s", newName, s.opts.SdcGUID,
-						systemID)
-					err = s.adminClients[systemID].RenameSdc(sdcID, newName)
-					if err != nil {
-						return status.Errorf(codes.FailedPrecondition, "Failed to rename SDC: %s", err)
-					}
-					err = s.getSDCName(opts.SdcGUID, systemID)
-					if err != nil {
-						return err
-					}
-				}
-			} else {
-				// case2: if IsSdcRenameEnabled=true and prefix not given then set worker_node_name for sdc name.
-				if sdc.Sdc.Name == hostName {
-					Log.Infof("SDC is already named: %s.", sdc.Sdc.Name)
-				} else {
-					Log.Infof("Assigning name: %s to SDC with GUID %s on system %s", hostName, s.opts.SdcGUID, systemID)
-					err = s.adminClients[systemID].RenameSdc(sdcID, hostName)
-					if err != nil {
-						return status.Errorf(codes.FailedPrecondition, "Failed to rename SDC: %s", err)
-					}
-					err = s.getSDCName(opts.SdcGUID, systemID)
-					if err != nil {
-						return err
-					}
-				}
-			}
+		var newName string
+		if len(opts.SdcPrefix) > 0 {
+			// case1: if IsSdcRenameEnabled=true and prefix given then set the prefix+worker_node_name for sdc name.
+			newName = opts.SdcPrefix + "-" + hostName
 		} else {
-			// case3: if IsSdcRenameEnabled=false and no prefix given then use the SDC ID for sdc name.
-			if sdc.Sdc.Name == sdcID {
-				Log.Infof("SDC is already named: %s.", sdc.Sdc.Name)
-			} else {
-				Log.Infof("Assigning name: %s to SDC with GUID %s on system %s", sdcID, s.opts.SdcGUID, systemID)
-				err = s.adminClients[systemID].RenameSdc(sdcID, sdcID)
-				if err != nil {
-					return status.Errorf(codes.FailedPrecondition, "Failed to rename SDC: %s", err)
-				}
-				err = s.getSDCName(opts.SdcGUID, systemID)
-				if err != nil {
-					return err
-				}
+			// case2: if IsSdcRenameEnabled=true and prefix not given then set worker_node_name for sdc name.
+			newName = hostName
+		}
+		if sdc.Sdc.Name == newName {
+			Log.Infof("SDC is already named: %s.", newName)
+		} else {
+			Log.Infof("Assigning name: %s to SDC with GUID %s on system %s", newName, s.opts.SdcGUID,
+				systemID)
+			err = s.adminClients[systemID].RenameSdc(sdcID, newName)
+			if err != nil {
+				return status.Errorf(codes.FailedPrecondition, "Failed to rename SDC: %s", err)
+			}
+			err = s.getSDCName(opts.SdcGUID, systemID)
+			if err != nil {
+				return err
 			}
 		}
 	}
