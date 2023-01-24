@@ -457,6 +457,9 @@ func (s *service) nodeProbe(ctx context.Context) error {
 				}
 			}
 		}
+		if len(sdc.Sdc.Name) > 0 {
+			Log.Infof("SDC name set to: %s.", sdc.Sdc.Name)
+		}
 	}
 
 	// get all the system names and IDs.
