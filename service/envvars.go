@@ -51,4 +51,10 @@ const (
 	// EnvIsApproveSDCEnabled is the name of the environment variable that specifies if the SDC approval is to be
 	// carried out or not.
 	EnvIsApproveSDCEnabled = "X_CSI_APPROVE_SDC_ENABLED"
+
+	// EnvReplicationContextPrefix enables sidecars to read required information from volume context
+	EnvReplicationContextPrefix = "X_CSI_REPLICATION_CONTEXT_PREFIX"
+
+	// EnvReplicationPrefix is used as a prefix to find out if replication is enabled
+	EnvReplicationPrefix = "X_CSI_REPLICATION_PREFIX"
 )

@@ -136,6 +136,8 @@ type Opts struct {
 	IsSdcRenameEnabled         bool   // allow driver to enable renaming SDC
 	SdcPrefix                  string // prefix to be set for SDC name
 	IsApproveSDCEnabled        bool
+	replicationContextPrefix   string
+	replicationPrefix          string
 }
 
 type service struct {
@@ -398,6 +400,14 @@ func (s *service) BeforeServe(
 
 	if s.privDir == "" {
 		s.privDir = defaultPrivDir
+	}
+
+	if replicationContextPrefix, ok := csictx.LookupEnv(ctx, EnvReplicationContextPrefix); ok {
+		opts.replicationContextPrefix = replicationContextPrefix + "/"
+	}
+
+	if replicationPrefix, ok := csictx.LookupEnv(ctx, EnvReplicationPrefix); ok {
+		opts.replicationPrefix = replicationPrefix
 	}
 
 	// log csiNode topology keys
