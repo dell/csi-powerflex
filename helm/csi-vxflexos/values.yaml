@@ -144,6 +144,8 @@ controller:
   #   operator: "Exists"
   #   effect: "NoSchedule"
 
+  # "approveSDCEnabled" defines whether to enable/disable SDC approval
+  # Default value: false
   approveSDCEnabled: true
 
 # "node" allows to configure node specific parameters

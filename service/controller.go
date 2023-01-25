@@ -712,17 +712,29 @@ func (s *service) ControllerPublishVolume(
 		return nil, status.Errorf(codes.NotFound, err.Error())
 	}
 
-	// pre-approved guid check
+	// support for pre-approved guid
+	sdc, err := s.systems[systemID].FindSdc("ID", sdcID)
+	if err != nil {
+		return nil, status.Errorf(codes.FailedPrecondition, "%s", err)
+	}
 	if s.opts.IsApproveSDCEnabled {
+		Log.Infof("Approve SDC enabled")
+
 		// fetch sdc mode set for the system
 		system := s.systems[systemID]
-		Log.Infof("systemID.............. %s\n", system.System.ID)
-		Log.Infof("systemName.............. %s\n", system.System.Name)
-		Log.Infof("RestrictedSdcModeEnabled.............. %s\n", system.System.RestrictedSdcModeEnabled)
-		Log.Infof("RestrictedSdcMode.............. %s\n", system.System.RestrictedSdcMode)
-		//if s.System.RestrictedSdcModeEnabled {
-		//	if s.System.RestrictedSdcMode == "Guid"
-		// if restrictedSdcModeEnabled==true
+		if system.System.RestrictedSdcModeEnabled && system.System.RestrictedSdcMode == "Guid" {
+			if !sdc.Sdc.SdcApproved {
+				resp, err := s.systems[systemID].ApproveSdcByGUID(sdc.Sdc.SdcGUID)
+				if resp == nil && err == nil {
+					Log.Infof("SDC approved, SDC GUID: %s", sdc.Sdc.SdcGUID)
+				} else if err != nil {
+					return nil, status.Errorf(codes.FailedPrecondition, "%s", err)
+				}
+			} else {
+				Log.Infof("SDC already approved, SDC GUID: %s", sdc.Sdc.SdcGUID)
+			}
+
+		}
 	}
 
 	vc := req.GetVolumeCapability()
