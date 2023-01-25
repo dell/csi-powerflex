@@ -3369,6 +3369,26 @@ func (f *feature) aReplicationCapabilitiesStructureIsReturned(arg1 string) error
 	return nil
 }
 
+func (f *feature) iCallRenameSDC(renameEnabled string, prefix string) error {
+	if renameEnabled == "true" {
+		f.service.opts.IsSdcRenameEnabled = true
+	}
+	f.service.opts.SdcPrefix = prefix
+	f.err = f.service.renameSDC(f.service.opts)
+	if f.err != nil {
+		fmt.Printf("error in renaming SDC: %s\n", f.err.Error())
+	}
+	return nil
+}
+
+func (f *feature) iCallGetSDCName(sdcGUID string, systemID string) error {
+	f.err = f.service.getSDCName(sdcGUID, systemID)
+	if f.err != nil {
+		fmt.Printf("error in getting SDC name: %s\n", f.err.Error())
+	}
+	return nil
+}
+
 func FeatureContext(s *godog.ScenarioContext) {
 	f := &feature{}
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
@@ -3528,6 +3548,8 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I use config "([^"]*)"$`, f.iUseConfig)
 	s.Step(`^I call GetReplicationCapabilities$`, f.iCallGetReplicationCapabilities)
 	s.Step(`^a "([^"]*)" replication capabilities structure is returned$`, f.aReplicationCapabilitiesStructureIsReturned)
+	s.Step(`^I call renameSDC with renameEnabled "([^"]*)" prefix "([^"]*)"$`, f.iCallRenameSDC)
+	s.Step(`^I call getSDCName with sdcGUID "([^"]*)" systemID "([^"]*)"$`, f.iCallGetSDCName)
 
 	s.After(func(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
 		if f.server != nil {

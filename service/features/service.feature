@@ -942,3 +942,21 @@ Feature: VxFlex OS CSI interface
     When I call Probe
     And I call setQoSParameters with systemID "15dbbf5617523655" sdcID "d0f055a700000000" bandwidthLimit "10240" iopsLimit "10" volumeName "k8s-a031818af5" csiVolID "15dbbf5617523655-456ca4fc00000009" nodeID "9E56672F-2F4B-4A42-BFF4-88B6846FBFDA"
     Then the error contains "error setting QoS parameters"
+
+  Scenario: Call probe for renaming SDC
+    Given a VxFlexOS service
+    When I call Probe
+    And I call renameSDC with renameEnabled "true" prefix "t"
+    Then the error contains "none"
+
+  Scenario: Call probe for renaming SDC
+    Given a VxFlexOS service
+    When I call Probe
+    And I call renameSDC with renameEnabled "true" prefix ""
+    Then the error contains "none"
+
+  Scenario: Call probe for getting SDC name
+    Given a VxFlexOS service
+    When I call Probe
+    And I call getSDCName with sdcGUID "9E56672F-2F4B-4A42-BFF4-88B6846FBFDA" systemID "14dbbf5617523654"
+    Then the error contains "none"

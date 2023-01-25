@@ -434,7 +434,7 @@ func (s *service) renameSDC(opts Opts) error {
 			return status.Errorf(codes.FailedPrecondition, "%s", err)
 		}
 		sdcID := sdc.Sdc.ID
-		
+
 		var newName string
 		if len(opts.SdcPrefix) > 0 {
 			// case1: if IsSdcRenameEnabled=true and prefix given then set the prefix+worker_node_name for sdc name.
