@@ -164,7 +164,7 @@ func (s *service) CreateRemoteVolume(ctx context.Context, req *replication.Creat
 
 	protectionDomain, ok := parameters[s.WithRP(KeyReplicationProtectionDomain)]
 	if !ok {
-		return nil, status.Errorf(codes.InvalidArgument, "replication enabled but no remote protection domain specified in storage class")
+		log.Printf("Remote protection domain not provided; there could be conflicts if two storage pools share a name")
 	}
 
 	name := "replicated-" + vol.Name
