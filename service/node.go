@@ -429,15 +429,12 @@ func (s *service) renameSDC(opts Opts) error {
 
 	// fetch SDC details
 	for _, systemID := range connectedSystemID {
-		sdcID, err := s.getSDCID(opts.SdcGUID, systemID)
-		if err != nil {
-			return status.Errorf(codes.FailedPrecondition, "%s", err)
-		}
 		sdc, err := s.systems[systemID].FindSdc("SdcGUID", opts.SdcGUID)
 		if err != nil {
 			return status.Errorf(codes.FailedPrecondition, "%s", err)
 		}
-
+		sdcID := sdc.Sdc.ID
+		
 		var newName string
 		if len(opts.SdcPrefix) > 0 {
 			// case1: if IsSdcRenameEnabled=true and prefix given then set the prefix+worker_node_name for sdc name.
