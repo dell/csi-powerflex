@@ -712,6 +712,19 @@ func (s *service) ControllerPublishVolume(
 		return nil, status.Errorf(codes.NotFound, err.Error())
 	}
 
+	// pre-approved guid check
+	if s.opts.IsApproveSDCEnabled {
+		// fetch sdc mode set for the system
+		system := s.systems[systemID]
+		Log.Infof("systemID.............. %s\n", system.System.ID)
+		Log.Infof("systemName.............. %s\n", system.System.Name)
+		Log.Infof("RestrictedSdcModeEnabled.............. %s\n", system.System.RestrictedSdcModeEnabled)
+		Log.Infof("RestrictedSdcMode.............. %s\n", system.System.RestrictedSdcMode)
+		//if s.System.RestrictedSdcModeEnabled {
+		//	if s.System.RestrictedSdcMode == "Guid"
+		// if restrictedSdcModeEnabled==true
+	}
+
 	vc := req.GetVolumeCapability()
 	if vc == nil {
 		return nil, status.Error(codes.InvalidArgument,

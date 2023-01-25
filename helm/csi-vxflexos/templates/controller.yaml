@@ -345,6 +345,10 @@ spec:
               value: "{{ .Values.controller.healthMonitor.enabled }}"
             {{- end }}
             {{- end }}
+            {{- if eq .Values.controller.approveSDCEnabled true}}
+            - name: X_CSI_APPROVE_SDC_ENABLED
+              value: "{{ .Values.controller.approveSDCEnabled }}"
+            {{- end }}
           volumeMounts:
             - name: socket-dir
               mountPath: /var/run/csi

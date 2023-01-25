@@ -144,6 +144,8 @@ controller:
   #   operator: "Exists"
   #   effect: "NoSchedule"
 
+  approveSDCEnabled: true
+
 # "node" allows to configure node specific parameters
 node:
   healthMonitor:
