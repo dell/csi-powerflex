@@ -913,3 +913,34 @@ func (s *service) getPeerMdms(systemID string) ([]*siotypes.PeerMDM, error) {
 	}
 	return mdms, nil
 }
+
+func (s *service) getProtectionDomain(systemID string, pdName string) (string, error) {
+	pdID, err := s.getProtectionDomainIDFromName(systemID, pdName)
+	if err != nil {
+		return "", err
+	}
+
+	if pdID != "" {
+		return pdID, nil
+	}
+
+	system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
+	if err != nil {
+		return "", err
+	}
+
+	pd, err := system.GetProtectionDomain("")
+	if err != nil {
+		return "", err
+	}
+
+	if len(pd) == 0 {
+		return "", errors.New("no protection domains found")
+	}
+
+	Log.Printf("[getProtectionDomain] - PD not provived, using: %s, System: %s", pd[0].Name, systemID)
+
+	pdID = pd[0].ID
+
+	return pdID, nil
+}
