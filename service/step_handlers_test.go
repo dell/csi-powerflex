@@ -702,6 +702,24 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 		_ = decoder.Decode(&req)
 		fmt.Printf("set volume name %s", req.NewName)
 		volumeIDToName[id] = req.NewName
+	case "removeReplicationConsistencyGroup":
+		if inducedError.Error() == "RemoveRCGError" {
+			writeError(w, "coule not remove RCG", http.StatusRequestTimeout, codes.Internal)
+			return
+		}
+
+		groups := systemArrays[r.Host].replicationConsistencyGroups
+		delete(groups, id)
+
+	case "removeReplicationPair":
+		if inducedError.Error() == "NoDeleteReplicationPair" {
+			writeError(w, "pairs exist", http.StatusRequestTimeout, codes.Internal)
+			return
+		}
+		pairs := systemArrays[r.Host].replicationPairs
+		delete(pairs, id)
+
+		fmt.Printf("volumeIDToReplicationState %+v\n", volumeIDToReplicationState)
 	}
 }
 
