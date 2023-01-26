@@ -1297,6 +1297,8 @@ func (f *feature) aValidVolume() error {
 	}
 	volumeIDToName[volIDtoUse] = goodVolumeName
 	volumeNameToID[goodVolumeName] = volIDtoUse
+	volumeIDToSizeInKB[volIDtoUse] = defaultVolumeSize
+	volumeIDToReplicationState[volIDtoUse] = unmarkedForReplication
 	return nil
 }
 
@@ -1727,6 +1729,8 @@ func (f *feature) thereAreValidVolumes(n int) error {
 		id := fmt.Sprintf(idTemplate, i)
 		volumeIDToName[id] = id
 		volumeNameToID[name] = name
+		volumeIDToSizeInKB[id] = defaultVolumeSize
+		volumeIDToReplicationState[id] = unmarkedForReplication
 	}
 	return nil
 }
@@ -2884,6 +2888,8 @@ func (f *feature) aValidSnapshot() error {
 	volumeIDToName[goodSnapID] = "snap4"
 	volumeNameToID["snap4"] = goodSnapID
 	volumeIDToAncestorID[goodSnapID] = goodVolumeID
+	volumeIDToSizeInKB[goodSnapID] = defaultVolumeSize
+	volumeIDToReplicationState[goodSnapID] = unmarkedForReplication
 	return nil
 }
 
@@ -2906,6 +2912,8 @@ func (f *feature) aValidSnapshotConsistencyGroup() error {
 	volumeNameToID["snap4"] = goodSnapID
 	volumeIDToAncestorID[goodSnapID] = goodVolumeID
 	volumeIDToConsistencyGroupID[goodSnapID] = goodVolumeID
+	volumeIDToSizeInKB[goodSnapID] = "8192"
+	volumeIDToReplicationState[goodSnapID] = unmarkedForReplication
 
 	// second snapshot in CG; this looks weird, but we give same ID to snap
 	// as it's ancestor so that we can publish the volume
@@ -2913,6 +2921,8 @@ func (f *feature) aValidSnapshotConsistencyGroup() error {
 	volumeNameToID["snap5"] = altSnapID
 	volumeIDToAncestorID[altSnapID] = altVolumeID
 	volumeIDToConsistencyGroupID[altSnapID] = goodVolumeID
+	volumeIDToSizeInKB[altSnapID] = "8192"
+	volumeIDToReplicationState[altSnapID] = unmarkedForReplication
 
 	// only return the SDC mappings on the altSnapID
 	req := f.getControllerPublishVolumeRequest("single-writer")
@@ -2966,6 +2976,8 @@ func (f *feature) thereAreValidSnapshotsOfVolume(nsnapshots int, volume string) 
 		volumeIDToName[id] = name
 		volumeNameToID[name] = id
 		volumeIDToAncestorID[id] = volumeID
+		volumeIDToSizeInKB[id] = "8192"
+		volumeIDToReplicationState[id] = unmarkedForReplication
 	}
 	return nil
 }

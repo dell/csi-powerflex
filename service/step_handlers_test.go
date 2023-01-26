@@ -860,6 +860,13 @@ func handleInstances(w http.ResponseWriter, r *http.Request) {
 	switch objType {
 	case "Volume":
 		if id != "9999" {
+			// Insert to map if it doesn't exist.
+			if volumeIDToName[id] == "" {
+				volumeIDToName[id] = "vol" + id
+				volumeIDToSizeInKB[id] = defaultVolumeSize
+				volumeIDToReplicationState[id] = unmarkedForReplication
+			}
+
 			replacementMap := make(map[string]string)
 			vol := systemArrays[r.Host].volumes[id]
 			log.Printf("Get id %s for %s\n", id, objType)
