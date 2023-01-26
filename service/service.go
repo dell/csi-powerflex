@@ -34,6 +34,7 @@ import (
 	volumeGroupSnapshot "github.com/dell/dell-csi-extensions/volumeGroupSnapshot"
 	"github.com/dell/gocsi"
 	csictx "github.com/dell/gocsi/context"
+	"github.com/dell/goscaleio"
 	sio "github.com/dell/goscaleio"
 	siotypes "github.com/dell/goscaleio/types/v1"
 	"github.com/fsnotify/fsnotify"
@@ -943,4 +944,47 @@ func (s *service) getProtectionDomain(systemID string, pdName string) (string, e
 	pdID = pd[0].ID
 
 	return pdID, nil
+}
+
+func (s *service) removeVolumeFromReplicationPair(systemID string, volumeID string) (*siotypes.ReplicationPair, error) {
+	adminClient := s.adminClients[systemID]
+	if adminClient == nil {
+		return nil, fmt.Errorf("can't find adminClient by id %s", systemID)
+	}
+
+	repPair, err := s.findReplicationPairByVolID(systemID, volumeID)
+	if err != nil {
+		return nil, err
+	}
+
+	pair := goscaleio.NewReplicationPair(adminClient)
+	pair.ReplicaitonPair = repPair
+
+	resp, err := pair.RemoveReplicationPair(true)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp, nil
+}
+
+func (s *service) findReplicationPairByVolID(systemID, volumeID string) (*siotypes.ReplicationPair, error) {
+	adminClient := s.adminClients[systemID]
+	if adminClient == nil {
+		return nil, fmt.Errorf("can't find adminClient by id %s", systemID)
+	}
+
+	// Gets a list of all replication pairs.
+	pairs, err := adminClient.GetAllReplicationPairs()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, pair := range pairs {
+		if volumeID == pair.LocalVolumeID {
+			return pair, nil
+		}
+	}
+
+	return nil, fmt.Errorf("replication pair for volume ID: %s, not found", volumeID)
 }

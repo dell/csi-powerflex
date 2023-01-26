@@ -619,6 +619,17 @@ func (s *service) DeleteVolume(
 			"volume in use by %s", vol.MappedSdcInfo[0].SdcID)
 	}
 
+	// If volume is marked for replication, remove the replication pair first.
+	if vol.VolumeReplicationState != "UnmarkedForReplication" {
+		Log.Printf("[DeleteVolume] - vol: %+v", vol)
+		pair, err := s.removeVolumeFromReplicationPair(systemID, volID)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal,
+				"error removing replication pair: %s", err.Error())
+		}
+		Log.Printf("[DeleteVolume] - Removed Pair: %+v", pair)
+	}
+
 	Log.WithFields(logrus.Fields{"name": vol.Name, "id": csiVolID}).Info("Deleting volume")
 	tgtVol := goscaleio.NewVolume(s.adminClients[systemID])
 	tgtVol.Volume = vol
@@ -2459,4 +2470,28 @@ func (s *service) CreateReplicationPair(systemID string, name string,
 	}
 
 	return response, nil
+}
+
+func (s *service) DeleteReplicationConsistencyGroup(systemID string, groupID string) error {
+	adminClient := s.adminClients[systemID]
+	if adminClient == nil {
+		return status.Errorf(codes.InvalidArgument, "can't find adminClient by id %s", systemID)
+	}
+
+	if groupID == "" {
+		return status.Errorf(codes.InvalidArgument, "group id wasn't provided")
+	}
+
+	group, err := adminClient.GetReplicationConsistencyGroupByID(groupID)
+	if err != nil {
+		Log.Printf("Replication Deletion Error: %s", err.Error())
+		return err
+	}
+
+	rcg := goscaleio.NewReplicationConsistencyGroup(adminClient)
+	rcg.ReplicationConsistencyGroup = group
+
+	err = rcg.RemoveReplicationConsistencyGroup(false)
+
+	return err
 }
