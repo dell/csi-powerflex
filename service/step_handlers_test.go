@@ -21,6 +21,7 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	types "github.com/dell/goscaleio/types/v1"
@@ -103,6 +104,11 @@ var count int
 
 var inducedError error
 
+const (
+	remoteRCGID            = "d303184900000001"
+	unmarkedForReplication = "UnmarkedForReplication"
+)
+
 // getFileHandler returns an http.Handler that
 func getHandler() http.Handler {
 	handler := http.HandlerFunc(
@@ -117,6 +123,8 @@ func getHandler() http.Handler {
 	volumeIDToAncestorID = make(map[string]string)
 	volumeNameToID = make(map[string]string)
 	volumeIDToConsistencyGroupID = make(map[string]string)
+	volumeIDToReplicationState = make(map[string]string)
+	volumeIDToSizeInKB = make(map[string]string)
 	debug = false
 	stepHandlersErrors.FindVolumeIDError = false
 	stepHandlersErrors.GetVolByIDError = false
@@ -194,6 +202,8 @@ func getRouter() http.Handler {
 	scaleioRouter.HandleFunc("/api/Volume/relationship/Statistics", handleVolumeStatistics)
 	scaleioRouter.HandleFunc("{SdcGUID}/relationships/Sdc", handleSystemSdc)
 	scaleioRouter.HandleFunc("/api/types/PeerMdm/instances", handlePeerMdmInstances)
+	scaleioRouter.HandleFunc("/api/types/ReplicationConsistencyGroup/instances", handleReplicationConsistencyGroupInstances)
+	scaleioRouter.HandleFunc("/api/types/ReplicationPair/instances", handleReplicationPairInstances)
 	return scaleioRouter
 }
 
@@ -327,6 +337,40 @@ var volumeIDToAncestorID map[string]string
 // Map of volume ID to consistency group ID
 var volumeIDToConsistencyGroupID map[string]string
 
+// Replication group mode to replace for.
+var replicationGroupConsistMode string
+
+// Map of volume ID to Replication State
+var volumeIDToReplicationState map[string]string
+
+// Map of volume ID to size in KB
+var volumeIDToSizeInKB map[string]string
+
+// Replication group state to replace for.
+var replicationGroupState string
+
+// Possible rework, every systemID should have a instances similar to an array.
+type systemArray struct {
+	ID                           string
+	replicationSystem            *systemArray
+	volumes                      map[string]map[string]string
+	replicationConsistencyGroups map[string]map[string]string
+	replicationPairs             map[string]map[string]string
+}
+
+func (s *systemArray) Init() {
+	s.volumes = make(map[string]map[string]string)
+	s.replicationConsistencyGroups = make(map[string]map[string]string)
+	s.replicationPairs = make(map[string]map[string]string)
+}
+
+func (s *systemArray) Link(remoteSystem *systemArray) {
+	s.replicationSystem = remoteSystem
+	remoteSystem.replicationSystem = s
+}
+
+var systemArrays map[string]*systemArray
+
 // handleVolumeInstances handles listing all volumes or creating a volume
 func handleVolumeInstances(w http.ResponseWriter, r *http.Request) {
 	if volumeIDToName == nil {
@@ -334,6 +378,8 @@ func handleVolumeInstances(w http.ResponseWriter, r *http.Request) {
 		volumeIDToAncestorID = make(map[string]string)
 		volumeNameToID = make(map[string]string)
 		volumeIDToConsistencyGroupID = make(map[string]string)
+		volumeIDToReplicationState = make(map[string]string)
+		volumeIDToSizeInKB = make(map[string]string)
 	}
 	if stepHandlersErrors.VolumeInstancesError {
 		writeError(w, "induced error", http.StatusRequestTimeout, codes.Internal)
@@ -376,6 +422,19 @@ func handleVolumeInstances(w http.ResponseWriter, r *http.Request) {
 		volumeNameToID[req.Name] = resp.ID
 		volumeIDToAncestorID[resp.ID] = "null"
 		volumeIDToConsistencyGroupID[resp.ID] = "null"
+		volumeIDToReplicationState[resp.ID] = unmarkedForReplication
+		volumeIDToSizeInKB[resp.ID] = req.VolumeSizeInKb
+
+		host := r.Host
+		fmt.Printf("Host Endpoint %s\n", host)
+		systemArrays[host].volumes[resp.ID] = make(map[string]string)
+		systemArrays[host].volumes[resp.ID]["name"] = req.Name
+		systemArrays[host].volumes[resp.ID]["id"] = resp.ID
+		systemArrays[host].volumes[resp.ID]["sizeInKb"] = req.VolumeSizeInKb
+		systemArrays[host].volumes[resp.ID]["volumeReplicationState"] = unmarkedForReplication
+		systemArrays[host].volumes[resp.ID]["consistencyGroupID"] = "null"
+		systemArrays[host].volumes[resp.ID]["ancestorVolumeId"] = "null"
+
 		if debug {
 			log.Printf("request name: %s id: %s\n", req.Name, resp.ID)
 		}
@@ -389,14 +448,17 @@ func handleVolumeInstances(w http.ResponseWriter, r *http.Request) {
 	// Read all the Volumes
 	case http.MethodGet:
 		instances := make([]*types.Volume, 0)
-		for id, name := range volumeIDToName {
-			name = id
+		volumes := systemArrays[r.Host].volumes
+
+		for id, vol := range volumes {
 			replacementMap := make(map[string]string)
-			replacementMap["__ID__"] = id
-			replacementMap["__NAME__"] = name
+			replacementMap["__ID__"] = vol["id"]
+			replacementMap["__NAME__"] = vol["name"]
 			replacementMap["__MAPPED_SDC_INFO__"] = getSdcMappings(id)
-			replacementMap["__ANCESTOR_ID__"] = volumeIDToAncestorID[id]
-			replacementMap["__CONSISTENCY_GROUP_ID__"] = volumeIDToConsistencyGroupID[id]
+			replacementMap["__ANCESTOR_ID__"] = vol["ancestorVolumeId"]
+			replacementMap["__CONSISTENCY_GROUP_ID__"] = vol["consistencyGroupID"]
+			replacementMap["__SIZE_IN_KB__"] = vol["sizeInKb"]
+			replacementMap["__VOLUME_REPLICATION_STATE__"] = vol["volumeReplicationState"]
 			data := returnJSONFile("features", "volume.json.template", nil, replacementMap)
 			vol := new(types.Volume)
 			err := json.Unmarshal(data, vol)
@@ -405,6 +467,31 @@ func handleVolumeInstances(w http.ResponseWriter, r *http.Request) {
 			}
 			instances = append(instances, vol)
 		}
+
+		// Add none-created volumes (old)
+		for id, name := range volumeIDToName {
+			if _, ok := volumes[id]; ok {
+				continue
+			}
+
+			name = id
+			replacementMap := make(map[string]string)
+			replacementMap["__ID__"] = id
+			replacementMap["__NAME__"] = name
+			replacementMap["__MAPPED_SDC_INFO__"] = getSdcMappings(id)
+			replacementMap["__ANCESTOR_ID__"] = volumeIDToAncestorID[id]
+			replacementMap["__CONSISTENCY_GROUP_ID__"] = volumeIDToConsistencyGroupID[id]
+			replacementMap["__SIZE_IN_KB__"] = volumeIDToSizeInKB[id]
+			replacementMap["__VOLUME_REPLICATION_STATE__"] = volumeIDToReplicationState[id]
+			data := returnJSONFile("features", "volume.json.template", nil, replacementMap)
+			vol := new(types.Volume)
+			err := json.Unmarshal(data, vol)
+			if err != nil {
+				log.Printf("error unmarshalling json: %s\n", string(data))
+			}
+			instances = append(instances, vol)
+		}
+
 		encoder := json.NewEncoder(w)
 		err := encoder.Encode(instances)
 		if err != nil {
@@ -580,6 +667,11 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "induced error", http.StatusRequestTimeout, codes.Internal)
 			return
 		}
+		req := types.SetVolumeSizeParam{}
+		decoder := json.NewDecoder(r.Body)
+		_ = decoder.Decode(&req)
+		intValue, _ := strconv.Atoi(req.SizeInGB)
+		volumeIDToSizeInKB[id] = strconv.Itoa(intValue / 1024)
 	case "setVolumeName":
 		//volumeIDToName[id] = snapParam.Name
 		req := types.SetVolumeNameParam{}
@@ -672,8 +764,44 @@ func handleRelationships(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "Unsupported relationship from type", http.StatusRequestTimeout, codes.Internal)
 		}
 	case "ProtectionDomain":
+		if inducedError.Error() == "NoProtectionDomainError" {
+			writeError(w, "induced error NoProtectionDomainError", http.StatusRequestTimeout, codes.Internal)
+			return
+		}
+
 		if from == "System" {
 			returnJSONFile("features", "get_system_instances.json", w, nil)
+		}
+	case "ReplicationPair":
+		if inducedError.Error() == "GetReplicationPairError" {
+			writeError(w, "GET ReplicationPair induced error", http.StatusRequestTimeout, codes.Internal)
+			return
+		}
+
+		instances := make([]*types.ReplicationPair, 0)
+
+		for _, pair := range systemArrays[r.Host].replicationPairs {
+			replacementMap := make(map[string]string)
+			replacementMap["__ID__"] = pair["id"]
+			replacementMap["__NAME__"] = pair["name"]
+			replacementMap["__SOURCE_VOLUME__"] = pair["localVolumeId"]
+			replacementMap["__DESTINATION_VOLUME__"] = pair["remoteVolumeId"]
+			replacementMap["__RP_GROUP__"] = pair["replicationConsistencyGroupId"]
+
+			data := returnJSONFile("features", "replication_pair.template", nil, replacementMap)
+			pair := new(types.ReplicationPair)
+			err := json.Unmarshal(data, pair)
+			if err != nil {
+				log.Printf("error unmarshalling json: %s\n", string(data))
+			}
+			log.Printf("pair +%v", pair)
+			instances = append(instances, pair)
+		}
+
+		encoder := json.NewEncoder(w)
+		err := encoder.Encode(instances)
+		if err != nil {
+			log.Printf("error encoding json: %s\n", err)
 		}
 	default:
 		writeError(w, "Unsupported relationship to type", http.StatusRequestTimeout, codes.Internal)
@@ -711,18 +839,62 @@ func handleInstances(w http.ResponseWriter, r *http.Request) {
 	switch objType {
 	case "Volume":
 		if id != "9999" {
-			log.Printf("Get id %s for %s\n", id, objType)
 			replacementMap := make(map[string]string)
-			replacementMap["__ID__"] = id
-			replacementMap["__NAME__"] = volumeIDToName[id]
-			replacementMap["__MAPPED_SDC_INFO__"] = getSdcMappings(id)
-			replacementMap["__ANCESTOR_ID__"] = volumeIDToAncestorID[id]
-			replacementMap["__CONSISTENCY_GROUP_ID__"] = volumeIDToConsistencyGroupID[id]
+			vol := systemArrays[r.Host].volumes[id]
+			log.Printf("Get id %s for %s\n", id, objType)
+			if vol != nil {
+				replacementMap["__ID__"] = vol["id"]
+				replacementMap["__NAME__"] = vol["name"]
+				replacementMap["__MAPPED_SDC_INFO__"] = getSdcMappings(id)
+				replacementMap["__ANCESTOR_ID__"] = vol["ancestorVolumeId"]
+				replacementMap["__CONSISTENCY_GROUP_ID__"] = vol["consistencyGroupID"]
+				replacementMap["__SIZE_IN_KB__"] = vol["sizeInKb"]
+				replacementMap["__VOLUME_REPLICATION_STATE__"] = vol["volumeReplicationState"]
+			} else {
+				replacementMap["__ID__"] = id
+				replacementMap["__NAME__"] = volumeIDToName[id]
+				replacementMap["__MAPPED_SDC_INFO__"] = getSdcMappings(id)
+				replacementMap["__ANCESTOR_ID__"] = volumeIDToAncestorID[id]
+				replacementMap["__CONSISTENCY_GROUP_ID__"] = volumeIDToConsistencyGroupID[id]
+				replacementMap["__SIZE_IN_KB__"] = volumeIDToSizeInKB[id]
+				replacementMap["__VOLUME_REPLICATION_STATE__"] = volumeIDToReplicationState[id]
+			}
 			returnJSONFile("features", "volume.json.template", w, replacementMap)
 		} else {
 			log.Printf("Did not find id %s for %s\n", id, objType)
 			writeError(w, "volume not found: "+id, http.StatusNotFound, codes.NotFound)
 		}
+
+	case "ReplicationConsistencyGroup":
+		if inducedError.Error() == "GetRCGByIdError" {
+			writeError(w, "could not GET RCG by ID", http.StatusRequestTimeout, codes.Internal)
+			return
+		}
+
+		group := systemArrays[r.Host].replicationConsistencyGroups[id]
+
+		replacementMap := make(map[string]string)
+		replacementMap["__ID__"] = group["id"]
+		replacementMap["__NAME__"] = group["name"]
+		replacementMap["__MODE__"] = replicationGroupConsistMode
+		replacementMap["__PROTECTION_DOMAIN__"] = group["protectionDomainId"]
+		replacementMap["__RM_PROTECTION_DOMAIN__"] = group["remoteProtectionDomainId"]
+		replacementMap["__REP_DIR__"] = group["replicationDirection"]
+
+		if replicationGroupState == "Normal" {
+			replacementMap["__STATE__"] = "Ok"
+		} else {
+			replacementMap["__STATE__"] = "StoppedByUser"
+			if replicationGroupState == "Failover" {
+				replacementMap["__FO_TYPE__"] = "Failover"
+				replacementMap["__FO_STATE__"] = "Done"
+			} else if replicationGroupState == "Paused" {
+				replacementMap["__P_MODE__"] = "Paused"
+			}
+		}
+
+		returnJSONFile("features", "replication_consistency_group.template", w, replacementMap)
+
 	}
 }
 
@@ -773,6 +945,243 @@ func handleQueryVolumeIDByKey(w http.ResponseWriter, r *http.Request) {
 		volumeNameToID[req.Name] = ""
 		writeError(w, fmt.Sprintf("Volume not found %s", req.Name), http.StatusNotFound, codes.NotFound)
 
+	}
+}
+
+func handleReplicationConsistencyGroupInstances(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPost:
+		if inducedError.Error() == "ReplicationConsistencyGroupError" {
+			writeError(w, "create rcg induced error", http.StatusRequestTimeout, codes.Internal)
+			return
+		}
+
+		req := types.ReplicationConsistencyGroupCreatePayload{}
+		decoder := json.NewDecoder(r.Body)
+		err := decoder.Decode(&req)
+		if err != nil {
+			log.Printf("error decoding json: %s\n", err.Error())
+		}
+
+		fmt.Printf("POST to ReplicationConsistencyGroup %s\n", req.Name)
+		for _, ctx := range systemArrays[r.Host].replicationConsistencyGroups {
+			if ctx["name"] == req.Name {
+				w.WriteHeader(http.StatusInternalServerError)
+				log.Printf("request for rcg creation of duplicate name: %s\n", req.Name)
+				resp := types.Error{Message: "The Replication Consistency Group already exists",
+					HTTPStatusCode: http.StatusInternalServerError, ErrorCode: 6}
+				encoder := json.NewEncoder(w)
+				err = encoder.Encode(resp)
+				if err != nil {
+					log.Printf("error encoding json: %s\n", err.Error())
+				}
+				return
+			}
+		}
+
+		resp := new(types.ReplicationConsistencyGroup)
+		resp.ID = hex.EncodeToString([]byte(req.Name))
+		fmt.Printf("Generated rcg ID %s Name %s\n", resp.ID, req.Name)
+
+		var array *systemArray
+
+		// Add local rcg.
+		array = systemArrays[r.Host]
+		array.replicationConsistencyGroups[resp.ID] = make(map[string]string)
+		array.replicationConsistencyGroups[resp.ID]["name"] = req.Name
+		array.replicationConsistencyGroups[resp.ID]["id"] = resp.ID
+		array.replicationConsistencyGroups[resp.ID]["remoteId"] = remoteRCGID
+		array.replicationConsistencyGroups[resp.ID]["protectionDomainId"] = req.ProtectionDomainID
+		array.replicationConsistencyGroups[resp.ID]["remoteProtectionDomainId"] = req.RemoteProtectionDomainID
+		array.replicationConsistencyGroups[resp.ID]["rpoInSeconds"] = req.RpoInSeconds
+		array.replicationConsistencyGroups[resp.ID]["remoteMdmId"] = req.DestinationSystemID
+		array.replicationConsistencyGroups[resp.ID]["replicationDirection"] = "LocalToRemote"
+
+		array = array.replicationSystem
+		array.replicationConsistencyGroups[remoteRCGID] = make(map[string]string)
+		array.replicationConsistencyGroups[remoteRCGID]["name"] = "rem-" + req.Name
+		array.replicationConsistencyGroups[remoteRCGID]["id"] = remoteRCGID
+		array.replicationConsistencyGroups[remoteRCGID]["remoteId"] = resp.ID
+		array.replicationConsistencyGroups[remoteRCGID]["protectionDomainId"] = req.RemoteProtectionDomainID
+		array.replicationConsistencyGroups[remoteRCGID]["remoteProtectionDomainId"] = req.ProtectionDomainID
+		array.replicationConsistencyGroups[remoteRCGID]["rpoInSeconds"] = req.RpoInSeconds
+		array.replicationConsistencyGroups[remoteRCGID]["remoteMdmId"] = array.ID
+		array.replicationConsistencyGroups[remoteRCGID]["replicationDirection"] = "RemoteToLocal"
+
+		if debug {
+			log.Printf("request name: %s id: %s\n", req.Name, resp.ID)
+		}
+
+		if inducedError.Error() == "StorageGroupAlreadyExists" || inducedError.Error() == "StorageGroupAlreadyExistsUnretriavable" {
+			writeError(w, "The Replication Consistency Group already exists", http.StatusRequestTimeout, codes.Internal)
+			return
+		}
+
+		encoder := json.NewEncoder(w)
+		err = encoder.Encode(resp)
+		if err != nil {
+			log.Printf("error encoding json: %s\n", err.Error())
+		}
+	case http.MethodGet:
+		if inducedError.Error() == "GetReplicationConsistencyGroupsError" {
+			writeError(w, "could not GET ReplicationConsistencyGroups", http.StatusRequestTimeout, codes.Internal)
+			return
+		}
+
+		instances := make([]*types.ReplicationConsistencyGroup, 0)
+		for _, group := range systemArrays[r.Host].replicationConsistencyGroups {
+			if inducedError.Error() == "StorageGroupAlreadyExistsUnretriavable" {
+				continue
+			}
+
+			replacementMap := make(map[string]string)
+			replacementMap["__ID__"] = group["id"]
+
+			if inducedError.Error() == "RemoteRCGBadNameError" {
+				replacementMap["__NAME__"] = "xxx"
+			} else {
+				replacementMap["__NAME__"] = group["name"]
+			}
+
+			replacementMap["__MODE__"] = replicationGroupConsistMode
+			replacementMap["__PROTECTION_DOMAIN__"] = group["protectionDomainId"]
+			replacementMap["__RM_PROTECTION_DOMAIN__"] = group["remoteProtectionDomainId"]
+			replacementMap["__REP_DIR__"] = group["replicationDirection"]
+
+			data := returnJSONFile("features", "replication_consistency_group.template", nil, replacementMap)
+
+			fmt.Printf("RCG data %s\n", string(data))
+			rcg := new(types.ReplicationConsistencyGroup)
+			err := json.Unmarshal(data, rcg)
+			if err != nil {
+				log.Printf("error unmarshalling json: %s\n", string(data))
+			}
+
+			instances = append(instances, rcg)
+		}
+
+		encoder := json.NewEncoder(w)
+		err := encoder.Encode(instances)
+		if err != nil {
+			log.Printf("error encoding json: %s\n", err)
+		}
+
+	}
+}
+
+func handleReplicationPairInstances(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPost:
+		if inducedError.Error() == "ReplicationPairError" {
+			writeError(w, "POST ReplicationPair induced error", http.StatusRequestTimeout, codes.Internal)
+			return
+		}
+		req := types.QueryReplicationPair{}
+		decoder := json.NewDecoder(r.Body)
+		err := decoder.Decode(&req)
+		if err != nil {
+			log.Printf("error decoding json: %s\n", err.Error())
+		}
+		fmt.Printf("POST to ReplicationPair %s Request %+v\n", req.Name, req)
+		for _, ctx := range systemArrays[r.Host].replicationPairs {
+			if ctx["name"] == req.Name {
+				w.WriteHeader(http.StatusInternalServerError)
+				log.Printf("request for replication pair creation of duplicate name: %s\n", req.Name)
+
+				resp := new(types.Error)
+				resp.Message = "Replication Pair name already in use"
+				resp.HTTPStatusCode = http.StatusInternalServerError
+				resp.ErrorCode = 6
+				encoder := json.NewEncoder(w)
+				err = encoder.Encode(resp)
+				if err != nil {
+					log.Printf("error encoding json: %s\n", err.Error())
+				}
+				return
+			}
+		}
+
+		resp := new(types.ReplicationPair)
+		resp.ID = hex.EncodeToString([]byte(req.Name))
+		fmt.Printf("Generated replicationPair ID %s Name %s Struct %+v\n", resp.ID, req.Name, req)
+
+		var array *systemArray
+		array = systemArrays[r.Host]
+		array.replicationPairs[resp.ID] = make(map[string]string)
+		array.replicationPairs[resp.ID]["name"] = req.Name
+		array.replicationPairs[resp.ID]["id"] = resp.ID
+		array.replicationPairs[resp.ID]["localVolumeId"] = req.SourceVolumeID
+		array.replicationPairs[resp.ID]["remoteVolumeId"] = req.DestinationVolumeID
+		array.replicationPairs[resp.ID]["replicationConsistencyGroupId"] = req.ReplicationConsistencyGroupID
+
+		// set replicated on volumes.
+		array.volumes[req.SourceVolumeID]["volumeReplicationState"] = "Replicated"
+
+		array = array.replicationSystem
+		array.replicationPairs[resp.ID] = make(map[string]string)
+		array.replicationPairs[resp.ID]["name"] = "rp-" + req.Name
+		array.replicationPairs[resp.ID]["id"] = resp.ID
+		array.replicationPairs[resp.ID]["localVolumeId"] = req.DestinationVolumeID
+		array.replicationPairs[resp.ID]["remoteVolumeId"] = req.SourceVolumeID
+		array.replicationPairs[resp.ID]["replicationConsistencyGroupId"] = array.replicationConsistencyGroups[remoteRCGID]["id"]
+
+		array.volumes[req.DestinationVolumeID]["volumeReplicationState"] = "Replicated"
+
+		volumeIDToReplicationState[req.SourceVolumeID] = "Replicated"
+		volumeIDToReplicationState[req.DestinationVolumeID] = "Replicated"
+
+		if debug {
+			log.Printf("request name: %s id: %s sourceVolume %s\n", req.Name, resp.ID, req.SourceVolumeID)
+		}
+
+		if inducedError.Error() == "ReplicationPairAlreadyExists" || inducedError.Error() == "ReplicationPairAlreadyExistsUnretrievable" {
+			writeError(w, "A Replication Pair for the specified local volume already exists", http.StatusRequestTimeout, codes.Internal)
+			return
+		}
+
+		encoder := json.NewEncoder(w)
+		err = encoder.Encode(resp)
+		if err != nil {
+			log.Printf("error encoding json: %s\n", err.Error())
+		}
+	case http.MethodGet:
+		if inducedError.Error() == "GetReplicationPairError" {
+			writeError(w, "GET ReplicationPair induced error", http.StatusRequestTimeout, codes.Internal)
+			return
+		}
+
+		instances := make([]*types.ReplicationPair, 0)
+		for _, pair := range systemArrays[r.Host].replicationPairs {
+			if inducedError.Error() == "ReplicationPairAlreadyExistsUnretrievable" {
+				continue
+			}
+
+			replacementMap := make(map[string]string)
+			replacementMap["__ID__"] = pair["id"]
+			replacementMap["__NAME__"] = pair["name"]
+			replacementMap["__SOURCE_VOLUME__"] = pair["localVolumeId"]
+			replacementMap["__DESTINATION_VOLUME__"] = pair["remoteVolumeId"]
+			replacementMap["__RP_GROUP__"] = pair["replicationConsistencyGroupId"]
+
+			log.Printf("replicatPair replacementMap %v\n", replacementMap)
+			data := returnJSONFile("features", "replication_pair.template", nil, replacementMap)
+
+			log.Printf("replication-pair-data %s\n", string(data))
+			pair := new(types.ReplicationPair)
+			err := json.Unmarshal(data, pair)
+			if err != nil {
+				log.Printf("error unmarshalling json: %s\n", string(data))
+			}
+
+			log.Printf("replication-pair +%v", pair)
+			instances = append(instances, pair)
+		}
+
+		encoder := json.NewEncoder(w)
+		err := encoder.Encode(instances)
+		if err != nil {
+			log.Printf("error encoding json: %s\n", err)
+		}
 	}
 }
 

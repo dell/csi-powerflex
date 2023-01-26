@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -49,7 +50,7 @@ import (
 
 const (
 	arrayID                    = "14dbbf5617523654"
-	arrayID2                   = "15dbbf5617523655-system-name"
+	arrayID2                   = "15dbbf5617523655"
 	badVolumeID                = "Totally Fake ID"
 	badCsiVolumeID             = "ffff-f250"
 	goodVolumeID               = "111"
@@ -137,6 +138,8 @@ type feature struct {
 	volumeID                              string
 	VolumeGroupSnapshot                   *volGroupSnap.CreateVolumeGroupSnapshotResponse
 	replicationCapabilitiesResponse       *replication.GetReplicationCapabilityResponse
+	clusterUID                            string
+	createStorageProtectionGroupResponse  *replication.CreateStorageProtectionGroupResponse
 }
 
 func (f *feature) checkGoRoutines(tag string) {
@@ -258,6 +261,20 @@ func (f *feature) aVxFlexOSServiceWithTimeoutMilliseconds(millis int) error {
 	}
 
 	inducedError = errors.New("")
+	f.clusterUID = uuid.New().String()
+
+	// Used to contain all contents of the systemArray.
+	systemArrays = make(map[string]*systemArray)
+	addr := f.server.Listener.Addr().String()
+	addr2 := f.server2.Listener.Addr().String()
+
+	systemArrays[addr] = &systemArray{ID: arrayID}
+	systemArrays[addr2] = &systemArray{ID: arrayID2}
+
+	systemArrays[addr].Init()
+	systemArrays[addr2].Init()
+
+	systemArrays[addr].Link(systemArrays[addr2])
 
 	f.checkGoRoutines("end aVxFlexOSService")
 	return nil
@@ -3426,6 +3443,74 @@ func (f *feature) iCallCreateRemoteVolume() error {
 	return nil
 }
 
+func (f *feature) iCallCreateStorageProtectionGroup() error {
+	ctx := new(context.Context)
+	parameters := make(map[string]string)
+
+	// Must be repeatable.
+	clusterUID := f.clusterUID
+
+	if inducedError.Error() != "EmptyParametersListError" {
+		parameters[f.service.WithRP(KeyReplicationRemoteSystem)] = arrayID2
+		parameters[f.service.WithRP(KeyReplicationRPO)] = "60"
+		parameters[f.service.WithRP(KeyReplicationClusterID)] = "cluster-k212"
+		parameters["clusterUID"] = clusterUID
+	}
+
+	if inducedError.Error() == "BadRemoteSystem" {
+		parameters[f.service.WithRP(KeyReplicationRemoteSystem)] = "xxx"
+	}
+
+	if inducedError.Error() == "NoRemoteSystem" {
+		delete(parameters, f.service.WithRP(KeyReplicationRemoteSystem))
+	}
+
+	if inducedError.Error() == "NoRPOSpecified" {
+		delete(parameters, f.service.WithRP(KeyReplicationRPO))
+	}
+
+	if inducedError.Error() == "NoRemoteClusterID" {
+		delete(parameters, f.service.WithRP(KeyReplicationClusterID))
+	}
+
+	req := &replication.CreateStorageProtectionGroupRequest{
+		VolumeHandle: f.createVolumeResponse.GetVolume().VolumeId,
+		Parameters:   parameters,
+	}
+	fmt.Printf("CreateStorageProtectionGroupRequest %+v\n", req)
+	fmt.Printf("StorageProtectionGroupRequest volumeHandle %s\n", req.VolumeHandle)
+	if stepHandlersErrors.NoVolIDError {
+		req.VolumeHandle = ""
+	}
+	if stepHandlersErrors.BadVolIDError {
+		req.VolumeHandle = "0/"
+	}
+	f.createStorageProtectionGroupResponse, f.err = f.service.CreateStorageProtectionGroup(*ctx, req)
+	return nil
+}
+
+func (f *feature) iCallCreateStorageProtectionGroupWith(arg1, arg2, arg3 string) error {
+	ctx := new(context.Context)
+	parameters := make(map[string]string)
+
+	// Must be repeatable.
+	clusterUID := f.clusterUID
+
+	parameters["clusterUID"] = clusterUID
+	parameters[f.service.WithRP(KeyReplicationRemoteSystem)] = arrayID2
+	parameters[f.service.WithRP(KeyReplicationRPO)] = arg3
+	parameters[f.service.WithRP(KeyReplicationConsistencyGroupName)] = arg1
+	parameters[f.service.WithRP(KeyReplicationClusterID)] = arg2
+
+	req := &replication.CreateStorageProtectionGroupRequest{
+		VolumeHandle: f.createVolumeResponse.GetVolume().VolumeId,
+		Parameters:   parameters,
+	}
+
+	f.createStorageProtectionGroupResponse, f.err = f.service.CreateStorageProtectionGroup(*ctx, req)
+	return nil
+}
+
 func FeatureContext(s *godog.ScenarioContext) {
 	f := &feature{}
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
@@ -3588,6 +3673,8 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I set renameSDC with renameEnabled "([^"]*)" prefix "([^"]*)"$`, f.iSetRenameSdcEnabledWithPrefix)
 	s.Step(`^I set approveSDC with approveSDCEnabled "([^"]*)"`, f.iSetApproveSdcEnabled)
 	s.Step(`^I call CreateRemoteVolume$`, f.iCallCreateRemoteVolume)
+	s.Step(`^I call CreateStorageProtectionGroup$`, f.iCallCreateStorageProtectionGroup)
+	s.Step(`^I call CreateStorageProtectionGroup with "([^"]*)", "([^"]*)", "([^"]*)"$`, f.iCallCreateStorageProtectionGroupWith)
 
 	s.After(func(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
 		if f.server != nil {

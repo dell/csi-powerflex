@@ -1,0 +1,51 @@
+{
+        "id": "__ID__",
+        "name": "__NAME__",
+        "rpoInSeconds": 60,
+        "protectionDomainId": "__PROTECTION_DOMAIN__",
+        "remoteProtectionDomainId": "__RM_PROTECTION_DOMAIN__",
+        "peerMdmId": "d02aebc400000000",
+        "remoteId": "246701fb00000001",
+        "remoteMdmId": "15dbbf5617523655",
+        "replicationDirection": "__REP_DIR__",
+        "currConsistMode": "__MODE__",
+        "freezeState": "Unfrozen",
+        "pauseMode": "__P_MODE__",
+        "lifetimeState": "Normal",
+        "type": "User",
+        "disasterRecoveryState": "None",
+        "remoteDisasterRecoveryState": "None",
+        "targetVolumeAccessMode": "NoAccess",
+        "failoverType": "__FO_TYPE__",
+        "failoverState": "__FO_STATE__",
+        "activeLocal": true,
+        "activeRemote": true,
+        "abstractState": "__STATE__",
+        "error": 65,
+        "localActivityState": "Active",
+        "remoteActivityState": "Active",
+        "inactiveReason": 11,
+        "links": [
+                {
+                        "rel": "self",
+                        "href": "/api/instances/ReplicationConsistencyGroup::__ID__"
+                },
+                {
+                        "rel": "/api/ReplicationConsistencyGroup/relationship/Statistics",
+                        "href": "/api/instances/ReplicationConsistencyGroup::__ID__/relationships/Statistics"
+                },
+                {
+                        "rel": "/api/ReplicationConsistencyGroup/relationship/ReplicationPair",
+                        "href": "/api/instances/ReplicationConsistencyGroup::__ID__/relationships/ReplicationPair"
+                },
+                {
+                        "rel": "/api/parent/relationship/peerMdmId",
+                        "href": "/api/instances/PeerMdm::d02aebc400000000"
+                },
+                {
+                        "rel": "/api/parent/relationship/protectionDomainId",
+                        "href": "/api/instances/ProtectionDomain::1dee83c600000000"
+                }
+        ]
+}
+
