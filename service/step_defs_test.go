@@ -3523,6 +3523,39 @@ func (f *feature) iCallCreateStorageProtectionGroupWith(arg1, arg2, arg3 string)
 	return nil
 }
 
+func (f *feature) iCallGetStorageProtectionGroupStatus() error {
+	ctx := new(context.Context)
+	attributes := make(map[string]string)
+
+	replicationGroupConsistMode = defaultConsistencyMode
+
+	attributes[f.service.opts.replicationContextPrefix+"systemName"] = arrayID
+	req := &replication.GetStorageProtectionGroupStatusRequest{
+		ProtectionGroupId:         f.createStorageProtectionGroupResponse.LocalProtectionGroupId,
+		ProtectionGroupAttributes: attributes,
+	}
+	_, f.err = f.service.GetStorageProtectionGroupStatus(*ctx, req)
+
+	return nil
+}
+
+func (f *feature) iCallGetStorageProtectionGroupStatusWithStateAndMode(arg1, arg2 string) error {
+	ctx := new(context.Context)
+	attributes := make(map[string]string)
+
+	replicationGroupState = arg1
+	replicationGroupConsistMode = arg2
+
+	attributes[f.service.opts.replicationContextPrefix+"systemName"] = arrayID
+	req := &replication.GetStorageProtectionGroupStatusRequest{
+		ProtectionGroupId:         f.createStorageProtectionGroupResponse.LocalProtectionGroupId,
+		ProtectionGroupAttributes: attributes,
+	}
+	_, f.err = f.service.GetStorageProtectionGroupStatus(*ctx, req)
+
+	return nil
+}
+
 func FeatureContext(s *godog.ScenarioContext) {
 	f := &feature{}
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
@@ -3687,6 +3720,8 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call CreateRemoteVolume$`, f.iCallCreateRemoteVolume)
 	s.Step(`^I call CreateStorageProtectionGroup$`, f.iCallCreateStorageProtectionGroup)
 	s.Step(`^I call CreateStorageProtectionGroup with "([^"]*)", "([^"]*)", "([^"]*)"$`, f.iCallCreateStorageProtectionGroupWith)
+	s.Step(`^I call GetStorageProtectionGroupStatus$`, f.iCallGetStorageProtectionGroupStatus)
+	s.Step(`^I call GetStorageProtectionGroupStatus with state "([^"]*)" and mode "([^"]*)"$`, f.iCallGetStorageProtectionGroupStatusWithStateAndMode)
 
 	s.After(func(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
 		if f.server != nil {

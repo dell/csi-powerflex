@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dell/goscaleio"
 	types "github.com/dell/goscaleio/types/v1"
 	"github.com/gorilla/mux"
 	codes "google.golang.org/grpc/codes"
@@ -108,6 +109,7 @@ const (
 	remoteRCGID            = "d303184900000001"
 	unmarkedForReplication = "UnmarkedForReplication"
 	defaultVolumeSize      = "33554432"
+	defaultConsistencyMode = goscaleio.Consistent
 )
 
 // getFileHandler returns an http.Handler that

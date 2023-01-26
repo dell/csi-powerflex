@@ -36,7 +36,7 @@ Scenario Outline: Test CreateRemoteVolume
   | "sourcevol" | "ProbeSecondaryError"        | "PodmonControllerProbeError"        |
 
 
-@replication-wip
+@replication
 Scenario Outline: Test CreateStorageProtectionGroup
   Given a VxFlexOS service
   And I use config "replication-config"
@@ -105,3 +105,39 @@ Scenario Outline: Test multiple CreateStorageProtectionGroup calls
   | name1     | name2     | group name | remote cluster id | rpo  | rpo2   | errormsg |
   | "1srcVol" | "2srcVol" | ""         | "cluster-k211"    | "60" | "60"   | "none"   |
   | "1srcVol" | "2srcVol" | ""         | "cluster-k211"    | "60" | "120"  | "none"   |
+
+@replication
+Scenario Outline: Test GetStorageProtectionGroupStatus 
+  Given a VxFlexOS service
+  And I use config "replication-config"
+  When I call CreateVolume <name>
+  And I call CreateRemoteVolume
+  And I call CreateStorageProtectionGroup
+  And I induce error <error>
+  And I call GetStorageProtectionGroupStatus
+  Then the error contains <errormsg>
+
+  Examples:
+  | name        | error                     | errormsg                                           |
+  | "sourcevol" | "none"                    | "none"                                             |
+  | "sourcevol" | "GetRCGByIdError"         | "could not GET RCG by ID"                          |
+  | "sourcevol" | "GetReplicationPairError" | "GET ReplicationPair induced error"                |
+
+@replication
+Scenario Outline: Test GetStorageProtectionGroupStatus current status
+  Given a VxFlexOS service
+  And I use config "replication-config"
+  When I call CreateVolume <name>
+  And I call CreateRemoteVolume
+  And I call CreateStorageProtectionGroup
+  And I call GetStorageProtectionGroupStatus with state <state> and mode <mode>
+  Then the error contains <errormsg>
+
+  Examples:
+  | name        | errormsg   | state       | mode                  |
+  | "sourcevol" | "none"     | "Normal"    | "Consistent"          |
+  | "sourcevol" | "none"     | "Normal"    | "PartiallyConsistent" |
+  | "sourcevol" | "none"     | "Normal"    | "ConsistentPending"   |
+  | "sourcevol" | "none"     | "Normal"    | "Invalid"             |
+  | "sourcevol" | "none"     | "Failover"  | "Consistent"          |
+  | "sourcevol" | "none"     | "Paused"    | "Consistent"          |
