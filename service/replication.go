@@ -8,6 +8,7 @@ import (
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/dell/dell-csi-extensions/replication"
+	"github.com/dell/goscaleio"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -28,6 +29,8 @@ const (
 	KeyReplicationRPO = "rpo"
 	// KeyReplicationClusterID represents key for replication remote cluster ID
 	KeyReplicationClusterID = "remoteClusterID"
+
+	sioReplicationPairsDoesNotExist = "Error in get relationship ReplicationPair"
 )
 
 func (s *service) GetReplicationCapabilities(ctx context.Context, req *replication.GetReplicationCapabilityRequest) (*replication.GetReplicationCapabilityResponse, error) {
@@ -346,6 +349,59 @@ func (s *service) CreateStorageProtectionGroup(ctx context.Context, req *replica
 	}, nil
 }
 
+func (s *service) GetStorageProtectionGroupStatus(ctx context.Context, req *replication.GetStorageProtectionGroupStatusRequest) (*replication.GetStorageProtectionGroupStatusResponse, error) {
+	Log.Printf("[GetStorageProtectionGroupStatus] - req %+v", req)
+
+	localParams := req.GetProtectionGroupAttributes()
+
+	protectionGroupSystem, ok := localParams[s.opts.replicationContextPrefix+"systemName"]
+	if !ok {
+		return nil, status.Errorf(codes.InvalidArgument, "Error: can't find `systemName` in replication group")
+	}
+
+	group, err := s.getReplicationConsistencyGroupByID(protectionGroupSystem, req.ProtectionGroupId)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "No replication consistency groups found: %s", err.Error())
+	}
+
+	pairs, err := s.getReplicationPairs(protectionGroupSystem, req.ProtectionGroupId)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(pairs) == 0 {
+		return nil, status.Errorf(codes.Internal, "no replication pairs exist")
+	}
+
+	Log.Printf("[GetStorageProtectionGroupStatus] - group %+v", group)
+
+	var state replication.StorageProtectionGroupStatus_State
+	switch group.CurrConsistMode {
+	case goscaleio.PartiallyConsistent, goscaleio.ConsistentPending:
+		state = replication.StorageProtectionGroupStatus_SYNC_IN_PROGRESS
+	case goscaleio.Consistent:
+		state = replication.StorageProtectionGroupStatus_SYNCHRONIZED
+	default:
+		Log.Printf("The status (%s) does not match with known protection group states", group.CurrConsistMode)
+		state = replication.StorageProtectionGroupStatus_UNKNOWN
+	}
+
+	if group.AbstractState == "StoppedByUser" {
+		if isFailover(group) {
+			state = replication.StorageProtectionGroupStatus_FAILEDOVER
+		} else if isPaused(group) {
+			state = replication.StorageProtectionGroupStatus_SUSPENDED
+		}
+	}
+
+	return &replication.GetStorageProtectionGroupStatusResponse{
+		Status: &replication.StorageProtectionGroupStatus{
+			State:    state,
+			IsSource: group.ReplicationDirection == "LocalToRemote",
+		},
+	}, nil
+}
+
 // WithRP appends Replication Prefix to provided string
 func (s *service) WithRP(key string) string {
 	return s.opts.replicationPrefix + "/" + key
@@ -450,4 +506,37 @@ func (s *service) createUniqueConsistencyGroupName(systemID, remoteSystemID, rpo
 	}
 
 	return consistencyGroupName, nil
+}
+
+func (s *service) getReplicationPairs(systemID string, groupID string) ([]*siotypes.ReplicationPair, error) {
+	adminClient := s.adminClients[systemID]
+	if adminClient == nil {
+		return nil, fmt.Errorf("can't find adminClient by id %s", systemID)
+	}
+
+	group, err := adminClient.GetReplicationConsistencyGroupByID(groupID)
+	if err != nil {
+		return nil, err
+	}
+
+	rcg := goscaleio.NewReplicationConsistencyGroup(adminClient)
+	rcg.ReplicationConsistencyGroup = group
+
+	pairs, err := rcg.GetReplicationPairs()
+	if err != nil {
+		if !strings.EqualFold(err.Error(), sioReplicationPairsDoesNotExist) {
+			Log.Printf("Error getting replication pairs: %s", err.Error())
+			return nil, err
+		}
+	}
+
+	return pairs, nil
+}
+
+func isFailover(group *siotypes.ReplicationConsistencyGroup) bool {
+	return group.FailoverType != "None" && group.FailoverState == "Done"
+}
+
+func isPaused(group *siotypes.ReplicationConsistencyGroup) bool {
+	return group.PauseMode != "None"
 }
