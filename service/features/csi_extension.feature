@@ -187,5 +187,3 @@ Scenario: Call CreateVolumeGroupSnapshot idempotent; criteria 3 fails
   And remove a volume from VolumeGroupSnapshotRequest
   And I call CreateVolumeSnapshotGroup
   Then the error contains "contains more snapshots"
-
-

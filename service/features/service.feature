@@ -21,7 +21,7 @@ Feature: VxFlex OS CSI interface
     Examples:
       | systemName                     | errorMsg |
       | "14dbbf5617523654"             | "none"   |
-      | "15dbbf5617523655-system-name" | "none"   |
+      | "15dbbf5617523655"             | "none"   |
 
   Scenario: Identity GetPluginInfo good call
     Given a VxFlexOS service

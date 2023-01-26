@@ -107,6 +107,7 @@ var inducedError error
 const (
 	remoteRCGID            = "d303184900000001"
 	unmarkedForReplication = "UnmarkedForReplication"
+	defaultVolumeSize      = "33554432"
 )
 
 // getFileHandler returns an http.Handler that
@@ -645,6 +646,17 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 			volumeNameToID[snapParam.SnapshotName] = id
 			volumeIDToAncestorID[id] = snapParam.VolumeID
 			volumeIDToConsistencyGroupID[id] = cgValue
+			volumeIDToSizeInKB[id] = defaultVolumeSize
+			volumeIDToReplicationState[id] = unmarkedForReplication
+
+			vols := systemArrays[r.Host].volumes
+			vols[id] = make(map[string]string)
+			vols[id]["name"] = snapParam.SnapshotName
+			vols[id]["id"] = id
+			vols[id]["sizeInKb"] = defaultVolumeSize
+			vols[id]["volumeReplicationState"] = unmarkedForReplication
+			vols[id]["consistencyGroupID"] = cgValue
+			vols[id]["ancestorVolumeId"] = snapParam.VolumeID
 		}
 
 		if stepHandlersErrors.WrongVolIDError {
@@ -655,13 +667,22 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 		if stepHandlersErrors.RemoveVolumeError {
 			writeError(w, "inducedError", http.StatusRequestTimeout, codes.Internal)
 		}
-		name := volumeIDToName[id]
-		volumeIDToName[id] = ""
-		volumeIDToAncestorID[id] = ""
-		volumeIDToConsistencyGroupID[id] = ""
-		if name != "" {
-			volumeNameToID[name] = ""
+
+		if name, ok := volumeIDToName[id]; ok {
+			volumeIDToName[id] = ""
+			volumeIDToAncestorID[id] = ""
+			volumeIDToConsistencyGroupID[id] = ""
+			volumeIDToSizeInKB[id] = ""
+			volumeIDToSizeInKB[id] = defaultVolumeSize
+			volumeIDToReplicationState[id] = ""
+			if name != "" {
+				volumeNameToID[name] = ""
+			}
 		}
+
+		volumes := systemArrays[r.Host].volumes
+		delete(volumes, id)
+
 	case "setVolumeSize":
 		if stepHandlersErrors.SetVolumeSizeError {
 			writeError(w, "induced error", http.StatusRequestTimeout, codes.Internal)
