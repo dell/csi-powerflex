@@ -179,3 +179,33 @@ Scenario Outline: Test DeleteStorageProtectionGroup
   | "sourcevol" | "ReplicationGroupAlreadyDeleted"      | "none"                                             |
   | "sourcevol" | "GetRCGByIdError"                     | "could not GET RCG by ID"                          |
   | "sourcevol" | "RemoveRCGError"                      | "coule not remove RCG"                             |
+
+@replication
+Scenario Outline: Test ExecuteAction
+  Given a VxFlexOS service
+  And I use config "replication-config"
+  When I call CreateVolume <name>
+  And I call CreateRemoteVolume
+  And I call CreateStorageProtectionGroup
+  And I call GetStorageProtectionGroupStatus with state <state> and mode <mode>
+  And I induce error <error>
+  And I call ExecuteAction <action>
+  Then the error contains <errormsg>
+
+  Examples:
+  | name        | error                     | errormsg                            | action              |  state      | mode          |
+  | "sourcevol" | "none"                    | "none"                              | "CreateSnapshot"    | "Normal"    | "Consistent"  |
+  | "sourcevol" | "ExecuteActionError"      | "could not execute RCG action"      | "CreateSnapshot"    | "Normal"    | "Consistent"  |
+  | "sourcevol" | "SnapshotCreationError"   | "RCG snapshot not created"          | "CreateSnapshot"    | "Normal"    | "Consistent"  |
+  | "sourcevol" | "none"                    | "none"                              | "FailoverRemote"    | "Normal"    | "Consistent"  |
+  | "sourcevol" | "ExecuteActionError"      | "could not execute RCG action"      | "FailoverRemote"    | "Normal"    | "Consistent"  |
+  | "sourcevol" | "none"                    | "none"                              | "UnplannedFailover" | "Normal"    | "Consistent"  |
+  | "sourcevol" | "ExecuteActionError"      | "could not execute RCG action"      | "UnplannedFailover" | "Normal"    | "Consistent"  |
+  | "sourcevol" | "none"                    | "none"                              | "ReprotectLocal"    | "Normal"    | "Consistent"  |
+  | "sourcevol" | "ExecuteActionError"      | "could not execute RCG action"      | "ReprotectLocal"    | "Normal"    | "Consistent"  |
+  | "sourcevol" | "none"                    | "none"                              | "Resume"            | "Failover"  | "Consistent"  |
+  | "sourcevol" | "none"                    | "none"                              | "Resume"            | "Paused"    | "Consistent"  |
+  | "sourcevol" | "ExecuteActionError"      | "could not execute RCG action"      | "Resume"            | "Failover"  | "Consistent"  |
+  | "sourcevol" | "none"                    | "none"                              | "Suspend"           | "Normal"    | "Consistent"  |
+  | "sourcevol" | "ExecuteActionError"      | "could not execute RCG action"      | "Suspend"           | "Normal"    | "Consistent"  |
+  | "sourcevol" | "none"                    | "not match with supported actions"  | "Unknown"           | "Normal"    | "Consistent"  |

@@ -26,6 +26,7 @@ import (
 
 	"github.com/dell/goscaleio"
 	types "github.com/dell/goscaleio/types/v1"
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	codes "google.golang.org/grpc/codes"
 )
@@ -384,10 +385,17 @@ func handleVolumeInstances(w http.ResponseWriter, r *http.Request) {
 		volumeIDToReplicationState = make(map[string]string)
 		volumeIDToSizeInKB = make(map[string]string)
 	}
+
 	if stepHandlersErrors.VolumeInstancesError {
 		writeError(w, "induced error", http.StatusRequestTimeout, codes.Internal)
 		return
 	}
+
+	if inducedError.Error() == "SnapshotCreationError" {
+		writeError(w, "RCG snapshot not created", http.StatusRequestTimeout, codes.Internal)
+		return
+	}
+
 	switch r.Method {
 
 	// Post is CreateVolume; here just return a volume id encoded from the name
@@ -720,7 +728,56 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 		delete(pairs, id)
 
 		fmt.Printf("volumeIDToReplicationState %+v\n", volumeIDToReplicationState)
+
+	case "createReplicationConsistencyGroupSnapshots":
+		if inducedError.Error() == "ExecuteActionError" {
+			writeError(w, "could not execute RCG action", http.StatusRequestTimeout, codes.Internal)
+			return
+		}
+
+		snapshotGroupID := uuid.New().String()
+		resp := types.CreateReplicationConsistencyGroupSnapshotResp{}
+		resp.SnapshotGroupID = snapshotGroupID
+
+		remoteConsistencyGroup := systemArrays[r.Host].replicationConsistencyGroups[id]["remoteId"]
+		remoteSystem := systemArrays[r.Host].replicationSystem
+
+		for _, pair := range remoteSystem.replicationPairs {
+			if pair["replicationConsistencyGroupId"] == remoteConsistencyGroup {
+				volID := uuid.New().String()
+				volName := "snapshot-" + pair["localVolumeId"]
+				remoteSystem.volumes[volID] = make(map[string]string)
+				remoteSystem.volumes[volID]["name"] = volName
+				remoteSystem.volumes[volID]["id"] = volID
+				remoteSystem.volumes[volID]["sizeInKb"] = remoteSystem.volumes[pair["localVolumeId"]]["sizeInKb"]
+				remoteSystem.volumes[volID]["volumeReplicationState"] = unmarkedForReplication
+				remoteSystem.volumes[volID]["consistencyGroupID"] = snapshotGroupID
+				remoteSystem.volumes[volID]["ancestorVolumeId"] = pair["localVolumeId"]
+			}
+		}
+
+		encoder := json.NewEncoder(w)
+		err := encoder.Encode(resp)
+		if err != nil {
+			log.Printf("error encoding json: %s\n", err)
+		}
+	case "switchoverReplicationConsistencyGroup":
+		fallthrough
+	case "failoverReplicationConsistencyGroup":
+		fallthrough
+	case "restoreReplicationConsistencyGroup":
+		fallthrough
+	case "reverseReplicationConsistencyGroup":
+		fallthrough
+	case "resumeReplicationConsistencyGroup":
+		fallthrough
+	case "pauseReplicationConsistencyGroup":
+		if inducedError.Error() == "ExecuteActionError" {
+			writeError(w, "could not execute RCG action", http.StatusRequestTimeout, codes.Internal)
+			return
+		}
 	}
+
 }
 
 func getSdcMappings(volumeID string) string {
