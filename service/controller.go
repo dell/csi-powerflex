@@ -2495,3 +2495,74 @@ func (s *service) DeleteReplicationConsistencyGroup(systemID string, groupID str
 
 	return err
 }
+
+func (s *service) CreateReplicationConsistencyGroupSnapshot(client *goscaleio.Client, group *siotypes.ReplicationConsistencyGroup) (*siotypes.CreateReplicationConsistencyGroupSnapshotResp, error) {
+	rcg := goscaleio.NewReplicationConsistencyGroup(client)
+	rcg.ReplicationConsistencyGroup = group
+
+	response, err := rcg.CreateReplicationConsistencyGroupSnapshot(false)
+	if err != nil {
+		return nil, err
+	}
+
+	return response, nil
+}
+
+func (s *service) ExecuteFailoverOnReplicationGroup(client *goscaleio.Client, group *siotypes.ReplicationConsistencyGroup) error {
+	rcg := goscaleio.NewReplicationConsistencyGroup(client)
+	rcg.ReplicationConsistencyGroup = group
+
+	Log.Printf("[ExecuteFailoverOnReplicationGroup]: Executing Failover command")
+
+	return rcg.ExecuteFailoverOnReplicationGroup()
+}
+
+func (s *service) ExecuteSwitchoverOnReplicationGroup(client *goscaleio.Client, group *siotypes.ReplicationConsistencyGroup) error {
+	rcg := goscaleio.NewReplicationConsistencyGroup(client)
+	rcg.ReplicationConsistencyGroup = group
+
+	Log.Printf("[ExecuteSwitchoverOnReplicationGroup]: Executing Switchover (Unplanned Failover)")
+
+	return rcg.ExecuteSwitchoverOnReplicationGroup(false)
+}
+
+func (s *service) ExecuteReverseOnReplicationGroup(client *goscaleio.Client, group *siotypes.ReplicationConsistencyGroup) error {
+	rcg := goscaleio.NewReplicationConsistencyGroup(client)
+	rcg.ReplicationConsistencyGroup = group
+
+	Log.Printf("[ExecuteReverseOnReplicationGroup]: Executing Reverse (Reprotect Local)")
+
+	return rcg.ExecuteReverseOnReplicationGroup()
+}
+
+func (s *service) ExecuteResumeOnReplicationGroup(client *goscaleio.Client, group *siotypes.ReplicationConsistencyGroup, failover bool) error {
+	rcg := goscaleio.NewReplicationConsistencyGroup(client)
+	rcg.ReplicationConsistencyGroup = group
+
+	Log.Printf("[ExecuteReverseOnReplicationGroup]: Resuming Replication Group")
+
+	if failover {
+		Log.Printf("[ExecuteReverseOnReplicationGroup]: In Failover, Restoring...")
+		return rcg.ExecuteRestoreOnReplicationGroup()
+	}
+
+	return rcg.ExecuteResumeOnReplicationGroup()
+}
+
+func (s *service) ExecutePauseOnReplicationGroup(client *goscaleio.Client, group *siotypes.ReplicationConsistencyGroup) error {
+	rcg := goscaleio.NewReplicationConsistencyGroup(client)
+	rcg.ReplicationConsistencyGroup = group
+
+	Log.Printf("[ExecutePauseOnReplicationGroup]: Pause Replication Group")
+
+	return rcg.ExecutePauseOnReplicationGroup()
+}
+
+func (s *service) verifySystem(systemID string) (*goscaleio.Client, error) {
+	adminClient := s.adminClients[systemID]
+	if adminClient == nil {
+		return nil, fmt.Errorf("can't find adminClient by id %s", systemID)
+	}
+
+	return adminClient, nil
+}
