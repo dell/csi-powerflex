@@ -31,6 +31,7 @@ import (
 	"github.com/dell/csi-vxflexos/v2/core"
 	"github.com/dell/csi-vxflexos/v2/k8sutils"
 	"github.com/dell/dell-csi-extensions/podmon"
+	"github.com/dell/dell-csi-extensions/replication"
 	volumeGroupSnapshot "github.com/dell/dell-csi-extensions/volumeGroupSnapshot"
 	"github.com/dell/gocsi"
 	csictx "github.com/dell/gocsi/context"
@@ -476,6 +477,7 @@ func (s *service) RegisterAdditionalServers(server *grpc.Server) {
 	Log.Info("Registering additional GRPC servers")
 	podmon.RegisterPodmonServer(server, s)
 	volumeGroupSnapshot.RegisterVolumeGroupSnapshotServer(server, s)
+	replication.RegisterReplicationServer(server, s)
 }
 
 // getVolProvisionType returns a string indicating thin or thick provisioning
