@@ -33,6 +33,7 @@ import (
 
 	"github.com/cucumber/godog"
 	"github.com/dell/dell-csi-extensions/podmon"
+	"github.com/dell/dell-csi-extensions/replication"
 	volGroupSnap "github.com/dell/dell-csi-extensions/volumeGroupSnapshot"
 	"github.com/dell/gofsutil"
 	"github.com/dell/goscaleio"
@@ -87,6 +88,7 @@ var setupGetSystemIDtoFail bool
 type feature struct {
 	nGoRoutines                           int
 	server                                *httptest.Server
+	server2                               *httptest.Server
 	service                               *service
 	adminClient                           *goscaleio.Client
 	system                                *goscaleio.System
@@ -134,6 +136,7 @@ type feature struct {
 	snapshotIndex                         int
 	volumeID                              string
 	VolumeGroupSnapshot                   *volGroupSnap.CreateVolumeGroupSnapshotResponse
+	replicationCapabilitiesResponse       *replication.GetReplicationCapabilityResponse
 }
 
 func (f *feature) checkGoRoutines(tag string) {
@@ -143,7 +146,13 @@ func (f *feature) checkGoRoutines(tag string) {
 }
 
 func (f *feature) aVxFlexOSService() error {
+	return f.aVxFlexOSServiceWithTimeoutMilliseconds(50)
+}
+
+func (f *feature) aVxFlexOSServiceWithTimeoutMilliseconds(millis int) error {
 	f.checkGoRoutines("start aVxFlexOSService")
+	goscaleio.ClientConnectTimeout = time.Duration(millis) * time.Millisecond
+
 	// Save off the admin client and the system
 	if f.service != nil {
 		adminClient := f.service.adminClients[arrayID]
@@ -223,6 +232,7 @@ func (f *feature) aVxFlexOSService() error {
 
 	// configure variables in the driver
 	publishGetMappedVolMaxRetry = 2
+	getMappedVolDelay = 10 * time.Millisecond
 
 	// Get or reuse the cached service
 	f.getService()
@@ -235,10 +245,13 @@ func (f *feature) aVxFlexOSService() error {
 	if handler != nil {
 		if f.server == nil {
 			f.server = httptest.NewServer(handler)
+			f.server2 = httptest.NewServer(handler)
 		}
 		if f.service.opts.arrays != nil {
 			f.service.opts.arrays[arrayID].Endpoint = f.server.URL
-			f.service.opts.arrays[arrayID2].Endpoint = f.server.URL
+			if f.service.opts.arrays[arrayID2] != nil {
+				f.service.opts.arrays[arrayID2].Endpoint = f.server2.URL
+			}
 		}
 	} else {
 		f.server = nil
@@ -3264,9 +3277,102 @@ func (f *feature) iCallSetQoSParameters(systemID string, sdcID string, bandwidth
 	return nil
 }
 
+func (f *feature) iUseConfig(filename string) error {
+	ArrayConfigFile = "./features/array-config/" + filename
+	var err error
+	f.service.opts.arrays, err = getArrayConfig(context.Background())
+	if err != nil {
+		return fmt.Errorf("invalid array config: %s", err.Error())
+	}
+	if f.service.opts.arrays != nil {
+		f.service.opts.arrays[arrayID].Endpoint = f.server.URL
+		if f.service.opts.arrays[arrayID2] != nil {
+			f.service.opts.arrays[arrayID2].Endpoint = f.server2.URL
+		}
+	}
+
+	fmt.Printf("****************************************************** s.opts.arrays %v\n", f.service.opts.arrays)
+	f.service.systemProbeAll(context.Background())
+	f.adminClient = f.service.adminClients[arrayID]
+	f.adminClient2 = f.service.adminClients[arrayID2]
+	if f.adminClient == nil {
+		return fmt.Errorf("adminClient nil")
+	}
+	if f.adminClient2 == nil {
+		return fmt.Errorf("adminClient2 nil")
+	}
+	return nil
+}
+
+func (f *feature) iCallGetReplicationCapabilities() error {
+	req := &replication.GetReplicationCapabilityRequest{}
+	ctx := new(context.Context)
+	f.replicationCapabilitiesResponse, f.err = f.service.GetReplicationCapabilities(*ctx, req)
+	log.Printf("GetReplicationCapabilities returned %+v", f.replicationCapabilitiesResponse)
+	return nil
+}
+
+func (f *feature) aReplicationCapabilitiesStructureIsReturned(arg1 string) error {
+	if f.err != nil {
+		return f.err
+	}
+	var createRemoteVolume, createProtectionGroup, deleteProtectionGroup, monitorProtectionGroup, replicationActionExecution bool
+	for _, cap := range f.replicationCapabilitiesResponse.GetCapabilities() {
+		if cap == nil {
+			continue
+		}
+		rpc := cap.GetRpc()
+		if rpc == nil {
+			continue
+		}
+		ty := rpc.GetType()
+		switch ty {
+		case replication.ReplicationCapability_RPC_CREATE_REMOTE_VOLUME:
+			createRemoteVolume = true
+		case replication.ReplicationCapability_RPC_CREATE_PROTECTION_GROUP:
+			createProtectionGroup = true
+		case replication.ReplicationCapability_RPC_DELETE_PROTECTION_GROUP:
+			deleteProtectionGroup = true
+		case replication.ReplicationCapability_RPC_MONITOR_PROTECTION_GROUP:
+			monitorProtectionGroup = true
+		case replication.ReplicationCapability_RPC_REPLICATION_ACTION_EXECUTION:
+			replicationActionExecution = true
+		}
+	}
+	var failoverRemote, unplannedFailoverLocal, reprotectLocal, suspend, resume, sync bool
+	for _, act := range f.replicationCapabilitiesResponse.GetActions() {
+		if act == nil {
+			continue
+		}
+		ty := act.GetType()
+		switch ty {
+		case replication.ActionTypes_FAILOVER_REMOTE:
+			failoverRemote = true
+		case replication.ActionTypes_UNPLANNED_FAILOVER_LOCAL:
+			unplannedFailoverLocal = true
+		case replication.ActionTypes_REPROTECT_LOCAL:
+			reprotectLocal = true
+		case replication.ActionTypes_SUSPEND:
+			suspend = true
+		case replication.ActionTypes_RESUME:
+			resume = true
+		case replication.ActionTypes_SYNC:
+			sync = true
+		}
+	}
+	if !createRemoteVolume || !createProtectionGroup || !deleteProtectionGroup || !replicationActionExecution || !monitorProtectionGroup {
+		return fmt.Errorf("Not all expected ReplicationCapability_RPC capabilities were returned")
+	}
+	if !failoverRemote || !unplannedFailoverLocal || !reprotectLocal || !suspend || !resume || !sync {
+		return fmt.Errorf("Not all expected ReplicationCapbility_RPC actions were returned")
+	}
+	return nil
+}
+
 func FeatureContext(s *godog.ScenarioContext) {
 	f := &feature{}
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
+	s.Step(`^a VxFlexOS service with timeout (\d+) milliseconds$`, f.aVxFlexOSServiceWithTimeoutMilliseconds)
 	s.Step(`^I call GetPluginInfo$`, f.iCallGetPluginInfo)
 	s.Step(`^I call DynamicArrayChange$`, f.iCallDynamicArrayChange)
 	s.Step(`^a valid DynamicArrayChange occurs$`, f.aValidDynamicArrayChange)
@@ -3419,6 +3525,9 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call getProtectionDomainIDFromName "([^"]*)" "([^"]*)"$`, f.iCallgetProtectionDomainIDFromName)
 	s.Step(`^I call getArrayInstallationID "([^"]*)"$`, f.iCallgetArrayInstallationID)
 	s.Step(`^I call setQoSParameters with systemID "([^"]*)" sdcID "([^"]*)" bandwidthLimit "([^"]*)" iopsLimit "([^"]*)" volumeName "([^"]*)" csiVolID "([^"]*)" nodeID "([^"]*)"$`, f.iCallSetQoSParameters)
+	s.Step(`^I use config "([^"]*)"$`, f.iUseConfig)
+	s.Step(`^I call GetReplicationCapabilities$`, f.iCallGetReplicationCapabilities)
+	s.Step(`^a "([^"]*)" replication capabilities structure is returned$`, f.aReplicationCapabilitiesStructureIsReturned)
 
 	s.After(func(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
 		if f.server != nil {
