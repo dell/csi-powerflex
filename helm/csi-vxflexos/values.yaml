@@ -144,9 +144,6 @@ controller:
   #   operator: "Exists"
   #   effect: "NoSchedule"
 
-  # "approveSDCEnabled" defines whether to enable/disable SDC approval
-  # Default value: false
-  approveSDCEnabled: true
 
 # "node" allows to configure node specific parameters
 node:
@@ -213,6 +210,10 @@ node:
     # Default value: none
     # Examples: "rhel-sdc", "sdc-test"
     prefix: "sdc-test"
+    
+  # "approveSDCEnabled" defines whether to enable/disable SDC approval
+  # Default value: false
+  approveSDCEnabled: true
 
 # monitoring pod details
 # These options control the running of the monitoring container
