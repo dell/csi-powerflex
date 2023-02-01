@@ -205,6 +205,7 @@ node:
     # Default value: "false"
     enabled: false
     # "prefix" defines a string for the new name of the SDC.
+    # "prefix" + "worker_node_hostname" should not exceed 31 chars.
     # Default value: none
     # Examples: "rhel-sdc", "sdc-test"
     prefix: "sdc-test"
