@@ -942,21 +942,33 @@ Feature: VxFlex OS CSI interface
     When I call Probe
     And I call setQoSParameters with systemID "15dbbf5617523655" sdcID "d0f055a700000000" bandwidthLimit "10240" iopsLimit "10" volumeName "k8s-a031818af5" csiVolID "15dbbf5617523655-456ca4fc00000009" nodeID "9E56672F-2F4B-4A42-BFF4-88B6846FBFDA"
     Then the error contains "error setting QoS parameters"
-
-  Scenario: Call probe for renaming SDC
+    
+  Scenario: Call probe for renaming SDC with prefix
     Given a VxFlexOS service
-    When I call Probe
-    And I call renameSDC with renameEnabled "true" prefix "t"
+    And I set renameSDC with renameEnabled "true" prefix "t"
+    And I call Probe
+    When I call Node Probe
     Then the error contains "none"
-
-  Scenario: Call probe for renaming SDC
+    
+  Scenario: Call probe for renaming SDC without prefix
+     Given a VxFlexOS service
+     And I set renameSDC with renameEnabled "true" prefix ""
+     And I call Probe
+     When I call Node Probe
+     Then the error contains "none"
+  
+  Scenario: Call probe for renaming SDC, renameSdc error
     Given a VxFlexOS service
-    When I call Probe
-    And I call renameSDC with renameEnabled "true" prefix ""
-    Then the error contains "none"
-
-  Scenario: Call probe for getting SDC name
+    And I induce error "SetSdcNameError"
+    And I set renameSDC with renameEnabled "true" prefix "t"
+    And I call Probe
+    When I call Node Probe
+    Then the error contains "Failed to rename SDC"
+    
+  Scenario: Call probe for renaming SDC, sdc error
     Given a VxFlexOS service
-    When I call Probe
-    And I call getSDCName with sdcGUID "9E56672F-2F4B-4A42-BFF4-88B6846FBFDA" systemID "14dbbf5617523654"
-    Then the error contains "none"
+    And I induce error "GetSdcInstancesError"
+    And I set renameSDC with renameEnabled "true" prefix "t"
+    And I call Probe
+    When I call Node Probe
+    Then the error contains "induced error"

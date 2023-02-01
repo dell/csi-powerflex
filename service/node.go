@@ -424,7 +424,7 @@ func (s *service) renameSDC(opts Opts) error {
 	// fetch hostname
 	hostName, ok := os.LookupEnv("HOSTNAME")
 	if !ok {
-		Log.Infof("%s not set\n", "HOSTNAME")
+		return status.Errorf(codes.FailedPrecondition, "%s not set", "HOSTNAME")
 	}
 
 	// fetch SDC details

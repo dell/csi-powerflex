@@ -29,9 +29,11 @@ import (
 )
 
 var (
-	debug         bool
-	sdcMappings   []types.MappedSdcInfo
-	sdcMappingsID string
+	debug             bool
+	sdcMappings       []types.MappedSdcInfo
+	sdcMappingsID     string
+	setSdcNameSuccess bool
+	sdcIDToName       map[string]string
 
 	stepHandlersErrors struct {
 		FindVolumeIDError             bool
@@ -88,6 +90,7 @@ var (
 		NoVolIDError                  bool
 		NoVolIDSDCError               bool
 		NoVolError                    bool
+		SetSdcNameError               bool
 	}
 )
 
@@ -166,6 +169,7 @@ func getHandler() http.Handler {
 	stepHandlersErrors.NoVolIDError = false
 	stepHandlersErrors.NoVolIDSDCError = false
 	stepHandlersErrors.NoVolError = false
+	stepHandlersErrors.SetSdcNameError = false
 	sdcMappings = sdcMappings[:0]
 	sdcMappingsID = ""
 	return handler
@@ -394,6 +398,29 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 	action := vars["action"]
 	log.Printf("action from %s id %s action %s", from, id, action)
 	switch action {
+	case "setSdcName":
+		if stepHandlersErrors.SetSdcNameError {
+			writeError(w, "induced error", http.StatusRequestTimeout, codes.Internal)
+			return
+		}
+		req := types.RenameSdcParam{}
+		decoder := json.NewDecoder(r.Body)
+		err := decoder.Decode(&req)
+		if err != nil {
+			log.Printf("error decoding json: %s\n", err.Error())
+		}
+		fmt.Printf("SdcName: %s\n", req.SdcName)
+		sdcIDToName = make(map[string]string, 0)
+		if id == "d0f055a700000000" {
+			sdcIDToName[id] = req.SdcName
+		}
+
+		if id == "d0f055aa00000001" {
+			sdcIDToName[id] = req.SdcName
+		}
+
+		setSdcNameSuccess = true
+
 	case "addMappedSdc":
 		if stepHandlersErrors.MapSdcError {
 			writeError(w, "induced error", http.StatusRequestTimeout, codes.Internal)
@@ -561,6 +588,28 @@ func handleRelationships(w http.ResponseWriter, r *http.Request) {
 			return
 		} else if stepHandlersErrors.PodmonNodeProbeError {
 			writeError(w, "PodmonNodeProbeError", http.StatusRequestTimeout, codes.Internal)
+			return
+		}
+		if setSdcNameSuccess {
+			instances := make([]*types.Sdc, 0)
+			for id, name := range sdcIDToName {
+				replacementMap := make(map[string]string)
+				replacementMap["__ID__"] = id
+				replacementMap["__NAME__"] = name
+				data := returnJSONFile("features", "get_sdc_instances.json.template", nil, replacementMap)
+				sdc := new(types.Sdc)
+				err := json.Unmarshal(data, sdc)
+				if err != nil {
+					log.Printf("error unmarshalling json: %s\n", string(data))
+				}
+				instances = append(instances, sdc)
+			}
+			encoder := json.NewEncoder(w)
+			err := encoder.Encode(instances)
+			if err != nil {
+				log.Printf("error encoding json: %s\n", err)
+			}
+			setSdcNameSuccess = false
 			return
 		}
 		returnJSONFile("features", "get_sdc_instances.json", w, nil)

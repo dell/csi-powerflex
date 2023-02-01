@@ -1,0 +1,37 @@
+  {
+    "versionInfo": null,
+    "perfProfile": "Default",
+    "sdcApproved": true,
+    "osType": "Linux",
+    "mdmConnectionState": "Connected",
+    "memoryAllocationFailure": null,
+    "socketAllocationFailure": null,
+    "softwareVersionInfo": null,
+    "sdcGuid": "9E56672F-2F4B-4A42-BFF4-88B6846FBFDA",
+    "installedSoftwareVersionInfo": "R2_6.0.0",
+    "kernelVersion": "3.10.0",
+    "kernelBuildNumber": null,
+    "sdcIp": "127.1.1.11",
+    "sdcApprovedIps": null,
+    "systemId": "14dbbf5617523654",
+    "name": "__NAME__",
+    "id": "__ID__",
+    "links": [
+      {
+        "rel": "self",
+        "href": "/api/instances/Sdc::d0f055a700000000"
+      },
+      {
+        "rel": "/api/Sdc/relationship/Statistics",
+        "href": "/api/instances/Sdc::d0f055a700000000/relationships/Statistics"
+      },
+      {
+        "rel": "/api/Sdc/relationship/Volume",
+        "href": "/api/instances/Sdc::d0f055a700000000/relationships/Volume"
+      },
+      {
+        "rel": "/api/parent/relationship/systemId",
+        "href": "/api/instances/System::14dbbf5617523654"
+      }
+    ]
+  }
