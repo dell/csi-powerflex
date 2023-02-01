@@ -725,11 +725,19 @@ func (s *service) ControllerPublishVolume(
 		if system.System.RestrictedSdcModeEnabled && system.System.RestrictedSdcMode == "Guid" {
 			if !sdc.Sdc.SdcApproved {
 				resp, err := s.systems[systemID].ApproveSdcByGUID(sdc.Sdc.SdcGUID)
-				if resp == nil && err == nil {
-					Log.Infof("SDC approved, SDC GUID: %s", sdc.Sdc.SdcGUID)
-				} else if err != nil {
+
+				// if resp == nil && err == nil {
+				// 	Log.Infof("SDC approved, SDC GUID: %s", sdc.Sdc.SdcGUID)
+				// } else if err != nil {
+				// 	return nil, status.Errorf(codes.FailedPrecondition, "%s", err)
+				// }
+
+				if err != nil {
 					return nil, status.Errorf(codes.FailedPrecondition, "%s", err)
 				}
+
+				Log.Infof("SDC Approved, SDC Id: %s and SDC GUID: %s", resp.SdcID, sdc.Sdc.SdcGUID)
+
 			} else {
 				Log.Infof("SDC already approved, SDC GUID: %s", sdc.Sdc.SdcGUID)
 			}
