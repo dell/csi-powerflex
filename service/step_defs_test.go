@@ -367,7 +367,7 @@ func (f *feature) CreateCSINode() (*storage.CSINode, error) {
 				{
 					Name:         "csi-vxflexos.dellemc.com",
 					NodeID:       "9E56672F-2F4B-4A42-BFF4-88B6846FBFDA",
-					TopologyKeys: []string{"csi-vxflexos.dellemc.com/000000000001"},
+					TopologyKeys: []string{"csi-vxflexos.dellemc.com/14dbbf5617523654"},
 				},
 			},
 		},
@@ -990,6 +990,8 @@ func (f *feature) iInduceError(errtype string) error {
 		stepHandlersErrors.NoVolIDError = true
 	case "NoVolIDSDCError":
 		stepHandlersErrors.NoVolIDSDCError = true
+	case "SetSdcNameError":
+		stepHandlersErrors.SetSdcNameError = true
 	case "NoVolError":
 		stepHandlersErrors.NoVolError = true
 	case "SetVolumeSizeError":
@@ -3369,6 +3371,14 @@ func (f *feature) aReplicationCapabilitiesStructureIsReturned(arg1 string) error
 	return nil
 }
 
+func (f *feature) iSetRenameSdcEnabledWithPrefix(renameEnabled string, prefix string) error {
+	if renameEnabled == "true" {
+		f.service.opts.IsSdcRenameEnabled = true
+	}
+	f.service.opts.SdcPrefix = prefix
+	return nil
+}
+
 func FeatureContext(s *godog.ScenarioContext) {
 	f := &feature{}
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
@@ -3528,6 +3538,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I use config "([^"]*)"$`, f.iUseConfig)
 	s.Step(`^I call GetReplicationCapabilities$`, f.iCallGetReplicationCapabilities)
 	s.Step(`^a "([^"]*)" replication capabilities structure is returned$`, f.aReplicationCapabilitiesStructureIsReturned)
+	s.Step(`^I set renameSDC with renameEnabled "([^"]*)" prefix "([^"]*)"$`, f.iSetRenameSdcEnabledWithPrefix)
 
 	s.After(func(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
 		if f.server != nil {

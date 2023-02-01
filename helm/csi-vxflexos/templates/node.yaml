@@ -203,6 +203,14 @@ spec:
             - name: X_CSI_HEALTH_MONITOR_ENABLED
               value: "{{ .Values.node.healthMonitor.enabled }}"
             {{- end }}
+            {{- if hasKey .Values.node "renameSDC" }}
+            - name: X_CSI_RENAME_SDC_ENABLED
+              value: "{{ .Values.node.renameSDC.enabled }}"
+            {{- if eq .Values.node.renameSDC.enabled true }}
+            - name: X_CSI_RENAME_SDC_PREFIX
+              value: "{{ .Values.node.renameSDC.prefix }}"
+            {{- end }}
+            {{- end }}
           volumeMounts:
             - name: driver-path
               mountPath: {{ .Values.kubeletConfigDir }}/plugins/vxflexos.emc.dell.com

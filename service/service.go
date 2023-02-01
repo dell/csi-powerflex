@@ -84,8 +84,8 @@ var KubeConfig string
 // K8sClientset is the client to query k8s
 var K8sClientset kubernetes.Interface
 
-//Log controlls the logger
-//give default value, will be overwritten by configmap
+// Log controlls the logger
+// give default value, will be overwritten by configmap
 var Log = logrus.New()
 
 // ArrayConnectionData contains data required to connect to array
@@ -133,6 +133,8 @@ type Opts struct {
 	EnableListVolumesSnapshots bool   // when listing volumes, include snapshots and volumes
 	AllowRWOMultiPodAccess     bool   // allow multiple pods to access a RWO volume on the same node
 	IsHealthMonitorEnabled     bool   // allow driver to make use of the alpha feature gate, CSIVolumeHealth
+	IsSdcRenameEnabled         bool   // allow driver to enable renaming SDC
+	SdcPrefix                  string // prefix to be set for SDC name
 }
 
 type service struct {
@@ -265,7 +267,7 @@ func (s *service) logCsiNodeTopologyKeys() error {
 
 }
 
-//New returns a handle to service
+// New returns a handle to service
 func New() Service {
 	return &service{
 		storagePoolIDToName:     map[string]string{},
@@ -321,6 +323,8 @@ func (s *service) BeforeServe(
 			"mode":                   s.mode,
 			"allowRWOMultiPodAccess": s.opts.AllowRWOMultiPodAccess,
 			"IsHealthMonitorEnabled": s.opts.IsHealthMonitorEnabled,
+			"IsSdcRenameEnabled":     s.opts.IsSdcRenameEnabled,
+			"sdcPrefix":              s.opts.SdcPrefix,
 		}
 
 		Log.WithFields(fields).Infof("configured %s", Name)
@@ -373,6 +377,16 @@ func (s *service) BeforeServe(
 		}
 	} else {
 		opts.IsHealthMonitorEnabled = false
+	}
+	if renameSDC, ok := csictx.LookupEnv(ctx, EnvIsSDCRenameEnabled); ok {
+		if renameSDC == "true" {
+			opts.IsSdcRenameEnabled = true
+		}
+	} else {
+		opts.IsSdcRenameEnabled = false
+	}
+	if sdcPrefix, ok := csictx.LookupEnv(ctx, EnvSDCPrefix); ok {
+		opts.SdcPrefix = sdcPrefix
 	}
 	if s.privDir == "" {
 		s.privDir = defaultPrivDir
@@ -726,9 +740,9 @@ func (s *service) getSystemIDFromCsiVolumeID(csiVolID string) string {
 	return ""
 }
 
-//this function updates volumePrefixToSystems, a map of volume ID prefixes -> system IDs
-//this is needed for checkSystemVolumes, a function that verifies that any legacy vol ID
-//is found on the default system, only
+// this function updates volumePrefixToSystems, a map of volume ID prefixes -> system IDs
+// this is needed for checkSystemVolumes, a function that verifies that any legacy vol ID
+// is found on the default system, only
 func (s *service) UpdateVolumePrefixToSystemsMap(systemID string) error {
 	//get one vol from system
 	vols, _, err := s.listVolumes(systemID, 0, 1, true, false, "", "")

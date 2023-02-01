@@ -395,6 +395,18 @@ func (s *service) nodeProbe(ctx context.Context) error {
 		}
 	}
 
+	// rename SDC
+	/*
+		case1: if IsSdcRenameEnabled=true and prefix given then set the prefix+worker_node_name for sdc name.
+		case2: if IsSdcRenameEnabled=true and prefix not given then set worker_node_name for sdc name.
+	*/
+	if s.opts.IsSdcRenameEnabled {
+		err = s.renameSDC(s.opts)
+		if err != nil {
+			return err
+		}
+	}
+
 	// get all the system names and IDs.
 	s.getSystemName(ctx, connectedSystemID)
 
@@ -405,6 +417,56 @@ func (s *service) nodeProbe(ctx context.Context) error {
 			s.privDir, err.Error())
 	}
 
+	return nil
+}
+
+func (s *service) renameSDC(opts Opts) error {
+	// fetch hostname
+	hostName, ok := os.LookupEnv("HOSTNAME")
+	if !ok {
+		return status.Errorf(codes.FailedPrecondition, "%s not set", "HOSTNAME")
+	}
+
+	// fetch SDC details
+	for _, systemID := range connectedSystemID {
+		sdc, err := s.systems[systemID].FindSdc("SdcGUID", opts.SdcGUID)
+		if err != nil {
+			return status.Errorf(codes.FailedPrecondition, "%s", err)
+		}
+		sdcID := sdc.Sdc.ID
+
+		var newName string
+		if len(opts.SdcPrefix) > 0 {
+			// case1: if IsSdcRenameEnabled=true and prefix given then set the prefix+worker_node_name for sdc name.
+			newName = opts.SdcPrefix + "-" + hostName
+		} else {
+			// case2: if IsSdcRenameEnabled=true and prefix not given then set worker_node_name for sdc name.
+			newName = hostName
+		}
+		if sdc.Sdc.Name == newName {
+			Log.Infof("SDC is already named: %s.", newName)
+		} else {
+			Log.Infof("Assigning name: %s to SDC with GUID %s on system %s", newName, s.opts.SdcGUID,
+				systemID)
+			err = s.adminClients[systemID].RenameSdc(sdcID, newName)
+			if err != nil {
+				return status.Errorf(codes.FailedPrecondition, "Failed to rename SDC: %s", err)
+			}
+			err = s.getSDCName(opts.SdcGUID, systemID)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (s *service) getSDCName(sdcGUID string, systemID string) error {
+	sdc, err := s.systems[systemID].FindSdc("SdcGUID", sdcGUID)
+	if err != nil {
+		return status.Errorf(codes.FailedPrecondition, "%s", err)
+	}
+	Log.Infof("SDC name set to: %s.", sdc.Sdc.Name)
 	return nil
 }
 
