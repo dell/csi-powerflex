@@ -2,7 +2,7 @@
   {
     "versionInfo": null,
     "perfProfile": "Default",
-    "sdcApproved": true,
+    "sdcApproved": false,
     "osType": "Linux",
     "mdmConnectionState": "Connected",
     "memoryAllocationFailure": null,

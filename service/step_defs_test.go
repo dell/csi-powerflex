@@ -992,6 +992,8 @@ func (f *feature) iInduceError(errtype string) error {
 		stepHandlersErrors.NoVolIDSDCError = true
 	case "SetSdcNameError":
 		stepHandlersErrors.SetSdcNameError = true
+	case "ApproveSdcError":
+		stepHandlersErrors.ApproveSdcError = true
 	case "NoVolError":
 		stepHandlersErrors.NoVolError = true
 	case "SetVolumeSizeError":
@@ -3378,6 +3380,12 @@ func (f *feature) iSetRenameSdcEnabledWithPrefix(renameEnabled string, prefix st
 	f.service.opts.SdcPrefix = prefix
 	return nil
 }
+func (f *feature) iSetApproveSdcEnabled(approveSDCEnabled string) error {
+	if approveSDCEnabled == "true" {
+		f.service.opts.IsApproveSDCEnabled = true
+	}
+	return nil
+}
 
 func FeatureContext(s *godog.ScenarioContext) {
 	f := &feature{}
@@ -3539,6 +3547,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call GetReplicationCapabilities$`, f.iCallGetReplicationCapabilities)
 	s.Step(`^a "([^"]*)" replication capabilities structure is returned$`, f.aReplicationCapabilitiesStructureIsReturned)
 	s.Step(`^I set renameSDC with renameEnabled "([^"]*)" prefix "([^"]*)"$`, f.iSetRenameSdcEnabledWithPrefix)
+	s.Step(`^I set approveSDC with approveSDCEnabled "([^"]*)"`, f.iSetApproveSdcEnabled)
 
 	s.After(func(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
 		if f.server != nil {

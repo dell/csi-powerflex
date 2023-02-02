@@ -972,3 +972,20 @@ Feature: VxFlex OS CSI interface
     And I call Probe
     When I call Node Probe
     Then the error contains "induced error"
+  
+  Scenario: Call Probe for approving sdc
+    Given a VxFlexOS service
+    And I set approveSDC with approveSDCEnabled "true"
+    And I call Probe
+    When I call Node Probe
+    Then the error contains "none"
+      
+   Scenario: Call Probe for approving sdc, invalid guid 
+    Given a VxFlexOS service
+    And I induce error "ApproveSdcError"
+    And I set approveSDC with approveSDCEnabled "true"
+    And I call Probe
+    When I call Node Probe
+    Then the error contains "The given GUID is invalid"
+    
+    
