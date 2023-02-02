@@ -440,7 +440,7 @@ func (s *service) approveSDC(opts Opts) error {
 		}
 
 		//fetch the restrictedSdcMode
-		if system.System.RestrictedSdcModeEnabled && system.System.RestrictedSdcMode == "Guid" {
+		if system.System.RestrictedSdcMode == "Guid" {
 			if !sdc.Sdc.SdcApproved {
 				resp, err := system.ApproveSdcByGUID(sdc.Sdc.SdcGUID)
 				if err != nil {
@@ -450,7 +450,17 @@ func (s *service) approveSDC(opts Opts) error {
 			} else {
 				Log.Infof("SDC already approved, SDC GUID: %s", sdc.Sdc.SdcGUID)
 			}
+		} else {
+			if !sdc.Sdc.SdcApproved {
+				return status.Errorf(codes.FailedPrecondition,
+					"Array RestrictedSdcMode is %s, driver only supports GUID RestrictedSdcMode cannot approve SDC %s",
+					system.System.RestrictedSdcMode, sdc.Sdc.SdcGUID)
+			}
+			Log.Warnf("Array RestrictedSdcMode is %s, driver only supports GUID RestrictedSdcMode If SDC becomes restricted again, driver will not be able to approve",
+				system.System.RestrictedSdcMode)
+
 		}
+
 	}
 	return nil
 }

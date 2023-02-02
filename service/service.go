@@ -394,9 +394,8 @@ func (s *service) BeforeServe(
 		if approveSDC == "true" {
 			opts.IsApproveSDCEnabled = true
 		}
-	} else {
-		opts.IsApproveSDCEnabled = false
 	}
+
 	if s.privDir == "" {
 		s.privDir = defaultPrivDir
 	}
