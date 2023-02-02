@@ -144,7 +144,6 @@ controller:
   #   operator: "Exists"
   #   effect: "NoSchedule"
 
-
 # "node" allows to configure node specific parameters
 node:
   healthMonitor:
