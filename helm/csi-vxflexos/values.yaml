@@ -213,7 +213,7 @@ node:
     
   # "approveSDCEnabled" defines whether to enable/disable SDC approval
   # Default value: false
-  approveSDCEnabled: true
+  approveSDCEnabled: false
 
 # monitoring pod details
 # These options control the running of the monitoring container
