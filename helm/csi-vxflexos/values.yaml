@@ -209,10 +209,16 @@ node:
     # Default value: none
     # Examples: "rhel-sdc", "sdc-test"
     prefix: "sdc-test"
-    
-  # "approveSDCEnabled" defines whether to enable/disable SDC approval
-  # Default value: false
-  approveSDCEnabled: false
+   
+  # "approveSDC" defines the approve operation for SDC
+  # Default value: None
+  approveSDC: 
+    # enabled: Enable/Disable SDC approval
+    #Allowed values:
+    #  true: enable approval
+    #  false: disable approval
+    # Default value: false
+    enabled: false
 
 # monitoring pod details
 # These options control the running of the monitoring container

@@ -433,6 +433,10 @@ func (s *service) approveSDC(opts Opts) error {
 	for _, systemID := range connectedSystemID {
 		system := s.systems[systemID]
 
+		if system == nil {
+			return nil
+		}
+
 		//fetch SDC details
 		sdc, err := s.systems[systemID].FindSdc("SdcGUID", opts.SdcGUID)
 		if err != nil {
