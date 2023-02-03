@@ -215,8 +215,8 @@ node:
   approveSDC: 
     # enabled: Enable/Disable SDC approval
     #Allowed values:
-    #  true: enable approval
-    #  false: disable approval
+    #  true: Driver will attempt to approve restricted SDC by GUID during setup
+    #  false: Driver will not attempt to approve restricted SDC by GUID during setup
     # Default value: false
     enabled: false
 
