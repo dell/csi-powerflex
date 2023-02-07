@@ -13,7 +13,7 @@
       "password": "Password123",
       "skipCertificateValidation": true,
       "isDefault": false,
-      "systemID": "15dbbf5617523655-system-name",
+      "systemID": "15dbbf5617523655",
       "AllSystemNames" : "15dbbf5617523655-previous-name"
    }
 ]
