@@ -407,6 +407,14 @@ func (s *service) nodeProbe(ctx context.Context) error {
 		}
 	}
 
+	// support for pre-approved guid
+	if s.opts.IsApproveSDCEnabled {
+		Log.Infof("Approve SDC enabled")
+		if err := s.approveSDC(s.opts); err != nil {
+			return err
+		}
+	}
+
 	// get all the system names and IDs.
 	s.getSystemName(ctx, connectedSystemID)
 
@@ -417,6 +425,46 @@ func (s *service) nodeProbe(ctx context.Context) error {
 			s.privDir, err.Error())
 	}
 
+	return nil
+}
+
+func (s *service) approveSDC(opts Opts) error {
+
+	for _, systemID := range connectedSystemID {
+		system := s.systems[systemID]
+
+		if system == nil {
+			continue
+		}
+
+		//fetch SDC details
+		sdc, err := s.systems[systemID].FindSdc("SdcGUID", opts.SdcGUID)
+		if err != nil {
+			return status.Errorf(codes.FailedPrecondition, "%s", err)
+		}
+
+		//fetch the restrictedSdcMode
+		if system.System.RestrictedSdcMode == "Guid" {
+			if !sdc.Sdc.SdcApproved {
+				resp, err := system.ApproveSdcByGUID(sdc.Sdc.SdcGUID)
+				if err != nil {
+					return status.Errorf(codes.FailedPrecondition, "%s", err)
+				}
+				Log.Infof("SDC Approved, SDC Id: %s and SDC GUID: %s", resp.SdcID, sdc.Sdc.SdcGUID)
+			} else {
+				Log.Infof("SDC already approved, SDC GUID: %s", sdc.Sdc.SdcGUID)
+			}
+		} else {
+			if !sdc.Sdc.SdcApproved {
+				return status.Errorf(codes.FailedPrecondition, "Array RestrictedSdcMode is %s, driver only supports GUID RestrictedSdcMode cannot approve SDC %s",
+					system.System.RestrictedSdcMode, sdc.Sdc.SdcGUID)
+			}
+			Log.Warnf("Array RestrictedSdcMode is %s, driver only supports GUID RestrictedSdcMode If SDC becomes restricted again, driver will not be able to approve",
+				system.System.RestrictedSdcMode)
+
+		}
+
+	}
 	return nil
 }
 

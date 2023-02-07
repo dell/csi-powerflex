@@ -50,6 +50,7 @@ var (
 		GetSystemSdcError             bool
 		GetSdcInstancesError          bool
 		MapSdcError                   bool
+		ApproveSdcError               bool
 		RemoveMappedSdcError          bool
 		SDCLimitsError                bool
 		SIOGatewayVolumeNotFoundError bool
@@ -170,6 +171,7 @@ func getHandler() http.Handler {
 	stepHandlersErrors.NoVolIDSDCError = false
 	stepHandlersErrors.NoVolError = false
 	stepHandlersErrors.SetSdcNameError = false
+	stepHandlersErrors.ApproveSdcError = false
 	sdcMappings = sdcMappings[:0]
 	sdcMappingsID = ""
 	return handler
@@ -420,6 +422,24 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 		}
 
 		setSdcNameSuccess = true
+
+	case "approveSdc":
+		errMsg := "The given GUID is invalid.Please specify GUID in the following format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+		if stepHandlersErrors.ApproveSdcError {
+			writeError(w, errMsg, http.StatusInternalServerError, codes.Internal)
+		}
+		req := types.ApproveSdcParam{}
+		decoder := json.NewDecoder(r.Body)
+		err := decoder.Decode(&req)
+		if err != nil {
+			log.Printf("error decoding json: %s\n", err.Error())
+		}
+		resp := types.ApproveSdcByGUIDResponse{SdcID: "d0f055a700000000"}
+		encoder := json.NewEncoder(w)
+		err = encoder.Encode(resp)
+		if err != nil {
+			log.Printf("error encoding json: %s\n", err.Error())
+		}
 
 	case "addMappedSdc":
 		if stepHandlersErrors.MapSdcError {

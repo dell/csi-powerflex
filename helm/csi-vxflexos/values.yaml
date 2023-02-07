@@ -209,6 +209,16 @@ node:
     # Default value: none
     # Examples: "rhel-sdc", "sdc-test"
     prefix: "sdc-test"
+   
+  # "approveSDC" defines the approve operation for SDC
+  # Default value: None
+  approveSDC: 
+    # enabled: Enable/Disable SDC approval
+    #Allowed values:
+    #  true: Driver will attempt to approve restricted SDC by GUID during setup
+    #  false: Driver will not attempt to approve restricted SDC by GUID during setup
+    # Default value: false
+    enabled: false
 
 # monitoring pod details
 # These options control the running of the monitoring container

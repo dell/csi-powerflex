@@ -47,4 +47,8 @@ const (
 	// EnvSDCPrefix is the name of the environment variable used to set the prefix for SDC name. This is only used by
 	// the Node Service.
 	EnvSDCPrefix = "X_CSI_RENAME_SDC_PREFIX"
+
+	// EnvIsApproveSDCEnabled is the name of the environment variable that specifies if the SDC approval is to be
+	// carried out or not.
+	EnvIsApproveSDCEnabled = "X_CSI_APPROVE_SDC_ENABLED"
 )

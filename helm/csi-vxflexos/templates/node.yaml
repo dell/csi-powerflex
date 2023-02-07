@@ -203,6 +203,10 @@ spec:
             - name: X_CSI_HEALTH_MONITOR_ENABLED
               value: "{{ .Values.node.healthMonitor.enabled }}"
             {{- end }}
+            {{- if hasKey .Values.node "approveSDC" }}
+            - name: X_CSI_APPROVE_SDC_ENABLED
+              value: "{{ .Values.node.approveSDC.enabled }}"
+            {{- end }}
             {{- if hasKey .Values.node "renameSDC" }}
             - name: X_CSI_RENAME_SDC_ENABLED
               value: "{{ .Values.node.renameSDC.enabled }}"

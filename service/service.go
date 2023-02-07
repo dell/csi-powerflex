@@ -135,6 +135,7 @@ type Opts struct {
 	IsHealthMonitorEnabled     bool   // allow driver to make use of the alpha feature gate, CSIVolumeHealth
 	IsSdcRenameEnabled         bool   // allow driver to enable renaming SDC
 	SdcPrefix                  string // prefix to be set for SDC name
+	IsApproveSDCEnabled        bool
 }
 
 type service struct {
@@ -325,6 +326,7 @@ func (s *service) BeforeServe(
 			"IsHealthMonitorEnabled": s.opts.IsHealthMonitorEnabled,
 			"IsSdcRenameEnabled":     s.opts.IsSdcRenameEnabled,
 			"sdcPrefix":              s.opts.SdcPrefix,
+			"IsApproveSDCEnabled":    s.opts.IsApproveSDCEnabled,
 		}
 
 		Log.WithFields(fields).Infof("configured %s", Name)
@@ -388,6 +390,12 @@ func (s *service) BeforeServe(
 	if sdcPrefix, ok := csictx.LookupEnv(ctx, EnvSDCPrefix); ok {
 		opts.SdcPrefix = sdcPrefix
 	}
+	if approveSDC, ok := csictx.LookupEnv(ctx, EnvIsApproveSDCEnabled); ok {
+		if approveSDC == "true" {
+			opts.IsApproveSDCEnabled = true
+		}
+	}
+
 	if s.privDir == "" {
 		s.privDir = defaultPrivDir
 	}
