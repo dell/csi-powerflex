@@ -1,0 +1,15 @@
+[
+    {
+      "id": "d02aebc400000000",
+      "name": "10.247.38.62",
+      "port": 7611,
+      "peerSystemId": "15dbbf5617523655",
+      "systemId": "14dbbf5617523654",
+      "softwareVersionInfo": "R3_6.400.0",
+      "membershipState": "Joined",
+      "perfProfile": "HighPerformance",
+      "networkType": "External",
+      "couplingRC": "SUCCESS"
+    }
+  ]
+  

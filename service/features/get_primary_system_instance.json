@@ -1,0 +1,188 @@
+[
+    {
+      "perfProfile": "Default",
+      "installId": "1c078b073d75512c",
+      "name": "mocksystem",
+      "systemVersionName": "DellEMC ScaleIO Version: R2_6.0.133",
+      "capacityAlertHighThresholdPercent": 80,
+      "capacityAlertCriticalThresholdPercent": 90,
+      "upgradeState": "NoUpgrade",
+      "remoteReadOnlyLimitState": false,
+      "mdmManagementPort": 6611,
+      "sdcMdmNetworkDisconnectionsCounterParameters": {
+        "shortWindow": {
+          "threshold": 300,
+          "windowSizeInSec": 60
+        },
+        "mediumWindow": {
+          "threshold": 500,
+          "windowSizeInSec": 3600
+        },
+        "longWindow": {
+          "threshold": 700,
+          "windowSizeInSec": 86400
+        }
+      },
+      "sdcSdsNetworkDisconnectionsCounterParameters": {
+        "shortWindow": {
+          "threshold": 800,
+          "windowSizeInSec": 60
+        },
+        "mediumWindow": {
+          "threshold": 4000,
+          "windowSizeInSec": 3600
+        },
+        "longWindow": {
+          "threshold": 20000,
+          "windowSizeInSec": 86400
+        }
+      },
+      "sdcMemoryAllocationFailuresCounterParameters": {
+        "shortWindow": {
+          "threshold": 300,
+          "windowSizeInSec": 60
+        },
+        "mediumWindow": {
+          "threshold": 500,
+          "windowSizeInSec": 3600
+        },
+        "longWindow": {
+          "threshold": 700,
+          "windowSizeInSec": 86400
+        }
+      },
+      "sdcSocketAllocationFailuresCounterParameters": {
+        "shortWindow": {
+          "threshold": 300,
+          "windowSizeInSec": 60
+        },
+        "mediumWindow": {
+          "threshold": 500,
+          "windowSizeInSec": 3600
+        },
+        "longWindow": {
+          "threshold": 700,
+          "windowSizeInSec": 86400
+        }
+      },
+      "sdcLongOperationsCounterParameters": {
+        "shortWindow": {
+          "threshold": 10000,
+          "windowSizeInSec": 60
+        },
+        "mediumWindow": {
+          "threshold": 100000,
+          "windowSizeInSec": 3600
+        },
+        "longWindow": {
+          "threshold": 1000000,
+          "windowSizeInSec": 86400
+        }
+      },
+      "cliPasswordAllowed": true,
+      "managementClientSecureCommunicationEnabled": true,
+      "tlsVersion": "TLSv1.2",
+      "showGuid": true,
+      "authenticationMethod": "Native",
+      "mdmToSdsPolicy": "None",
+      "mdmCluster": {
+        "clusterState": "ClusteredNormal",
+        "clusterMode": "ThreeNodes",
+        "master": {
+          "versionInfo": "R2_6.0.0",
+          "managementIPs": [
+            "127.1.1.6"
+          ],
+          "ips": [
+            "127.1.1.6"
+          ],
+          "virtualInterfaces": [],
+          "opensslVersion": "OpenSSL 1.0.2k-fips  26 Jan 2017",
+          "role": "Manager",
+          "id": "0873f5bd5c3dd9a1",
+          "port": 9011
+        },
+        "worker": [
+          {
+            "versionInfo": "R2_6.0.0",
+            "managementIPs": [
+              "127.1.1.7"
+            ],
+            "ips": [
+              "127.1.1.7"
+            ],
+            "virtualInterfaces": [],
+            "opensslVersion": "OpenSSL 1.0.2k-fips  26 Jan 2017",
+            "role": "Manager",
+            "status": "Normal",
+            "name": "127.1.1.7",
+            "id": "7e521a811a247d10",
+            "port": 9011
+          }
+        ],
+        "tieBreakers": [
+          {
+            "versionInfo": "R2_6.0.0",
+            "managementIPs": [
+              "127.1.1.8"
+            ],
+            "ips": [
+              "127.1.1.8"
+            ],
+            "opensslVersion": "N/A",
+            "role": "TieBreaker",
+            "status": "Normal",
+            "id": "4542577337090b82",
+            "port": 9011
+          }
+        ],
+        "goodNodesNum": 3,
+        "goodReplicasNum": 2,
+        "id": "1503005277137548884"
+      },
+      "sdcSdsConnectivityInfo": {
+        "sdcSdsConnectivityStatus": "AllConnected",
+        "disconnectedSdcId": null,
+        "disconnectedSdcName": null,
+        "disconnectedSdsId": null,
+        "disconnectedSdsName": null,
+        "disconnectedSdsIp": null
+      },
+      "swid": "",
+      "defaultIsVolumeObfuscated": false,
+      "daysInstalled": 6,
+      "restrictedSdcModeEnabled": false,
+      "restrictedSdcMode": "None",
+      "maxCapacityInGb": "Unlimited",
+      "capacityTimeLeftInDays": "Unlimited",
+      "enterpriseFeaturesEnabled": true,
+      "isInitialLicense": true,
+      "id": "14dbbf5617523654",
+      "links": [
+        {
+          "rel": "self",
+          "href": "/api/instances/System::14dbbf5617523654"
+        },
+        {
+          "rel": "/api/System/relationship/Statistics",
+          "href": "/api/instances/System::14dbbf5617523654/relationships/Statistics"
+        },
+        {
+          "rel": "/api/System/relationship/ProtectionDomain",
+          "href": "/api/instances/System::14dbbf5617523654/relationships/ProtectionDomain"
+        },
+        {
+          "rel": "/api/System/relationship/Sdc",
+          "href": "/api/instances/System::14dbbf5617523654/relationships/Sdc"
+        },
+        {
+          "rel": "/api/System/relationship/User",
+          "href": "/api/instances/System::14dbbf5617523654/relationships/User"
+        }
+      ]
+    }  
+  ]
+  
+  
+  
+  

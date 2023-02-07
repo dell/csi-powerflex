@@ -256,6 +256,9 @@ func (f *feature) aVxFlexOSServiceWithTimeoutMilliseconds(millis int) error {
 	} else {
 		f.server = nil
 	}
+
+	inducedError = errors.New("")
+
 	f.checkGoRoutines("end aVxFlexOSService")
 	return nil
 }
@@ -324,6 +327,8 @@ MDM-ID 14dbbf5617523654 SDC ID d0f33bd700000004 INSTALLATION ID 1c078b073d75512c
 		array := opts.arrays[arrayID]
 		opts.arrays["addAnotherArray"] = array
 	}
+
+	opts.replicationPrefix = "replication.storage.dell.com"
 
 	svc.opts = opts
 
@@ -885,6 +890,7 @@ func (f *feature) iChangeTheStoragePool(storagePoolName string) error {
 
 func (f *feature) iInduceError(errtype string) error {
 	log.Printf("set induce error %s\n", errtype)
+	inducedError = errors.New(errtype)
 	switch errtype {
 	case "WrongSysNameError":
 		stepHandlersErrors.WrongSysNameError = true
@@ -1116,8 +1122,16 @@ func (f *feature) iInduceError(errtype string) error {
 		stepHandlersErrors.CreateVGSBadTimeError = true
 	case "CreateSplitVGSError":
 		stepHandlersErrors.CreateSplitVGSError = true
+	case "ProbePrimaryError":
+		f.service.adminClients[arrayID] = nil
+		f.service.systems[arrayID] = nil
+		stepHandlersErrors.PodmonControllerProbeError = true
+	case "ProbeSecondaryError":
+		f.service.adminClients[arrayID2] = nil
+		f.service.systems[arrayID2] = nil
+		stepHandlersErrors.PodmonControllerProbeError = true
 	default:
-		return fmt.Errorf("Don't know how to induce error %q", errtype)
+		fmt.Println("Ensure that the error is handled in the handlers section.")
 	}
 	return nil
 }
@@ -3380,9 +3394,34 @@ func (f *feature) iSetRenameSdcEnabledWithPrefix(renameEnabled string, prefix st
 	f.service.opts.SdcPrefix = prefix
 	return nil
 }
+
 func (f *feature) iSetApproveSdcEnabled(approveSDCEnabled string) error {
 	if approveSDCEnabled == "true" {
 		f.service.opts.IsApproveSDCEnabled = true
+	}
+	return nil
+}
+
+func (f *feature) iCallCreateRemoteVolume() error {
+	ctx := new(context.Context)
+	req := &replication.CreateRemoteVolumeRequest{}
+	if f.createVolumeResponse == nil {
+		return errors.New("iCallCreateRemoteVolume: f.createVolumeResponse is nil")
+	}
+	req.VolumeHandle = f.createVolumeResponse.Volume.VolumeId
+	if stepHandlersErrors.NoVolIDError {
+		req.VolumeHandle = ""
+	}
+	if stepHandlersErrors.BadVolIDError {
+		req.VolumeHandle = "/"
+	}
+	req.Parameters = map[string]string{
+		f.service.WithRP(KeyReplicationRemoteStoragePool): "viki_pool_HDD_20181031",
+		f.service.WithRP(KeyReplicationRemoteSystem):      "15dbbf5617523655",
+	}
+	_, f.err = f.service.CreateRemoteVolume(*ctx, req)
+	if f.err != nil {
+		fmt.Printf("CreateRemoteVolumeRequest returned error: %s", f.err)
 	}
 	return nil
 }
@@ -3548,6 +3587,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^a "([^"]*)" replication capabilities structure is returned$`, f.aReplicationCapabilitiesStructureIsReturned)
 	s.Step(`^I set renameSDC with renameEnabled "([^"]*)" prefix "([^"]*)"$`, f.iSetRenameSdcEnabledWithPrefix)
 	s.Step(`^I set approveSDC with approveSDCEnabled "([^"]*)"`, f.iSetApproveSdcEnabled)
+	s.Step(`^I call CreateRemoteVolume$`, f.iCallCreateRemoteVolume)
 
 	s.After(func(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
 		if f.server != nil {

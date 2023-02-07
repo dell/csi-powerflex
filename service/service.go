@@ -136,6 +136,8 @@ type Opts struct {
 	IsSdcRenameEnabled         bool   // allow driver to enable renaming SDC
 	SdcPrefix                  string // prefix to be set for SDC name
 	IsApproveSDCEnabled        bool
+	replicationContextPrefix   string
+	replicationPrefix          string
 }
 
 type service struct {
@@ -398,6 +400,14 @@ func (s *service) BeforeServe(
 
 	if s.privDir == "" {
 		s.privDir = defaultPrivDir
+	}
+
+	if replicationContextPrefix, ok := csictx.LookupEnv(ctx, EnvReplicationContextPrefix); ok {
+		opts.replicationContextPrefix = replicationContextPrefix + "/"
+	}
+
+	if replicationPrefix, ok := csictx.LookupEnv(ctx, EnvReplicationPrefix); ok {
+		opts.replicationPrefix = replicationPrefix
 	}
 
 	// log csiNode topology keys
@@ -870,4 +880,36 @@ func (s *service) getProtectionDomainIDFromName(systemID, protectionDomainName s
 		return "", err
 	}
 	return pd.ID, nil
+}
+
+func (s *service) getSystem(systemID string) (*siotypes.System, error) {
+	adminClient := s.adminClients[systemID]
+	if adminClient == nil {
+		return nil, fmt.Errorf("can't find adminClient by id %s", systemID)
+	}
+
+	// Gets the desired system content. Needed for remote replication.
+	systems, err := adminClient.GetSystems()
+	if err != nil {
+		return nil, err
+	}
+	for _, system := range systems {
+		if system.ID == systemID {
+			return system, nil
+		}
+	}
+	return nil, fmt.Errorf("System %s not found", systemID)
+}
+
+func (s *service) getPeerMdms(systemID string) ([]*siotypes.PeerMDM, error) {
+	adminClient := s.adminClients[systemID]
+	if adminClient == nil {
+		return nil, fmt.Errorf("can't find adminClient by id %s", systemID)
+	}
+
+	mdms, err := adminClient.GetPeerMDMs()
+	if err != nil {
+		return nil, err
+	}
+	return mdms, nil
 }

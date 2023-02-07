@@ -101,6 +101,8 @@ var scaleioRouter http.Handler
 var testControllerHasNoConnection bool
 var count int
 
+var inducedError error
+
 // getFileHandler returns an http.Handler that
 func getHandler() http.Handler {
 	handler := http.HandlerFunc(
@@ -191,6 +193,7 @@ func getRouter() http.Handler {
 	scaleioRouter.HandleFunc("{Volume}/relationship/Statistics", handleVolumeStatistics)
 	scaleioRouter.HandleFunc("/api/Volume/relationship/Statistics", handleVolumeStatistics)
 	scaleioRouter.HandleFunc("{SdcGUID}/relationships/Sdc", handleSystemSdc)
+	scaleioRouter.HandleFunc("/api/types/PeerMdm/instances", handlePeerMdmInstances)
 	return scaleioRouter
 }
 
@@ -246,6 +249,10 @@ func handleSystemInstances(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "PodmonControllerProbeError", http.StatusRequestTimeout, codes.Internal)
 		return
 	}
+	if inducedError.Error() == "BadRemoteSystemIDError" {
+		returnJSONFile("features", "get_primary_system_instance.json", w, nil)
+		return
+	}
 	if stepHandlersErrors.systemNameMatchingError {
 		count++
 	}
@@ -265,6 +272,14 @@ func handleStoragePoolInstances(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	returnJSONFile("features", "get_storage_pool_instances.json", w, nil)
+}
+
+func handlePeerMdmInstances(w http.ResponseWriter, r *http.Request) {
+	if inducedError.Error() == "PeerMdmError" {
+		writeError(w, "PeerMdmError", http.StatusRequestTimeout, codes.Internal)
+		return
+	}
+	returnJSONFile("features", "get_peer_mdms.json", w, nil)
 }
 
 func returnJSONFile(directory, filename string, w http.ResponseWriter, replacements map[string]string) (jsonBytes []byte) {
@@ -328,6 +343,11 @@ func handleVolumeInstances(w http.ResponseWriter, r *http.Request) {
 
 	// Post is CreateVolume; here just return a volume id encoded from the name
 	case http.MethodPost:
+		if inducedError.Error() == "CreateVolumeError" {
+			writeError(w, "create volume induced error", http.StatusRequestTimeout, codes.Internal)
+			return
+		}
+
 		req := types.VolumeParam{}
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
