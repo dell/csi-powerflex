@@ -140,6 +140,7 @@ type feature struct {
 	replicationCapabilitiesResponse       *replication.GetReplicationCapabilityResponse
 	clusterUID                            string
 	createStorageProtectionGroupResponse  *replication.CreateStorageProtectionGroupResponse
+	deleteStorageProtectionGroupResponse  *replication.DeleteStorageProtectionGroupResponse
 }
 
 func (f *feature) checkGoRoutines(tag string) {
@@ -3556,6 +3557,37 @@ func (f *feature) iCallGetStorageProtectionGroupStatusWithStateAndMode(arg1, arg
 	return nil
 }
 
+func (f *feature) iCallDeleteVolume(name string) error {
+	for id, name := range volumeIDToName {
+		fmt.Printf("volIDToName id %s name %s\n", id, name)
+	}
+	for name, id := range volumeNameToID {
+		fmt.Printf("volNameToID name %s id %s\n", name, id)
+	}
+	ctx := new(context.Context)
+	req := f.getControllerDeleteVolumeRequest("single-writer")
+	id := arrayID + "-" + volumeNameToID[name]
+	log.Printf("iCallDeleteVolume name %s to ID %s", name, id)
+	req.VolumeId = id
+	f.deleteVolumeResponse, f.err = f.service.DeleteVolume(*ctx, req)
+	if f.err != nil {
+		fmt.Printf("DeleteVolume error: %s", f.err)
+	}
+	return nil
+}
+
+func (f *feature) iCallDeleteStorageProtectionGroup() error {
+	ctx := new(context.Context)
+	attributes := make(map[string]string)
+	attributes[f.service.opts.replicationContextPrefix+"systemName"] = arrayID
+	req := &replication.DeleteStorageProtectionGroupRequest{
+		ProtectionGroupId:         f.createStorageProtectionGroupResponse.LocalProtectionGroupId,
+		ProtectionGroupAttributes: attributes,
+	}
+	f.deleteStorageProtectionGroupResponse, f.err = f.service.DeleteStorageProtectionGroup(*ctx, req)
+	return nil
+}
+
 func FeatureContext(s *godog.ScenarioContext) {
 	f := &feature{}
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
@@ -3722,6 +3754,8 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call CreateStorageProtectionGroup with "([^"]*)", "([^"]*)", "([^"]*)"$`, f.iCallCreateStorageProtectionGroupWith)
 	s.Step(`^I call GetStorageProtectionGroupStatus$`, f.iCallGetStorageProtectionGroupStatus)
 	s.Step(`^I call GetStorageProtectionGroupStatus with state "([^"]*)" and mode "([^"]*)"$`, f.iCallGetStorageProtectionGroupStatusWithStateAndMode)
+	s.Step(`^I call DeleteVolume "([^"]*)"$`, f.iCallDeleteVolume)
+	s.Step(`^I call DeleteStorageProtectionGroup$`, f.iCallDeleteStorageProtectionGroup)
 
 	s.After(func(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
 		if f.server != nil {

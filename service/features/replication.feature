@@ -141,3 +141,41 @@ Scenario Outline: Test GetStorageProtectionGroupStatus current status
   | "sourcevol" | "none"     | "Normal"    | "Invalid"             |
   | "sourcevol" | "none"     | "Failover"  | "Consistent"          |
   | "sourcevol" | "none"     | "Paused"    | "Consistent"          |
+
+@replication
+Scenario Outline: Test DeleteStorageProtectionGroup up to volume
+  Given a VxFlexOS service
+  And I use config "replication-config"
+  When I call CreateVolume <name>
+  And I call CreateRemoteVolume
+  And I call CreateStorageProtectionGroup
+  And I induce error <error>
+  And I call DeleteVolume <name>
+  Then the error contains <errormsg>
+
+  Examples:
+  | name        | error                                       | errormsg                                           |
+  | "sourcevol" | "none"                                      | "none"                                             |
+  | "sourcevol" | "NoDeleteReplicationPair"                   | "pairs exist"                                      |
+  | "sourcevol" | "ReplicationPairAlreadyExistsUnretrievable" | "error removing replication pair"                  |
+  | "sourcevol" | "GetReplicationPairError"                   | "GET ReplicationPair induced error"                |
+
+@replication
+Scenario Outline: Test DeleteStorageProtectionGroup 
+  Given a VxFlexOS service
+  And I use config "replication-config"
+  When I call CreateVolume <name>
+  And I call CreateRemoteVolume
+  And I call CreateStorageProtectionGroup
+  And I call DeleteVolume <name>
+  And I induce error <error>
+  And I call DeleteStorageProtectionGroup
+  Then the error contains <errormsg>
+
+  Examples:
+  | name        | error                                 | errormsg                                           |
+  | "sourcevol" | "none"                                | "none"                                             |
+  | "sourcevol" | "GetReplicationPairError"             | "GET ReplicationPair induced error"                |
+  | "sourcevol" | "ReplicationGroupAlreadyDeleted"      | "none"                                             |
+  | "sourcevol" | "GetRCGByIdError"                     | "could not GET RCG by ID"                          |
+  | "sourcevol" | "RemoveRCGError"                      | "coule not remove RCG"                             |

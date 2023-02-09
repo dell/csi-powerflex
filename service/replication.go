@@ -31,6 +31,7 @@ const (
 	KeyReplicationClusterID = "remoteClusterID"
 
 	sioReplicationPairsDoesNotExist = "Error in get relationship ReplicationPair"
+	sioReplicationGroupNotFound     = "The Replication Consistency Group was not found"
 )
 
 func (s *service) GetReplicationCapabilities(ctx context.Context, req *replication.GetReplicationCapabilityRequest) (*replication.GetReplicationCapabilityResponse, error) {
@@ -400,6 +401,33 @@ func (s *service) GetStorageProtectionGroupStatus(ctx context.Context, req *repl
 			IsSource: group.ReplicationDirection == "LocalToRemote",
 		},
 	}, nil
+}
+
+func (s *service) DeleteStorageProtectionGroup(ctx context.Context, req *replication.DeleteStorageProtectionGroupRequest) (*replication.DeleteStorageProtectionGroupResponse, error) {
+	Log.Printf("[DeleteStorageProtectionGroup] %+v", req)
+	localParams := req.GetProtectionGroupAttributes()
+
+	protectionGroupSystem := localParams[s.opts.replicationContextPrefix+"systemName"]
+
+	pairs, err := s.getReplicationPairs(protectionGroupSystem, req.ProtectionGroupId)
+	if err != nil {
+		// Handle the case where it doesn't exist. Already deleted.
+		if strings.EqualFold(err.Error(), sioReplicationGroupNotFound) {
+			return &replication.DeleteStorageProtectionGroupResponse{}, nil
+		}
+		return nil, err
+	}
+
+	if len(pairs) != 0 {
+		return nil, status.Errorf(codes.Internal, "unable to delete protection group, pairs exist")
+	}
+
+	err = s.DeleteReplicationConsistencyGroup(protectionGroupSystem, req.ProtectionGroupId)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "error deleting the replication consistency group: %s", err.Error())
+	}
+
+	return &replication.DeleteStorageProtectionGroupResponse{}, nil
 }
 
 // WithRP appends Replication Prefix to provided string
