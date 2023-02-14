@@ -5,6 +5,7 @@ import (
 	"log"
 	"strconv"
 	"strings"
+	"time"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/dell/dell-csi-extensions/replication"
@@ -33,6 +34,9 @@ const (
 	sioReplicationPairsDoesNotExist = "Error in get relationship ReplicationPair"
 	sioReplicationGroupNotFound     = "The Replication Consistency Group was not found"
 )
+
+var getRemoteSnapDelay = (1 * time.Second)
+var snapshotMaxRetries = 10
 
 func (s *service) GetReplicationCapabilities(ctx context.Context, req *replication.GetReplicationCapabilityRequest) (*replication.GetReplicationCapabilityResponse, error) {
 	var rep = new(replication.GetReplicationCapabilityResponse)
@@ -430,6 +434,111 @@ func (s *service) DeleteStorageProtectionGroup(ctx context.Context, req *replica
 	return &replication.DeleteStorageProtectionGroupResponse{}, nil
 }
 
+func (s *service) ExecuteAction(ctx context.Context, req *replication.ExecuteActionRequest) (*replication.ExecuteActionResponse, error) {
+	Log.Printf("[ExecuteAction] - req %+v", req)
+
+	action := req.GetAction().GetActionTypes().String()
+	protectionGroupID := req.GetProtectionGroupId()
+	localParams := req.GetProtectionGroupAttributes()
+	remoteParams := req.GetRemoteProtectionGroupAttributes()
+	actionAttributes := make(map[string]string)
+
+	remoteSystem := remoteParams[s.opts.replicationContextPrefix+"systemName"]
+	localSystem := localParams[s.opts.replicationContextPrefix+"systemName"]
+
+	client, err := s.verifySystem(localSystem)
+	if err != nil {
+		return nil, status.Errorf(codes.FailedPrecondition, err.Error())
+	}
+
+	group, err := s.getReplicationConsistencyGroupByID(localSystem, protectionGroupID)
+	if err != nil {
+		return nil, status.Errorf(codes.FailedPrecondition, "No replication consistency groups found: %s", err.Error())
+	}
+
+	statusResp, err := s.GetStorageProtectionGroupStatus(ctx, &replication.GetStorageProtectionGroupStatusRequest{
+		ProtectionGroupId:         protectionGroupID,
+		ProtectionGroupAttributes: localParams,
+	})
+	if err != nil {
+		return nil, status.Errorf(codes.FailedPrecondition, "unable to get storage protection group status: %s", err.Error())
+	}
+
+	switch action {
+	case replication.ActionTypes_CREATE_SNAPSHOT.String():
+		if statusResp.Status.State != replication.StorageProtectionGroupStatus_SYNCHRONIZED {
+			return nil, status.Errorf(codes.FailedPrecondition, "rg is not synchronized, can't process snapshot")
+		}
+
+		resp, err := s.CreateReplicationConsistencyGroupSnapshot(client, group)
+		if err != nil {
+			return nil, status.Error(codes.Unknown, err.Error())
+		}
+
+		attempts := 0
+
+		for len(actionAttributes) == 0 && attempts < snapshotMaxRetries {
+			actionAttributes, err = s.getConsistencyGroupSnapshotContent(localSystem, remoteSystem, protectionGroupID, resp.SnapshotGroupID)
+			if err != nil {
+				return nil, status.Error(codes.Unknown, err.Error())
+			}
+			time.Sleep(getRemoteSnapDelay)
+			attempts++
+		}
+	case replication.ActionTypes_FAILOVER_REMOTE.String():
+		if err := s.ExecuteSwitchoverOnReplicationGroup(client, group); err != nil {
+			return nil, status.Error(codes.Unknown, err.Error())
+		}
+
+	case replication.ActionTypes_UNPLANNED_FAILOVER_LOCAL.String():
+		if err := s.ExecuteFailoverOnReplicationGroup(client, group); err != nil {
+			return nil, status.Error(codes.Unknown, err.Error())
+		}
+
+	case replication.ActionTypes_REPROTECT_LOCAL.String():
+		if err := s.ExecuteReverseOnReplicationGroup(client, group); err != nil {
+			return nil, status.Error(codes.Unknown, err.Error())
+		}
+
+	case replication.ActionTypes_RESUME.String():
+		failover := statusResp.Status.State == replication.StorageProtectionGroupStatus_FAILEDOVER
+		paused := statusResp.Status.State == replication.StorageProtectionGroupStatus_SUSPENDED
+		if paused || failover {
+			if err := s.ExecuteResumeOnReplicationGroup(client, group, failover); err != nil {
+				return nil, status.Error(codes.Unknown, err.Error())
+			}
+		}
+	case replication.ActionTypes_SUSPEND.String():
+		paused := statusResp.Status.State == replication.StorageProtectionGroupStatus_SUSPENDED
+		if !paused {
+			if err := s.ExecutePauseOnReplicationGroup(client, group); err != nil {
+				return nil, status.Error(codes.Unknown, err.Error())
+			}
+		}
+	default:
+		return nil, status.Errorf(codes.Unknown, "The requested action does not match with supported actions")
+	}
+
+	statusResp, err = s.GetStorageProtectionGroupStatus(ctx, &replication.GetStorageProtectionGroupStatusRequest{
+		ProtectionGroupId:         protectionGroupID,
+		ProtectionGroupAttributes: localParams,
+	})
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "unable to get storage protection group status: %s", err.Error())
+	}
+
+	resp := &replication.ExecuteActionResponse{
+		Success: true,
+		ActionTypes: &replication.ExecuteActionResponse_Action{
+			Action: req.GetAction(),
+		},
+		Status:           statusResp.Status,
+		ActionAttributes: actionAttributes,
+	}
+
+	return resp, nil
+}
+
 // WithRP appends Replication Prefix to provided string
 func (s *service) WithRP(key string) string {
 	return s.opts.replicationPrefix + "/" + key
@@ -567,4 +676,28 @@ func isFailover(group *siotypes.ReplicationConsistencyGroup) bool {
 
 func isPaused(group *siotypes.ReplicationConsistencyGroup) bool {
 	return group.PauseMode != "None"
+}
+
+func (s *service) getConsistencyGroupSnapshotContent(localSystem, remoteSystem, protectionGroup, snapshotGroup string) (map[string]string, error) {
+	actionAttributes := make(map[string]string)
+
+	pairs, err := s.getReplicationPairs(localSystem, protectionGroup)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, pair := range pairs {
+		existingSnaps, _, err := s.listVolumes(remoteSystem, 0, 0, false, false, "", pair.RemoteVolumeID)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, snap := range existingSnaps {
+			if snapshotGroup == snap.ConsistencyGroupID {
+				actionAttributes[localSystem+"-"+pair.LocalVolumeID] = remoteSystem + "-" + snap.ID
+			}
+		}
+	}
+
+	return actionAttributes, nil
 }
