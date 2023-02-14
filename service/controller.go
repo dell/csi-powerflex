@@ -1726,7 +1726,7 @@ func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) e
 	// Create ScaleIO API client if needed
 	if s.adminClients[systemID] == nil {
 		skipCertificateValidation := array.SkipCertificateValidation || array.Insecure
-		c, err := goscaleio.NewClientWithArgs(array.Endpoint, "", skipCertificateValidation, !s.opts.DisableCerts)
+		c, err := goscaleio.NewClientWithArgs(array.Endpoint, "", math.MaxInt64, skipCertificateValidation, !s.opts.DisableCerts)
 		if err != nil {
 			return status.Errorf(codes.FailedPrecondition,
 				"unable to create ScaleIO client: %s", err.Error())
