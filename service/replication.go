@@ -30,6 +30,8 @@ const (
 	KeyReplicationRPO = "rpo"
 	// KeyReplicationClusterID represents key for replication remote cluster ID
 	KeyReplicationClusterID = "remoteClusterID"
+	// KeyReplicationVGPrefix represents key for replication vg prefix
+	KeyReplicationVGPrefix = "volumeGroupPrefix"
 
 	sioReplicationPairsDoesNotExist = "Error in get relationship ReplicationPair"
 	sioReplicationGroupNotFound     = "The Replication Consistency Group was not found"
@@ -284,11 +286,18 @@ func (s *service) CreateStorageProtectionGroup(ctx context.Context, req *replica
 
 		clusterUID, ok := parameters["clusterUID"]
 		if !ok {
-			return nil, status.Errorf(codes.InvalidArgument, "replication enabled but no source cluster UID retrieved")
+			Log.Warnf("[CreateStorageProtectionGroup] - source cluster UID not provided, using remote system ID in RCG name.")
+			clusterUID = remoteSystemID
+		}
+
+		rcgPrefix, ok := parameters[s.WithRP(KeyReplicationVGPrefix)]
+		if !ok || rcgPrefix == "" {
+			Log.Warnf("[CreateStorageProtectionGroup] - RCG prefix not provided, using 'RCG' as prefix.")
+			rcgPrefix = "rcg"
 		}
 
 		consistencyGroupName, err = s.createUniqueConsistencyGroupName(systemID, remoteSystemID, rpo,
-			localProtectionDomain, remoteProtectionDomain, remoteClusterID, clusterUID)
+			localProtectionDomain, remoteProtectionDomain, remoteClusterID, clusterUID, rcgPrefix)
 		if err != nil {
 			return nil, err
 		}
@@ -593,16 +602,14 @@ func (s *service) getReplicationConsistencyGroupByID(systemID string, groupID st
 	return group, nil
 }
 
-func (s *service) createUniqueConsistencyGroupName(systemID, remoteSystemID, rpo, localPd, remotePd, remoteClusterID, clusterUID string) (string, error) {
-	var consistencyGroupName string
+func (s *service) createUniqueConsistencyGroupName(systemID, remoteSystemID, rpo, localPd, remotePd, remoteClusterID, clusterUID, rcgPrefix string) (string, error) {
+	consistencyGroupName := rcgPrefix + "-"
 	clusterUID = strings.Replace(clusterUID, "-", "", -1)
 	remoteClusterID = strings.Replace(remoteClusterID, "-", "", -1)
 
 	if remoteClusterID == "self" {
-		consistencyGroupName += "rcg-"
 		consistencyGroupName += clusterUID[:6] + "-v"
 	} else {
-		consistencyGroupName += "rcg-"
 		remoteClusterID = strings.ReplaceAll(remoteClusterID, "cluster", "")
 
 		if len(remoteClusterID) > 7 {

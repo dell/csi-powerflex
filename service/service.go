@@ -31,6 +31,7 @@ import (
 	"github.com/dell/csi-vxflexos/v2/core"
 	"github.com/dell/csi-vxflexos/v2/k8sutils"
 	"github.com/dell/dell-csi-extensions/podmon"
+	"github.com/dell/dell-csi-extensions/replication"
 	volumeGroupSnapshot "github.com/dell/dell-csi-extensions/volumeGroupSnapshot"
 	"github.com/dell/gocsi"
 	csictx "github.com/dell/gocsi/context"
@@ -476,6 +477,7 @@ func (s *service) RegisterAdditionalServers(server *grpc.Server) {
 	Log.Info("Registering additional GRPC servers")
 	podmon.RegisterPodmonServer(server, s)
 	volumeGroupSnapshot.RegisterVolumeGroupSnapshotServer(server, s)
+	replication.RegisterReplicationServer(server, s)
 }
 
 // getVolProvisionType returns a string indicating thin or thick provisioning
@@ -987,4 +989,53 @@ func (s *service) findReplicationPairByVolID(systemID, volumeID string) (*siotyp
 	}
 
 	return nil, fmt.Errorf("replication pair for volume ID: %s, not found", volumeID)
+}
+
+func (s *service) expandReplicationPair(ctx context.Context, req *csi.ControllerExpandVolumeRequest, systemID, volumeID string) error {
+	Log.Printf("[expandReplicationPair] - Start: %s, %s", systemID, volumeID)
+	pair, err := s.findReplicationPairByVolID(systemID, volumeID)
+	if err != nil {
+		return err
+	}
+
+	Log.Printf("[expandReplicationPair] - Pair Found: %+v", pair)
+	group, err := s.getReplicationConsistencyGroupByID(systemID, pair.ReplicationConsistencyGroupID)
+	if err != nil {
+		return err
+	}
+
+	Log.Printf("[expandReplicationPair] - Group Found: %+v", group)
+	// Avoid getting in a expand attempt cycle.
+	if group.ReplicationDirection == "RemoteToLocal" {
+		Log.Printf("[expandReplicationPair] - Only want to expand from LocalToRemote, if first call, there might be an issue.")
+		return nil
+	}
+
+	req.VolumeId = group.RemoteMdmID + "-" + pair.RemoteVolumeID
+
+	resp, err := s.ControllerExpandVolume(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	Log.Printf("[expandReplicationPair] - ControllerExpandVolume expanded the remote volume first: %+v", resp)
+	Log.Printf("[expandReplicationPair] - Ensuring remote has expanded...")
+
+	requestedSize, err := validateVolSize(req.CapacityRange)
+	if err != nil {
+		return err
+	}
+
+	vol, _ := s.getVolByID(volumeID, systemID)
+
+	attempts := 0
+	maxVolRetrievalRetries := 100
+
+	for int64(vol.SizeInKb) != requestedSize && attempts < maxVolRetrievalRetries {
+		time.Sleep(3 * time.Millisecond)
+		vol, _ = s.getVolByID(volumeID, systemID)
+		attempts++
+	}
+
+	return nil
 }

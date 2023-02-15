@@ -209,3 +209,20 @@ Scenario Outline: Test ExecuteAction
   | "sourcevol" | "none"                    | "none"                              | "Suspend"           | "Normal"    | "Consistent"  |
   | "sourcevol" | "ExecuteActionError"      | "could not execute RCG action"      | "Suspend"           | "Normal"    | "Consistent"  |
   | "sourcevol" | "none"                    | "not match with supported actions"  | "Unknown"           | "Normal"    | "Consistent"  |
+
+@replication
+Scenario Outline: Test ControllerExpandVolume on replication pair
+  Given a VxFlexOS service
+  And I use config "replication-config"
+  When I call CreateVolume <name>
+  And I call CreateRemoteVolume
+  And I call CreateStorageProtectionGroup
+  And I induce error <error>
+  Then I call ControllerExpandVolume set to <GB>
+  Then the error contains <errormsg>
+
+  Examples:
+  | name      | GB | error                     | errormsg                            |
+  | "1srcVol" | 64 | "none"                    | "none"                              |
+  | "1srcVol" | 64 | "GetReplicationPairError" | "GET ReplicationPair induced error" |
+  | "1srcVol" | 64 | "GetRCGByIdError"         | "could not GET RCG by ID"           |
