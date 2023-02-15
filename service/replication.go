@@ -602,7 +602,7 @@ func (s *service) getReplicationConsistencyGroupByID(systemID string, groupID st
 	return group, nil
 }
 
-func (s *service) createUniqueConsistencyGroupName(systemID, remoteSystemId, rpo, localPd, remotePd, remoteClusterID, clusterUID, rcgPrefix string) (string, error) {
+func (s *service) createUniqueConsistencyGroupName(systemID, remoteSystemID, rpo, localPd, remotePd, remoteClusterID, clusterUID, rcgPrefix string) (string, error) {
 	consistencyGroupName := rcgPrefix + "-"
 	clusterUID = strings.Replace(clusterUID, "-", "", -1)
 	remoteClusterID = strings.Replace(remoteClusterID, "-", "", -1)
