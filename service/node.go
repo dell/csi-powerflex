@@ -477,6 +477,9 @@ func (s *service) renameSDC(opts Opts) error {
 
 	// fetch SDC details
 	for _, systemID := range connectedSystemID {
+		if s.systems[systemID] == nil {
+			continue
+		}
 		sdc, err := s.systems[systemID].FindSdc("SdcGUID", opts.SdcGUID)
 		if err != nil {
 			return status.Errorf(codes.FailedPrecondition, "%s", err)
