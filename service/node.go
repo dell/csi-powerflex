@@ -479,6 +479,9 @@ func (s *service) renameSDC(opts Opts) error {
 	for _, systemID := range connectedSystemID {
 		fmt.Println("******systemID********", systemID)
 		system := s.systems[systemID]
+		if system == nil {
+			continue
+		}
 		fmt.Println("*******system*********", system)
 		fmt.Println("******SdcGuid********", opts.SdcGUID)
 		sdc, err := system.FindSdc("SdcGUID", opts.SdcGUID)
