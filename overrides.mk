@@ -6,7 +6,7 @@
 DEFAULT_BASEIMAGE="registry.access.redhat.com/ubi8/ubi-minimal"
 # digest for 8.6-994
 DEFAULT_DIGEST="sha256:c5ffdf5938d73283cec018f2adf59f0ed9f8c376d93e415a27b16c3c6aad6f45"
-DEFAULT_GOVERSION="1.19.2"
+DEFAULT_GOVERSION="1.20"
 DEFAULT_REGISTRY="sample_registry"
 DEFAULT_IMAGENAME="csi-vxflexos"
 DEFAULT_BUILDSTAGE="final"
