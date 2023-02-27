@@ -9,10 +9,10 @@ require (
 	github.com/akutz/memconn v0.1.0
 	github.com/container-storage-interface/spec v1.5.0
 	github.com/cucumber/godog v0.12.1
-	github.com/dell/dell-csi-extensions/common v1.1.1-0.20221019160525-ed5b353790e7
-	github.com/dell/dell-csi-extensions/podmon v1.1.2-0.20221019160525-ed5b353790e7
-	github.com/dell/dell-csi-extensions/replication v1.2.2-0.20230208231315-3fa5be96edff
-	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.2.2-0.20221019160525-ed5b353790e7
+	github.com/dell/dell-csi-extensions/common v1.1.1-0.20230223220121-65f0c737bc34
+	github.com/dell/dell-csi-extensions/podmon v1.1.2-0.20230223220121-65f0c737bc34
+	github.com/dell/dell-csi-extensions/replication v1.2.2-0.20230223220121-65f0c737bc34
+	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.2.2-0.20230223220121-65f0c737bc34
 	github.com/dell/gocsi v1.6.0
 	github.com/dell/gofsutil v1.11.0
 	github.com/dell/goscaleio v1.9.1-0.20230210195957-57ee14d5f084
