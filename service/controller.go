@@ -2569,6 +2569,15 @@ func (s *service) ExecutePauseOnReplicationGroup(client *goscaleio.Client, group
 	return rcg.ExecutePauseOnReplicationGroup()
 }
 
+func (s *service) ExecuteSyncOnReplicationGroup(client *goscaleio.Client, group *siotypes.ReplicationConsistencyGroup) (*siotypes.SynchronizationResponse, error) {
+	rcg := goscaleio.NewReplicationConsistencyGroup(client)
+	rcg.ReplicationConsistencyGroup = group
+
+	Log.Printf("[ExecuteSyncOnReplicationGroup]: Executing SyncNow")
+
+	return rcg.ExecuteSyncOnReplicationGroup()
+}
+
 func (s *service) verifySystem(systemID string) (*goscaleio.Client, error) {
 	adminClient := s.adminClients[systemID]
 	if adminClient == nil {

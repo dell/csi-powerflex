@@ -209,6 +209,8 @@ Scenario Outline: Test ExecuteAction
   | "sourcevol" | "none"                    | "none"                              | "Suspend"           | "Normal"    | "Consistent"  |
   | "sourcevol" | "ExecuteActionError"      | "could not execute RCG action"      | "Suspend"           | "Normal"    | "Consistent"  |
   | "sourcevol" | "none"                    | "not match with supported actions"  | "Unknown"           | "Normal"    | "Consistent"  |
+  | "sourcevol" | "none"                    | "none"                              | "Sync"              | "Normal"    | "Consistent"  |
+  | "sourcevol" | "ExecuteActionError"      | "could not execute RCG action"      | "Sync"              | "Normal"    | "Consistent"  |
 
 @replication
 Scenario Outline: Test ControllerExpandVolume on replication pair
