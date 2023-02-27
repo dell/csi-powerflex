@@ -524,6 +524,10 @@ func (s *service) ExecuteAction(ctx context.Context, req *replication.ExecuteAct
 				return nil, status.Error(codes.Unknown, err.Error())
 			}
 		}
+	case replication.ActionTypes_SYNC.String():
+		if _, err := s.ExecuteSyncOnReplicationGroup(client, group); err != nil {
+			return nil, status.Error(codes.Unknown, err.Error())
+		}
 	default:
 		return nil, status.Errorf(codes.Unknown, "The requested action does not match with supported actions")
 	}
