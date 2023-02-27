@@ -3610,6 +3610,8 @@ func (f *feature) iCallExecuteAction(arg1 string) error {
 		act.ActionTypes = replication.ActionTypes_RESUME
 	case "Suspend":
 		act.ActionTypes = replication.ActionTypes_SUSPEND
+	case "Sync":
+		act.ActionTypes = replication.ActionTypes_SYNC
 	default:
 		act.ActionTypes = replication.ActionTypes_UNKNOWN_ACTION
 	}

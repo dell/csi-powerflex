@@ -772,6 +772,8 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 	case "resumeReplicationConsistencyGroup":
 		fallthrough
 	case "pauseReplicationConsistencyGroup":
+		fallthrough
+	case "syncNowReplicationConsistencyGroup":
 		if inducedError.Error() == "ExecuteActionError" {
 			writeError(w, "could not execute RCG action", http.StatusRequestTimeout, codes.Internal)
 			return
