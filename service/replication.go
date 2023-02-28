@@ -682,7 +682,7 @@ func (s *service) getReplicationPairs(systemID string, groupID string) ([]*sioty
 }
 
 func isFailover(group *siotypes.ReplicationConsistencyGroup) bool {
-	return group.FailoverType != "None" && group.FailoverState == "Done"
+	return group.FailoverType != "None"
 }
 
 func isPaused(group *siotypes.ReplicationConsistencyGroup) bool {
