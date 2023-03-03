@@ -12,7 +12,10 @@ images:
   # "powerflexSdc" defines the SDC image for init container.
   # the dellemc/sdc:3.6.0.6 is supported only on RHEL 8.6, RHEL 8.4, RHEL 7.9
   # if you are using any other os which is not listed above
-  # please use dellemc/sdc:3.6
+  # please install the sdcs manually prior to driver installation.
+  # refer the docs for manual installation.
+  # https://dell.github.io/csm-docs/docs/csidriver/installation/helm/powerflex/#manual-sdc-deployment
+  # change the powerflexSdc to dellemc/sdc:3.6
   powerflexSdc: dellemc/sdc:3.6.0.6
 
 
