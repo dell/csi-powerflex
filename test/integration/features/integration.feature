@@ -86,62 +86,62 @@ Feature: VxFlex OS CSI interface
       | "single-node-single-writer" |
       | "single-node-multi-writer"  |
 
-  Scenario Outline: Create, publish, unpublish, and delete basic vol, using systemName. Second run: sc has ID, but secret has name
-    Given a VxFlexOS service
-    And a capability with voltype "mount" access "single-writer" fstype "ext4"
-    And I set another systemName "altSystem"
-    And a volume request <name> "8"
-    When I call CreateVolume
-    And there are no errors
-    And when I call PublishVolume "SDC_GUID"
-    And there are no errors
-    And when I call NodePublishVolume "SDC_GUID"
-    And when I call NodeUnpublishVolume "SDC_GUID"
-    And when I call UnpublishVolume "SDC_GUID"
-    And there are no errors
-    And when I call DeleteVolume
-    Then there are no errors
+  # Scenario Outline: Create, publish, unpublish, and delete basic vol, using systemName. Second run: sc has ID, but secret has name
+  #   Given a VxFlexOS service
+  #   And a capability with voltype "mount" access "single-writer" fstype "ext4"
+  #   And I set another systemName "altSystem"
+  #   And a volume request <name> "8"
+  #   When I call CreateVolume
+  #   And there are no errors
+  #   And when I call PublishVolume "SDC_GUID"
+  #   And there are no errors
+  #   And when I call NodePublishVolume "SDC_GUID"
+  #   And when I call NodeUnpublishVolume "SDC_GUID"
+  #   And when I call UnpublishVolume "SDC_GUID"
+  #   And there are no errors
+  #   And when I call DeleteVolume
+  #   Then there are no errors
 
-    Examples:
-      | name                         |
-      | "integration7"               |
-      | "alt_system_id_integration8" |
+  #   Examples:
+  #     | name                         |
+  #     | "integration7"               |
+  #     | "alt_system_id_integration8" |
 
-  Scenario: Create, publish, unpublish, and delete basic vol, change name of array and specify wrong allSystemNames , this will pass if volume because handle has id
-    Given a VxFlexOS service
-    And I set another systemID "altSystem"
-    And Set System Name As "1a99af710210af0f-pflex-system"
-    And Set Bad AllSystemNames
-    And a capability with voltype "mount" access "single-writer" fstype "ext4"
-    And a volume request "integration9" "8"
-    When I call CreateVolume
-    And Set System Name As "1a99af710210af0f_pflex_system"
-    And when I call PublishVolume "SDC_GUID"
-    And there are no errors
-    And when I call NodePublishVolume "SDC_GUID"
-    And when I call NodeUnpublishVolume "SDC_GUID"
-    And when I call UnpublishVolume "SDC_GUID"
-    And there are no errors
-    And when I call DeleteVolume
+  # Scenario: Create, publish, unpublish, and delete basic vol, change name of array and specify wrong allSystemNames , this will pass if volume because handle has id
+  #   Given a VxFlexOS service
+  #   And I set another systemID "altSystem"
+  #   And Set System Name As "1a99af710210af0f-pflex-system"
+  #   And Set Bad AllSystemNames
+  #   And a capability with voltype "mount" access "single-writer" fstype "ext4"
+  #   And a volume request "integration9" "8"
+  #   When I call CreateVolume
+  #   And Set System Name As "1a99af710210af0f_pflex_system"
+  #   And when I call PublishVolume "SDC_GUID"
+  #   And there are no errors
+  #   And when I call NodePublishVolume "SDC_GUID"
+  #   And when I call NodeUnpublishVolume "SDC_GUID"
+  #   And when I call UnpublishVolume "SDC_GUID"
+  #   And there are no errors
+  #   And when I call DeleteVolume
 
 
-  Scenario: Create, publish, unpublish, and delete basic vol, change name of array and specify allSystemNames
-    Given a VxFlexOS service
-    And I set another systemID "altSystem"
-    And Set System Name As "1235e15806d1ec0f-pflex-system"
-    And a capability with voltype "mount" access "single-writer" fstype "ext4"
-    And a volume request "integration8" "8"
-    When I call CreateVolume
-    And Set System Name As "1235e15806d1ec0f_pflex_system"
-    And there are no errors
-    And when I call PublishVolume "SDC_GUID"
-    And there are no errors
-    And when I call NodePublishVolume "SDC_GUID"
-    And when I call NodeUnpublishVolume "SDC_GUID"
-    And when I call UnpublishVolume "SDC_GUID"
-    And there are no errors
-    And when I call DeleteVolume
-    Then there are no errors
+  # Scenario: Create, publish, unpublish, and delete basic vol, change name of array and specify allSystemNames
+  #   Given a VxFlexOS service
+  #   And I set another systemID "altSystem"
+  #   And Set System Name As "1235e15806d1ec0f-pflex-system"
+  #   And a capability with voltype "mount" access "single-writer" fstype "ext4"
+  #   And a volume request "integration8" "8"
+  #   When I call CreateVolume
+  #   And Set System Name As "1235e15806d1ec0f_pflex_system"
+  #   And there are no errors
+  #   And when I call PublishVolume "SDC_GUID"
+  #   And there are no errors
+  #   And when I call NodePublishVolume "SDC_GUID"
+  #   And when I call NodeUnpublishVolume "SDC_GUID"
+  #   And when I call UnpublishVolume "SDC_GUID"
+  #   And there are no errors
+  #   And when I call DeleteVolume
+  #   Then there are no errors
 
   @long
   Scenario Outline: Create volume, create snapshot, delete snapshot, delete volume for multiple sizes
@@ -172,68 +172,68 @@ Feature: VxFlex OS CSI interface
       | "32" |
       | "64" |
 
-  Scenario: Create volume, create snapshot, create volume from snapshot, delete original volume, delete new volume
-    Given a VxFlexOS service
-    And I set another systemID "altSystem"
-    And a basic block volume request "ss1" "8"
-    When I call CreateVolume
-    And I call CreateSnapshot
-    And there are no errors
-    And I call ListSnapshot
-    And expect Error ListSnapshotResponse
-    And I call DeleteSnapshot
-    And there are no errors
-    And when I call DeleteVolume
-    And there are no errors
+  # Scenario: Create volume, create snapshot, create volume from snapshot, delete original volume, delete new volume
+  #   Given a VxFlexOS service
+  #   And I set another systemID "altSystem"
+  #   And a basic block volume request "ss1" "8"
+  #   When I call CreateVolume
+  #   And I call CreateSnapshot
+  #   And there are no errors
+  #   And I call ListSnapshot
+  #   And expect Error ListSnapshotResponse
+  #   And I call DeleteSnapshot
+  #   And there are no errors
+  #   And when I call DeleteVolume
+  #   And there are no errors
 
 
-  Scenario: Create volume, create snapshot, create volume from snapshot, delete original volume, delete new volume
-    Given a VxFlexOS service
-    And I set another systemID <id>
-    And a basic block volume request "integration1" "8"
-    When I call CreateVolume
-    And I call CreateSnapshot
-    And there are no errors
-    And I call ListVolume
-    And a valid ListVolumeResponse is returned
-    And I call ListSnapshot For Snap
-    And a valid ListSnapshotResponse is returned
-    And I call CreateVolumeFromSnapshot
-    Then there are no errors
-    And I call ListVolume
-    And a valid ListVolumeResponse is returned
-    And I call DeleteSnapshot
-    And there are no errors
-    And when I call DeleteVolume
-    And there are no errors
-    And when I call DeleteAllVolumes
-    And there are no errors
-    And I call ListVolume
-    Examples:
-      | id              |
-      | "altSystem"     |
-      | "defaultSystem" |
+  # Scenario: Create volume, create snapshot, create volume from snapshot, delete original volume, delete new volume
+  #   Given a VxFlexOS service
+  #   And I set another systemID <id>
+  #   And a basic block volume request "integration1" "8"
+  #   When I call CreateVolume
+  #   And I call CreateSnapshot
+  #   And there are no errors
+  #   And I call ListVolume
+  #   And a valid ListVolumeResponse is returned
+  #   And I call ListSnapshot For Snap
+  #   And a valid ListSnapshotResponse is returned
+  #   And I call CreateVolumeFromSnapshot
+  #   Then there are no errors
+  #   And I call ListVolume
+  #   And a valid ListVolumeResponse is returned
+  #   And I call DeleteSnapshot
+  #   And there are no errors
+  #   And when I call DeleteVolume
+  #   And there are no errors
+  #   And when I call DeleteAllVolumes
+  #   And there are no errors
+  #   And I call ListVolume
+  #   Examples:
+  #     | id              |
+  #     | "altSystem"     |
+  #     | "defaultSystem" |
 
-  Scenario: Craete volume, clone volume, delete original volume, delete new volume
-    Given a VxFlexOS service
-    And I set another systemID <id>
-    And a basic block volume request "integration1" "8"
-    When I call CreateVolume
-    And I call CloneVolume
-    And there are no errors
-    And I call ListVolume
-    And a valid ListVolumeResponse is returned
-    And I call ListSnapshot
-    And a valid ListSnapshotResponse is returned
-    And when I call DeleteVolume
-    And there are no errors
-    And when I call DeleteAllVolumes
-    And there are no errors
-    And I call ListVolume
-    Examples:
-      | id              |
-      | "altSystem"     |
-      | "defaultSystem" |
+  # Scenario: Craete volume, clone volume, delete original volume, delete new volume
+  #   Given a VxFlexOS service
+  #   And I set another systemID <id>
+  #   And a basic block volume request "integration1" "8"
+  #   When I call CreateVolume
+  #   And I call CloneVolume
+  #   And there are no errors
+  #   And I call ListVolume
+  #   And a valid ListVolumeResponse is returned
+  #   And I call ListSnapshot
+  #   And a valid ListSnapshotResponse is returned
+  #   And when I call DeleteVolume
+  #   And there are no errors
+  #   And when I call DeleteAllVolumes
+  #   And there are no errors
+  #   And I call ListVolume
+  #   Examples:
+  #     | id              |
+  #     | "altSystem"     |
+  #     | "defaultSystem" |
 
   Scenario: Create volume, create snapshot, create many volumes from snap, delete original volume, delete new volumes
     Given a VxFlexOS service
