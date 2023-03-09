@@ -212,6 +212,14 @@ func (s *service) CreateRemoteVolume(ctx context.Context, req *replication.Creat
 	}, nil
 }
 
+func (s *service) DeleteRemoteVolume(ctx context.Context,
+	req *replication.DeleteRemoteVolumeRequest) (*replication.DeleteRemoteVolumeResponse, error) {
+
+	Log.Printf("!!! Deleting Remote Volume !!!")
+
+	return &replication.DeleteRemoteVolumeResponse{}, nil
+}
+
 func (s *service) CreateStorageProtectionGroup(ctx context.Context, req *replication.CreateStorageProtectionGroupRequest) (*replication.CreateStorageProtectionGroupResponse, error) {
 	Log.Printf("[CreateStorageProtectionGroup] - req %+v", req)
 
