@@ -3,6 +3,7 @@ kind: CSIDriver
 metadata:
     name: csi-vxflexos.dellemc.com
 spec:
+    storageCapacity: {{ (include "csi-vxflexos.isStorageCapacitySupported" .) | default false }}
     fsGroupPolicy: {{ .Values.fsGroupPolicy }}
     attachRequired: true
     podInfoOnMount: true
