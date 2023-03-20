@@ -958,7 +958,7 @@ func handleInstances(w http.ResponseWriter, r *http.Request) {
 			if array, ok := systemArrays[r.Host]; ok {
 				vol = array.volumes[id]
 			}
-			// vol := systemArrays[r.Host].volumes[id]
+
 			log.Printf("Get id %s for %s\n", id, objType)
 			if vol != nil {
 				replacementMap["__ID__"] = vol["id"]
