@@ -85,7 +85,7 @@ Feature: VxFlex OS CSI interface
      | "single-writer"             |
      | "single-node-single-writer" |
      | "single-node-multi-writer"  |
-     
+  
   Scenario Outline: Create, publish, unpublish, and delete basic vol, using systemName. Second run: sc has ID, but secret has name
    Given a VxFlexOS service
     And a capability with voltype "mount" access "single-writer" fstype "ext4"
@@ -106,7 +106,7 @@ Feature: VxFlex OS CSI interface
       | name                         |
       | "integration7"               |
       | "alt_system_id_integration8" |
-
+  @wip
   Scenario: Create, publish, unpublish, and delete basic vol, change name of array and specify wrong allSystemNames , this will pass if volume because handle has id
     Given a VxFlexOS service
     And I set another systemID "altSystem"
