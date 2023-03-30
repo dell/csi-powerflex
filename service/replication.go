@@ -216,8 +216,9 @@ func (s *service) CreateRemoteVolume(ctx context.Context, req *replication.Creat
 func (s *service) DeleteLocalVolume(ctx context.Context, req *replication.DeleteLocalVolumeRequest) (*replication.DeleteLocalVolumeResponse, error) {
 
 	Log.Printf("!!! Deleting Remote Volume !!!")
+	Log.Error("DeleteLocalVolume is not yet implemented")
 
-	return nil, fmt.Errorf("DeleteLocalVolume is not yet implemented")
+	return &replication.DeleteLocalVolumeResponse{}, nil
 }
 
 func (s *service) CreateStorageProtectionGroup(ctx context.Context, req *replication.CreateStorageProtectionGroupRequest) (*replication.CreateStorageProtectionGroupResponse, error) {
