@@ -212,8 +212,7 @@ func (s *service) CreateRemoteVolume(ctx context.Context, req *replication.Creat
 	}, nil
 }
 
-func (s *service) DeleteLocalVolume(ctx context.Context,
-	req *replication.DeleteLocalVolumeRequest) (*replication.DeleteLocalVolumeResponse, error) {
+func (s *service) DeleteLocalVolume(ctx context.Context, req *replication.DeleteLocalVolumeRequest) (*replication.DeleteLocalVolumeResponse, error) {
 
 	Log.Printf("!!! Deleting Remote Volume !!!")
 
