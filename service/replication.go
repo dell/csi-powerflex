@@ -215,7 +215,6 @@ func (s *service) CreateRemoteVolume(ctx context.Context, req *replication.Creat
 // DeleteLocalVolume deletes the backend volume on the storage array.
 func (s *service) DeleteLocalVolume(ctx context.Context, req *replication.DeleteLocalVolumeRequest) (*replication.DeleteLocalVolumeResponse, error) {
 
-	Log.Printf("!!! Deleting Remote Volume !!!")
 	Log.Error("DeleteLocalVolume is not yet implemented")
 
 	return &replication.DeleteLocalVolumeResponse{}, nil

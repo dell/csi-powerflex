@@ -3456,6 +3456,19 @@ func (f *feature) iCallCreateRemoteVolume() error {
 	return nil
 }
 
+func (f *feature) iCallDeleteLocalVolume() error {
+	ctx := new(context.Context)
+
+	req := &replication.DeleteLocalVolumeRequest{}
+
+	_, f.err = f.service.DeleteLocalVolume(*ctx, req)
+	if f.err != nil {
+		fmt.Printf("DeleteLocalVolume returned error: %s", f.err)
+	}
+
+	return nil
+}
+
 func (f *feature) iCallCreateStorageProtectionGroup() error {
 	ctx := new(context.Context)
 	parameters := make(map[string]string)
@@ -3794,6 +3807,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I set renameSDC with renameEnabled "([^"]*)" prefix "([^"]*)"$`, f.iSetRenameSdcEnabledWithPrefix)
 	s.Step(`^I set approveSDC with approveSDCEnabled "([^"]*)"`, f.iSetApproveSdcEnabled)
 	s.Step(`^I call CreateRemoteVolume$`, f.iCallCreateRemoteVolume)
+	s.Step(`^I call DeleteLocalVolume$`, f.iCallDeleteLocalVolume)
 	s.Step(`^I call CreateStorageProtectionGroup$`, f.iCallCreateStorageProtectionGroup)
 	s.Step(`^I call CreateStorageProtectionGroup with "([^"]*)", "([^"]*)", "([^"]*)"$`, f.iCallCreateStorageProtectionGroupWith)
 	s.Step(`^I call GetStorageProtectionGroupStatus$`, f.iCallGetStorageProtectionGroupStatus)
