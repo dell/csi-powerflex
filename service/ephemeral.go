@@ -16,13 +16,14 @@ package service
 import (
 	"context"
 	"errors"
-	"github.com/container-storage-interface/spec/lib/go/csi"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"io/ioutil"
 	"os"
 	"regexp"
 	"strconv"
+
+	"github.com/container-storage-interface/spec/lib/go/csi"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 var (
@@ -55,7 +56,7 @@ func parseSize(size string) (int64, error) {
 	return 0, errors.New(message)
 }
 
-//Call complete stack: systemProbe, CreateVolume, ControllerPublishVolume, and NodePublishVolume
+// Call complete stack: systemProbe, CreateVolume, ControllerPublishVolume, and NodePublishVolume
 func (s *service) ephemeralNodePublish(
 	ctx context.Context,
 	req *csi.NodePublishVolumeRequest) (
@@ -206,8 +207,8 @@ func (s *service) ephemeralNodePublish(
 	return &csi.NodePublishVolumeResponse{}, nil
 }
 
-//Call stack: ControllerUnpublishVolume, DeleteVolume (NodeUnpublish will be already called by the time this method is called)
-//remove lockfile
+// Call stack: ControllerUnpublishVolume, DeleteVolume (NodeUnpublish will be already called by the time this method is called)
+// remove lockfile
 func (s *service) ephemeralNodeUnpublish(
 	ctx context.Context,
 	req *csi.NodeUnpublishVolumeRequest) error {

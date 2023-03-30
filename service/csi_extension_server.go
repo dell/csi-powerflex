@@ -222,7 +222,7 @@ func (s *service) getSystemID(req *volumeGroupSnapshot.CreateVolumeGroupSnapshot
 
 }
 
-//validate if request has source volumes, a VGS name, and VGS name length < 27 chars
+// validate if request has source volumes, a VGS name, and VGS name length < 27 chars
 func validateCreateVGSreq(req *volumeGroupSnapshot.CreateVolumeGroupSnapshotRequest) error {
 	if len(req.SourceVolumeIDs) == 0 {
 		err := status.Errorf(codes.InvalidArgument, "SourceVolumeIDs cannot be empty")
@@ -284,10 +284,10 @@ func (s *service) buildSnapshotDefs(req *volumeGroupSnapshot.CreateVolumeGroupSn
 
 }
 
-//A VolumeGroupSnapshot request is idempotent if the following criteria is met:
-//1. For each snapshot we intend to make, there is a snapshot with the same name and ancestor ID on array
-//2. Each snapshot that we find to satisfy criteria 1 all belong to the same consistency group
-//3. The consistency group that satisfies criteria 2 contain no other snapshots
+// A VolumeGroupSnapshot request is idempotent if the following criteria is met:
+// 1. For each snapshot we intend to make, there is a snapshot with the same name and ancestor ID on array
+// 2. Each snapshot that we find to satisfy criteria 1 all belong to the same consistency group
+// 3. The consistency group that satisfies criteria 2 contain no other snapshots
 func (s *service) checkIdempotency(ctx context.Context, snapshotsToMake *siotypes.SnapshotVolumesParam, systemID string, snapGrpID string) (*volumeGroupSnapshot.CreateVolumeGroupSnapshotResponse, error) {
 	Log.Infof("CheckIdempotency called")
 
@@ -399,7 +399,7 @@ func (s *service) checkIdempotency(ctx context.Context, snapshotsToMake *siotype
 	return resp, nil
 }
 
-//build the response for CreateVGS to return
+// build the response for CreateVGS to return
 func (s *service) buildCreateVGSResponse(ctx context.Context, snapResponse *siotypes.SnapshotVolumesResp, snapshotDefs []*siotypes.SnapshotDef, systemID string) ([]*volumeGroupSnapshot.Snapshot, error) {
 	var groupSnapshots []*volumeGroupSnapshot.Snapshot
 	for index, id := range snapResponse.VolumeIDList {
