@@ -35,6 +35,18 @@ Scenario Outline: Test CreateRemoteVolume
   | "sourcevol" | "ProbePrimaryError"          | "PodmonControllerProbeError"        |
   | "sourcevol" | "ProbeSecondaryError"        | "PodmonControllerProbeError"        |
 
+@replication
+Scenario Outline: Test DeleteLocalVolume
+  Given a VxFlexOS service
+  And I use config "replication-config"
+  When I call CreateVolume <name>
+  And I call CreateRemoteVolume
+  And I induce error <error>
+  And I call DeleteLocalVolume
+  Then the error contains <errormsg>
+  Examples:
+  | name        | error                         | errormsg                            |
+  | "sourcevol" | "none"                        | "none"                              |
 
 @replication
 Scenario Outline: Test CreateStorageProtectionGroup
