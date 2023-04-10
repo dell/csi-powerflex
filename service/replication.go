@@ -214,8 +214,19 @@ func (s *service) CreateRemoteVolume(ctx context.Context, req *replication.Creat
 
 // DeleteLocalVolume deletes the backend volume on the storage array.
 func (s *service) DeleteLocalVolume(ctx context.Context, req *replication.DeleteLocalVolumeRequest) (*replication.DeleteLocalVolumeResponse, error) {
+	Log.Printf("[DeleteLocalVolume] - req %+v", req)
 
-	Log.Error("DeleteLocalVolume is not yet implemented")
+	volHandleCtx := req.GetVolumeHandle()
+
+	if volHandleCtx == "" {
+		return nil, status.Error(codes.InvalidArgument, "volume handle is required")
+	}
+
+	_, err := s.DeleteVolume(ctx, &csi.DeleteVolumeRequest{VolumeId: volHandleCtx})
+	if err != nil {
+		log.Printf("DeleteLocalVolume called failed: %s", err.Error())
+		return nil, err
+	}
 
 	return &replication.DeleteLocalVolumeResponse{}, nil
 }
