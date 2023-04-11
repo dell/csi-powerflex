@@ -37,16 +37,20 @@ Scenario Outline: Test CreateRemoteVolume
 
 @replication
 Scenario Outline: Test DeleteLocalVolume
-  Given a VxFlexOS service
+  Given a VxFlexOS service with timeout 120000 milliseconds
   And I use config "replication-config"
   When I call CreateVolume <name>
   And I call CreateRemoteVolume
+  And I call CreateStorageProtectionGroup
+  And I call DeleteVolume <name>
   And I induce error <error>
-  And I call DeleteLocalVolume
+  And I call DeleteLocalVolume <name>
   Then the error contains <errormsg>
   Examples:
   | name        | error                         | errormsg                            |
   | "sourcevol" | "none"                        | "none"                              |
+  | "sourcevol" | "BadVolumeHandleError"        | "volume handle is required"         |
+  | "sourcevol" | "RemoveVolumeError"           | "inducedError"                      |
 
 @replication
 Scenario Outline: Test CreateStorageProtectionGroup

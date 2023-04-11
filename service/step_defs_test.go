@@ -3456,10 +3456,21 @@ func (f *feature) iCallCreateRemoteVolume() error {
 	return nil
 }
 
-func (f *feature) iCallDeleteLocalVolume() error {
+func (f *feature) iCallDeleteLocalVolume(name string) error {
 	ctx := new(context.Context)
 
-	req := &replication.DeleteLocalVolumeRequest{}
+	replicatedVolName := "replicated-" + name
+	volumeHandle := arrayID2 + "-" + volumeNameToID[replicatedVolName]
+
+	if inducedError.Error() == "BadVolumeHandleError" {
+		volumeHandle = ""
+	}
+
+	log.Printf("iCallDeleteLocalVolume name %s to ID %s", name, volumeHandle)
+
+	req := &replication.DeleteLocalVolumeRequest{
+		VolumeHandle: volumeHandle,
+	}
 
 	_, f.err = f.service.DeleteLocalVolume(*ctx, req)
 	if f.err != nil {
@@ -3807,7 +3818,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I set renameSDC with renameEnabled "([^"]*)" prefix "([^"]*)"$`, f.iSetRenameSdcEnabledWithPrefix)
 	s.Step(`^I set approveSDC with approveSDCEnabled "([^"]*)"`, f.iSetApproveSdcEnabled)
 	s.Step(`^I call CreateRemoteVolume$`, f.iCallCreateRemoteVolume)
-	s.Step(`^I call DeleteLocalVolume$`, f.iCallDeleteLocalVolume)
+	s.Step(`^I call DeleteLocalVolume "([^"]*)"$`, f.iCallDeleteLocalVolume)
 	s.Step(`^I call CreateStorageProtectionGroup$`, f.iCallCreateStorageProtectionGroup)
 	s.Step(`^I call CreateStorageProtectionGroup with "([^"]*)", "([^"]*)", "([^"]*)"$`, f.iCallCreateStorageProtectionGroupWith)
 	s.Step(`^I call GetStorageProtectionGroupStatus$`, f.iCallGetStorageProtectionGroupStatus)

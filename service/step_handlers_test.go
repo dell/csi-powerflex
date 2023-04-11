@@ -725,6 +725,12 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		pairs := systemArrays[r.Host].replicationPairs
+
+		// Set replication state
+		targetSystem := systemArrays[r.Host].replicationSystem
+		remoteVolume := pairs[id]["remoteVolumeId"]
+		targetSystem.volumes[remoteVolume]["volumeReplicationState"] = unmarkedForReplication
+
 		delete(pairs, id)
 
 		fmt.Printf("volumeIDToReplicationState %+v\n", volumeIDToReplicationState)
