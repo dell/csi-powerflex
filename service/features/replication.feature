@@ -37,7 +37,7 @@ Scenario Outline: Test CreateRemoteVolume
 
 @replication
 Scenario Outline: Test DeleteLocalVolume
-  Given a VxFlexOS service with timeout 120000 milliseconds
+  Given a VxFlexOS service
   And I use config "replication-config"
   When I call CreateVolume <name>
   And I call CreateRemoteVolume

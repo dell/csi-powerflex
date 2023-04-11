@@ -150,7 +150,7 @@ func (f *feature) checkGoRoutines(tag string) {
 }
 
 func (f *feature) aVxFlexOSService() error {
-	return f.aVxFlexOSServiceWithTimeoutMilliseconds(50)
+	return f.aVxFlexOSServiceWithTimeoutMilliseconds(150)
 }
 
 func (f *feature) aVxFlexOSServiceWithTimeoutMilliseconds(millis int) error {
