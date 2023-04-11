@@ -436,15 +436,16 @@ func handleVolumeInstances(w http.ResponseWriter, r *http.Request) {
 		volumeIDToReplicationState[resp.ID] = unmarkedForReplication
 		volumeIDToSizeInKB[resp.ID] = req.VolumeSizeInKb
 
-		host := r.Host
-		fmt.Printf("Host Endpoint %s\n", host)
-		systemArrays[host].volumes[resp.ID] = make(map[string]string)
-		systemArrays[host].volumes[resp.ID]["name"] = req.Name
-		systemArrays[host].volumes[resp.ID]["id"] = resp.ID
-		systemArrays[host].volumes[resp.ID]["sizeInKb"] = req.VolumeSizeInKb
-		systemArrays[host].volumes[resp.ID]["volumeReplicationState"] = unmarkedForReplication
-		systemArrays[host].volumes[resp.ID]["consistencyGroupID"] = "null"
-		systemArrays[host].volumes[resp.ID]["ancestorVolumeId"] = "null"
+		if array, ok := systemArrays[r.Host]; ok {
+			fmt.Printf("Host Endpoint %s\n", r.Host)
+			array.volumes[resp.ID] = make(map[string]string)
+			array.volumes[resp.ID]["name"] = req.Name
+			array.volumes[resp.ID]["id"] = resp.ID
+			array.volumes[resp.ID]["sizeInKb"] = req.VolumeSizeInKb
+			array.volumes[resp.ID]["volumeReplicationState"] = unmarkedForReplication
+			array.volumes[resp.ID]["consistencyGroupID"] = "null"
+			array.volumes[resp.ID]["ancestorVolumeId"] = "null"
+		}
 
 		if debug {
 			log.Printf("request name: %s id: %s\n", req.Name, resp.ID)
@@ -459,24 +460,28 @@ func handleVolumeInstances(w http.ResponseWriter, r *http.Request) {
 	// Read all the Volumes
 	case http.MethodGet:
 		instances := make([]*types.Volume, 0)
-		volumes := systemArrays[r.Host].volumes
+		volumes := make(map[string]map[string]string)
 
-		for id, vol := range volumes {
-			replacementMap := make(map[string]string)
-			replacementMap["__ID__"] = vol["id"]
-			replacementMap["__NAME__"] = vol["name"]
-			replacementMap["__MAPPED_SDC_INFO__"] = getSdcMappings(id)
-			replacementMap["__ANCESTOR_ID__"] = vol["ancestorVolumeId"]
-			replacementMap["__CONSISTENCY_GROUP_ID__"] = vol["consistencyGroupID"]
-			replacementMap["__SIZE_IN_KB__"] = vol["sizeInKb"]
-			replacementMap["__VOLUME_REPLICATION_STATE__"] = vol["volumeReplicationState"]
-			data := returnJSONFile("features", "volume.json.template", nil, replacementMap)
-			vol := new(types.Volume)
-			err := json.Unmarshal(data, vol)
-			if err != nil {
-				log.Printf("error unmarshalling json: %s\n", string(data))
+		if array, ok := systemArrays[r.Host]; ok {
+			volumes = array.volumes
+
+			for id, vol := range volumes {
+				replacementMap := make(map[string]string)
+				replacementMap["__ID__"] = vol["id"]
+				replacementMap["__NAME__"] = vol["name"]
+				replacementMap["__MAPPED_SDC_INFO__"] = getSdcMappings(id)
+				replacementMap["__ANCESTOR_ID__"] = vol["ancestorVolumeId"]
+				replacementMap["__CONSISTENCY_GROUP_ID__"] = vol["consistencyGroupID"]
+				replacementMap["__SIZE_IN_KB__"] = vol["sizeInKb"]
+				replacementMap["__VOLUME_REPLICATION_STATE__"] = vol["volumeReplicationState"]
+				data := returnJSONFile("features", "volume.json.template", nil, replacementMap)
+				vol := new(types.Volume)
+				err := json.Unmarshal(data, vol)
+				if err != nil {
+					log.Printf("error unmarshalling json: %s\n", string(data))
+				}
+				instances = append(instances, vol)
 			}
-			instances = append(instances, vol)
 		}
 
 		// Add none-created volumes (old)
@@ -659,14 +664,15 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 			volumeIDToSizeInKB[id] = defaultVolumeSize
 			volumeIDToReplicationState[id] = unmarkedForReplication
 
-			vols := systemArrays[r.Host].volumes
-			vols[id] = make(map[string]string)
-			vols[id]["name"] = snapParam.SnapshotName
-			vols[id]["id"] = id
-			vols[id]["sizeInKb"] = defaultVolumeSize
-			vols[id]["volumeReplicationState"] = unmarkedForReplication
-			vols[id]["consistencyGroupID"] = cgValue
-			vols[id]["ancestorVolumeId"] = snapParam.VolumeID
+			if array, ok := systemArrays[r.Host]; ok {
+				array.volumes[id] = make(map[string]string)
+				array.volumes[id]["name"] = snapParam.SnapshotName
+				array.volumes[id]["id"] = id
+				array.volumes[id]["sizeInKb"] = defaultVolumeSize
+				array.volumes[id]["volumeReplicationState"] = unmarkedForReplication
+				array.volumes[id]["consistencyGroupID"] = cgValue
+				array.volumes[id]["ancestorVolumeId"] = snapParam.VolumeID
+			}
 		}
 
 		if stepHandlersErrors.WrongVolIDError {
@@ -690,8 +696,9 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		volumes := systemArrays[r.Host].volumes
-		delete(volumes, id)
+		if array, ok := systemArrays[r.Host]; ok {
+			delete(array.volumes, id)
+		}
 
 	case "setVolumeSize":
 		if stepHandlersErrors.SetVolumeSizeError {
@@ -953,7 +960,11 @@ func handleInstances(w http.ResponseWriter, r *http.Request) {
 			}
 
 			replacementMap := make(map[string]string)
-			vol := systemArrays[r.Host].volumes[id]
+			vol := make(map[string]string)
+			if array, ok := systemArrays[r.Host]; ok {
+				vol = array.volumes[id]
+			}
+
 			log.Printf("Get id %s for %s\n", id, objType)
 			if vol != nil {
 				replacementMap["__ID__"] = vol["id"]
