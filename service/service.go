@@ -92,14 +92,16 @@ var Log = logrus.New()
 
 // ArrayConnectionData contains data required to connect to array
 type ArrayConnectionData struct {
-	SystemID                  string `json:"systemID"`
-	Username                  string `json:"username"`
-	Password                  string `json:"password"`
-	Endpoint                  string `json:"endpoint"`
-	SkipCertificateValidation bool   `json:"skipCertificateValidation,omitempty"`
-	Insecure                  bool   `json:"insecure,omitempty"`
-	IsDefault                 bool   `json:"isDefault,omitempty"`
-	AllSystemNames            string `json:"allSystemNames"`
+	SystemID                  string  `json:"systemID"`
+	Username                  string  `json:"username"`
+	Password                  string  `json:"password"`
+	Endpoint                  string  `json:"endpoint"`
+	SkipCertificateValidation bool    `json:"skipCertificateValidation,omitempty"`
+	Insecure                  bool    `json:"insecure,omitempty"`
+	IsDefault                 bool    `json:"isDefault,omitempty"`
+	AllSystemNames            string  `json:"allSystemNames"`
+	NasName                   *string `json:"nasName"`
+	NfsAcls                   string  `json:"nfsAcls"`
 }
 
 // Manifest is the SP's manifest.
@@ -698,6 +700,8 @@ func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error
 				"isDefault":                 c.IsDefault,
 				"systemID":                  c.SystemID,
 				"allSystemNames":            c.AllSystemNames,
+				"nasName":                   c.NasName,
+				"nfsAcls":                   c.NfsAcls,
 			}
 
 			Log.WithFields(fields).Infof("configured %s", c.SystemID)
