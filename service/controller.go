@@ -603,6 +603,9 @@ func (s *service) checkNFS(ctx context.Context, systemID string) (bool, error) {
 	// }
 
 	array := s.opts.arrays[systemID]
+
+	fmt.Println("array****", array)
+	fmt.Println("array details****", array.NasName, array.Endpoint, array.SystemID)
 	if array.NasName == nil || *(array.NasName) == "" {
 		return false, nil
 	}
