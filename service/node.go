@@ -651,6 +651,7 @@ func (s *service) NodeGetInfo(
 	// csi-vxflexos.dellemc.com/<systemID>: <provisionerName>
 	topology := map[string]string{}
 	for _, sysID := range connectedSystemID {
+		fmt.Println("sysID*******", sysID)
 		isNFS, err := s.checkNFS(sysID)
 		if err != nil {
 			return nil, err

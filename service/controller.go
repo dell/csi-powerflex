@@ -553,6 +553,8 @@ func validateVolSize(cr *csi.CapacityRange) (int64, error) {
 }
 
 func (s *service) checkNFS(systemID string) (bool, error) {
+	c := s.adminClients[systemID]
+	fmt.Println("goscaleclient", c)
 	version, err := s.adminClients[systemID].GetVersion()
 	if err != nil {
 		return false, err
