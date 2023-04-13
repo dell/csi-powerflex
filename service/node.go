@@ -652,7 +652,7 @@ func (s *service) NodeGetInfo(
 	topology := map[string]string{}
 	for _, sysID := range connectedSystemID {
 		fmt.Println("sysID*******", sysID)
-		isNFS, err := s.checkNFS(sysID)
+		isNFS, err := s.checkNFS(ctx,sysID)
 		if err != nil {
 			return nil, err
 		}
