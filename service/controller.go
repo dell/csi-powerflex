@@ -553,56 +553,60 @@ func validateVolSize(cr *csi.CapacityRange) (int64, error) {
 }
 
 func (s *service) checkNFS(ctx context.Context, systemID string) (bool, error) {
-	c := s.adminClients[systemID]
+	// c := s.adminClients[systemID]
+	// array := s.opts.arrays[systemID]
+	// fmt.Println("goscaleclient", c)
+
+	// var altSystemNames []string
+	// if array.AllSystemNames != "" {
+	// 	altSystemNames = strings.Split(array.AllSystemNames, ",")
+	// }
+
+	// // Create ScaleIO API client if needed
+	// if s.adminClients[systemID] == nil {
+	// 	skipCertificateValidation := array.SkipCertificateValidation || array.Insecure
+	// 	c, err := goscaleio.NewClientWithArgs(array.Endpoint, "", math.MaxInt64, skipCertificateValidation, !s.opts.DisableCerts)
+	// 	if err != nil {
+	// 		return false, err
+	// 	}
+	// 	s.adminClients[systemID] = c
+	// 	for _, name := range altSystemNames {
+	// 		s.adminClients[name] = c
+	// 	}
+	// }
+
+	// if s.adminClients[systemID].GetToken() == "" {
+	// 	_, err := s.adminClients[systemID].Authenticate(&goscaleio.ConfigConnect{
+	// 		Endpoint: array.Endpoint,
+	// 		Username: array.Username,
+	// 		Password: array.Password,
+	// 	})
+	// 	if err != nil {
+	// 		return false, err
+
+	// 	}
+	// }
+	// version, err := s.adminClients[systemID].GetVersion()
+	// if err != nil {
+	// 	return false, err
+	// }
+	// ver, err := strconv.ParseFloat(version, 64)
+	// if err != nil {
+	// 	return false, err
+	// }
+	// if ver >= 4.0 {
+	// 	array := s.opts.arrays[systemID]
+	// 	if array.NasName == nil || *(array.NasName) == "" {
+	// 		return false, nil
+	// 	}
+	// 	return true, nil
+	// }
+
 	array := s.opts.arrays[systemID]
-	fmt.Println("goscaleclient", c)
-
-	var altSystemNames []string
-	if array.AllSystemNames != "" {
-		altSystemNames = strings.Split(array.AllSystemNames, ",")
+	if array.NasName == nil || *(array.NasName) == "" {
+		return false, nil
 	}
-
-	// Create ScaleIO API client if needed
-	if s.adminClients[systemID] == nil {
-		skipCertificateValidation := array.SkipCertificateValidation || array.Insecure
-		c, err := goscaleio.NewClientWithArgs(array.Endpoint, "", math.MaxInt64, skipCertificateValidation, !s.opts.DisableCerts)
-		if err != nil {
-			return false, err
-		}
-		s.adminClients[systemID] = c
-		for _, name := range altSystemNames {
-			s.adminClients[name] = c
-		}
-	}
-
-	if s.adminClients[systemID].GetToken() == "" {
-		_, err := s.adminClients[systemID].Authenticate(&goscaleio.ConfigConnect{
-			Endpoint: array.Endpoint,
-			Username: array.Username,
-			Password: array.Password,
-		})
-		if err != nil {
-			return false, err
-
-		}
-	}
-	version, err := s.adminClients[systemID].GetVersion()
-	if err != nil {
-		return false, err
-	}
-	ver, err := strconv.ParseFloat(version, 64)
-	if err != nil {
-		return false, err
-	}
-	if ver >= 4.0 {
-		array := s.opts.arrays[systemID]
-		if array.NasName == nil || *(array.NasName) == "" {
-			return false, nil
-		}
-		return true, nil
-	}
-
-	return false, nil
+	return true, nil
 
 }
 
