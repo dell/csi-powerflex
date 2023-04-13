@@ -552,12 +552,25 @@ func validateVolSize(cr *csi.CapacityRange) (int64, error) {
 	return sizeKiB, nil
 }
 
-func (s *service) checkNFS(systemID string) bool {
-	array := s.opts.arrays[systemID]
-	if array.NasName == nil || *(array.NasName) == "" {
-		return false
+func (s *service) checkNFS(systemID string) (bool, error) {
+	version, err := s.adminClients[systemID].GetVersion()
+	if err != nil {
+		return false, err
 	}
-	return true
+	ver, err := strconv.ParseFloat(version, 64)
+	if err != nil {
+		return false, err
+	}
+	if ver >= 4.0 {
+		array := s.opts.arrays[systemID]
+		if array.NasName == nil || *(array.NasName) == "" {
+			return false, nil
+		}
+		return true, nil
+	}
+
+	return false, nil
+
 }
 
 func (s *service) DeleteVolume(
