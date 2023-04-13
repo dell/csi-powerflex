@@ -656,7 +656,7 @@ func (s *service) NodeGetInfo(
 			return nil, err
 		}
 		if isNFS {
-			topology[Name+"/"+sysID+"-nfs"] = SystemTopologySystemValue
+			topology[Name+"/"+sysID+"-nfs"] = "true"
 		}
 		topology[Name+"/"+sysID] = SystemTopologySystemValue
 	}
