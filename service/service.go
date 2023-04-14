@@ -460,6 +460,11 @@ func (s *service) checkNFS(ctx context.Context, systemID string) (bool, error) {
 
 	fmt.Println("adminClient******", c)
 
+	version, err := c.GetVersion()
+
+	fmt.Println("version****", version)
+	fmt.Println("err*****", err)
+
 	arrayConData, err := getArrayConfig(ctx)
 
 	fmt.Println("arrayConData*****", arrayConData)
