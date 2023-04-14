@@ -24,6 +24,27 @@
   # defines the MDM(s) that SDC should register with on start.
   # Allowed values:  a list of IP addresses or hostnames separated by comma.
   # Default value: none 
+
+  # nasName: what NAS should be used for NFS volumes
+  # Allowed Values: string - (name of NAS server)
+  # Default Value: None
+  nasName: "nas-server"
+
+  # nfsAcls: enables setting permissions on NFS mount directory
+  # This value will be used if a storage class does not have the NFS ACL (nfsAcls) parameter specified
+  # Permissions can be specified in two formats:
+  #   1) Unix mode (NFSv3)
+  #   2) NFSv4 ACLs (NFSv4)
+  #      NFSv4 ACLs are supported on NFSv4 share only.
+  # Allowed values:
+  #   1) Unix mode: valid octal mode number
+  #      Examples: "0777", "777", "0755"
+  #   2) NFSv4 acls: valid NFSv4 acls, seperated by comma
+  #      Examples: "A::OWNER@:RWX,A::GROUP@:RWX", "A::OWNER@:rxtncy"
+  # Optional: true
+  # Default value: "0777"
+  # nfsAcls: "0777"  
+
   mdm: "10.0.0.1,10.0.0.2"
 - username: "admin"
   password: "Password123"
