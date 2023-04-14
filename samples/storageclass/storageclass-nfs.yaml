@@ -52,19 +52,14 @@ parameters:
   # Optional: false
   # Uncomment the line below if you want to use iopsLimit
   # iopsLimit: <IOPS_LIMIT> # Insert iops limit
-# volumeBindingMode determines how volume binding and dynamic provisioning should occur
-# Allowed values:
-#  Immediate: volume binding and dynamic provisioning occurs once PVC is created
-#  WaitForFirstConsumer: delay the binding and provisioning of PV until a pod using the PVC is created.
-# Optional: false
-# Default value: WaitForFirstConsumer (required for topology section below)
-# nasName: NAS server's name. If not specified, value from secret.yaml will be used
+
+  # nasName: NAS server's name. If not specified, value from secret.yaml will be used
   # Allowed values: string
   # Optional: true
   # Default value: None
   nasName: "nas-server"
  
- # allowRoot: enables or disables root squashing (valid only for NFS)
+  # allowRoot: enables or disables root squashing (valid only for NFS)
   # Allowed values:
   #   true: will allow root users to use their privileges
   #   false: will prevent root users on NFS clients from exercising root privileges on the NFS server
@@ -72,21 +67,27 @@ parameters:
   # Default value: false
   allowRoot: "false"
   
- # nfsAcls: enables setting permissions on NFS mount directory
- # This value overrides the NFS ACL (nfsAcls) attribute of corresponding array config in secret, if present
- # Permissions can be specified in two formats:
- #   1) Unix mode (NFSv3)
- #   2) NFSv4 ACLs (NFSv4)
- #      NFSv4 ACLs are supported on NFSv4 share only.
- # Allowed values:
- #   1) Unix mode: valid octal mode number
- #      Examples: "0777", "777", "0755"
- #   2) NFSv4 acls: valid NFSv4 acls, seperated by comma
- #      Examples: "A::OWNER@:RWX,A::GROUP@:RWX", "A::OWNER@:rxtncy"
- # Optional: true
- # Default value: "0777"
- # nfsAcls: "0777"
- 
+  # nfsAcls: enables setting permissions on NFS mount directory
+  # This value overrides the NFS ACL (nfsAcls) attribute of corresponding array config in secret, if present
+  # Permissions can be specified in two formats:
+  #   1) Unix mode (NFSv3)
+  #   2) NFSv4 ACLs (NFSv4)
+  #      NFSv4 ACLs are supported on NFSv4 share only.
+  # Allowed values:
+  #   1) Unix mode: valid octal mode number
+  #      Examples: "0777", "777", "0755"
+  #   2) NFSv4 acls: valid NFSv4 acls, seperated by comma
+  #      Examples: "A::OWNER@:RWX,A::GROUP@:RWX", "A::OWNER@:rxtncy"
+  # Optional: true
+  # Default value: "0777"
+  # nfsAcls: "0777"
+  
+# volumeBindingMode determines how volume binding and dynamic provisioning should occur
+# Allowed values:
+#  Immediate: volume binding and dynamic provisioning occurs once PVC is created
+#  WaitForFirstConsumer: delay the binding and provisioning of PV until a pod using the PVC is created.
+# Optional: false
+# Default value: WaitForFirstConsumer (required for topology section below) 
 volumeBindingMode: WaitForFirstConsumer
 # allowedTopologies helps scheduling pods on worker nodes which match all of below expressions.
 allowedTopologies:
