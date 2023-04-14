@@ -161,6 +161,7 @@ type service struct {
 	//maps the first 24 bits of a volume ID to the volume's systemID
 	volumePrefixToSystems   map[string][]string
 	connectedSystemNameToID map[string]string
+	isNfs                   bool
 }
 
 // Process dynamic changes to configMap or Secret.
@@ -447,6 +448,19 @@ func (s *service) BeforeServe(
 	return nil
 }
 
+func (s *service) checkNFS(ctx context.Context, systemID string) (bool, error) {
+
+	array := s.opts.arrays[systemID]
+
+	fmt.Println("array****", array)
+	fmt.Println("array details****", array.NasName, array.Endpoint, array.SystemID)
+	if array.NasName == nil || *(array.NasName) == "" {
+		return false, nil
+	}
+	return true, nil
+
+}
+
 // Probe all systems managed by driver
 func (s *service) doProbe(ctx context.Context) error {
 
@@ -718,6 +732,9 @@ func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error
 			copy := ArrayConnectionData{}
 			copy = c
 			arrays[c.SystemID] = &copy
+			fmt.Println("nasname", copy.NasName)
+			fmt.Println("nasname***", arrays[c.SystemID].NasName)
+			fmt.Println("arrays****", arrays)
 		}
 	} else {
 		return nil, fmt.Errorf("arrays details are not provided in vxflexos-creds secret")
