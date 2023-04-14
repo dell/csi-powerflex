@@ -450,7 +450,15 @@ func (s *service) BeforeServe(
 
 func (s *service) checkNFS(ctx context.Context, systemID string) (bool, error) {
 
-	array := s.opts.arrays[systemID]
+	arrayConData, err := getArrayConfig(ctx)
+
+	fmt.Println("arrayConData*****", arrayConData)
+
+	if err != nil {
+		return false, err
+	}
+
+	array := arrayConData[systemID]
 
 	fmt.Println("array****", array)
 	fmt.Println("array details****", array.NasName, array.Endpoint, array.SystemID)
