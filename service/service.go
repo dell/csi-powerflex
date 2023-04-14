@@ -462,25 +462,36 @@ func (s *service) checkNFS(ctx context.Context, systemID string) (bool, error) {
 
 	version, err := c.GetVersion()
 
-	fmt.Println("version****", version)
-	fmt.Println("err*****", err)
-
-	arrayConData, err := getArrayConfig(ctx)
-
-	fmt.Println("arrayConData*****", arrayConData)
-
 	if err != nil {
 		return false, err
 	}
 
-	array := arrayConData[systemID]
-
-	fmt.Println("array****", array)
-	fmt.Println("array details****", array.NasName, array.Endpoint, array.SystemID)
-	if array.NasName == nil || *(array.NasName) == "" {
-		return false, nil
+	ver, err := strconv.ParseFloat(version, 64)
+	fmt.Println("ver*****", ver)
+	fmt.Println("err", err)
+	if err != nil {
+		return false, err
 	}
-	return true, nil
+
+	if ver >= 4.0 {
+		arrayConData, err := getArrayConfig(ctx)
+		fmt.Println("arrayConData*****", arrayConData)
+		if err != nil {
+			return false, err
+		}
+		array := arrayConData[systemID]
+		fmt.Println("array****", array)
+		fmt.Println("array details****", array.NasName, array.Endpoint, array.SystemID)
+		if array.NasName == nil || *(array.NasName) == "" {
+			return false, nil
+		}
+		return true, nil
+	}
+
+	fmt.Println("version****", version)
+	fmt.Println("err*****", err)
+
+	return false, nil
 
 }
 
