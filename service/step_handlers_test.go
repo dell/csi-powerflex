@@ -250,7 +250,7 @@ func handleVersion(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusRequestTimeout)
 		return
 	}
-	w.Write([]byte("2.5"))
+	w.Write([]byte("4.0"))
 }
 
 // handleSystemInstances implements GET /api/types/System/instances
