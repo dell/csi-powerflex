@@ -222,9 +222,33 @@ func (s *service) DeleteLocalVolume(ctx context.Context, req *replication.Delete
 		return nil, status.Error(codes.InvalidArgument, "volume handle is required")
 	}
 
-	_, err := s.DeleteVolume(ctx, &csi.DeleteVolumeRequest{VolumeId: volHandleCtx})
+	volumeID := getVolumeIDFromCsiVolumeID(volHandleCtx)
+	systemID := s.getSystemIDFromCsiVolumeID(volHandleCtx)
+
+	Log.Printf("Volume ID: %s System ID: %s", volumeID, systemID)
+
+	if volumeID == "" || systemID == "" {
+		return nil, status.Error(codes.InvalidArgument, "failed to provide system ID or volume ID")
+	}
+
+	vol, err := s.getVolByID(volumeID, systemID)
 	if err != nil {
-		log.Printf("DeleteLocalVolume call failed: %s", err.Error())
+		if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) {
+			log.Printf("[DeleteLocalVolume] - volume already deleted.")
+			return &replication.DeleteLocalVolumeResponse{}, nil
+		}
+
+		return nil, status.Errorf(codes.Internal, "can't query volume: %s", err.Error())
+	}
+
+	if vol.VolumeReplicationState != "UnmarkedForReplication" {
+		log.Printf("[DeleteLocalVolume] - target volume is marked for replication when deleting")
+		return nil, status.Error(codes.InvalidArgument, "replication target volume marked for replication. Delete source volume.")
+	}
+
+	_, err = s.DeleteVolume(ctx, &csi.DeleteVolumeRequest{VolumeId: volHandleCtx})
+	if err != nil {
+		log.Printf("[DeleteLocalVolume] - call failed: %s", err.Error())
 		return nil, err
 	}
 
