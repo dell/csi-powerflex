@@ -92,16 +92,16 @@ var Log = logrus.New()
 
 // ArrayConnectionData contains data required to connect to array
 type ArrayConnectionData struct {
-	SystemID                  string  `json:"systemID"`
-	Username                  string  `json:"username"`
-	Password                  string  `json:"password"`
-	Endpoint                  string  `json:"endpoint"`
-	SkipCertificateValidation bool    `json:"skipCertificateValidation,omitempty"`
-	Insecure                  bool    `json:"insecure,omitempty"`
-	IsDefault                 bool    `json:"isDefault,omitempty"`
-	AllSystemNames            string  `json:"allSystemNames"`
-	NasName                   *string `json:"nasName"`
-	NfsAcls                   string  `json:"nfsAcls"`
+	SystemID                  string `json:"systemID"`
+	Username                  string `json:"username"`
+	Password                  string `json:"password"`
+	Endpoint                  string `json:"endpoint"`
+	SkipCertificateValidation bool   `json:"skipCertificateValidation,omitempty"`
+	Insecure                  bool   `json:"insecure,omitempty"`
+	IsDefault                 bool   `json:"isDefault,omitempty"`
+	AllSystemNames            string `json:"allSystemNames"`
+	NasName                   string `json:"nasName"`
+	NfsAcls                   string `json:"nfsAcls"`
 }
 
 // Manifest is the SP's manifest.
@@ -142,6 +142,8 @@ type Opts struct {
 	IsApproveSDCEnabled        bool
 	replicationContextPrefix   string
 	replicationPrefix          string
+	NfsAcls                    string
+	ExternalAccess             string
 }
 
 type service struct {
@@ -333,6 +335,8 @@ func (s *service) BeforeServe(
 			"IsSdcRenameEnabled":     s.opts.IsSdcRenameEnabled,
 			"sdcPrefix":              s.opts.SdcPrefix,
 			"IsApproveSDCEnabled":    s.opts.IsApproveSDCEnabled,
+			"nfsAcls":                s.opts.NfsAcls,
+			"externalAccess":         s.opts.ExternalAccess,
 		}
 
 		Log.WithFields(fields).Infof("configured %s", Name)
@@ -414,6 +418,13 @@ func (s *service) BeforeServe(
 		opts.replicationPrefix = replicationPrefix
 	}
 
+	if nfsAcls, ok := csictx.LookupEnv(ctx, EnvNfsAcls); ok {
+		opts.NfsAcls = nfsAcls
+	}
+	if externalAccess, ok := csictx.LookupEnv(ctx, EnvExternalAccess); ok {
+		opts.ExternalAccess = externalAccess
+	}
+
 	// log csiNode topology keys
 	if err = s.logCsiNodeTopologyKeys(); err != nil {
 		Log.WithError(err).Error("unable to log csiNode topology keys")
@@ -445,36 +456,6 @@ func (s *service) BeforeServe(
 		return s.doProbe(ctx)
 	}
 	return nil
-}
-
-func (s *service) checkNFS(ctx context.Context, systemID string) (bool, error) {
-
-	err := s.systemProbeAll(ctx)
-	if err != nil {
-		return false, err
-	}
-	c := s.adminClients[systemID]
-
-	version, err := c.GetVersion()
-	if err != nil {
-		return false, err
-	}
-	ver, err := strconv.ParseFloat(version, 64)
-	if err != nil {
-		return false, err
-	}
-	if ver >= 4.0 {
-		arrayConData, err := getArrayConfig(ctx)
-		if err != nil {
-			return false, err
-		}
-		array := arrayConData[systemID]
-		if array.NasName == nil || *(array.NasName) == "" {
-			return false, nil
-		}
-		return true, nil
-	}
-	return false, nil
 }
 
 // Probe all systems managed by driver
@@ -719,6 +700,34 @@ func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error
 				names := strings.Split(c.AllSystemNames, ",")
 				Log.Printf("Powerflex systemID %s AllSytemNames given %#v\n", systemID, names)
 			}
+
+			// for PowerFlex v4.0
+			var s *service
+			if c.NasName == "" {
+				return nil, fmt.Errorf(fmt.Sprintf("invalid value for NasName at index %d", i))
+			}
+			if c.NfsAcls == "" {
+				c.NfsAcls = s.opts.NfsAcls
+				//c.NfsAcls = Opts.NfsAcls
+			}
+
+			//// for PowerFlex v4.0
+			//version, err := sio.GetVersion()
+			//if err != nil {
+			//	return nil, err
+			//}
+			//ver, err := strconv.ParseFloat(version, 64)
+			//if err != nil {
+			//	return nil, err
+			//}
+			//if ver >= 4.0 {
+			//	if c.NasName == "" {
+			//		return nil, fmt.Errorf(fmt.Sprintf("invalid value for NasName at index %d", i))
+			//	}
+			//	if c.NfsAcls == "" {
+			//		c.NfsAcls = opts.NfsAcls
+			//	}
+			//}
 
 			skipCertificateValidation := c.SkipCertificateValidation || c.Insecure
 
