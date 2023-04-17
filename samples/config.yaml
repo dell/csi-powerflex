@@ -24,7 +24,8 @@
   # defines the MDM(s) that SDC should register with on start.
   # Allowed values:  a list of IP addresses or hostnames separated by comma.
   # Default value: none 
-
+  
+  # NFS is only supported on arrays >= 4.0
   # nasName: what NAS should be used for NFS volumes
   # Allowed Values: string - (name of NAS server)
   # Default Value: None

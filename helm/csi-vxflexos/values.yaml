@@ -38,7 +38,7 @@ kubeletConfigDir: /var/lib/kubelet
 # Default value: none
 defaultFsType: ext4
 
-# externalAccess: allows to specify additional entries for hostAccess of NFS volumes. Both single IP address and subnet are valid entries.
+# externalAccess: allows to specify additional entries for host to access NFS volumes. Both single IP address and subnet are valid entries.
 # Allowed Values: x.x.x.x/xx or x.x.x.x
 # Default Value: None
 externalAccess:
