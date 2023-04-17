@@ -51,6 +51,23 @@ Scenario Outline: Test DeleteLocalVolume
   | "sourcevol" | "none"                        | "none"                              |
   | "sourcevol" | "BadVolumeHandleError"        | "volume handle is required"         |
   | "sourcevol" | "RemoveVolumeError"           | "inducedError"                      |
+  | "sourcevol" | "BadVolIDError"               | "failed to provide"                 |
+  | "sourcevol" | "TargetVolumeAlreadyDeleted"  | "none"                              |
+  | "sourcevol" | "GetVolByIDError"             | "can't query volume"                |
+
+@replication
+Scenario Outline: Test DeleteLocalVolume incorrect order
+  Given a VxFlexOS service
+  And I use config "replication-config"
+  When I call CreateVolume <name>
+  And I call CreateRemoteVolume
+  And I call CreateStorageProtectionGroup
+  And I call DeleteLocalVolume <name>
+  Then the error contains <errormsg>
+  Examples:
+  | name        | error                         | errormsg                            |
+  | "sourcevol" | "none"                        | "replication target volume marked"  |
+
 
 @replication
 Scenario Outline: Test CreateStorageProtectionGroup

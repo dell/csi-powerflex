@@ -3465,6 +3465,9 @@ func (f *feature) iCallDeleteLocalVolume(name string) error {
 	if inducedError.Error() == "BadVolumeHandleError" {
 		volumeHandle = ""
 	}
+	if stepHandlersErrors.BadVolIDError {
+		volumeHandle = "/"
+	}
 
 	log.Printf("iCallDeleteLocalVolume name %s to ID %s", name, volumeHandle)
 

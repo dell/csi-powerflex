@@ -937,8 +937,8 @@ func handleInstances(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if stepHandlersErrors.SIOGatewayVolumeNotFoundError {
-		writeError(w, "Could not find the volume", http.StatusRequestTimeout, codes.Internal)
+	if stepHandlersErrors.SIOGatewayVolumeNotFoundError || inducedError.Error() == "TargetVolumeAlreadyDeleted" {
+		writeError(w, sioGatewayVolumeNotFound, http.StatusRequestTimeout, codes.Internal)
 		return
 	}
 
