@@ -193,7 +193,7 @@ func (s *service) CreateRemoteVolume(ctx context.Context, req *replication.Creat
 
 	createVolumeResponse, err := s.CreateVolume(ctx, volReq)
 	if err != nil {
-		log.Printf("CreateVolume called failed: %s", err.Error())
+		log.Printf("CreateVolume call failed: %s", err.Error())
 		return nil, err
 	}
 
@@ -224,7 +224,7 @@ func (s *service) DeleteLocalVolume(ctx context.Context, req *replication.Delete
 
 	_, err := s.DeleteVolume(ctx, &csi.DeleteVolumeRequest{VolumeId: volHandleCtx})
 	if err != nil {
-		log.Printf("DeleteLocalVolume called failed: %s", err.Error())
+		log.Printf("DeleteLocalVolume call failed: %s", err.Error())
 		return nil, err
 	}
 
