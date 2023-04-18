@@ -708,7 +708,6 @@ func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error
 			}
 			if c.NfsAcls == "" {
 				c.NfsAcls = s.opts.NfsAcls
-				//c.NfsAcls = Opts.NfsAcls
 			}
 
 			skipCertificateValidation := c.SkipCertificateValidation || c.Insecure
