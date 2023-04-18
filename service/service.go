@@ -711,24 +711,6 @@ func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error
 				//c.NfsAcls = Opts.NfsAcls
 			}
 
-			//// for PowerFlex v4.0
-			//version, err := sio.GetVersion()
-			//if err != nil {
-			//	return nil, err
-			//}
-			//ver, err := strconv.ParseFloat(version, 64)
-			//if err != nil {
-			//	return nil, err
-			//}
-			//if ver >= 4.0 {
-			//	if c.NasName == "" {
-			//		return nil, fmt.Errorf(fmt.Sprintf("invalid value for NasName at index %d", i))
-			//	}
-			//	if c.NfsAcls == "" {
-			//		c.NfsAcls = opts.NfsAcls
-			//	}
-			//}
-
 			skipCertificateValidation := c.SkipCertificateValidation || c.Insecure
 
 			fields := map[string]interface{}{
