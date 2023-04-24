@@ -142,6 +142,8 @@ type Opts struct {
 	IsApproveSDCEnabled        bool
 	replicationContextPrefix   string
 	replicationPrefix          string
+	NfsAcls                    string
+	ExternalAccess             string
 }
 
 type service struct {
@@ -333,6 +335,8 @@ func (s *service) BeforeServe(
 			"IsSdcRenameEnabled":     s.opts.IsSdcRenameEnabled,
 			"sdcPrefix":              s.opts.SdcPrefix,
 			"IsApproveSDCEnabled":    s.opts.IsApproveSDCEnabled,
+			"nfsAcls":                s.opts.NfsAcls,
+			"externalAccess":         s.opts.ExternalAccess,
 		}
 
 		Log.WithFields(fields).Infof("configured %s", Name)
@@ -412,6 +416,13 @@ func (s *service) BeforeServe(
 
 	if replicationPrefix, ok := csictx.LookupEnv(ctx, EnvReplicationPrefix); ok {
 		opts.replicationPrefix = replicationPrefix
+	}
+
+	if nfsAcls, ok := csictx.LookupEnv(ctx, EnvNfsAcls); ok {
+		opts.NfsAcls = nfsAcls
+	}
+	if externalAccess, ok := csictx.LookupEnv(ctx, EnvExternalAccess); ok {
+		opts.ExternalAccess = externalAccess
 	}
 
 	// log csiNode topology keys
@@ -718,6 +729,15 @@ func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error
 			if c.AllSystemNames != "" {
 				names := strings.Split(c.AllSystemNames, ",")
 				Log.Printf("Powerflex systemID %s AllSytemNames given %#v\n", systemID, names)
+			}
+
+			// for PowerFlex v4.0
+			var s *service
+			if *(c.NasName) == "" {
+				return nil, fmt.Errorf(fmt.Sprintf("invalid value for NasName at index %d", i))
+			}
+			if c.NfsAcls == "" {
+				c.NfsAcls = s.opts.NfsAcls
 			}
 
 			skipCertificateValidation := c.SkipCertificateValidation || c.Insecure
