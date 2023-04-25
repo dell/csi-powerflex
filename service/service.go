@@ -92,16 +92,16 @@ var Log = logrus.New()
 
 // ArrayConnectionData contains data required to connect to array
 type ArrayConnectionData struct {
-	SystemID                  string `json:"systemID"`
-	Username                  string `json:"username"`
-	Password                  string `json:"password"`
-	Endpoint                  string `json:"endpoint"`
-	SkipCertificateValidation bool   `json:"skipCertificateValidation,omitempty"`
-	Insecure                  bool   `json:"insecure,omitempty"`
-	IsDefault                 bool   `json:"isDefault,omitempty"`
-	AllSystemNames            string `json:"allSystemNames"`
-	NasName                   string `json:"nasName"`
-	NfsAcls                   string `json:"nfsAcls"`
+	SystemID                  string  `json:"systemID"`
+	Username                  string  `json:"username"`
+	Password                  string  `json:"password"`
+	Endpoint                  string  `json:"endpoint"`
+	SkipCertificateValidation bool    `json:"skipCertificateValidation,omitempty"`
+	Insecure                  bool    `json:"insecure,omitempty"`
+	IsDefault                 bool    `json:"isDefault,omitempty"`
+	AllSystemNames            string  `json:"allSystemNames"`
+	NasName                   *string `json:"nasName"`
+	NfsAcls                   string  `json:"nfsAcls"`
 }
 
 // Manifest is the SP's manifest.
@@ -458,6 +458,36 @@ func (s *service) BeforeServe(
 	return nil
 }
 
+func (s *service) checkNFS(ctx context.Context, systemID string) (bool, error) {
+
+	err := s.systemProbeAll(ctx)
+	if err != nil {
+		return false, err
+	}
+	c := s.adminClients[systemID]
+
+	version, err := c.GetVersion()
+	if err != nil {
+		return false, err
+	}
+	ver, err := strconv.ParseFloat(version, 64)
+	if err != nil {
+		return false, err
+	}
+	if ver >= 4.0 {
+		arrayConData, err := getArrayConfig(ctx)
+		if err != nil {
+			return false, err
+		}
+		array := arrayConData[systemID]
+		if array.NasName == nil || *(array.NasName) == "" {
+			return false, nil
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
 // Probe all systems managed by driver
 func (s *service) doProbe(ctx context.Context) error {
 
@@ -703,7 +733,7 @@ func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error
 
 			// for PowerFlex v4.0
 			var s *service
-			if c.NasName == "" {
+			if *(c.NasName) == "" {
 				return nil, fmt.Errorf(fmt.Sprintf("invalid value for NasName at index %d", i))
 			}
 			if c.NfsAcls == "" {
