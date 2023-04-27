@@ -125,23 +125,23 @@ Feature: VxFlex OS CSI interface
   #   And when I call DeleteVolume
 
 
-  # Scenario: Create, publish, unpublish, and delete basic vol, change name of array and specify allSystemNames
-  #   Given a VxFlexOS service
-  #   And I set another systemID "altSystem"
-  #   And Set System Name As "1235e15806d1ec0f-pflex-system"
-  #   And a capability with voltype "mount" access "single-writer" fstype "ext4"
-  #   And a volume request "integration8" "8"
-  #   When I call CreateVolume
-  #   And Set System Name As "1235e15806d1ec0f_pflex_system"
-  #   And there are no errors
-  #   And when I call PublishVolume "SDC_GUID"
-  #   And there are no errors
-  #   And when I call NodePublishVolume "SDC_GUID"
-  #   And when I call NodeUnpublishVolume "SDC_GUID"
-  #   And when I call UnpublishVolume "SDC_GUID"
-  #   And there are no errors
-  #   And when I call DeleteVolume
-  #   Then there are no errors
+  Scenario: Create, publish, unpublish, and delete basic vol, change name of array and specify allSystemNames
+  Given a VxFlexOS service
+  And I set another systemID "altSystem"
+  And Set System Name As "1235e15806d1ec0f-pflex-system"
+  And a capability with voltype "mount" access "single-writer" fstype "ext4"
+  And a volume request "integration8" "8"
+  When I call CreateVolume
+  And Set System Name As "1235e15806d1ec0f_pflex_system"
+  And there are no errors
+  And when I call PublishVolume "SDC_GUID"
+  And there are no errors
+  And when I call NodePublishVolume "SDC_GUID"
+  And when I call NodeUnpublishVolume "SDC_GUID"
+  And when I call UnpublishVolume "SDC_GUID"
+  And there are no errors
+  And when I call DeleteVolume
+  Then there are no errors
 
   @long
   Scenario Outline: Create volume, create snapshot, delete snapshot, delete volume for multiple sizes
