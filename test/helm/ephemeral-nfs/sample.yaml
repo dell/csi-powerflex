@@ -1,0 +1,24 @@
+kind: Pod
+apiVersion: v1
+metadata:
+  name: my-csi-app-inline-volumes
+spec:
+  containers:
+    - name: my-frontend
+      image: busybox
+      command: [ "sleep", "100000" ]
+      volumeMounts:
+      - mountPath: "/data0"
+        name: my-csi-volume
+  volumes:
+  - name: my-csi-volume
+    csi:
+      driver: csi-vxflexos.dellemc.com
+      fsType: "nfs"
+      volumeAttributes:
+        volumeName: "my-csi-volume"
+        size: "8Gi"
+        storagepool: sample
+        systemID: sample
+
+ 
