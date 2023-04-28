@@ -10,7 +10,7 @@ spec:
   resources:
     requests:
       storage: 8Gi
-  storageClassName: vxflexos
+  storageClassName: vxflexos-nfs
 ---
 kind: PersistentVolumeClaim
 apiVersion: v1
@@ -24,7 +24,7 @@ spec:
   resources:
     requests:
       storage: 8Gi
-  storageClassName: vxflexos
+  storageClassName: vxflexos-nfs
 ---
 kind: PersistentVolumeClaim
 apiVersion: v1
@@ -38,7 +38,7 @@ spec:
   resources:
     requests:
       storage: 8Gi
-  storageClassName: vxflexos
+  storageClassName: vxflexos-nfs
 ---
 kind: PersistentVolumeClaim
 apiVersion: v1
@@ -52,7 +52,7 @@ spec:
   resources:
     requests:
       storage: 8Gi
-  storageClassName: vxflexos
+  storageClassName: vxflexos-nfs
 ---
 kind: PersistentVolumeClaim
 apiVersion: v1
@@ -66,5 +66,5 @@ spec:
   resources:
     requests:
       storage: 8Gi
-  storageClassName: vxflexos
+  storageClassName: vxflexos-nfs
 ---
