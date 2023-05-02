@@ -51,13 +51,15 @@ const (
 
 // ArrayConnectionData contains data required to connect to array
 type ArrayConnectionData struct {
-	SystemID       string `json:"systemID"`
-	Username       string `json:"username"`
-	Password       string `json:"password"`
-	Endpoint       string `json:"endpoint"`
-	Insecure       bool   `json:"insecure,omitempty"`
-	IsDefault      bool   `json:"isDefault,omitempty"`
-	AllSystemNames string `json:"allSystemNames"`
+	SystemID       string  `json:"systemID"`
+	Username       string  `json:"username"`
+	Password       string  `json:"password"`
+	Endpoint       string  `json:"endpoint"`
+	Insecure       bool    `json:"insecure,omitempty"`
+	IsDefault      bool    `json:"isDefault,omitempty"`
+	AllSystemNames string  `json:"allSystemNames"`
+	NasName        *string `json:"nasname"`
+	NfsAcls        string  `json:"nfsAcls"`
 }
 
 type feature struct {
@@ -1733,6 +1735,19 @@ func (f *feature) restCallToSetName(auth string, url string, name string) (strin
 	return "", nil
 }
 
+func (f *feature) iSetBadNasName() error {
+	//wip
+	for _, a := range f.arrays {
+		if a.NasName != nil {
+			badNasName := "badNas"
+			a.NasName = &badNasName
+			fmt.Printf("set bad NasName done \n")
+			return nil
+		}
+	}
+	return fmt.Errorf("Error during set bad NasName")
+}
+
 func FeatureContext(s *godog.ScenarioContext) {
 	f := &feature{}
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
@@ -1793,4 +1808,5 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^the volumecondition is "([^"]*)"$`, f.theVolumeconditionIs)
 	s.Step(`^I call NodeGetVolumeStats$`, f.iCallNodeGetVolumeStats)
 	s.Step(`^the VolumeCondition is "([^"]*)"$`, f.theVolumeConditionIs)
+	s.Step(`^I set wrongNasName$`, f.iSetBadNasName)
 }
