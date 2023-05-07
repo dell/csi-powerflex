@@ -465,7 +465,6 @@ func (s *service) checkNFS(ctx context.Context, systemID string) (bool, error) {
 		return false, err
 	}
 	c := s.adminClients[systemID]
-
 	version, err := c.GetVersion()
 	if err != nil {
 		return false, err
@@ -563,6 +562,26 @@ func (s *service) getVolByID(id string, systemID string) (*siotypes.Volume, erro
 	return vols[0], nil
 }
 
+// getFilesystemByID returns the PowerFlex filesystem from the given Powerflex filesystem ID
+func (s *service) getFilesystemByID(id string, systemID string) (*siotypes.FileSystem, error) {
+
+	adminClient := s.adminClients[systemID]
+	if adminClient == nil {
+		return nil, fmt.Errorf("can't find adminClient by id %s", systemID)
+	}
+	system, err := adminClient.FindSystem(systemID, "", "")
+	if err != nil {
+		return nil, fmt.Errorf("can't find system by id %s", systemID)
+	}
+	// The GetFileSystemByIDName API returns a filesystem, but when only passing
+	// in a filesystem ID or name, the response will be just the one filesystem
+	fs, err := system.GetFileSystemByIDName(id, "")
+	if err != nil {
+		return nil, err
+	}
+	return fs, nil
+}
+
 // getSDCID returns SDC ID from the given sdc GUID and system ID.
 func (s *service) getSDCID(sdcGUID string, systemID string) (string, error) {
 	sdcGUID = strings.ToUpper(sdcGUID)
@@ -615,6 +634,38 @@ func (s *service) getCSIVolume(vol *siotypes.Volume, systemID string) *csi.Volum
 	vi := &csi.Volume{
 		VolumeId:      systemID + dash + vol.ID,
 		CapacityBytes: int64(vol.SizeInKb * bytesInKiB),
+		VolumeContext: attributes,
+	}
+
+	return vi
+}
+
+// getCSIVolumeFromFilesystem converts the given siotypes.FileSystem to a CSI volume
+func (s *service) getCSIVolumeFromFilesystem(fs *siotypes.FileSystem, systemID string) *csi.Volume {
+
+	// Get storage pool name; add to cache of ID to Name if not present
+	storagePoolName := s.getStoragePoolNameFromID(systemID, fs.StoragePoolID)
+	installationID, err := s.getArrayInstallationID(systemID)
+	if err != nil {
+		Log.Printf("getCSIVolumeFromFilesystem error system not found: %s with error: %v\n", systemID, err)
+	}
+
+	// Make the additional volume attributes
+	creationTime, _ := strconv.Atoi(fs.CreationTimestamp)
+	attributes := map[string]string{
+		"Name":            fs.Name,
+		"StoragePoolID":   fs.StoragePoolID,
+		"StoragePoolName": storagePoolName,
+		"StorageSystem":   systemID,
+		"CreationTime":    time.Unix(int64(creationTime), 0).String(),
+		"InstallationID":  installationID,
+		"NasServerID":     fs.NasServerID,
+	}
+	hyphen := "/"
+
+	vi := &csi.Volume{
+		VolumeId:      systemID + hyphen + fs.ID,
+		CapacityBytes: int64(fs.SizeTotal),
 		VolumeContext: attributes,
 	}
 
@@ -732,12 +783,12 @@ func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error
 			}
 
 			// for PowerFlex v4.0
-			var s *service
-			if *(c.NasName) == "" {
-				return nil, fmt.Errorf(fmt.Sprintf("invalid value for NasName at index %d", i))
+			str := ""
+			if c.NasName == nil || *(c.NasName) == "" {
+				c.NasName = &str
 			}
 			if c.NfsAcls == "" {
-				c.NfsAcls = s.opts.NfsAcls
+				c.NfsAcls = str
 			}
 
 			skipCertificateValidation := c.SkipCertificateValidation || c.Insecure
@@ -792,27 +843,88 @@ func getVolumeIDFromCsiVolumeID(csiVolID string) string {
 	}
 	err := errors.New("csiVolID unexpected string")
 	Log.WithError(err).Errorf("%s format error", csiVolID)
+	return ""
+}
 
+// getFilesystemIDFromCsiVolumeID returns PowerFlex filesystem ID from CSI volume ID
+func getFilesystemIDFromCsiVolumeID(csiVolID string) string {
+	if csiVolID == "" {
+		return ""
+	}
+	containsHyphen := strings.Contains(csiVolID, "/")
+	if containsHyphen {
+		i := strings.LastIndex(csiVolID, "/")
+		if i == -1 {
+			return csiVolID
+		}
+		tokens := strings.Split(csiVolID, "/")
+		index := len(tokens)
+		if index > 0 {
+			return tokens[index-1]
+		}
+	}
+	err := errors.New("csiVolID unexpected string")
+	Log.WithError(err).Errorf("%s format error", csiVolID)
 	return ""
 }
 
 // getSystemIDFromCsiVolumeId returns PowerFlex volume ID from CSI volume ID
 func (s *service) getSystemIDFromCsiVolumeID(csiVolID string) string {
-	i := strings.LastIndex(csiVolID, "-")
-	if i == -1 {
-		return ""
-	}
-	tokens := strings.Split(csiVolID, "-")
-	if len(tokens) > 1 {
-		sys := csiVolID[:i]
-		if id, ok := s.connectedSystemNameToID[sys]; ok {
-			return id
+	containsHyphen := strings.Contains(csiVolID, "/")
+	if containsHyphen {
+		i := strings.LastIndex(csiVolID, "/")
+		if i == -1 {
+			return ""
 		}
-		return sys
+		tokens := strings.Split(csiVolID, "/")
+		if len(tokens) > 1 {
+			sys := csiVolID[:i]
+			if id, ok := s.connectedSystemNameToID[sys]; ok {
+				return id
+			}
+			return sys
+		}
+	} else {
+		i := strings.LastIndex(csiVolID, "-")
+		if i == -1 {
+			return ""
+		}
+		tokens := strings.Split(csiVolID, "-")
+		if len(tokens) > 1 {
+			sys := csiVolID[:i]
+			if id, ok := s.connectedSystemNameToID[sys]; ok {
+				return id
+			}
+			return sys
+		}
 	}
-
 	// There is only volume ID in csi volume ID
 	return ""
+}
+
+// exportFilesystem - Method to export filesystem with idempotency
+func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPublishVolumeRequest, client *goscaleio.Client, fs *siotypes.FileSystem, nodeID string) (*csi.ControllerPublishVolumeResponse, error) {
+	volumeContext := req.GetVolumeContext()
+	if volumeContext != nil {
+		Log.Printf("VolumeContext:")
+		for key, value := range volumeContext {
+			Log.Printf("    [%s]=%s", key, value)
+		}
+	}
+
+	// fetch the node IP, for exporting the FS on node.
+	// TODO
+
+	// Create NFS export if it doesn't exist
+	// Add host IP to existing nfs export
+	// Add external host IP to existing nfs export
+	// TODO
+
+	// create publish context
+	publishContext := make(map[string]string)
+	publishContext[KeyNasName] = volumeContext[KeyNasName]
+	publishContext[KeyNfsACL] = volumeContext[KeyNfsACL]
+	return &csi.ControllerPublishVolumeResponse{PublishContext: publishContext}, nil
 }
 
 // this function updates volumePrefixToSystems, a map of volume ID prefixes -> system IDs
@@ -1075,7 +1187,7 @@ func (s *service) expandReplicationPair(ctx context.Context, req *csi.Controller
 	Log.Printf("[expandReplicationPair] - ControllerExpandVolume expanded the remote volume first: %+v", resp)
 	Log.Printf("[expandReplicationPair] - Ensuring remote has expanded...")
 
-	requestedSize, err := validateVolSize(req.CapacityRange)
+	requestedSize, err := validateVolSize(req.CapacityRange, false)
 	if err != nil {
 		return err
 	}
@@ -1092,4 +1204,26 @@ func (s *service) expandReplicationPair(ctx context.Context, req *csi.Controller
 	}
 
 	return nil
+}
+
+func (s *service) getNASServerIDFromName(systemID, nasName string) (string, error) {
+	if nasName == "" {
+		Log.Printf("NAS server not provided.")
+		return "", nil
+	}
+	system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
+	if err != nil {
+		return "", err
+	}
+	nas, err := system.GetNASByIDName("", nasName)
+	if err != nil {
+		return "", err
+	}
+	return nas.ID, nil
+}
+
+func (s *service) GetNfsTopology(systemID string) []*csi.Topology {
+	nfsTopology := new(csi.Topology)
+	nfsTopology.Segments = map[string]string{Name + "/" + systemID + "-nfs": "true"}
+	return []*csi.Topology{nfsTopology}
 }
