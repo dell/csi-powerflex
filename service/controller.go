@@ -71,6 +71,9 @@ const (
 	// volume create parameters map
 	KeyFsType = "fsType"
 
+	NFSExportLocalPath  = "/"
+	NFSExportNamePrefix = "csishare-"
+
 	// DefaultVolumeSizeKiB is default volume sgolang/protobuf/blob/master/ptypesize
 	// to create on a scaleIO cluster when no size is given, expressed in KiB
 	DefaultVolumeSizeKiB = 16 * kiBytesInGiB
@@ -95,6 +98,7 @@ const (
 	removeModeOnlyMe                    = "ONLY_ME"
 	sioGatewayNotFound                  = "Not found"
 	sioGatewayVolumeNotFound            = "Could not find the volume"
+	sioGatewayNFSExportNotFound         = "couldn't find NFS export"
 	sioGatewayFilesystemNotFound        = "Could not find the filesystem"
 	sioVolumeRemovalOperationInProgress = "A volume removal operation is currently in progress"
 	sioGatewayVolumeNameInUse           = "Volume name already in use. Please use a different name."
@@ -878,6 +882,11 @@ func (s *service) ControllerPublishVolume(
 				err.Error())
 		}
 
+		sdcIP, err := s.getSDCIP(nodeID, systemID)
+		if err != nil {
+			return nil, status.Errorf(codes.NotFound, err.Error())
+		}
+
 		fsc := req.GetVolumeCapability()
 		if fsc == nil {
 			return nil, status.Error(codes.InvalidArgument,
@@ -895,7 +904,7 @@ func (s *service) ControllerPublishVolume(
 		}
 
 		//Export for NFS
-		resp, err := s.exportFilesystem(ctx, req, adminClient, fs, nodeID)
+		resp, err := s.exportFilesystem(ctx, req, adminClient, fs, sdcIP, nodeID, am)
 		return resp, err
 	} else {
 		volID := getVolumeIDFromCsiVolumeID(csiVolID)
