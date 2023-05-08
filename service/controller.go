@@ -315,7 +315,11 @@ func (s *service) CreateVolume(
 		if existingFS != nil {
 			if existingFS.SizeTotal == int(size) {
 				vi := s.getCSIVolumeFromFilesystem(existingFS, systemID)
-				vi.AccessibleTopology = volumeTopology
+				vi.VolumeContext[KeyNasName] = nasName
+				vi.VolumeContext[KeyNfsACL] = nfsAcls
+				vi.VolumeContext[KeyFsType] = fsType
+				nfsTopology := s.GetNfsTopology(systemID)
+				vi.AccessibleTopology = nfsTopology
 				csiResp := &csi.CreateVolumeResponse{
 					Volume: vi,
 				}
