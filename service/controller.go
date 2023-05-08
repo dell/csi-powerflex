@@ -161,6 +161,7 @@ func (s *service) CreateVolume(
 
 	cr := req.GetCapacityRange()
 	size, err := validateVolSize(cr, isNFS)
+	fmt.Println("size:", size)
 	if err != nil {
 		return nil, err
 	}
@@ -283,6 +284,7 @@ func (s *service) CreateVolume(
 
 		// fetch volume name
 		volName := req.GetName()
+		volName = "k8s-ac0ba19e9c"
 
 		// log all parameters used in CreateFilesystem call
 		fields := map[string]interface{}{
