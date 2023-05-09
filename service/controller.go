@@ -148,17 +148,13 @@ func (s *service) CreateVolume(
 
 	s.logStatistics()
 
+	cr := req.GetCapacityRange()
+
 	// Check for filesystem type
 	isNFS := false
 	fsType := req.VolumeCapabilities[0].GetMount().GetFsType()
 	if fsType == "nfs" {
 		isNFS = true
-	}
-
-	cr := req.GetCapacityRange()
-	size, err := validateVolSize(cr, isNFS)
-	if err != nil {
-		return nil, err
 	}
 
 	// validate AccessibleTopology
@@ -280,7 +276,10 @@ func (s *service) CreateVolume(
 		// fetch volume name
 		volName := req.GetName()
 
-		// log all parameters used in CreateFilesystem call
+		// volume size
+		size := cr.GetRequiredBytes()
+
+		// log all parameters used in CreateVolume call
 		fields := map[string]interface{}{
 			"Name":                               volName,
 			"SizeInB":                            size,
@@ -290,7 +289,7 @@ func (s *service) CreateVolume(
 			HeaderPersistentVolumeClaimName:      params[CSIPersistentVolumeClaimName],
 			HeaderPersistentVolumeClaimNamespace: params[CSIPersistentVolumeClaimNamespace],
 		}
-		Log.WithFields(fields).Info("Executing CreateFilesystem with following fields")
+		Log.WithFields(fields).Info("Executing CreateVolume with following fields")
 
 		volumeParam := &siotypes.FsCreate{
 			Name:          volName,
@@ -307,6 +306,12 @@ func (s *service) CreateVolume(
 		existingFS, err := system.GetFileSystemByIDName("", volName)
 
 		if existingFS != nil {
+			Log.Info("Volume exists")
+			Log.Infof("volume size:......%v", existingFS.SizeTotal)
+
+			Log.Infof("existingFS.SizeTotal:......%#v", existingFS.SizeTotal)
+			Log.Infof("given sizeInB:......%#v", size)
+
 			if existingFS.SizeTotal == int(size) {
 				vi := s.getCSIVolumeFromFilesystem(existingFS, systemID)
 				vi.AccessibleTopology = volumeTopology
@@ -322,15 +327,17 @@ func (s *service) CreateVolume(
 		Log.Debug("Volume does not exist, proceeding to create new volume")
 		fsResp, err := system.CreateFileSystem(volumeParam)
 		if err != nil {
-			Log.Debugf("Filesystem create response Error:%v", err)
-			return nil, status.Errorf(codes.Unknown, "Create Filesystem %s failed with error: %v", volName, err)
+			Log.Debugf("Volume create response Error:%v", err)
+			return nil, status.Errorf(codes.Unknown, "Create Volume %s failed with error: %v", volName, err)
 		}
+		Log.Infof("FS ID.....: %v", fsResp.ID)
 
 		newFs, err := system.GetFileSystemByIDName(fsResp.ID, "")
 		if err != nil {
-			Log.Debugf("Find Filesystem response: %v Error: %v", newFs, err)
+			Log.Debugf("Find Volume response: %v Error: %v", newFs, err)
 		}
 		if newFs != nil {
+			Log.Infof("newFs.SizeTotal.... %v", newFs.SizeTotal)
 			vi := s.getCSIVolumeFromFilesystem(newFs, systemID)
 			vi.VolumeContext[KeyNasName] = nasName
 			vi.VolumeContext[KeyNfsACL] = nfsAcls
@@ -343,6 +350,11 @@ func (s *service) CreateVolume(
 			return csiResp, nil
 		}
 	} else {
+		size, err := validateVolSize(cr)
+		if err != nil {
+			return nil, err
+		}
+
 		params = mergeStringMaps(params, req.GetSecrets())
 
 		// We require the storagePool name for creation
@@ -403,7 +415,7 @@ func (s *service) CreateVolume(
 			HeaderPersistentVolumeClaimNamespace: params[CSIPersistentVolumeClaimNamespace],
 		}
 
-		Log.WithFields(fields).Info("creating volume")
+		Log.WithFields(fields).Info("Executing CreateVolume with following fields")
 
 		volumeParam := &siotypes.VolumeParam{
 			Name:           name,
@@ -649,12 +661,11 @@ func (s *service) clearCache() {
 
 // validateVolSize uses the CapacityRange range params to determine what size
 // volume to create, and returns an error if volume size would be greater than
-// the given limit. Returned size is in KiB for block volumes and Bytes for NFS volumes
-func validateVolSize(cr *csi.CapacityRange, isNFS bool) (int64, error) {
+// the given limit. Returned size is in KiB
+func validateVolSize(cr *csi.CapacityRange) (int64, error) {
 
 	minSize := cr.GetRequiredBytes()
 	maxSize := cr.GetLimitBytes()
-
 	if minSize < 0 || maxSize < 0 {
 		return 0, status.Errorf(
 			codes.OutOfRange,
@@ -694,13 +705,8 @@ func validateVolSize(cr *csi.CapacityRange, isNFS bool) (int64, error) {
 		}
 	}
 
-	if isNFS {
-		sizeB = sizeGiB * kiBytesInGiB * bytesInKiB
-		return sizeB, nil
-	} else {
-		sizeKiB = sizeGiB * kiBytesInGiB
-		return sizeKiB, nil
-	}
+	sizeKiB = sizeGiB * kiBytesInGiB
+	return sizeKiB, nil
 }
 
 func (s *service) DeleteVolume(
@@ -893,7 +899,6 @@ func (s *service) ControllerPublishVolume(
 			return nil, status.Error(codes.InvalidArgument,
 				errUnknownAccessMode)
 		}
-
 		//Export for NFS
 		resp, err := s.exportFilesystem(ctx, req, adminClient, fs, nodeID)
 		return resp, err
@@ -2351,7 +2356,7 @@ func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.Controlle
 	volName := vol.Name
 	cr := req.GetCapacityRange()
 	Log.Printf("cr:%d", cr)
-	requestedSize, err := validateVolSize(cr, false)
+	requestedSize, err := validateVolSize(cr)
 	if err != nil {
 		return nil, err
 	}
