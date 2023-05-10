@@ -957,6 +957,7 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 		resp, err := client.CreateNFSExport(&siotypes.NFSExportCreate{
 			Name:         nfsExportName,
 			FileSystemID: fs.ID,
+			Path:         NFSExportLocalPath + fs.Name,
 		})
 
 		if err != nil {
