@@ -285,6 +285,7 @@ func (s *service) CreateVolume(
 
 		// fetch volume name
 		volName := req.GetName()
+		volName = "tweeFS3"
 
 		fmt.Println("volName:", volName)
 
@@ -893,6 +894,7 @@ func (s *service) ControllerPublishVolume(
 	}
 	if isNFS {
 		fsID := getFilesystemIDFromCsiVolumeID(csiVolID)
+		fmt.Println("fsID:", fsID)
 		fs, err := s.getFilesystemByID(fsID, systemID)
 		if err != nil {
 			if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
