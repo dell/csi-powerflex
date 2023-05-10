@@ -95,7 +95,6 @@ const (
 	removeModeOnlyMe                    = "ONLY_ME"
 	sioGatewayNotFound                  = "Not found"
 	sioGatewayVolumeNotFound            = "Could not find the volume"
-	sioGatewayFilesystemNotFound        = "Could not find the filesystem"
 	sioVolumeRemovalOperationInProgress = "A volume removal operation is currently in progress"
 	sioGatewayVolumeNameInUse           = "Volume name already in use. Please use a different name."
 	errNoMultiMap                       = "volume not enabled for mapping to multiple hosts"
@@ -225,6 +224,15 @@ func (s *service) CreateVolume(
 				Segments: systemSegments,
 			})
 			Log.Printf("Accessible topology for volume: %s, segments: %#v", req.GetName(), systemSegments)
+		}
+	}
+
+	if req.VolumeCapabilities[0].GetBlock() != nil {
+		// We need to check if user requests raw block access from nfs and prevent that
+		fsType, ok := params[KeyFsType]
+		// FsType can be empty
+		if ok && fsType == "nfs" {
+			return nil, status.Errorf(codes.InvalidArgument, "raw block requested from NFS Volume")
 		}
 	}
 

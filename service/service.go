@@ -465,6 +465,9 @@ func (s *service) checkNFS(ctx context.Context, systemID string) (bool, error) {
 		return false, err
 	}
 	c := s.adminClients[systemID]
+	if c == nil {
+		return false, nil
+	}
 	version, err := c.GetVersion()
 	if err != nil {
 		return false, err
