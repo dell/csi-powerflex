@@ -925,14 +925,8 @@ func (s *service) getSystemIDFromCsiVolumeID(csiVolID string) string {
 // exportFilesystem - Method to export filesystem with idempotency
 func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPublishVolumeRequest, client *goscaleio.Client, fs *siotypes.FileSystem, nodeIP, nodeID string, am *csi.VolumeCapability_AccessMode) (*csi.ControllerPublishVolumeResponse, error) {
 	volumeContext := req.GetVolumeContext()
-	if volumeContext != nil {
-		Log.Printf("VolumeContext:")
-		for key, value := range volumeContext {
-			Log.Printf("    [%s]=%s", key, value)
-		}
-	}
 
-	// fetch the node IP, for exporting the FS on node.
+	// fetch the node IP, for exporting the FS on host.
 	// TODO
 
 	// Create NFS export if it doesn't exist
@@ -1332,7 +1326,7 @@ func (s *service) expandReplicationPair(ctx context.Context, req *csi.Controller
 	Log.Printf("[expandReplicationPair] - ControllerExpandVolume expanded the remote volume first: %+v", resp)
 	Log.Printf("[expandReplicationPair] - Ensuring remote has expanded...")
 
-	requestedSize, err := validateVolSize(req.CapacityRange, false)
+	requestedSize, err := validateVolSize(req.CapacityRange)
 	if err != nil {
 		return err
 	}
