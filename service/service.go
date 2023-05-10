@@ -467,7 +467,10 @@ func (s *service) checkNFS(ctx context.Context, systemID string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+
 	c := s.adminClients[systemID]
+	fmt.Printf("adminClients:%#v\n", s.adminClients)
+	fmt.Printf("client: %#v\n", c)
 	version, err := c.GetVersion()
 	if err != nil {
 		return false, err
