@@ -938,15 +938,16 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 
 	nfsExport, err := client.GetNFSExportByIDName(fs.ID, "")
 
-	nfsExportID = nfsExport.ID
-
 	if err != nil {
 		if strings.Contains(err.Error(), sioGatewayNFSExportNotFound) {
 			nfsExportExists = false
+
 		} else {
 			return nil, err
 		}
 	}
+
+	nfsExportID = nfsExport.ID
 
 	if !nfsExportExists {
 		resp, err := client.CreateNFSExport(&siotypes.NFSExportCreate{
