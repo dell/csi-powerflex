@@ -161,6 +161,7 @@ func (s *service) CreateVolume(
 
 	cr := req.GetCapacityRange()
 	size, err := validateVolSize(cr, isNFS)
+	fmt.Println("isNFS:", isNFS)
 	fmt.Println("size:", size)
 	if err != nil {
 		return nil, err
@@ -249,6 +250,7 @@ func (s *service) CreateVolume(
 			return nil, status.Errorf(codes.InvalidArgument, "`%s` is a required parameter", KeyNasName)
 		}
 		nasServerID, err := s.getNASServerIDFromName(systemID, nasName)
+		fmt.Println("nasSeverID:", nasServerID)
 		if err != nil {
 			return nil, err
 		}
@@ -263,6 +265,7 @@ func (s *service) CreateVolume(
 			if err != nil {
 				return nil, err
 			}
+			fmt.Println("pdID:", pdID)
 		}
 
 		storagePoolName, ok := params[KeyStoragePool]
@@ -275,6 +278,8 @@ func (s *service) CreateVolume(
 			return nil, err
 		}
 
+		fmt.Println("storagePoolID:", storagePoolID)
+
 		// fetch NFS ACL
 		if params[KeyNfsACL] != "" {
 			nfsAcls = params[KeyNfsACL] // Storage class takes precedence
@@ -282,9 +287,12 @@ func (s *service) CreateVolume(
 			nfsAcls = arr.NfsAcls // Secrets next
 		}
 
+		fmt.Println("nfsScls:", nfsAcls)
+
 		// fetch volume name
 		volName := req.GetName()
-		volName = "k8s-ac0ba19e9c"
+
+		fmt.Println("volName:", volName)
 
 		// log all parameters used in CreateFilesystem call
 		fields := map[string]interface{}{
@@ -304,6 +312,8 @@ func (s *service) CreateVolume(
 			StoragePoolID: storagePoolID,
 			NasServerID:   nasServerID,
 		}
+
+		fmt.Printf("volumeParam:%#v\n", volumeParam)
 
 		//Idempotency check
 		system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
@@ -331,6 +341,7 @@ func (s *service) CreateVolume(
 		}
 		Log.Debug("Volume does not exist, proceeding to create new volume")
 		fsResp, err := system.CreateFileSystem(volumeParam)
+		fmt.Println("fsResp:", fsResp)
 		if err != nil {
 			Log.Debugf("Filesystem create response Error:%v", err)
 			return nil, status.Errorf(codes.Unknown, "Create Filesystem %s failed with error: %v", volName, err)
