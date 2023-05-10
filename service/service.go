@@ -947,8 +947,6 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 		}
 	}
 
-	nfsExportID = nfsExport.ID
-
 	if !nfsExportExists {
 		resp, err := client.CreateNFSExport(&siotypes.NFSExportCreate{
 			Name:         nfsExportName,
@@ -961,6 +959,9 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 		}
 
 		nfsExportID = resp.ID
+	} else {
+		nfsExportID = nfsExport.ID
+
 	}
 
 	//Allocate host access to NFS Share with appropriate access mode
