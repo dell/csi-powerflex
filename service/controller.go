@@ -267,7 +267,6 @@ func (s *service) CreateVolume(
 			return nil, status.Errorf(codes.InvalidArgument, "`%s` is a required parameter", KeyNasName)
 		}
 		nasServerID, err := s.getNASServerIDFromName(systemID, nasName)
-
 		if err != nil {
 			return nil, err
 		}
