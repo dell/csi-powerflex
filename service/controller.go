@@ -267,7 +267,7 @@ func (s *service) CreateVolume(
 			return nil, status.Errorf(codes.InvalidArgument, "`%s` is a required parameter", KeyNasName)
 		}
 		nasServerID, err := s.getNASServerIDFromName(systemID, nasName)
-		fmt.Println("nasSeverID:", nasServerID)
+
 		if err != nil {
 			return nil, err
 		}
@@ -282,7 +282,7 @@ func (s *service) CreateVolume(
 			if err != nil {
 				return nil, err
 			}
-			fmt.Println("pdID:", pdID)
+
 		}
 
 		storagePoolName, ok := params[KeyStoragePool]
@@ -294,8 +294,6 @@ func (s *service) CreateVolume(
 		if err != nil {
 			return nil, err
 		}
-
-		fmt.Println("storagePoolID:", storagePoolID)
 
 		// fetch NFS ACL
 		if params[KeyNfsACL] != "" {
@@ -326,8 +324,6 @@ func (s *service) CreateVolume(
 			NasServerID:   nasServerID,
 		}
 
-		fmt.Printf("volumeParam:%#v\n", volumeParam)
-
 		//Idempotency check
 		system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
 		if err != nil {
@@ -354,7 +350,6 @@ func (s *service) CreateVolume(
 		}
 		Log.Debug("Volume does not exist, proceeding to create new volume")
 		fsResp, err := system.CreateFileSystem(volumeParam)
-		fmt.Println("fsResp:", fsResp)
 		if err != nil {
 			Log.Debugf("Create volume response error:%v", err)
 			return nil, status.Errorf(codes.Unknown, "Create Volume %s failed with error: %v", volName, err)
@@ -895,7 +890,6 @@ func (s *service) ControllerPublishVolume(
 	}
 	if isNFS {
 		fsID := getFilesystemIDFromCsiVolumeID(csiVolID)
-		fmt.Println("fsID:", fsID)
 		fs, err := s.getFilesystemByID(fsID, systemID)
 		if err != nil {
 			if strings.EqualFold(err.Error(), sioGatewayFilesystemNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
