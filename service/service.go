@@ -931,6 +931,9 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 
 	nfsExportName := NFSExportNamePrefix + fs.Name
 
+	fmt.Printf("fileSystem:%#v\n", fs)
+	fmt.Printf("exportID:%#v\n", fs.ExportFsID)
+
 	nfsExportExists := true
 	var nfsExportID string
 	// Check if nfs export exists for the File system
@@ -955,6 +958,9 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 	// Create NFS export if it doesn't exist
 	if !nfsExportExists {
 		Log.Debugf("NFS Export does not exist for fs: %s ,proceeding to create NFS Export")
+		fmt.Printf("nfsExportName:%v\n", nfsExportName)
+		fmt.Printf("filesytemID:%v\n", fs.ID)
+		fmt.Println("path",NFSExportLocalPath + fs.Name)
 		resp, err := client.CreateNFSExport(&siotypes.NFSExportCreate{
 			Name:         nfsExportName,
 			FileSystemID: fs.ID,
