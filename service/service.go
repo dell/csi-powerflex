@@ -469,8 +469,6 @@ func (s *service) checkNFS(ctx context.Context, systemID string) (bool, error) {
 	}
 
 	c := s.adminClients[systemID]
-	fmt.Printf("adminClients:%#v\n", s.adminClients)
-	fmt.Printf("client: %#v\n", c)
 
 	if c == nil {
 		return false, nil
