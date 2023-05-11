@@ -236,6 +236,19 @@ func (s *service) CreateVolume(
 		}
 	}
 
+	// fetch volume name
+	name := req.GetName()
+	if name == "" {
+		return nil, status.Error(codes.InvalidArgument,
+			"Name cannot be empty")
+	}
+
+	if len(name) > 31 {
+		name = name[0:31]
+		Log.Printf("Requested name %s longer than 31 character max, truncated to %s\n", req.Name, name)
+		req.Name = name
+	}
+
 	nfsAcls := s.opts.NfsAcls
 	var arr *ArrayConnectionData
 	sysID := s.opts.defaultSystemID
@@ -281,10 +294,7 @@ func (s *service) CreateVolume(
 			nfsAcls = arr.NfsAcls // Secrets next
 		}
 
-		// fetch volume name
-		volName := req.GetName()
-
-		// volume size
+		// fetch volume size
 		size := cr.GetRequiredBytes()
 
 		// log all parameters used in CreateVolume call
@@ -376,18 +386,6 @@ func (s *service) CreateVolume(
 		}
 
 		volType := s.getVolProvisionType(params) // Thick or Thin
-
-		name := req.GetName()
-		if name == "" {
-			return nil, status.Error(codes.InvalidArgument,
-				"Name cannot be empty")
-		}
-
-		if len(name) > 31 {
-			name = name[0:31]
-			Log.Printf("Requested name %s longer than 31 character max, truncated to %s\n", req.Name, name)
-			req.Name = name
-		}
 
 		contentSource := req.GetVolumeContentSource()
 		if contentSource != nil {
