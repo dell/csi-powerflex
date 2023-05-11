@@ -232,6 +232,15 @@ func (s *service) CreateVolume(
 		}
 	}
 
+	if req.VolumeCapabilities[0].GetBlock() != nil {
+		// We need to check if user requests raw block access from nfs and prevent that
+		fsType, ok := params[KeyFsType]
+		// FsType can be empty
+		if ok && fsType == "nfs" {
+			return nil, status.Errorf(codes.InvalidArgument, "raw block requested from NFS Volume")
+		}
+	}
+
 	nfsAcls := s.opts.NfsAcls
 	var arr *ArrayConnectionData
 	sysID := s.opts.defaultSystemID
@@ -322,12 +331,6 @@ func (s *service) CreateVolume(
 		existingFS, err := system.GetFileSystemByIDName("", volName)
 
 		if existingFS != nil {
-			Log.Info("Volume exists")
-			Log.Infof("volume size:......%v", existingFS.SizeTotal)
-
-			Log.Infof("existingFS.SizeTotal:......%#v", existingFS.SizeTotal)
-			Log.Infof("given sizeInB:......%#v", size)
-
 			if existingFS.SizeTotal == int(size) {
 				vi := s.getCSIVolumeFromFilesystem(existingFS, systemID)
 				vi.VolumeContext[KeyNasName] = nasName
@@ -348,17 +351,15 @@ func (s *service) CreateVolume(
 		fsResp, err := system.CreateFileSystem(volumeParam)
 		fmt.Println("fsResp:", fsResp)
 		if err != nil {
-			Log.Debugf("Volume create response Error:%v", err)
+			Log.Debugf("Create volume response error:%v", err)
 			return nil, status.Errorf(codes.Unknown, "Create Volume %s failed with error: %v", volName, err)
 		}
-		Log.Infof("FS ID.....: %v", fsResp.ID)
 
 		newFs, err := system.GetFileSystemByIDName(fsResp.ID, "")
 		if err != nil {
 			Log.Debugf("Find Volume response: %v Error: %v", newFs, err)
 		}
 		if newFs != nil {
-			Log.Infof("newFs.SizeTotal.... %v", newFs.SizeTotal)
 			vi := s.getCSIVolumeFromFilesystem(newFs, systemID)
 			vi.VolumeContext[KeyNasName] = nasName
 			vi.VolumeContext[KeyNfsACL] = nfsAcls
