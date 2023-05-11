@@ -849,7 +849,14 @@ func (s *service) ControllerPublishVolume(
 		}
 	}
 
+	// create publish context
+	publishContext := make(map[string]string)
+	publishContext[KeyNasName] = volumeContext[KeyNasName]
+	publishContext[KeyNfsACL] = volumeContext[KeyNfsACL]
+
 	csiVolID := req.GetVolumeId()
+	publishContext["volumeContextId"] = csiVolID
+
 	if csiVolID == "" {
 		return nil, status.Error(codes.InvalidArgument,
 			"volume ID is required")
@@ -898,12 +905,12 @@ func (s *service) ControllerPublishVolume(
 		fmt.Println("fsID:", fsID)
 		fs, err := s.getFilesystemByID(fsID, systemID)
 		if err != nil {
-			if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
+			if strings.EqualFold(err.Error(), sioGatewayFilesystemNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
 				return nil, status.Error(codes.NotFound,
-					"volume not found")
+					"filesystem not found")
 			}
 			return nil, status.Errorf(codes.Internal,
-				"failure checking volume status before controller publish: %s",
+				"failure checking filesystem status before controller publish: %s",
 				err.Error())
 		}
 
@@ -911,6 +918,8 @@ func (s *service) ControllerPublishVolume(
 		if err != nil {
 			return nil, status.Errorf(codes.NotFound, err.Error())
 		}
+
+		publishContext["host"] = sdcIP
 
 		fsc := req.GetVolumeCapability()
 		if fsc == nil {
@@ -928,7 +937,7 @@ func (s *service) ControllerPublishVolume(
 				errUnknownAccessMode)
 		}
 		//Export for NFS
-		resp, err := s.exportFilesystem(ctx, req, adminClient, fs, sdcIP, nodeID, am)
+		resp, err := s.exportFilesystem(ctx, req, adminClient, fs, sdcIP, nodeID, publishContext, am)
 		return resp, err
 	} else {
 		volID := getVolumeIDFromCsiVolumeID(csiVolID)

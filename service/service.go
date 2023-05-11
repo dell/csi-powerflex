@@ -613,9 +613,9 @@ func (s *service) getSDCID(sdcGUID string, systemID string) (string, error) {
 func (s *service) getSDCIP(sdcGUID string, systemID string) (string, error) {
 	sdcGUID = strings.ToUpper(sdcGUID)
 
-	// Need to translate sdcGUID to fmt.Errorf("getSDCID error systemID not found: %s", systemID)
+	// Need to translate sdcGUID to fmt.Errorf("getSDCIP error systemID not found: %s", systemID)
 	if s.systems[systemID] == nil {
-		return "", fmt.Errorf("getSDCID error systemID not found: %s", systemID)
+		return "", fmt.Errorf("getSDCIP error systemID not found: %s", systemID)
 	}
 	id, err := s.systems[systemID].FindSdc("SdcGUID", sdcGUID)
 	if err != nil {
@@ -930,19 +930,13 @@ func (s *service) getSystemIDFromCsiVolumeID(csiVolID string) string {
 }
 
 // exportFilesystem - Method to export filesystem with idempotency
-func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPublishVolumeRequest, client *goscaleio.Client, fs *siotypes.FileSystem, nodeIP, nodeID string, am *csi.VolumeCapability_AccessMode) (*csi.ControllerPublishVolumeResponse, error) {
-	volumeContext := req.GetVolumeContext()
-
-	// fetch the node IP, for exporting the FS on host.
-	// TODO
-
-	// Create NFS export if it doesn't exist
+func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPublishVolumeRequest, client *goscaleio.Client, fs *siotypes.FileSystem, nodeIP, nodeID string, pContext map[string]string, am *csi.VolumeCapability_AccessMode) (*csi.ControllerPublishVolumeResponse, error) {
 
 	nfsExportName := NFSExportNamePrefix + fs.Name
 
 	nfsExportExists := true
 	var nfsExportID string
-
+	// Check if nfs export exists for the File system
 	nfsExport, err := client.GetNFSExportByIDName(fs.ID, "")
 
 	if err != nil {
@@ -953,7 +947,7 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 			return nil, err
 		}
 	}
-
+	// Create NFS export if it doesn't exist
 	if !nfsExportExists {
 		resp, err := client.CreateNFSExport(&siotypes.NFSExportCreate{
 			Name:         nfsExportName,
@@ -970,8 +964,6 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 		nfsExportID = nfsExport.ID
 
 	}
-
-	//Allocate host access to NFS Share with appropriate access mode
 
 	nfsExportResp, err := client.GetNFSExportByIDName(nfsExportID, "")
 
@@ -1044,17 +1036,12 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 		return nil, status.Errorf(codes.NotFound, "Other hosts have access on NFS Share: %s", nfsExportID)
 	}
 
-	// create publish context
-	publishContext := make(map[string]string)
-	publishContext[KeyNasName] = volumeContext[KeyNasName]
-	publishContext[KeyNfsACL] = volumeContext[KeyNfsACL]
-
 	//Idempotent case
 	if foundIdempotent {
 		Log.Info("Host has access to the given host and exists in the required state.")
-		return &csi.ControllerPublishVolumeResponse{PublishContext: volumeContext}, nil
+		return &csi.ControllerPublishVolumeResponse{PublishContext: pContext}, nil
 	}
-
+	//Allocate host access to NFS Share with appropriate access mode
 	if am.Mode == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
 		readHostList = append(readHostList, nodeIP)
 		client.ModifyNFSExport(&siotypes.NFSExportModify{AddReadOnlyRootHosts: readHostList}, nfsExportID)
@@ -1067,12 +1054,9 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 		return nil, status.Errorf(codes.NotFound, "Allocating host %s access to NFS Export failed. Error: %v", nodeID, err)
 	}
 	Log.Debugf("NFS Export: %s is accessible to host: %s with access mode: %s", nfsExportID, nodeID, am.Mode)
-	Log.Debugf("ControllerPublishVolume successful for volid: [%s]", publishContext["volumeContextId"])
-	// Add host IP to existing nfs export
-	// Add external host IP to existing nfs export
-	// TODO
+	Log.Debugf("ControllerPublishVolume successful for volid: [%s]", pContext["volumeContextId"])
 
-	return &csi.ControllerPublishVolumeResponse{PublishContext: publishContext}, nil
+	return &csi.ControllerPublishVolumeResponse{PublishContext: pContext}, nil
 }
 
 // this function updates volumePrefixToSystems, a map of volume ID prefixes -> system IDs

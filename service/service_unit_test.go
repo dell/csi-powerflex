@@ -79,7 +79,7 @@ func TestGetVolSize(t *testing.T) {
 		tt := tt
 		t.Run("", func(st *testing.T) {
 			st.Parallel()
-			size, err := validateVolSize(tt.cr, false)
+			size, err := validateVolSize(tt.cr)
 			if tt.sizeKiB == 0 {
 				// error is expected
 				assert.Error(st, err)
