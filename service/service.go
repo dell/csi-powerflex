@@ -929,30 +929,28 @@ func (s *service) getSystemIDFromCsiVolumeID(csiVolID string) string {
 // exportFilesystem - Method to export filesystem with idempotency
 func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPublishVolumeRequest, client *goscaleio.Client, fs *siotypes.FileSystem, nodeIP, nodeID string, pContext map[string]string, am *csi.VolumeCapability_AccessMode) (*csi.ControllerPublishVolumeResponse, error) {
 
-	nfsExportName := NFSExportNamePrefix + fs.Name
+	var nfsExportName string
+	nfsExportName = NFSExportNamePrefix + fs.Name
 
 	fmt.Printf("fileSystem:%#v\n", fs)
 	fmt.Printf("exportID:%#v\n", fs.ExportFsID)
 
-	nfsExportExists := true
+	nfsExportExists := false
 	var nfsExportID string
+
 	// Check if nfs export exists for the File system
-	if fs.ExportFsID != "" {
-		nfsExport, err := client.GetNFSExportByIDName(fs.ExportFsID, "")
+	nfsExportList, err := client.GetNFSExport()
 
-		if err != nil {
-			if strings.Contains(err.Error(), sioGatewayNFSExportNotFound) {
-				nfsExportExists = false
+	if err != nil {
+		return nil, err
+	}
 
-			} else {
-				return nil, err
-			}
-		} else {
+	for _, nfsExport := range nfsExportList {
+		if nfsExport.FileSystemID == fs.ID {
+			nfsExportExists = true
 			nfsExportID = nfsExport.ID
+			nfsExportName = nfsExport.Name
 		}
-
-	} else {
-		nfsExportExists = false
 	}
 
 	// Create NFS export if it doesn't exist
@@ -960,7 +958,7 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 		Log.Debugf("NFS Export does not exist for fs: %s ,proceeding to create NFS Export")
 		fmt.Printf("nfsExportName:%v\n", nfsExportName)
 		fmt.Printf("filesytemID:%v\n", fs.ID)
-		fmt.Println("path",NFSExportLocalPath + fs.Name)
+		fmt.Println("path", NFSExportLocalPath+fs.Name)
 		resp, err := client.CreateNFSExport(&siotypes.NFSExportCreate{
 			Name:         nfsExportName,
 			FileSystemID: fs.ID,
