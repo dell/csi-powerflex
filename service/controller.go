@@ -259,7 +259,6 @@ func (s *service) CreateVolume(
 	sysID := s.opts.defaultSystemID
 	arr = s.opts.arrays[sysID]
 	volName := name
-	volName = "k8s-9cbf02ca15"
 
 	if isNFS {
 		// fetch NAS server ID
