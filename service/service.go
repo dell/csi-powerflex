@@ -46,6 +46,9 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -464,6 +467,7 @@ func (s *service) checkNFS(ctx context.Context, systemID string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+
 	c := s.adminClients[systemID]
 	if c == nil {
 		return false, nil
@@ -600,6 +604,23 @@ func (s *service) getSDCID(sdcGUID string, systemID string) (string, error) {
 	}
 
 	return id.Sdc.ID, nil
+}
+
+// getSDCID returns SDC ID from the given sdc GUID and system ID.
+func (s *service) getSDCIP(sdcGUID string, systemID string) (string, error) {
+	sdcGUID = strings.ToUpper(sdcGUID)
+
+	// Need to translate sdcGUID to fmt.Errorf("getSDCIP error systemID not found: %s", systemID)
+	if s.systems[systemID] == nil {
+		return "", fmt.Errorf("getSDCIP error systemID not found: %s", systemID)
+	}
+	id, err := s.systems[systemID].FindSdc("SdcGUID", sdcGUID)
+	if err != nil {
+		return "", fmt.Errorf("error finding SDC from GUID: %s, err: %s",
+			sdcGUID, err.Error())
+	}
+
+	return id.Sdc.SdcIP, nil
 }
 
 // getStoragePoolID returns pool ID from the given name, system ID, and protectionDomain name
@@ -906,22 +927,137 @@ func (s *service) getSystemIDFromCsiVolumeID(csiVolID string) string {
 }
 
 // exportFilesystem - Method to export filesystem with idempotency
-func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPublishVolumeRequest, client *goscaleio.Client, fs *siotypes.FileSystem, nodeID string) (*csi.ControllerPublishVolumeResponse, error) {
-	volumeContext := req.GetVolumeContext()
+func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPublishVolumeRequest, client *goscaleio.Client, fs *siotypes.FileSystem, nodeIP, nodeID string, pContext map[string]string, am *csi.VolumeCapability_AccessMode) (*csi.ControllerPublishVolumeResponse, error) {
 
-	// fetch the node IP, for exporting the FS on host.
-	// TODO
+	var nfsExportName string
+	nfsExportName = NFSExportNamePrefix + fs.Name
+
+	nfsExportExists := false
+	var nfsExportID string
+
+	// Check if nfs export exists for the File system
+	nfsExportList, err := client.GetNFSExport()
+
+	if err != nil {
+		return nil, err
+	}
+
+	for _, nfsExport := range nfsExportList {
+		if nfsExport.FileSystemID == fs.ID {
+			nfsExportExists = true
+			nfsExportID = nfsExport.ID
+			nfsExportName = nfsExport.Name
+		}
+	}
 
 	// Create NFS export if it doesn't exist
-	// Add host IP to existing nfs export
-	// Add external host IP to existing nfs export
-	// TODO
+	if !nfsExportExists {
+		Log.Debugf("NFS Export does not exist for fs: %s ,proceeding to create NFS Export", fs)
+		resp, err := client.CreateNFSExport(&siotypes.NFSExportCreate{
+			Name:         nfsExportName,
+			FileSystemID: fs.ID,
+			Path:         NFSExportLocalPath + fs.Name,
+		})
 
-	// create publish context
-	publishContext := make(map[string]string)
-	publishContext[KeyNasName] = volumeContext[KeyNasName]
-	publishContext[KeyNfsACL] = volumeContext[KeyNfsACL]
-	return &csi.ControllerPublishVolumeResponse{PublishContext: publishContext}, nil
+		if err != nil {
+			return nil, status.Errorf(codes.NotFound, "create NFS Export failed. Error:%v", err)
+		}
+
+		nfsExportID = resp.ID
+	}
+
+	nfsExportResp, err := client.GetNFSExportByIDName(nfsExportID, "")
+
+	if err != nil {
+		return nil, status.Errorf(codes.NotFound, "Could not find NFS Export: %s", err)
+	}
+
+	readOnlyHosts := nfsExportResp.ReadOnlyHosts
+	readWriteHosts := nfsExportResp.ReadWriteHosts
+	readOnlyRootHosts := nfsExportResp.ReadOnlyRootHosts
+	readWriteRootHosts := nfsExportResp.ReadWriteRootHosts
+
+	foundIncompatible := false
+	foundIdempotent := false
+	otherHostsWithAccess := len(readOnlyHosts)
+
+	var readHostList, readWriteHostList []string
+
+	for _, host := range readOnlyHosts {
+		if host == nodeIP {
+			foundIncompatible = true
+			break
+		}
+	}
+
+	otherHostsWithAccess += len(readWriteHosts)
+	if !foundIncompatible {
+		for _, host := range readWriteHosts {
+			if host == nodeIP {
+				foundIncompatible = true
+				break
+			}
+		}
+	}
+
+	otherHostsWithAccess += len(readOnlyRootHosts)
+	if !foundIncompatible {
+		for _, host := range readOnlyRootHosts {
+			readHostList = append(readHostList, host)
+			if host == nodeIP {
+				if am.Mode == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
+					foundIdempotent = true
+				} else {
+					foundIncompatible = true
+				}
+			}
+		}
+	}
+	otherHostsWithAccess += len(readWriteRootHosts)
+
+	if !foundIncompatible && !foundIdempotent {
+		for _, host := range readWriteRootHosts {
+			readWriteHostList = append(readWriteHostList, nodeIP)
+			if host == nodeIP {
+				if am.Mode == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
+					foundIncompatible = true
+				} else {
+					foundIdempotent = true
+					otherHostsWithAccess--
+				}
+			}
+		}
+	}
+
+	if foundIncompatible {
+		return nil, status.Errorf(codes.NotFound, "Host: %s has access on NFS Export: %s with incompatible access mode.", nodeID, nfsExportID)
+	}
+
+	if (am.Mode == csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER || am.Mode == csi.VolumeCapability_AccessMode_SINGLE_NODE_SINGLE_WRITER || am.Mode == csi.VolumeCapability_AccessMode_SINGLE_NODE_MULTI_WRITER) && otherHostsWithAccess > 0 {
+		return nil, status.Errorf(codes.NotFound, "Other hosts have access on NFS Share: %s", nfsExportID)
+	}
+
+	//Idempotent case
+	if foundIdempotent {
+		Log.Info("Host has access to the given host and exists in the required state.")
+		return &csi.ControllerPublishVolumeResponse{PublishContext: pContext}, nil
+	}
+	//Allocate host access to NFS Share with appropriate access mode
+	if am.Mode == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
+		readHostList = append(readHostList, nodeIP)
+		client.ModifyNFSExport(&siotypes.NFSExportModify{AddReadOnlyRootHosts: readHostList}, nfsExportID)
+	} else {
+		readWriteHostList = append(readWriteHostList, nodeIP)
+		client.ModifyNFSExport(&siotypes.NFSExportModify{AddReadWriteRootHosts: readWriteHostList}, nfsExportID)
+	}
+
+	if err != nil {
+		return nil, status.Errorf(codes.NotFound, "Allocating host %s access to NFS Export failed. Error: %v", nodeID, err)
+	}
+	Log.Debugf("NFS Export: %s is accessible to host: %s with access mode: %s", nfsExportID, nodeID, am.Mode)
+	Log.Debugf("ControllerPublishVolume successful for volid: [%s]", pContext["volumeContextId"])
+
+	return &csi.ControllerPublishVolumeResponse{PublishContext: pContext}, nil
 }
 
 // this function updates volumePrefixToSystems, a map of volume ID prefixes -> system IDs

@@ -71,6 +71,9 @@ const (
 	// volume create parameters map
 	KeyFsType = "fsType"
 
+	NFSExportLocalPath  = "/"
+	NFSExportNamePrefix = "csishare-"
+
 	// DefaultVolumeSizeKiB is default volume sgolang/protobuf/blob/master/ptypesize
 	// to create on a scaleIO cluster when no size is given, expressed in KiB
 	DefaultVolumeSizeKiB = 16 * kiBytesInGiB
@@ -253,6 +256,7 @@ func (s *service) CreateVolume(
 	var arr *ArrayConnectionData
 	sysID := s.opts.defaultSystemID
 	arr = s.opts.arrays[sysID]
+	volName := name
 
 	if isNFS {
 		// fetch NAS server ID
@@ -275,6 +279,7 @@ func (s *service) CreateVolume(
 			if err != nil {
 				return nil, err
 			}
+
 		}
 
 		storagePoolName, ok := params[KeyStoragePool]
@@ -326,7 +331,11 @@ func (s *service) CreateVolume(
 		if existingFS != nil {
 			if existingFS.SizeTotal == int(size) {
 				vi := s.getCSIVolumeFromFilesystem(existingFS, systemID)
-				vi.AccessibleTopology = volumeTopology
+				vi.VolumeContext[KeyNasName] = nasName
+				vi.VolumeContext[KeyNfsACL] = nfsAcls
+				vi.VolumeContext[KeyFsType] = fsType
+				nfsTopology := s.GetNfsTopology(systemID)
+				vi.AccessibleTopology = nfsTopology
 				csiResp := &csi.CreateVolumeResponse{
 					Volume: vi,
 				}
@@ -825,7 +834,14 @@ func (s *service) ControllerPublishVolume(
 		}
 	}
 
+	// create publish context
+	publishContext := make(map[string]string)
+	publishContext[KeyNasName] = volumeContext[KeyNasName]
+	publishContext[KeyNfsACL] = volumeContext[KeyNfsACL]
+
 	csiVolID := req.GetVolumeId()
+	publishContext["volumeContextId"] = csiVolID
+
 	if csiVolID == "" {
 		return nil, status.Error(codes.InvalidArgument,
 			"volume ID is required")
@@ -882,6 +898,13 @@ func (s *service) ControllerPublishVolume(
 				err.Error())
 		}
 
+		sdcIP, err := s.getSDCIP(nodeID, systemID)
+		if err != nil {
+			return nil, status.Errorf(codes.NotFound, err.Error())
+		}
+
+		publishContext["host"] = sdcIP
+
 		fsc := req.GetVolumeCapability()
 		if fsc == nil {
 			return nil, status.Error(codes.InvalidArgument,
@@ -898,7 +921,7 @@ func (s *service) ControllerPublishVolume(
 				errUnknownAccessMode)
 		}
 		//Export for NFS
-		resp, err := s.exportFilesystem(ctx, req, adminClient, fs, nodeID)
+		resp, err := s.exportFilesystem(ctx, req, adminClient, fs, sdcIP, nodeID, publishContext, am)
 		return resp, err
 	} else {
 		volID := getVolumeIDFromCsiVolumeID(csiVolID)
