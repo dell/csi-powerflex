@@ -224,7 +224,11 @@ func (s *service) NodePublishVolume(
 
 		fmt.Printf("path:%#v\n", path)
 
-		publishNFS(ctx, req, path)
+		if err := publishNFS(ctx, req, path); err != nil {
+			return nil, err
+		}
+
+		return &csi.NodePublishVolumeResponse{}, nil
 	}
 
 	sdcMappedVol, err := s.getSDCMappedVol(volID, systemID, publishGetMappedVolMaxRetry)
