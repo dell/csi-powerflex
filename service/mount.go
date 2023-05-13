@@ -331,6 +331,118 @@ func publishVolume(
 	return nil
 }
 
+func publishNFS(ctx context.Context, req *csi.NodePublishVolumeRequest, nfsExportUrl string) error {
+	volCap := req.GetVolumeCapability()
+
+	if volCap == nil {
+		return status.Error(codes.InvalidArgument,
+			"Volume Capability is required")
+	}
+
+	am := volCap.GetAccessMode()
+
+	if am == nil {
+		return status.Error(codes.InvalidArgument,
+			"Volume Access Mode is required")
+	}
+
+	mountVol := volCap.GetMount()
+
+	if mountVol == nil {
+		return status.Error(codes.InvalidArgument, "Invalid access type")
+	}
+
+	var mntOptions []string
+	mntOptions = mountVol.GetMountFlags()
+	Log.Infof("The mountOptions received are: %s", mntOptions)
+
+	target := req.GetTargetPath()
+	if target == "" {
+		return status.Error(codes.InvalidArgument,
+			"Target Path is required")
+	}
+
+	// make sure target is created
+	_, err := mkdir(target)
+
+	if err != nil {
+		return status.Error(codes.FailedPrecondition, fmt.Sprintf("Could not create '%s': '%s'", target, err.Error()))
+	}
+	roFlag := req.GetReadonly()
+	rwOption := "rw"
+	if roFlag {
+		rwOption = "ro"
+	}
+
+	mntOptions = append(mntOptions, rwOption)
+
+	fields := map[string]interface{}{
+		"ID":         req.VolumeId,
+		"TargetPath": target,
+		"ExportPath": nfsExportUrl,
+		"AccessMode": am.GetMode(),
+	}
+	Log.WithFields(fields).Info("Node publish volume params ")
+
+	mnts, err := gofsutil.GetMounts(ctx)
+	if err != nil {
+		return status.Errorf(codes.Internal,
+			"could not reliably determine existing mount status: '%s'",
+			err.Error())
+	}
+
+	if len(mnts) != 0 {
+		for _, m := range mnts {
+			// check for idempotency
+			//same volume
+			if m.Device == nfsExportUrl {
+				if m.Path == target {
+					//as per specs, T1=T2, P1=P2 - return OK
+					if contains(m.Opts, rwOption) {
+						Log.WithFields(fields).Debug(
+							"mount already in place with same options")
+						return nil
+					}
+					//T1=T2, P1!=P2 - return AlreadyExists
+					Log.WithFields(fields).Error("Mount point already in use by device with different options")
+					return status.Error(codes.AlreadyExists, "Mount point already in use by device with different options")
+				}
+				//T1!=T2, P1==P2 || P1 != P2 - return FailedPrecondition for single node
+				if am.GetMode() == csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER ||
+					am.GetMode() == csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY ||
+					am.GetMode() == csi.VolumeCapability_AccessMode_SINGLE_NODE_SINGLE_WRITER {
+					Log.WithFields(fields).Error("Mount point already in use for same device")
+					return status.Error(codes.FailedPrecondition, "Mount point already in use for same device")
+				}
+			}
+		}
+	}
+
+	Log.Infof("The mountOptions being used for mount are: %s", mntOptions)
+	if err := gofsutil.Mount(context.Background(), nfsExportUrl, target, "nfs", mntOptions...); err != nil {
+		var count = 0
+		var errmsg = err.Error()
+		//Both substring validation is for NFSv3 and NFSv4 errors resp.
+		for (strings.Contains(strings.ToLower(errmsg), "access denied by server while mounting") || (strings.Contains(strings.ToLower(errmsg), "no such file or directory"))) && count < 5 {
+			time.Sleep(2 * time.Second)
+			Log.Infof("Mount re-trial attempt-%d", count)
+			err = gofsutil.Mount(context.Background(), nfsExportUrl, target, "nfs", mntOptions...)
+			if err != nil {
+				errmsg = err.Error()
+			} else {
+				break
+			}
+			count++
+		}
+		if err != nil {
+			Log.Errorf("%v", err)
+			return err
+		}
+	}
+	return nil
+
+}
+
 func handlePrivFSMount(
 	ctx context.Context,
 	accMode *csi.VolumeCapability_AccessMode,

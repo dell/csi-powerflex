@@ -892,6 +892,24 @@ func getFilesystemIDFromCsiVolumeID(csiVolID string) string {
 	return ""
 }
 
+func (s *service) getNFSExport(fs *siotypes.FileSystem, client *goscaleio.Client) (*siotypes.NFSExport, error) {
+
+	nfsExportList, err := client.GetNFSExport()
+
+	if err != nil {
+		return nil, err
+	}
+
+	for _, nfsExport := range nfsExportList {
+		if nfsExport.FileSystemID == fs.ID {
+			return &nfsExport, nil
+		}
+	}
+
+	return nil, status.Errorf(codes.NotFound, "NFS Export for the file system: %s not found", fs.Name)
+
+}
+
 // getSystemIDFromCsiVolumeId returns PowerFlex volume ID from CSI volume ID
 func (s *service) getSystemIDFromCsiVolumeID(csiVolID string) string {
 	containsHyphen := strings.Contains(csiVolID, "/")

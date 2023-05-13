@@ -142,6 +142,13 @@ func (s *service) NodePublishVolume(
 	}
 	Log.Printf("[NodePublishVolume] csiVolID: %s", csiVolID)
 
+	// Check for NFS protocol
+	fsType := volumeContext[KeyFsType]
+	isNFS := false
+	if fsType == "nfs" {
+		isNFS = true
+	}
+
 	volID := getVolumeIDFromCsiVolumeID(csiVolID)
 	Log.Printf("[NodePublishVolume] volumeID: %s", volID)
 
@@ -168,6 +175,31 @@ func (s *service) NodePublishVolume(
 		return nil, status.Errorf(codes.Internal,
 			"checkVolumesMap for id: %s failed : %s", csiVolID, err.Error())
 
+	}
+
+	if isNFS {
+		fsID := getFilesystemIDFromCsiVolumeID(csiVolID)
+
+		fs, err := s.getFilesystemByID(fsID, systemID)
+		if err != nil {
+			if strings.EqualFold(err.Error(), sioGatewayFilesystemNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
+				return nil, status.Error(codes.NotFound,
+					"filesystem not found")
+			}
+			return nil, status.Errorf(codes.Internal,
+				"failure checking filesystem status before controller publish: %s",
+				err.Error())
+		}
+
+		client := s.adminClients[systemID]
+
+		NFSExport, err := s.getNFSExport(fs, client)
+
+		if err != nil {
+			return nil, err
+		}
+
+		publishNFS(ctx, req, NFSExport.Path)
 	}
 
 	sdcMappedVol, err := s.getSDCMappedVol(volID, systemID, publishGetMappedVolMaxRetry)
