@@ -178,6 +178,9 @@ func (s *service) NodePublishVolume(
 	}
 
 	if isNFS {
+		pubContext := req.PublishContext
+		host := pubContext["host"]
+		fmt.Printf("host:%#v\n", host)
 		fsID := getFilesystemIDFromCsiVolumeID(csiVolID)
 
 		fs, err := s.getFilesystemByID(fsID, systemID)
@@ -199,7 +202,11 @@ func (s *service) NodePublishVolume(
 			return nil, err
 		}
 
-		publishNFS(ctx, req, NFSExport.Path)
+		path := fmt.Sprintf("%s:%s", host, NFSExport.Path)
+
+		fmt.Printf("path:%#v\n", path)
+
+		publishNFS(ctx, req, path)
 	}
 
 	sdcMappedVol, err := s.getSDCMappedVol(volID, systemID, publishGetMappedVolMaxRetry)
