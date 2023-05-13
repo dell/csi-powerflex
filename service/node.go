@@ -202,7 +202,25 @@ func (s *service) NodePublishVolume(
 			return nil, err
 		}
 
-		path := fmt.Sprintf("%s:%s", host, NFSExport.Path)
+		system, err := client.FindSystem(systemID, "", "")
+
+		if err != nil {
+			return nil, err
+		}
+
+		nas, err := system.GetNASByIDName(fs.NasServerID, "")
+
+		if err != nil {
+			return nil, err
+		}
+
+		fileInterface, err := system.GetFileInterface(nas.CurrentPreferredIPv4InterfaceID)
+
+		if err != nil {
+			return nil, err
+		}
+
+		path := fmt.Sprintf("%s:%s", fileInterface.IpAddress, NFSExport.Path)
 
 		fmt.Printf("path:%#v\n", path)
 
