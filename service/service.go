@@ -910,6 +910,27 @@ func (s *service) getNFSExport(fs *siotypes.FileSystem, client *goscaleio.Client
 
 }
 
+func (s *service) getFileInterface(systemID string, fs *siotypes.FileSystem, client *goscaleio.Client) (*siotypes.FileInterface, error) {
+	system, err := client.FindSystem(systemID, "", "")
+
+	if err != nil {
+		return nil, err
+	}
+
+	nas, err := system.GetNASByIDName(fs.NasServerID, "")
+
+	if err != nil {
+		return nil, err
+	}
+
+	fileInterface, err := system.GetFileInterface(nas.CurrentPreferredIPv4InterfaceID)
+
+	if err != nil {
+		return nil, err
+	}
+	return fileInterface, err
+}
+
 // getSystemIDFromCsiVolumeId returns PowerFlex volume ID from CSI volume ID
 func (s *service) getSystemIDFromCsiVolumeID(csiVolID string) string {
 	containsHyphen := strings.Contains(csiVolID, "/")

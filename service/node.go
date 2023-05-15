@@ -178,14 +178,11 @@ func (s *service) NodePublishVolume(
 	}
 
 	if isNFS {
-		pubContext := req.PublishContext
-		host := pubContext["host"]
-		fmt.Printf("host:%#v\n", host)
 		fsID := getFilesystemIDFromCsiVolumeID(csiVolID)
 
 		fs, err := s.getFilesystemByID(fsID, systemID)
 		if err != nil {
-			if strings.EqualFold(err.Error(), sioGatewayFilesystemNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
+			if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
 				return nil, status.Error(codes.NotFound,
 					"filesystem not found")
 			}
@@ -202,27 +199,12 @@ func (s *service) NodePublishVolume(
 			return nil, err
 		}
 
-		system, err := client.FindSystem(systemID, "", "")
-
-		if err != nil {
-			return nil, err
-		}
-
-		nas, err := system.GetNASByIDName(fs.NasServerID, "")
-
-		if err != nil {
-			return nil, err
-		}
-
-		fileInterface, err := system.GetFileInterface(nas.CurrentPreferredIPv4InterfaceID)
-
+		fileInterface, err := s.getFileInterface(systemID, fs, client)
 		if err != nil {
 			return nil, err
 		}
 
 		path := fmt.Sprintf("%s:%s", fileInterface.IpAddress, NFSExport.Path)
-
-		fmt.Printf("path:%#v\n", path)
 
 		if err := publishNFS(ctx, req, path); err != nil {
 			return nil, err
