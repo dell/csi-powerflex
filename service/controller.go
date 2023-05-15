@@ -98,8 +98,6 @@ const (
 	removeModeOnlyMe                    = "ONLY_ME"
 	sioGatewayNotFound                  = "Not found"
 	sioGatewayVolumeNotFound            = "Could not find the volume"
-	sioGatewayNFSExportNotFound         = "couldn't find NFS export"
-	sioGatewayFilesystemNotFound        = "Could not find the filesystem"
 	sioVolumeRemovalOperationInProgress = "A volume removal operation is currently in progress"
 	sioGatewayVolumeNameInUse           = "Volume name already in use. Please use a different name."
 	errNoMultiMap                       = "volume not enabled for mapping to multiple hosts"
@@ -891,12 +889,12 @@ func (s *service) ControllerPublishVolume(
 		fsID := getFilesystemIDFromCsiVolumeID(csiVolID)
 		fs, err := s.getFilesystemByID(fsID, systemID)
 		if err != nil {
-			if strings.EqualFold(err.Error(), sioGatewayFilesystemNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
+			if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
 				return nil, status.Error(codes.NotFound,
-					"filesystem not found")
+					"volume not found")
 			}
 			return nil, status.Errorf(codes.Internal,
-				"failure checking filesystem status before controller publish: %s",
+				"failure checking volume status before controller publish: %s",
 				err.Error())
 		}
 
