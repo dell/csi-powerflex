@@ -204,7 +204,7 @@ func (s *service) NodePublishVolume(
 			return nil, err
 		}
 
-		path := fmt.Sprintf("%s:%s", fileInterface.IpAddress, NFSExport.Path)
+		path := fmt.Sprintf("%s:%s", fileInterface.IPAddress, NFSExport.Path)
 
 		if err := publishNFS(ctx, req, path); err != nil {
 			return nil, err
