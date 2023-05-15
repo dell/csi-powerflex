@@ -892,6 +892,48 @@ func getFilesystemIDFromCsiVolumeID(csiVolID string) string {
 	return ""
 }
 
+// getNFSExport method returns the NFSExport for a given filesystem
+// and returns a not found error if the NFSExport does not exist for filesystem.
+func (s *service) getNFSExport(fs *siotypes.FileSystem, client *goscaleio.Client) (*siotypes.NFSExport, error) {
+
+	nfsExportList, err := client.GetNFSExport()
+
+	if err != nil {
+		return nil, err
+	}
+
+	for _, nfsExport := range nfsExportList {
+		if nfsExport.FileSystemID == fs.ID {
+			return &nfsExport, nil
+		}
+	}
+
+	return nil, status.Errorf(codes.NotFound, "NFS Export for the file system: %s not found", fs.Name)
+
+}
+
+// getFileInterface method returns the FileInterface for the given filesytem.
+func (s *service) getFileInterface(systemID string, fs *siotypes.FileSystem, client *goscaleio.Client) (*siotypes.FileInterface, error) {
+	system, err := client.FindSystem(systemID, "", "")
+
+	if err != nil {
+		return nil, err
+	}
+
+	nas, err := system.GetNASByIDName(fs.NasServerID, "")
+
+	if err != nil {
+		return nil, err
+	}
+
+	fileInterface, err := system.GetFileInterface(nas.CurrentPreferredIPv4InterfaceID)
+
+	if err != nil {
+		return nil, err
+	}
+	return fileInterface, err
+}
+
 // getSystemIDFromCsiVolumeId returns PowerFlex volume ID from CSI volume ID
 func (s *service) getSystemIDFromCsiVolumeID(csiVolID string) string {
 	containsHyphen := strings.Contains(csiVolID, "/")
@@ -952,7 +994,7 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 
 	// Create NFS export if it doesn't exist
 	if !nfsExportExists {
-		Log.Debugf("NFS Export does not exist for fs: %s ,proceeding to create NFS Export", fs)
+		Log.Debugf("NFS Export does not exist for fs: %s ,proceeding to create NFS Export", fs.Name)
 		resp, err := client.CreateNFSExport(&siotypes.NFSExportCreate{
 			Name:         nfsExportName,
 			FileSystemID: fs.ID,
