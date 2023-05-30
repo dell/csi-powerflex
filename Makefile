@@ -36,7 +36,7 @@ build: dependencies
 
 # Generates the docker container (but does not push)
 docker: dependencies
-	make -f docker.mk docker
+	make -f docker.mk build-base-image docker
 
 # Pushes container to the repository
 push: docker
