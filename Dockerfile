@@ -26,17 +26,7 @@ RUN CGO_ENABLED=0 \
     make build
 
 # Stage to build the driver image
-FROM $BASEIMAGE@${DIGEST} AS final
-# install necessary packages
-# alphabetical order for easier maintenance
-RUN microdnf update -y && \
-    microdnf install -y  \
-        e4fsprogs \
-        kmod \
-        libaio \
-        numactl \
-        xfsprogs && \
-    microdnf clean all
+FROM $BASEIMAGE AS final
 ENTRYPOINT ["/csi-vxflexos.sh"]
 # copy in the driver
 COPY --from=builder /go/src/csi-vxflexos /
