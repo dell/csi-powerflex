@@ -40,7 +40,7 @@ docker: dependencies
 
 # Pushes container to the repository
 push: docker
-	make -f docker.mk build-base-image push
+	make -f docker.mk  push
 
 # Windows or Linux; requires no hardware
 unit-test:

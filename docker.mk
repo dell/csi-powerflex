@@ -26,6 +26,6 @@ push:
 
 build-base-image:
 	@echo "Building base image from $(BASEIMAGE) and loading dependencies..."
-    ./scripts/build_ubi_micro.sh $(BASEIMAGE)
-    @echo "Base image build: SUCCESS"
-    $(eval BASEIMAGE=localhost/csipowerflex-ubimicro:latest)
+	./scripts/build_ubi_micro.sh $(BASEIMAGE)
+	@echo "Base image build: SUCCESS"
+	$(eval BASEIMAGE=localhost/csipowerflex-ubimicro:latest)
