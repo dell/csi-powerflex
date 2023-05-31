@@ -19,7 +19,7 @@ import (
 	logrus "github.com/sirupsen/logrus"
 )
 
-//Log init
+// Log init
 var Log = logrus.New()
 
 // New returns a new Mock Storage Plug-in Provider.

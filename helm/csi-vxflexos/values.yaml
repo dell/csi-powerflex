@@ -3,7 +3,7 @@
 
 # "version" is used to verify the values file matches driver version
 # Not recommend to change
-version: v2.6.0
+version: v2.7.0
 
 images:
   # "driver" defines the container image, used for the driver container.
@@ -95,7 +95,7 @@ controller:
     # image: Image to use for dell-csi-replicator. This shouldn't be changed
     # Allowed values: string
     # Default value: None
-    image: dellemc/dell-csi-replicator:v1.4.0
+    image: dellemc/dell-csi-replicator:v1.5.0
 
     # replicationContextPrefix: prefix to use for naming of resources created by replication feature
     # Allowed values: string
@@ -277,7 +277,7 @@ vgsnapshotter:
 # Enable this feature only after contact support for additional information
 podmon:
   enabled: false
-  image: dellemc/podmon:v1.5.0
+  image: dellemc/podmon:v1.6.0
   #controller:
   #  args:
   #    - "--csisock=unix:/var/run/csi/csi.sock"

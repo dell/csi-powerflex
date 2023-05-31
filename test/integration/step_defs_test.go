@@ -1371,8 +1371,8 @@ func (f *feature) iCallCreateVolumeGroupSnapshot() error {
 	return nil
 }
 
-//takes f.VolumeGroupSnapshot (assumes length >=2 ), and splits its snapshots into
-//two VolumeGroupSnapshots, f.volumeGroupSnapshot and  f.volumeGroupSnapshot2
+// takes f.VolumeGroupSnapshot (assumes length >=2 ), and splits its snapshots into
+// two VolumeGroupSnapshots, f.volumeGroupSnapshot and  f.volumeGroupSnapshot2
 func (f *feature) iCallSplitVolumeGroupSnapshot() error {
 	if f.VolumeGroupSnapshot == nil {
 		fmt.Printf("No VolumeGroupSnapshot to split.\n")
@@ -1594,7 +1594,7 @@ func (f *feature) theVolumeconditionIs(health string) error {
 	return nil
 }
 
-//add given suffix to name or use time as suffix and set to max of 30 characters
+// add given suffix to name or use time as suffix and set to max of 30 characters
 func makeAUniqueName(name *string) {
 	if name == nil {
 		temp := "tmp"
