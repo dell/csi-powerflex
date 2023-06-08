@@ -109,7 +109,7 @@ func (s *service) NodePublishVolume(
 	ctx context.Context,
 	req *csi.NodePublishVolumeRequest) (
 	*csi.NodePublishVolumeResponse, error) {
-
+	fmt.Println("i am in nodePublish Volume function.....")
 	var reqID string
 	headers, ok := metadata.FromIncomingContext(ctx)
 	if ok {
@@ -136,6 +136,7 @@ func (s *service) NodePublishVolume(
 	}
 
 	csiVolID := req.GetVolumeId()
+	fmt.Println("***NodePublishVolume csiVolID***:", csiVolID)
 	if csiVolID == "" {
 		return nil, status.Error(codes.InvalidArgument,
 			"volume ID is required")
@@ -155,6 +156,8 @@ func (s *service) NodePublishVolume(
 		return nil, status.Error(codes.InvalidArgument,
 			"systemID is not found in the request and there is no default system")
 	}
+
+	fmt.Println("****NodePublishVolume systemID****", systemID)
 
 	Log.Printf("[NodePublishVolume] We are about to probe the system with systemID %s", systemID)
 	// Probe the system to make sure it is managed by driver
@@ -307,6 +310,8 @@ func (s *service) getSDCMappedVol(volumeID string, systemID string, maxRetry int
 	var sdcMappedVol *goscaleio.SdcMappedVolume
 	var err error
 	for i := 0; i < maxRetry; i++ {
+		fmt.Println("getSDCMappedVol fn:")
+		fmt.Println("connectedSystemNameToID", s.connectedSystemNameToID[systemID])
 		if id, ok := s.connectedSystemNameToID[systemID]; ok {
 			Log.Printf("Node publish getMappedVol name: %s id: %s", systemID, id)
 			systemID = id
@@ -334,12 +339,14 @@ func getMappedVol(volID string, systemID string) (*goscaleio.SdcMappedVolume, er
 		Log.Printf("Length of localVols (goscaleio.GetLocalVolumeMap()) is 0 \n")
 	}
 	for _, v := range localVols {
+		fmt.Printf("%#v\n", v)
 		if v.VolumeID == volID && v.MdmID == systemID {
 			sdcMappedVol = v
 			Log.Printf("Found matching SDC mapped volume %v", sdcMappedVol)
 			break
 		}
 	}
+	fmt.Println("sdcMappedVol", sdcMappedVol)
 	if sdcMappedVol == nil {
 		return nil, status.Errorf(codes.Unavailable,
 			"volume: %s on system: %s not published to node", volID, systemID)
