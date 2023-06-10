@@ -124,7 +124,6 @@ Feature: VxFlex OS CSI interface
     And there are no errors
     And when I call DeleteVolume
 
-  @wip
   Scenario: Create, publish, unpublish, and delete basic vol, change name of array and specify allSystemNames
     Given a VxFlexOS service
     And I set another systemID "altSystem"
@@ -172,7 +171,7 @@ Feature: VxFlex OS CSI interface
       | "32" |
       | "64" |
    
-  
+  @wip
   Scenario: Create volume, create snapshot, create volume from snapshot, delete original volume, delete new volume
     Given a VxFlexOS service
     And I set another systemID "altSystem"
