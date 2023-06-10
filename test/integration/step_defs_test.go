@@ -1638,16 +1638,20 @@ func (f *feature) iSetSystemName(name string) error {
 			id = parts[0]
 		}
 	}
+	fmt.Println("id***", id)
 	isNumeric := regexp.MustCompile(`^[0-9a-f]+$`).MatchString
 	if !isNumeric(id) {
 		return fmt.Errorf("Error during set name on pflex %s is not id of system", id)
 	}
 	endpoint := ""
 	var array *ArrayConnectionData
+	fmt.Println("f.arrays****", f.arrays)
 	for _, a := range f.arrays {
 		if strings.Contains(a.SystemID, id) || strings.Contains(a.SystemID, "pflex") {
 			endpoint = a.Endpoint
+			fmt.Println("endpoint****", endpoint)
 			array = a
+			fmt.Println("**array***", array)
 		}
 	}
 	if array == nil {
@@ -1655,7 +1659,9 @@ func (f *feature) iSetSystemName(name string) error {
 	}
 	if endpoint != "" {
 		cred := array.Username + ":" + array.Password
+		fmt.Println("cred:", cred)
 		url := endpoint + "/api/login"
+		fmt.Println("url:", url)
 		fmt.Printf("call url %s\n", url)
 		token, err := f.restCallToSetName(cred, url, "")
 		if err != nil {
