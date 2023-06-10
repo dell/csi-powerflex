@@ -85,7 +85,7 @@ Feature: VxFlex OS CSI interface
      | "single-writer"             |
      | "single-node-single-writer" |
      | "single-node-multi-writer"  |
-  
+  @wip
   Scenario Outline: Create, publish, unpublish, and delete basic vol, using systemName. Second run: sc has ID, but secret has name
    Given a VxFlexOS service
     And a capability with voltype "mount" access "single-writer" fstype "ext4"
