@@ -1760,6 +1760,7 @@ func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) e
 				err.Error())
 		}
 		s.systems[systemID] = system
+		fmt.Printf("s.systems%#v\n", s.systems)
 		if system.System != nil && system.System.Name != "" {
 			Log.Printf("Found Name for system=%s with ID=%s", system.System.Name, system.System.ID)
 			s.connectedSystemNameToID[system.System.Name] = system.System.ID
