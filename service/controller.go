@@ -1795,7 +1795,8 @@ func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) e
 }
 
 func (s *service) requireProbe(ctx context.Context, systemID string) error {
-	if s.adminClients[systemID] == nil {
+	fmt.Println("*****s.adminClients[systemID]*****:", s.adminClients[systemID])
+	if s.adminClients[systemID] == nil || s.systems[systemID] == nil {
 		Log.Debugf("probing system %s automatically", systemID)
 		array, ok := s.opts.arrays[systemID]
 		if ok {
@@ -1846,6 +1847,7 @@ func (s *service) CreateSnapshot(
 			"systemID is not found in the request and there is no default system")
 	}
 
+	fmt.Println("calling the requireProbe in createSnapshot fn...")
 	// Requires probe
 	if err := s.requireProbe(ctx, systemID); err != nil {
 		return nil, err
