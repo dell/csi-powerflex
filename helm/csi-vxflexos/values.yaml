@@ -5,12 +5,26 @@
 # Not recommend to change
 version: v2.7.0
 
+# Defines the image locations of every containers used by the CSI Driver & CSM
+# You can replace them with an internal registry location if needed
 images:
   # "driver" defines the container image, used for the driver container.
-  driverRepository: dellemc
-
+  driver: dellemc/csi-vxflexos:v2.7.0
   # "powerflexSdc" defines the SDC image for init container.
   powerflexSdc: dellemc/sdc:3.6.0.6
+  # CSI sidecars
+  attacher: registry.k8s.io/sig-storage/csi-attacher:v4.3.0
+  provisioner: registry.k8s.io/sig-storage/csi-provisioner:v3.5.0
+  snapshotter: registry.k8s.io/sig-storage/csi-snapshotter:v6.2.2
+  resizer: registry.k8s.io/sig-storage/csi-resizer:v1.8.0
+  registrar: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.8.0
+  healthmonitor: registry.k8s.io/sig-storage/csi-external-health-monitor-controller:v0.9.0
+
+  # CSM sidecars
+  replication: dellemc/dell-csi-replicator:v1.5.0
+  vgsnapshotter: dellemc/csi-volumegroup-snapshotter:v1.2.0
+  podmon: dellemc/podmon:v1.6.0
+  authorization: dellemc/csm-authorization-sidecar:v1.7.0
 
 
 # Represents number of certificate secrets, which user is going to create for ssl authentication. (vxflexos-cert-0..vxflexos-cert-n)
@@ -91,11 +105,6 @@ controller:
     #   false: disable replication feature(do not install dell-csi-replicator sidecar)
     # Default value: false
     enabled: false
-
-    # image: Image to use for dell-csi-replicator. This shouldn't be changed
-    # Allowed values: string
-    # Default value: None
-    image: dellemc/dell-csi-replicator:v1.5.0
 
     # replicationContextPrefix: prefix to use for naming of resources created by replication feature
     # Allowed values: string
@@ -271,31 +280,29 @@ monitor:
 # These options control the running of the vgsnapshotter container
 vgsnapshotter:
   enabled: false
-  image: dellemc/csi-volumegroup-snapshotter:v1.2.0
 
 # Podmon is an optional feature under development and tech preview.
 # Enable this feature only after contact support for additional information
 podmon:
   enabled: false
-  image: dellemc/podmon:v1.6.0
-  #controller:
-  #  args:
-  #    - "--csisock=unix:/var/run/csi/csi.sock"
-  #    - "--labelvalue=csi-vxflexos"
-  #    - "--mode=controller"
-  #    - "--skipArrayConnectionValidation=false"
-  #    - "--driver-config-params=/vxflexos-config-params/driver-config-params.yaml"
-  #    - "--driverPodLabelValue=dell-storage"
-  #    - "--ignoreVolumelessPods=false"
-  #node:
-  #  args:
-  #    - "--csisock=unix:/var/lib/kubelet/plugins/vxflexos.emc.dell.com/csi_sock"
-  #    - "--labelvalue=csi-vxflexos"
-  #    - "--mode=node"
-  #    - "--leaderelection=false"
-  #    - "--driver-config-params=/vxflexos-config-params/driver-config-params.yaml"
-  #    - "--driverPodLabelValue=dell-storage"
-  #    - "--ignoreVolumelessPods=false"
+  controller:
+   args:
+     - "--csisock=unix:/var/run/csi/csi.sock"
+     - "--labelvalue=csi-vxflexos"
+     - "--mode=controller"
+     - "--skipArrayConnectionValidation=false"
+     - "--driver-config-params=/vxflexos-config-params/driver-config-params.yaml"
+     - "--driverPodLabelValue=dell-storage"
+     - "--ignoreVolumelessPods=false"
+  node:
+   args:
+     - "--csisock=unix:/var/lib/kubelet/plugins/vxflexos.emc.dell.com/csi_sock"
+     - "--labelvalue=csi-vxflexos"
+     - "--mode=node"
+     - "--leaderelection=false"
+     - "--driver-config-params=/vxflexos-config-params/driver-config-params.yaml"
+     - "--driverPodLabelValue=dell-storage"
+     - "--ignoreVolumelessPods=false"
 
 # CSM module attributes
 # authorization: enable csm-authorization for RBAC
@@ -306,10 +313,6 @@ podmon:
 # Default value: "false"
 authorization:
   enabled: false
-
-  # sidecarProxyImage: the container image used for the csm-authorization-sidecar.
-  # Default value: dellemc/csm-authorization-sidecar:v1.7.0
-  sidecarProxyImage: dellemc/csm-authorization-sidecar:v1.7.0
 
   # proxyHost: hostname of the csm-authorization server
   # Default value: None

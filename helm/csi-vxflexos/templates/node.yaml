@@ -106,7 +106,7 @@ spec:
             capabilities:
               add: ["SYS_ADMIN"]
             allowPrivilegeEscalation: true
-          image: {{ required "Must provide the podmon container image." .Values.podmon.image }}
+          image: {{ required "Must provide the podmon container image." .Values.images.podmon }}
           imagePullPolicy: {{ .Values.imagePullPolicy }}
           args:
             {{- toYaml .Values.podmon.node.args | nindent 12 }}
@@ -148,7 +148,7 @@ spec:
 {{- if hasKey .Values "authorization" }}
 {{- if eq .Values.authorization.enabled true }}
         - name: karavi-authorization-proxy
-          image: {{ required "Must provide the authorization sidecar container image." .Values.authorization.sidecarProxyImage }}
+          image: {{ required "Must provide the authorization sidecar container image." .Values.images.authorization }}
           imagePullPolicy: {{ .Values.imagePullPolicy }}
           env:
             - name: PROXY_HOST
@@ -182,7 +182,7 @@ spec:
             allowPrivilegeEscalation: true
             capabilities:
               add: ["SYS_ADMIN"]
-          image: "{{ required "Must provide the driver image repository." .Values.images.driverRepository }}/{{ .Chart.Name }}:{{ .Values.version }}"
+          image: "{{ required "Must provide the driver image repository." .Values.images.driver }}"
           imagePullPolicy: {{ .Values.imagePullPolicy }}
           command: [ "/csi-vxflexos.sh" ]
           args:
@@ -236,7 +236,7 @@ spec:
               readOnly: true
 {{- end}}
         - name: registrar
-          image: {{ required "Must provide the CSI registrar container image." ( include "csi-vxflexos.registrarImage" . ) }}
+          image: {{ required "Must provide the CSI registrar container image." .Values.images.registrar }}
           imagePullPolicy: {{ .Values.imagePullPolicy }}
           args:
             - "--v=5"
