@@ -241,6 +241,9 @@ func (s *service) NodeUnpublishVolume(
 		}
 	}
 
+	fmt.Println("****volumeContext*****", ctx.Value(KeyFsType))
+	fmt.Println("***ctx***", ctx)
+
 	targetPath := req.GetTargetPath()
 	if targetPath == "" {
 		return nil, status.Error(codes.InvalidArgument, "A target path argument is required")
