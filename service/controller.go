@@ -1184,33 +1184,9 @@ func (s *service) ControllerUnpublishVolume(
 		return nil, err
 	}
 
+	adminClient := s.adminClients[systemID]
+
 	s.logStatistics()
-
-	csiVolID := req.GetVolumeId()
-	if csiVolID == "" {
-		return nil, status.Error(codes.InvalidArgument,
-			"volume ID is required")
-	}
-	//ensure no ambiguity if legacy vol
-	err := s.checkVolumesMap(csiVolID)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal,
-			"checkVolumesMap for id: %s failed : %s", csiVolID, err.Error())
-
-	}
-
-	volID := getVolumeIDFromCsiVolumeID(csiVolID)
-	vol, err := s.getVolByID(volID, systemID)
-
-	if err != nil {
-		if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) {
-			return nil, status.Error(codes.NotFound,
-				"Volume not found")
-		}
-		return nil, status.Errorf(codes.Internal,
-			"failure checking volume status before controller unpublish: %s",
-			err.Error())
-	}
 
 	nodeID := req.GetNodeId()
 	if nodeID == "" {
@@ -1223,31 +1199,97 @@ func (s *service) ControllerUnpublishVolume(
 		return nil, status.Errorf(codes.NotFound, err.Error())
 	}
 
-	// check if volume is attached to node at all
-	mappedToNode := false
-	for _, mapping := range vol.MappedSdcInfo {
-		if mapping.SdcID == sdcID {
-			mappedToNode = true
-			break
+	csiVolID := req.GetVolumeId()
+	if csiVolID == "" {
+		return nil, status.Error(codes.InvalidArgument,
+			"volume ID is required")
+	}
+
+	protocol, err := s.ParseVolumeID(ctx, csiVolID, systemID)
+	if err != nil {
+		return nil, status.Errorf(codes.Unavailable,
+			"error parsing protocol from volumeID: %s", err.Error())
+	}
+
+	if protocol == "nfs" {
+		fsID := getFilesystemIDFromCsiVolumeID(csiVolID)
+		fs, err := s.getFilesystemByID(fsID, systemID)
+		if err != nil {
+			if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
+				return nil, status.Error(codes.NotFound,
+					"volume not found")
+			}
+			return nil, status.Errorf(codes.Internal,
+				"failure checking volume status before controller unpublish: %s",
+				err.Error())
 		}
-	}
 
-	if !mappedToNode {
-		Log.Debug("volume already unpublished")
-		return &csi.ControllerUnpublishVolumeResponse{}, nil
-	}
-	adminClient := s.adminClients[systemID]
-	targetVolume := goscaleio.NewVolume(adminClient)
-	targetVolume.Volume = vol
+		sdcIP, err := s.getSDCIP(nodeID, systemID)
+		if err != nil {
+			return nil, status.Errorf(codes.NotFound, err.Error())
+		}
 
-	unmapVolumeSdcParam := &siotypes.UnmapVolumeSdcParam{
-		SdcID:   sdcID,
-		AllSdcs: "",
-	}
+		//unexport for NFS
+		err = s.unexportFilesystem(ctx, req, adminClient, fs, req.GetVolumeId(), sdcIP, nodeID)
+		if err != nil {
+			return nil, err
+		}
 
-	if err = targetVolume.UnmapVolumeSdc(unmapVolumeSdcParam); err != nil {
-		return nil, status.Errorf(codes.Internal,
-			"Error unmapping volume from node: %s", err.Error())
+	} else {
+
+		csiVolID := req.GetVolumeId()
+		if csiVolID == "" {
+			return nil, status.Error(codes.InvalidArgument,
+				"volume ID is required")
+		}
+
+		err := s.checkVolumesMap(csiVolID)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal,
+				"checkVolumesMap for id: %s failed : %s", csiVolID, err.Error())
+
+		}
+
+		volID := getVolumeIDFromCsiVolumeID(csiVolID)
+		vol, err := s.getVolByID(volID, systemID)
+
+		if err != nil {
+			if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) {
+				return nil, status.Error(codes.NotFound,
+					"Volume not found")
+			}
+			return nil, status.Errorf(codes.Internal,
+				"failure checking volume status before controller unpublish: %s",
+				err.Error())
+		}
+
+		// check if volume is attached to node at all
+		mappedToNode := false
+		for _, mapping := range vol.MappedSdcInfo {
+			if mapping.SdcID == sdcID {
+				mappedToNode = true
+				break
+			}
+		}
+
+		if !mappedToNode {
+			Log.Debug("volume already unpublished")
+			return &csi.ControllerUnpublishVolumeResponse{}, nil
+		}
+		adminClient := s.adminClients[systemID]
+		targetVolume := goscaleio.NewVolume(adminClient)
+		targetVolume.Volume = vol
+
+		unmapVolumeSdcParam := &siotypes.UnmapVolumeSdcParam{
+			SdcID:   sdcID,
+			AllSdcs: "",
+		}
+
+		if err = targetVolume.UnmapVolumeSdc(unmapVolumeSdcParam); err != nil {
+			return nil, status.Errorf(codes.Internal,
+				"Error unmapping volume from node: %s", err.Error())
+		}
+
 	}
 
 	return &csi.ControllerUnpublishVolumeResponse{}, nil
