@@ -234,7 +234,7 @@ func (s *service) NodeUnpublishVolume(
 	*csi.NodeUnpublishVolumeResponse, error) {
 
 	var reqID string
-	var isNFS bool
+
 	headers, ok := metadata.FromIncomingContext(ctx)
 	fmt.Printf("headers: %#v\n", headers)
 	if ok {
@@ -312,10 +312,12 @@ func (s *service) NodeUnpublishVolume(
 	}
 
 	vi := s.getCSIVolume(vol, systemID)
-	if vi.VolumeContext[KeyFsType] == "nfs" {
-		fmt.Println("it is NFS......")
-		isNFS = true
-	}
+
+	fmt.Println("context:fsType", vi.VolumeContext[KeyFsType])
+
+	isNfs := vi.VolumeContext[KeyFsType] == "nfs"
+
+	fmt.Println("isNFS:", isNfs)
 
 	sdcMappedVol, err := s.getSDCMappedVol(volID, systemID, unpublishGetMappedVolMaxRetry)
 	if err != nil {
