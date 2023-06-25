@@ -305,13 +305,13 @@ func (s *service) NodeUnpublishVolume(
 
 	}
 
-	vol, err := s.getVolByID(volID, systemID)
+	vol, err := s.getFilesystemByID(volID, systemID)
 	if err != nil {
 		return nil, status.Errorf(codes.Unavailable,
 			"error retrieving volume details: %s", err.Error())
 	}
 
-	vi := s.getCSIVolume(vol, systemID)
+	vi := s.getCSIVolumeFromFilesystem(vol, systemID)
 
 	fmt.Println("context:fsType", vi.VolumeContext[KeyFsType])
 
