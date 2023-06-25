@@ -235,6 +235,7 @@ func (s *service) NodeUnpublishVolume(
 
 	var reqID string
 	headers, ok := metadata.FromIncomingContext(ctx)
+	fmt.Printf("headers: %#v\n", headers)
 	if ok {
 		if req, ok := headers["csi.requestid"]; ok && len(req) > 0 {
 			reqID = req[0]
@@ -242,6 +243,7 @@ func (s *service) NodeUnpublishVolume(
 	}
 
 	fmt.Println("****volumeContext*****", ctx.Value(KeyFsType))
+
 	fmt.Println("***ctx***", ctx)
 
 	targetPath := req.GetTargetPath()
