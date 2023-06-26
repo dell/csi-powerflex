@@ -952,7 +952,7 @@ func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnp
 
 	var readHostIDList, readWriteHostIDList []string
 	for _, host := range readOnlyHosts {
-		if host == nodeIP {
+		if host == hostUrl {
 			foundIncompatible = true
 			break
 		}
@@ -960,7 +960,7 @@ func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnp
 	otherHostsWithAccess += len(readWriteHosts)
 	if !foundIncompatible {
 		for _, host := range readWriteHosts {
-			if host == nodeIP {
+			if host == hostUrl {
 				foundIncompatible = true
 				break
 			}
@@ -1004,7 +1004,7 @@ func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnp
 
 	} else if foundReadWrite {
 		fmt.Printf("foundReadWrite: %#v\n", foundReadWrite)
-		fmt.Printf("readHostIDList: %#v\n", readWriteHostIDList)
+		fmt.Printf("readWriteHostIDList: %#v\n", readWriteHostIDList)
 		err = client.ModifyNFSExport(&siotypes.NFSExportModify{RemoveReadWriteRootHosts: readWriteHostIDList}, nfsExportID)
 
 	} else {
