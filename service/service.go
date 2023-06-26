@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -894,12 +895,19 @@ func getFilesystemIDFromCsiVolumeID(csiVolID string) string {
 	return ""
 }
 
+func Contains(slice []string, element string) bool {
+	for _, a := range slice {
+		if a == element {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnpublishVolumeRequest, client *goscaleio.Client, fs *siotypes.FileSystem, volumeContextID, nodeIP, nodeID string) error {
 
 	var nfsExportName string
 	nfsExportName = NFSExportNamePrefix + fs.Name
-
-	hostUrl := nodeIP + "/" + "255.255.255.255"
 
 	nfsExportExists := false
 	var nfsExportID string
@@ -938,100 +946,54 @@ func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnp
 
 	fmt.Printf("%#v\n", nfsExportResp)
 
-	readOnlyHosts := nfsExportResp.ReadOnlyHosts
-	readWriteHosts := nfsExportResp.ReadWriteHosts
-	readOnlyRootHosts := nfsExportResp.ReadOnlyRootHosts
-	readWriteRootHosts := nfsExportResp.ReadWriteRootHosts
+	var modifyParam *siotypes.NFSExportModify
 
-	foundIncompatible := false
-	foundReadOnly := false
-	foundReadWrite := false
-	otherHostsWithAccess := len(readOnlyHosts)
-
-	fmt.Printf("otherHostsWithAccess 1st time. %#v\n", otherHostsWithAccess)
-
-	var readHostIDList, readWriteHostIDList []string
-	for _, host := range readOnlyHosts {
-		if host == hostUrl {
-			foundIncompatible = true
-			break
-		}
-	}
-	otherHostsWithAccess += len(readWriteHosts)
-	if !foundIncompatible {
-		for _, host := range readWriteHosts {
-			if host == hostUrl {
-				foundIncompatible = true
-				break
-			}
-		}
-	}
-	otherHostsWithAccess += len(readOnlyRootHosts)
-	fmt.Printf("otherHostsWithAccess 2nd time. %#v\n", otherHostsWithAccess)
-	if !foundIncompatible {
-		for _, host := range readOnlyRootHosts {
-			if host == hostUrl {
-				foundReadOnly = true
-				fmt.Printf("I am readonly %#v\n", foundReadOnly)
-				otherHostsWithAccess--
-				fmt.Printf("otherHostsWithAccess readonly time. %#v\n", otherHostsWithAccess)
-			} else {
-				readHostIDList = append(readHostIDList, host)
-			}
-		}
-	}
-	otherHostsWithAccess += len(readWriteRootHosts)
-	if !foundIncompatible {
-		for _, host := range readWriteRootHosts {
-			if host == hostUrl {
-				foundReadWrite = true
-				fmt.Printf("I am write %#v\n", foundReadWrite)
-				otherHostsWithAccess--
-				fmt.Printf("otherHostsWithAccess write time. %#v\n", otherHostsWithAccess)
-			} else {
-				readWriteHostIDList = append(readWriteHostIDList, host)
-			}
+	sort.Strings(nfsExportResp.ReadOnlyHosts)
+	index := sort.SearchStrings(nfsExportResp.ReadOnlyHosts, nodeIP)
+	if len(nfsExportResp.ReadOnlyHosts) > 0 {
+		if index >= 0 {
+			modifyParam.RemoveReadOnlyHosts = []string{nodeIP + "/255.255.255.255"} // we can't remove without netmask
+			Log.Debug("Going to remove IP from ROHosts: ", modifyParam.RemoveReadOnlyHosts[0])
 		}
 	}
 
-	if foundIncompatible {
-		return status.Errorf(codes.NotFound, "Cannot remove host access. Host: %s has access on NFS Share: %s with incompatible access mode.", nodeID, nfsExportID)
+	sort.Strings(nfsExportResp.ReadOnlyRootHosts)
+	index = sort.SearchStrings(nfsExportResp.ReadOnlyRootHosts, nodeIP)
+	if len(nfsExportResp.ReadOnlyRootHosts) > 0 {
+		if index >= 0 {
+			modifyParam.RemoveReadOnlyRootHosts = []string{nodeIP + "/255.255.255.255"} // we can't remove without netmask
+			Log.Debug("Going to remove IP from RORootHosts: ", modifyParam.RemoveReadOnlyRootHosts[0])
+		}
 	}
-	if foundReadOnly {
-		fmt.Printf("foundReadOnly: %#v\n", foundReadOnly)
-		fmt.Printf("readHostIDList: %#v\n", readHostIDList)
-		err = client.ModifyNFSExport(&siotypes.NFSExportModify{RemoveReadOnlyRootHosts: readHostIDList}, nfsExportID)
 
-	} else if foundReadWrite {
-		fmt.Printf("foundReadWrite: %#v\n", foundReadWrite)
-		fmt.Printf("readWriteHostIDList: %#v\n", readWriteHostIDList)
-		err = client.ModifyNFSExport(&siotypes.NFSExportModify{RemoveReadWriteRootHosts: readWriteHostIDList}, nfsExportID)
-
-	} else {
-		//Idempotent case
-		Log.Infof("Host: %s has no access on NFS Share: %s", nodeID, nfsExportID)
+	if Contains(nfsExportResp.ReadWriteHosts, nodeIP+"/255.255.255.255") {
+		modifyParam.RemoveReadWriteHosts = []string{nodeIP + "/255.255.255.255"} // we can't remove without netmask
+		Log.Debug("Going to remove IP from RWHosts: ", modifyParam.RemoveReadWriteHosts[0])
 	}
+
+	if Contains(nfsExportResp.ReadWriteRootHosts, nodeIP+"/255.255.255.255") {
+		modifyParam.RemoveReadWriteRootHosts = []string{nodeIP + "/255.255.255.255"} // we can't remove without netmask
+		Log.Debug("Going to remove IP from RWRootHosts: ", modifyParam.RemoveReadWriteRootHosts[0])
+	}
+
+	err = client.ModifyNFSExport(modifyParam, nfsExportID)
+
 	if err != nil {
 		return status.Errorf(codes.NotFound, "Allocating host %s access to NFS Export failed. Error: %v", nodeID, err)
 
 	}
 	Log.Debugf("Host: %s access is removed from NFS Share: %s", nodeID, nfsExportID)
 
-	fmt.Printf("otherHostsWithAccess: %#v\n", otherHostsWithAccess)
-
 	if deleteExport {
-		if otherHostsWithAccess > 0 {
-			Log.Printf("NFS export: %s can not be deleted as other hosts have access on it", nfsExportID)
-		} else {
-			err = client.DeleteNFSExport(nfsExportID)
+		err = client.DeleteNFSExport(nfsExportID)
 
-			if err != nil {
-				return status.Errorf(codes.NotFound, "delete NFS Export failed. Error:%v", err)
-			}
-
-			Log.Printf("NFS export %s  deleted successfully", nfsExportID)
+		if err != nil {
+			return status.Errorf(codes.NotFound, "delete NFS Export failed. Error:%v", err)
 		}
+
+		Log.Printf("NFS export %s  deleted successfully", nfsExportID)
 	}
+
 	Log.Debugf("ControllerUnpublishVolume successful for volid: [%s]", volumeContextID)
 
 	return nil
