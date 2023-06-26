@@ -758,9 +758,9 @@ func (s *service) DeleteVolume(
 			return nil, err
 		}
 		fsID := getFilesystemIDFromCsiVolumeID(csiVolID)
-		toBeDeletedFS, err := system.GetFileSystemByIDName("", fsID)
+		toBeDeletedFS, err := system.GetFileSystemByIDName(fsID, "")
 		if err != nil {
-			if strings.Contains(err.Error(), "was not found") {
+			if strings.Contains(err.Error(), sioGatewayVolumeNotFound) {
 				Log.WithFields(logrus.Fields{"id": fsID}).Debug("File System does not exist", fsID)
 				return &csi.DeleteVolumeResponse{}, nil
 			}
@@ -781,7 +781,7 @@ func (s *service) DeleteVolume(
 		err = system.DeleteFileSystem(fsName)
 
 		if err != nil {
-			if strings.Contains(err.Error(), sioGatewayNotFound) {
+			if strings.Contains(err.Error(), sioGatewayVolumeNotFound) {
 				return &csi.DeleteVolumeResponse{}, nil
 			} else {
 				return nil, status.Errorf(codes.Internal,
