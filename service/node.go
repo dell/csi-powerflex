@@ -278,7 +278,7 @@ func (s *service) NodeUnpublishVolume(
 
 	}
 
-	volID := getVolumeIDFromCsiVolumeID(csiVolID)
+	volID := getFilesystemIDFromCsiVolumeID(csiVolID)
 	Log.Printf("NodeUnpublishVolume volumeID: %s", volID)
 
 	systemID := s.getSystemIDFromCsiVolumeID(csiVolID)

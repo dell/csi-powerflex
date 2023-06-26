@@ -879,6 +879,8 @@ func (s *service) ControllerPublishVolume(
 			"node ID is required")
 	}
 
+	fmt.Println("nodeID:", nodeID)
+
 	// Check for NFS protocol
 	fsType := volumeContext[KeyFsType]
 	isNFS := false
@@ -899,6 +901,7 @@ func (s *service) ControllerPublishVolume(
 		}
 
 		sdcIP, err := s.getSDCIP(nodeID, systemID)
+		fmt.Println("sdcIP:", sdcIP)
 		if err != nil {
 			return nil, status.Errorf(codes.NotFound, err.Error())
 		}
