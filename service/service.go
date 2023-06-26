@@ -934,6 +934,8 @@ func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnp
 		return status.Errorf(codes.NotFound, "Could not find NFS Export: %s", err)
 	}
 
+	fmt.Printf("%#v\n", nfsExportResp)
+
 	readOnlyHosts := nfsExportResp.ReadOnlyHosts
 	readWriteHosts := nfsExportResp.ReadWriteHosts
 	readOnlyRootHosts := nfsExportResp.ReadOnlyRootHosts
@@ -943,6 +945,8 @@ func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnp
 	foundReadOnly := false
 	foundReadWrite := false
 	otherHostsWithAccess := len(readOnlyHosts)
+
+	fmt.Printf("otherHostsWithAccess 1st time. %#v\n", otherHostsWithAccess)
 
 	var readHostIDList, readWriteHostIDList []string
 	for _, host := range readOnlyHosts {
@@ -961,11 +965,14 @@ func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnp
 		}
 	}
 	otherHostsWithAccess += len(readOnlyRootHosts)
+	fmt.Printf("otherHostsWithAccess 2nd time. %#v\n", otherHostsWithAccess)
 	if !foundIncompatible {
 		for _, host := range readOnlyRootHosts {
 			if host == nodeIP {
 				foundReadOnly = true
+				fmt.Printf("I am readonly %#v\n", foundReadOnly)
 				otherHostsWithAccess--
+				fmt.Printf("otherHostsWithAccess readonly time. %#v\n", otherHostsWithAccess)
 			} else {
 				readHostIDList = append(readHostIDList, host)
 			}
@@ -976,7 +983,9 @@ func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnp
 		for _, host := range readWriteRootHosts {
 			if host == nodeIP {
 				foundReadWrite = true
+				fmt.Printf("I am write %#v\n", foundReadWrite)
 				otherHostsWithAccess--
+				fmt.Printf("otherHostsWithAccess write time. %#v\n", otherHostsWithAccess)
 			} else {
 				readWriteHostIDList = append(readWriteHostIDList, host)
 			}
@@ -987,9 +996,13 @@ func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnp
 		return status.Errorf(codes.NotFound, "Cannot remove host access. Host: %s has access on NFS Share: %s with incompatible access mode.", nodeID, nfsExportID)
 	}
 	if foundReadOnly {
+		fmt.Printf("foundReadOnly: %#v\n", foundReadOnly)
+		fmt.Printf("readHostIDList: %#v\n", readHostIDList)
 		err = client.ModifyNFSExport(&siotypes.NFSExportModify{RemoveReadOnlyRootHosts: readHostIDList}, nfsExportID)
 
 	} else if foundReadWrite {
+		fmt.Printf("foundReadWrite: %#v\n", foundReadWrite)
+		fmt.Printf("readHostIDList: %#v\n", readWriteHostIDList)
 		err = client.ModifyNFSExport(&siotypes.NFSExportModify{RemoveReadWriteRootHosts: readWriteHostIDList}, nfsExportID)
 
 	} else {
@@ -1001,6 +1014,8 @@ func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnp
 
 	}
 	Log.Debugf("Host: %s access is removed from NFS Share: %s", nodeID, nfsExportID)
+
+	fmt.Printf("otherHostsWithAccess: %#v\n", otherHostsWithAccess)
 
 	if deleteExport {
 		if otherHostsWithAccess > 0 {
