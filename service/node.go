@@ -179,6 +179,7 @@ func (s *service) NodePublishVolume(
 	// handle NFS nodePublish separately
 	if isNFS {
 		fsID := getFilesystemIDFromCsiVolumeID(csiVolID)
+		Log.Printf("[NodePublishVolume] fileSystemID: %s", fsID)
 
 		fs, err := s.getFilesystemByID(fsID, systemID)
 		if err != nil {
@@ -236,18 +237,11 @@ func (s *service) NodeUnpublishVolume(
 	var reqID string
 
 	headers, ok := metadata.FromIncomingContext(ctx)
-	fmt.Printf("headers: %#v\n", headers)
 	if ok {
 		if req, ok := headers["csi.requestid"]; ok && len(req) > 0 {
 			reqID = req[0]
 		}
 	}
-
-	fmt.Println("reqID:", reqID)
-
-	fmt.Println("****volumeContext*****", ctx.Value(KeyFsType))
-
-	fmt.Println("***ctx***", ctx)
 
 	targetPath := req.GetTargetPath()
 	if targetPath == "" {
@@ -263,8 +257,9 @@ func (s *service) NodeUnpublishVolume(
 			"volume ID is required")
 	}
 
+	isNFS := strings.Contains(csiVolID, "/")
+
 	var ephemeralVolume bool
-	fmt.Println("ephemeralVolume", ephemeralVolume)
 	//For ephemeral volumes, kubernetes gives us an internal ID, so we need to use the lockfile to find the Powerflex ID this is mapped to.
 	lockFile := ephemeralStagingMountPath + csiVolID + "/id"
 	if s.fileExist(lockFile) {
@@ -282,7 +277,54 @@ func (s *service) NodeUnpublishVolume(
 
 	}
 
-	volID := getFilesystemIDFromCsiVolumeID(csiVolID)
+	if isNFS {
+		fsID := getFilesystemIDFromCsiVolumeID(csiVolID)
+		Log.Printf("NodeUnpublishVolume fileSystemID: %s", fsID)
+
+		systemID := s.getSystemIDFromCsiVolumeID(csiVolID)
+		if systemID == "" {
+			// use default system
+			systemID = s.opts.defaultSystemID
+		}
+		Log.Printf("NodeUnpublishVolume systemID: %s", systemID)
+		if systemID == "" {
+			return nil, status.Error(codes.InvalidArgument,
+				"systemID is not found in the request and there is no default system")
+		}
+
+		fs, err := s.getFilesystemByID(fsID, systemID)
+		if err != nil {
+			if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
+				return nil, status.Error(codes.NotFound,
+					"filesystem not found")
+			}
+			return nil, status.Errorf(codes.Internal,
+				"failure checking filesystem status before controller publish: %s",
+				err.Error())
+		}
+
+		// Probe the system to make sure it is managed by driver
+		if err := s.requireProbe(ctx, systemID); err != nil {
+			return nil, err
+		}
+
+		//ensure no ambiguity if legacy vol
+		err = s.checkVolumesMap(csiVolID)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal,
+				"checkVolumesMap for id: %s failed : %s", csiVolID, err.Error())
+
+		}
+
+		if err := unpublishNFS(ctx, req, fs.Name); err != nil {
+			return nil, err
+		}
+
+		return &csi.NodeUnpublishVolumeResponse{}, nil
+
+	}
+
+	volID := getVolumeIDFromCsiVolumeID(csiVolID)
 	Log.Printf("NodeUnpublishVolume volumeID: %s", volID)
 
 	systemID := s.getSystemIDFromCsiVolumeID(csiVolID)
@@ -309,64 +351,48 @@ func (s *service) NodeUnpublishVolume(
 
 	}
 
-	vol, err := s.getFilesystemByID(volID, systemID)
+	sdcMappedVol, err := s.getSDCMappedVol(volID, systemID, unpublishGetMappedVolMaxRetry)
 	if err != nil {
-		return nil, status.Errorf(codes.Unavailable,
-			"error retrieving volume details: %s", err.Error())
+		Log.Infof("Error from getSDCMappedVol is: %#v", err)
+		Log.Infof("Error message from getSDCMappedVol is: %s", err.Error())
+		// fix k8s 19 bug: ControllerUnpublishVolume is called before NodeUnpublishVolume
+		// cleanup target from pod
+		if err := gofsutil.Unmount(ctx, targetPath); err != nil {
+			Log.Errorf("cleanup target mount: %s", err.Error())
+		}
+
+		if err := removeWithRetry(targetPath); err != nil {
+			Log.Errorf("cleanup target path: %s", err.Error())
+		}
+		// dont cleanup pvtMount in case it is in use elsewhere on the node
+
+		if ephemeralVolume {
+			Log.Info("Detected ephemeral")
+			err := s.ephemeralNodeUnpublish(ctx, req)
+			if err != nil {
+				Log.Errorf("ephemeralNodeUnpublish returned error: %s", err.Error())
+				return nil, err
+			}
+
+		}
+
+		// Idempotent need to return ok if not published
+		return &csi.NodeUnpublishVolumeResponse{}, nil
 	}
 
-	vi := s.getCSIVolumeFromFilesystem(vol, systemID)
+	if err := unpublishVolume(req, s.privDir, sdcMappedVol.SdcDevice, reqID); err != nil {
+		return nil, err
+	}
 
-	fmt.Printf("volumeContext: %#v\n", vi.VolumeContext)
+	if ephemeralVolume {
+		Log.Info("Detected ephemeral")
+		err := s.ephemeralNodeUnpublish(ctx, req)
+		if err != nil {
+			Log.Errorf("ephemeralNodeUnpublish returned error: %v", err)
+			return nil, err
+		}
 
-	fmt.Println("context:fsType", vi.VolumeContext[KeyFsType])
-
-	isNfs := vi.VolumeContext[KeyFsType] == "nfs"
-
-	fmt.Println("isNFS:", isNfs)
-
-	// sdcMappedVol, err := s.getSDCMappedVol(volID, systemID, unpublishGetMappedVolMaxRetry)
-	// if err != nil {
-	// 	Log.Infof("Error from getSDCMappedVol is: %#v", err)
-	// 	Log.Infof("Error message from getSDCMappedVol is: %s", err.Error())
-	// 	// fix k8s 19 bug: ControllerUnpublishVolume is called before NodeUnpublishVolume
-	// 	// cleanup target from pod
-	// 	if err := gofsutil.Unmount(ctx, targetPath); err != nil {
-	// 		Log.Errorf("cleanup target mount: %s", err.Error())
-	// 	}
-
-	// 	if err := removeWithRetry(targetPath); err != nil {
-	// 		Log.Errorf("cleanup target path: %s", err.Error())
-	// 	}
-	// 	// dont cleanup pvtMount in case it is in use elsewhere on the node
-
-	// 	if ephemeralVolume {
-	// 		Log.Info("Detected ephemeral")
-	// 		err := s.ephemeralNodeUnpublish(ctx, req)
-	// 		if err != nil {
-	// 			Log.Errorf("ephemeralNodeUnpublish returned error: %s", err.Error())
-	// 			return nil, err
-	// 		}
-
-	// 	}
-
-	// 	// Idempotent need to return ok if not published
-	// 	return &csi.NodeUnpublishVolumeResponse{}, nil
-	// }
-
-	// if err := unpublishVolume(req, s.privDir, sdcMappedVol.SdcDevice, reqID); err != nil {
-	// 	return nil, err
-	// }
-
-	// if ephemeralVolume {
-	// 	Log.Info("Detected ephemeral")
-	// 	err := s.ephemeralNodeUnpublish(ctx, req)
-	// 	if err != nil {
-	// 		Log.Errorf("ephemeralNodeUnpublish returned error: %v", err)
-	// 		return nil, err
-	// 	}
-
-	// }
+	}
 
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }

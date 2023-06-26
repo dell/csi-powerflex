@@ -444,6 +444,62 @@ func publishNFS(ctx context.Context, req *csi.NodePublishVolumeRequest, nfsExpor
 
 }
 
+func unpublishNFS(ctx context.Context, req *csi.NodeUnpublishVolumeRequest, filterStr string) error {
+	target := req.GetTargetPath()
+	if target == "" {
+		return status.Error(codes.InvalidArgument,
+			"Target Path is required")
+	}
+
+	Log.Debugf("attempting to unmount '%s'", target)
+	isMounted, err := isVolumeMounted(ctx, filterStr, target)
+	if err != nil {
+		return err
+	}
+	if !isMounted {
+		return nil
+	}
+	if err := gofsutil.Unmount(context.Background(), target); err != nil {
+		return status.Errorf(codes.Internal,
+			"error unmounting target'%s': '%s'", target, err.Error())
+	}
+	Log.Debugf("unmounting '%s' succeeded", target)
+
+	return nil
+}
+
+func isVolumeMounted(ctx context.Context, filterStr string, target string) (bool, error) {
+
+	mnts, err := gofsutil.GetMounts(ctx)
+	if err != nil {
+		return false, status.Errorf(codes.Internal,
+			"could not reliably determine existing mount status: '%s'",
+			err.Error())
+	}
+
+	if len(mnts) != 0 {
+		// Idempotence check not to return error if not published
+		mounted := false
+		for _, m := range mnts {
+			if strings.Contains(m.Device, filterStr) {
+				if m.Path == target {
+					mounted = true
+					return mounted, nil
+				}
+			}
+		}
+		if mounted == false {
+			Log.Debugf("target '%s' does not exist", target)
+			return mounted, nil
+		}
+	} else {
+		// No mount exists also means not published
+		Log.Debugf("target '%s' does not exist", target)
+		return false, nil
+	}
+	return false, nil
+}
+
 func handlePrivFSMount(
 	ctx context.Context,
 	accMode *csi.VolumeCapability_AccessMode,
