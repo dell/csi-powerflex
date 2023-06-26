@@ -946,7 +946,7 @@ func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnp
 
 	fmt.Printf("%#v\n", nfsExportResp)
 
-	var modifyParam *siotypes.NFSExportModify
+	var modifyParam *siotypes.NFSExportModify = &siotypes.NFSExportModify{}
 
 	sort.Strings(nfsExportResp.ReadOnlyHosts)
 	index := sort.SearchStrings(nfsExportResp.ReadOnlyHosts, nodeIP)
