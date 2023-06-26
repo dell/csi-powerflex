@@ -98,6 +98,7 @@ const (
 	removeModeOnlyMe                    = "ONLY_ME"
 	sioGatewayNotFound                  = "Not found"
 	sioGatewayVolumeNotFound            = "Could not find the volume"
+	sioGatewayFileSystemNotFound        = "couldn't find filesystem by id"
 	sioVolumeRemovalOperationInProgress = "A volume removal operation is currently in progress"
 	sioGatewayVolumeNameInUse           = "Volume name already in use. Please use a different name."
 	errNoMultiMap                       = "volume not enabled for mapping to multiple hosts"
@@ -760,7 +761,7 @@ func (s *service) DeleteVolume(
 		fsID := getFilesystemIDFromCsiVolumeID(csiVolID)
 		toBeDeletedFS, err := system.GetFileSystemByIDName(fsID, "")
 		if err != nil {
-			if strings.Contains(err.Error(), sioGatewayVolumeNotFound) {
+			if strings.Contains(err.Error(), sioGatewayFileSystemNotFound) {
 				Log.WithFields(logrus.Fields{"id": fsID}).Debug("File System does not exist", fsID)
 				return &csi.DeleteVolumeResponse{}, nil
 			}
@@ -771,17 +772,24 @@ func (s *service) DeleteVolume(
 		// Check if nfs export exists for the File system
 		client := s.adminClients[systemID]
 
-		_, err = s.getNFSExport(toBeDeletedFS, client)
+		nfsExport, err := s.getNFSExport(toBeDeletedFS, client)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal,
-				"error removing filesystem as it has an existing NFS export: %s", err.Error())
+			if !strings.Contains(err.Error(), "not found") {
+				return nil, status.Errorf(codes.Internal,
+					"error getting the NFS Export for the fs: %s", err.Error())
+			}
+
+		} else {
+			if nfsExport != nil {
+				return nil, status.Errorf(codes.FailedPrecondition, "Filesystem %s can not be deleted as it has associated NFS Export.", fsID)
+			}
 		}
 
 		Log.WithFields(logrus.Fields{"name": fsName, "id": fsID}).Info("Deleting FileSystem")
 		err = system.DeleteFileSystem(fsName)
 
 		if err != nil {
-			if strings.Contains(err.Error(), sioGatewayVolumeNotFound) {
+			if strings.Contains(err.Error(), sioGatewayFileSystemNotFound) {
 				return &csi.DeleteVolumeResponse{}, nil
 			} else {
 				return nil, status.Errorf(codes.Internal,
@@ -1273,7 +1281,7 @@ func (s *service) ControllerUnpublishVolume(
 		fsID := getFilesystemIDFromCsiVolumeID(csiVolID)
 		fs, err := s.getFilesystemByID(fsID, systemID)
 		if err != nil {
-			if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
+			if strings.EqualFold(err.Error(), sioGatewayFileSystemNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
 				return nil, status.Error(codes.NotFound,
 					"volume not found")
 			}
