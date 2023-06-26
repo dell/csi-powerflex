@@ -899,6 +899,8 @@ func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnp
 	var nfsExportName string
 	nfsExportName = NFSExportNamePrefix + fs.Name
 
+	hostUrl := nodeIP + "/" + "255.255.255.255"
+
 	nfsExportExists := false
 	var nfsExportID string
 	deleteExport := true
@@ -968,7 +970,7 @@ func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnp
 	fmt.Printf("otherHostsWithAccess 2nd time. %#v\n", otherHostsWithAccess)
 	if !foundIncompatible {
 		for _, host := range readOnlyRootHosts {
-			if host == nodeIP {
+			if host == hostUrl {
 				foundReadOnly = true
 				fmt.Printf("I am readonly %#v\n", foundReadOnly)
 				otherHostsWithAccess--
@@ -981,7 +983,7 @@ func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnp
 	otherHostsWithAccess += len(readWriteRootHosts)
 	if !foundIncompatible {
 		for _, host := range readWriteRootHosts {
-			if host == nodeIP {
+			if host == hostUrl {
 				foundReadWrite = true
 				fmt.Printf("I am write %#v\n", foundReadWrite)
 				otherHostsWithAccess--
