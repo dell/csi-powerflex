@@ -772,7 +772,7 @@ func (s *service) DeleteVolume(
 		client := s.adminClients[systemID]
 
 		_, err = s.getNFSExport(toBeDeletedFS, client)
-		if err == nil {
+		if err != nil {
 			return nil, status.Errorf(codes.Internal,
 				"error removing filesystem as it has an existing NFS export: %s", err.Error())
 		}
