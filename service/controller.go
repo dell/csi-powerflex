@@ -726,12 +726,70 @@ func (s *service) DeleteVolume(
 		return nil, status.Error(codes.InvalidArgument,
 			"volume ID is required")
 	}
+	isNFS := strings.Contains(csiVolID, "/")
 	//ensure no ambiguity if legacy vol
 	err := s.checkVolumesMap(csiVolID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal,
 			"checkVolumesMap for id: %s failed : %s", csiVolID, err.Error())
 
+	}
+
+	if isNFS {
+		// get systemID from req
+		systemID := s.getSystemIDFromCsiVolumeID(csiVolID)
+		if systemID == "" {
+			// use default system
+			systemID = s.opts.defaultSystemID
+		}
+
+		if systemID == "" {
+			return nil, status.Error(codes.InvalidArgument,
+				"systemID is not found in the request and there is no default system")
+		}
+
+		if err := s.requireProbe(ctx, systemID); err != nil {
+			return nil, err
+		}
+
+		s.logStatistics()
+		system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
+		if err != nil {
+			return nil, err
+		}
+		fsID := getFilesystemIDFromCsiVolumeID(csiVolID)
+		toBeDeletedFS, err := system.GetFileSystemByIDName("", fsID)
+		if err != nil {
+			if strings.Contains(err.Error(), "was not found") {
+				Log.WithFields(logrus.Fields{"id": fsID}).Debug("File System does not exist", fsID)
+				return &csi.DeleteVolumeResponse{}, nil
+			}
+		}
+
+		fsName := toBeDeletedFS.Name
+
+		// Check if nfs export exists for the File system
+		client := s.adminClients[systemID]
+
+		_, err = s.getNFSExport(toBeDeletedFS, client)
+		if err == nil {
+			return nil, status.Errorf(codes.Internal,
+				"error removing filesystem as it has an existing NFS export: %s", err.Error())
+		}
+
+		Log.WithFields(logrus.Fields{"name": fsName, "id": fsID}).Info("Deleting FileSystem")
+		err = system.DeleteFileSystem(fsName)
+
+		if err != nil {
+			if strings.Contains(err.Error(), sioGatewayNotFound) {
+				return &csi.DeleteVolumeResponse{}, nil
+			} else {
+				return nil, status.Errorf(codes.Internal,
+					"error removing filesystem: %s", err.Error())
+			}
+		}
+
+		return &csi.DeleteVolumeResponse{}, nil
 	}
 
 	// get systemID from req
@@ -1201,6 +1259,42 @@ func (s *service) ControllerUnpublishVolume(
 			"checkVolumesMap for id: %s failed : %s", csiVolID, err.Error())
 
 	}
+	nodeID := req.GetNodeId()
+	if nodeID == "" {
+		return nil, status.Error(codes.InvalidArgument,
+			"Node ID is required")
+	}
+
+	adminClient := s.adminClients[systemID]
+
+	isNFS := strings.Contains(csiVolID, "/")
+
+	if isNFS {
+		fsID := getFilesystemIDFromCsiVolumeID(csiVolID)
+		fs, err := s.getFilesystemByID(fsID, systemID)
+		if err != nil {
+			if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
+				return nil, status.Error(codes.NotFound,
+					"volume not found")
+			}
+			return nil, status.Errorf(codes.Internal,
+				"failure checking volume status before controller publish: %s",
+				err.Error())
+		}
+
+		sdcIP, err := s.getSDCIP(nodeID, systemID)
+		if err != nil {
+			return nil, status.Errorf(codes.NotFound, err.Error())
+		}
+
+		//unexport for NFS
+		err = s.unexportFilesystem(ctx, req, adminClient, fs, req.GetVolumeId(), sdcIP, nodeID)
+		if err != nil {
+			return nil, err
+		}
+
+		return &csi.ControllerUnpublishVolumeResponse{}, nil
+	}
 
 	volID := getVolumeIDFromCsiVolumeID(csiVolID)
 	vol, err := s.getVolByID(volID, systemID)
@@ -1213,12 +1307,6 @@ func (s *service) ControllerUnpublishVolume(
 		return nil, status.Errorf(codes.Internal,
 			"failure checking volume status before controller unpublish: %s",
 			err.Error())
-	}
-
-	nodeID := req.GetNodeId()
-	if nodeID == "" {
-		return nil, status.Error(codes.InvalidArgument,
-			"Node ID is required")
 	}
 
 	sdcID, err := s.getSDCID(nodeID, systemID)
@@ -1239,7 +1327,6 @@ func (s *service) ControllerUnpublishVolume(
 		Log.Debug("volume already unpublished")
 		return &csi.ControllerUnpublishVolumeResponse{}, nil
 	}
-	adminClient := s.adminClients[systemID]
 	targetVolume := goscaleio.NewVolume(adminClient)
 	targetVolume.Volume = vol
 

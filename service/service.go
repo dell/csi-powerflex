@@ -894,6 +894,133 @@ func getFilesystemIDFromCsiVolumeID(csiVolID string) string {
 	return ""
 }
 
+func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnpublishVolumeRequest, client *goscaleio.Client, fs *siotypes.FileSystem, volumeContextID, nodeIP, nodeID string) error {
+
+	var nfsExportName string
+	nfsExportName = NFSExportNamePrefix + fs.Name
+
+	nfsExportExists := false
+	var nfsExportID string
+	deleteExport := true
+	// Check if nfs export exists for the File system
+	nfsExportList, err := client.GetNFSExport()
+
+	if err != nil {
+		return err
+	}
+
+	for _, nfsExport := range nfsExportList {
+		if nfsExport.FileSystemID == fs.ID {
+			nfsExportExists = true
+			if nfsExport.Name != nfsExportName {
+				//This means that share was created manually on array, hence don't delete via driver
+				deleteExport = false
+				nfsExportName = nfsExport.Name
+			}
+			nfsExportID = nfsExport.ID
+			nfsExportName = nfsExport.Name
+		}
+	}
+
+	if !nfsExportExists {
+		Log.Infof("NFS Share: %s not found on array.", nfsExportName)
+		return nil
+	}
+
+	// remove host access from NFS Export
+	nfsExportResp, err := client.GetNFSExportByIDName(nfsExportID, "")
+
+	if err != nil {
+		return status.Errorf(codes.NotFound, "Could not find NFS Export: %s", err)
+	}
+
+	readOnlyHosts := nfsExportResp.ReadOnlyHosts
+	readWriteHosts := nfsExportResp.ReadWriteHosts
+	readOnlyRootHosts := nfsExportResp.ReadOnlyRootHosts
+	readWriteRootHosts := nfsExportResp.ReadWriteRootHosts
+
+	foundIncompatible := false
+	foundReadOnly := false
+	foundReadWrite := false
+	otherHostsWithAccess := len(readOnlyHosts)
+
+	var readHostIDList, readWriteHostIDList []string
+	for _, host := range readOnlyHosts {
+		if host == nodeIP {
+			foundIncompatible = true
+			break
+		}
+	}
+	otherHostsWithAccess += len(readWriteHosts)
+	if !foundIncompatible {
+		for _, host := range readWriteHosts {
+			if host == nodeIP {
+				foundIncompatible = true
+				break
+			}
+		}
+	}
+	otherHostsWithAccess += len(readOnlyRootHosts)
+	if !foundIncompatible {
+		for _, host := range readOnlyRootHosts {
+			if host == nodeIP {
+				foundReadOnly = true
+				otherHostsWithAccess--
+			} else {
+				readHostIDList = append(readHostIDList, host)
+			}
+		}
+	}
+	otherHostsWithAccess += len(readWriteRootHosts)
+	if !foundIncompatible {
+		for _, host := range readWriteRootHosts {
+			if host == nodeIP {
+				foundReadWrite = true
+				otherHostsWithAccess--
+			} else {
+				readWriteHostIDList = append(readWriteHostIDList, host)
+			}
+		}
+	}
+
+	if foundIncompatible {
+		return status.Errorf(codes.NotFound, "Cannot remove host access. Host: %s has access on NFS Share: %s with incompatible access mode.", nodeID, nfsExportID)
+	}
+	if foundReadOnly {
+		err = client.ModifyNFSExport(&siotypes.NFSExportModify{RemoveReadOnlyRootHosts: readHostIDList}, nfsExportID)
+
+	} else if foundReadWrite {
+		err = client.ModifyNFSExport(&siotypes.NFSExportModify{RemoveReadWriteRootHosts: readWriteHostIDList}, nfsExportID)
+
+	} else {
+		//Idempotent case
+		Log.Infof("Host: %s has no access on NFS Share: %s", nodeID, nfsExportID)
+	}
+	if err != nil {
+		return status.Errorf(codes.NotFound, "Allocating host %s access to NFS Export failed. Error: %v", nodeID, err)
+
+	}
+	Log.Debugf("Host: %s access is removed from NFS Share: %s", nodeID, nfsExportID)
+
+	if deleteExport {
+		if otherHostsWithAccess > 0 {
+			Log.Printf("NFS export: %s can not be deleted as other hosts have access on it", nfsExportID)
+		} else {
+			err = client.DeleteNFSExport(nfsExportID)
+
+			if err != nil {
+				return status.Errorf(codes.NotFound, "delete NFS Export failed. Error:%v", err)
+			}
+
+			Log.Printf("NFS export %s  deleted successfully", nfsExportID)
+		}
+	}
+	Log.Debugf("ControllerUnpublishVolume successful for volid: [%s]", volumeContextID)
+
+	return nil
+
+}
+
 // getNFSExport method returns the NFSExport for a given filesystem
 // and returns a not found error if the NFSExport does not exist for filesystem.
 func (s *service) getNFSExport(fs *siotypes.FileSystem, client *goscaleio.Client) (*siotypes.NFSExport, error) {
