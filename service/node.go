@@ -243,6 +243,8 @@ func (s *service) NodeUnpublishVolume(
 		}
 	}
 
+	fmt.Println("reqID:", reqID)
+
 	fmt.Println("****volumeContext*****", ctx.Value(KeyFsType))
 
 	fmt.Println("***ctx***", ctx)
@@ -255,12 +257,14 @@ func (s *service) NodeUnpublishVolume(
 	s.logStatistics()
 
 	csiVolID := req.GetVolumeId()
+
 	if csiVolID == "" {
 		return nil, status.Error(codes.InvalidArgument,
 			"volume ID is required")
 	}
 
 	var ephemeralVolume bool
+	fmt.Println("ephemeralVolume", ephemeralVolume)
 	//For ephemeral volumes, kubernetes gives us an internal ID, so we need to use the lockfile to find the Powerflex ID this is mapped to.
 	lockFile := ephemeralStagingMountPath + csiVolID + "/id"
 	if s.fileExist(lockFile) {
@@ -321,48 +325,48 @@ func (s *service) NodeUnpublishVolume(
 
 	fmt.Println("isNFS:", isNfs)
 
-	sdcMappedVol, err := s.getSDCMappedVol(volID, systemID, unpublishGetMappedVolMaxRetry)
-	if err != nil {
-		Log.Infof("Error from getSDCMappedVol is: %#v", err)
-		Log.Infof("Error message from getSDCMappedVol is: %s", err.Error())
-		// fix k8s 19 bug: ControllerUnpublishVolume is called before NodeUnpublishVolume
-		// cleanup target from pod
-		if err := gofsutil.Unmount(ctx, targetPath); err != nil {
-			Log.Errorf("cleanup target mount: %s", err.Error())
-		}
+	// sdcMappedVol, err := s.getSDCMappedVol(volID, systemID, unpublishGetMappedVolMaxRetry)
+	// if err != nil {
+	// 	Log.Infof("Error from getSDCMappedVol is: %#v", err)
+	// 	Log.Infof("Error message from getSDCMappedVol is: %s", err.Error())
+	// 	// fix k8s 19 bug: ControllerUnpublishVolume is called before NodeUnpublishVolume
+	// 	// cleanup target from pod
+	// 	if err := gofsutil.Unmount(ctx, targetPath); err != nil {
+	// 		Log.Errorf("cleanup target mount: %s", err.Error())
+	// 	}
 
-		if err := removeWithRetry(targetPath); err != nil {
-			Log.Errorf("cleanup target path: %s", err.Error())
-		}
-		// dont cleanup pvtMount in case it is in use elsewhere on the node
+	// 	if err := removeWithRetry(targetPath); err != nil {
+	// 		Log.Errorf("cleanup target path: %s", err.Error())
+	// 	}
+	// 	// dont cleanup pvtMount in case it is in use elsewhere on the node
 
-		if ephemeralVolume {
-			Log.Info("Detected ephemeral")
-			err := s.ephemeralNodeUnpublish(ctx, req)
-			if err != nil {
-				Log.Errorf("ephemeralNodeUnpublish returned error: %s", err.Error())
-				return nil, err
-			}
+	// 	if ephemeralVolume {
+	// 		Log.Info("Detected ephemeral")
+	// 		err := s.ephemeralNodeUnpublish(ctx, req)
+	// 		if err != nil {
+	// 			Log.Errorf("ephemeralNodeUnpublish returned error: %s", err.Error())
+	// 			return nil, err
+	// 		}
 
-		}
+	// 	}
 
-		// Idempotent need to return ok if not published
-		return &csi.NodeUnpublishVolumeResponse{}, nil
-	}
+	// 	// Idempotent need to return ok if not published
+	// 	return &csi.NodeUnpublishVolumeResponse{}, nil
+	// }
 
-	if err := unpublishVolume(req, s.privDir, sdcMappedVol.SdcDevice, reqID); err != nil {
-		return nil, err
-	}
+	// if err := unpublishVolume(req, s.privDir, sdcMappedVol.SdcDevice, reqID); err != nil {
+	// 	return nil, err
+	// }
 
-	if ephemeralVolume {
-		Log.Info("Detected ephemeral")
-		err := s.ephemeralNodeUnpublish(ctx, req)
-		if err != nil {
-			Log.Errorf("ephemeralNodeUnpublish returned error: %v", err)
-			return nil, err
-		}
+	// if ephemeralVolume {
+	// 	Log.Info("Detected ephemeral")
+	// 	err := s.ephemeralNodeUnpublish(ctx, req)
+	// 	if err != nil {
+	// 		Log.Errorf("ephemeralNodeUnpublish returned error: %v", err)
+	// 		return nil, err
+	// 	}
 
-	}
+	// }
 
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }

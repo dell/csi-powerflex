@@ -676,6 +676,7 @@ func (s *service) getCSIVolumeFromFilesystem(fs *siotypes.FileSystem, systemID s
 
 	// Make the additional volume attributes
 	creationTime, _ := strconv.Atoi(fs.CreationTimestamp)
+	fmt.Println("filesytemType", fs.Type)
 	attributes := map[string]string{
 		"Name":            fs.Name,
 		"StoragePoolID":   fs.StoragePoolID,
@@ -684,6 +685,7 @@ func (s *service) getCSIVolumeFromFilesystem(fs *siotypes.FileSystem, systemID s
 		"CreationTime":    time.Unix(int64(creationTime), 0).String(),
 		"InstallationID":  installationID,
 		"NasServerID":     fs.NasServerID,
+		"fsType":          "nfs",
 	}
 	hyphen := "/"
 
