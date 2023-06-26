@@ -313,6 +313,8 @@ func (s *service) NodeUnpublishVolume(
 
 	vi := s.getCSIVolumeFromFilesystem(vol, systemID)
 
+	fmt.Printf("volumeContext: %#v\n", vi.VolumeContext)
+
 	fmt.Println("context:fsType", vi.VolumeContext[KeyFsType])
 
 	isNfs := vi.VolumeContext[KeyFsType] == "nfs"
