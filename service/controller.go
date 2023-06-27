@@ -727,12 +727,78 @@ func (s *service) DeleteVolume(
 		return nil, status.Error(codes.InvalidArgument,
 			"volume ID is required")
 	}
+
+	isNFS := strings.Contains(csiVolID, "/")
 	//ensure no ambiguity if legacy vol
 	err := s.checkVolumesMap(csiVolID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal,
 			"checkVolumesMap for id: %s failed : %s", csiVolID, err.Error())
 
+	}
+
+	if isNFS {
+		// get systemID from req
+		systemID := s.getSystemIDFromCsiVolumeID(csiVolID)
+		if systemID == "" {
+			// use default system
+			systemID = s.opts.defaultSystemID
+		}
+
+		if systemID == "" {
+			return nil, status.Error(codes.InvalidArgument,
+				"systemID is not found in the request and there is no default system")
+		}
+
+		if err := s.requireProbe(ctx, systemID); err != nil {
+			return nil, err
+		}
+
+		s.logStatistics()
+		system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
+		if err != nil {
+			return nil, err
+		}
+		fsID := getFilesystemIDFromCsiVolumeID(csiVolID)
+		toBeDeletedFS, err := system.GetFileSystemByIDName(fsID, "")
+		if err != nil {
+			if strings.Contains(err.Error(), sioGatewayFileSystemNotFound) {
+				Log.WithFields(logrus.Fields{"id": fsID}).Debug("File System does not exist", fsID)
+				return &csi.DeleteVolumeResponse{}, nil
+			}
+		}
+
+		fsName := toBeDeletedFS.Name
+
+		// Check if nfs export exists for the File system
+		client := s.adminClients[systemID]
+
+		nfsExport, err := s.getNFSExport(toBeDeletedFS, client)
+		if err != nil {
+			if !strings.Contains(err.Error(), "not found") {
+				return nil, status.Errorf(codes.Internal,
+					"error getting the NFS Export for the fs: %s", err.Error())
+			}
+
+		} else {
+			if nfsExport != nil {
+				return nil, status.Errorf(codes.FailedPrecondition, "Filesystem %s can not be deleted as it has associated NFS Export.", fsID)
+			}
+		}
+
+		Log.WithFields(logrus.Fields{"name": fsName, "id": fsID}).Info("Deleting FileSystem")
+		err = system.DeleteFileSystem(fsName)
+
+		if err != nil {
+			if strings.Contains(err.Error(), sioGatewayFileSystemNotFound) {
+				return &csi.DeleteVolumeResponse{}, nil
+			} else {
+				return nil, status.Errorf(codes.Internal,
+					"error removing filesystem: %s", err.Error())
+			}
+		}
+
+		return &csi.DeleteVolumeResponse{}, nil
 	}
 
 	// get systemID from req
