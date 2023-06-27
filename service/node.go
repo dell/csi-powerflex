@@ -254,6 +254,7 @@ func (s *service) NodeUnpublishVolume(
 			"volume ID is required")
 	}
 
+	isNFS := strings.Contains(csiVolID, "/")
 	var ephemeralVolume bool
 	//For ephemeral volumes, kubernetes gives us an internal ID, so we need to use the lockfile to find the Powerflex ID this is mapped to.
 	lockFile := ephemeralStagingMountPath + csiVolID + "/id"
@@ -269,6 +270,53 @@ func (s *service) NodeUnpublishVolume(
 		//Convert volume id from []byte to string format
 		csiVolID = string(idFromFile)
 		Log.Infof("Read volume ID: %s from lockfile: %s ", csiVolID, lockFile)
+
+	}
+
+	if isNFS {
+		fsID := getFilesystemIDFromCsiVolumeID(csiVolID)
+		Log.Printf("NodeUnpublishVolume fileSystemID: %s", fsID)
+
+		systemID := s.getSystemIDFromCsiVolumeID(csiVolID)
+		if systemID == "" {
+			// use default system
+			systemID = s.opts.defaultSystemID
+		}
+		Log.Printf("NodeUnpublishVolume systemID: %s", systemID)
+		if systemID == "" {
+			return nil, status.Error(codes.InvalidArgument,
+				"systemID is not found in the request and there is no default system")
+		}
+
+		fs, err := s.getFilesystemByID(fsID, systemID)
+		if err != nil {
+			if strings.EqualFold(err.Error(), sioGatewayFileSystemNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
+				return nil, status.Error(codes.NotFound,
+					"filesystem not found")
+			}
+			return nil, status.Errorf(codes.Internal,
+				"failure checking filesystem status before nodeunpublish: %s",
+				err.Error())
+		}
+
+		// Probe the system to make sure it is managed by driver
+		if err := s.requireProbe(ctx, systemID); err != nil {
+			return nil, err
+		}
+
+		//ensure no ambiguity if legacy vol
+		err = s.checkVolumesMap(csiVolID)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal,
+				"checkVolumesMap for id: %s failed : %s", csiVolID, err.Error())
+
+		}
+
+		if err := unpublishNFS(ctx, req, fs.Name); err != nil {
+			return nil, err
+		}
+
+		return &csi.NodeUnpublishVolumeResponse{}, nil
 
 	}
 

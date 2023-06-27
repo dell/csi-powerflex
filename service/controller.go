@@ -98,6 +98,7 @@ const (
 	removeModeOnlyMe                    = "ONLY_ME"
 	sioGatewayNotFound                  = "Not found"
 	sioGatewayVolumeNotFound            = "Could not find the volume"
+	sioGatewayFileSystemNotFound        = "couldn't find filesystem by id"
 	sioVolumeRemovalOperationInProgress = "A volume removal operation is currently in progress"
 	sioGatewayVolumeNameInUse           = "Volume name already in use. Please use a different name."
 	errNoMultiMap                       = "volume not enabled for mapping to multiple hosts"
