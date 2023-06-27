@@ -59,6 +59,21 @@ const (
 	// volume create parameters map
 	KeyMkfsFormatOption = "mkfsFormatOption"
 
+	// KeyNasName is the key used to get the NAS name from the
+	// volume create parameters map
+	KeyNasName = "nasName"
+
+	// KeyNfsACL is the key used to get the NFS ACL from the
+	// volume create parameters map
+	KeyNfsACL = "nfsAcls"
+
+	// KeyFsType is the key used to get the filesystem type from the
+	// volume create parameters map
+	KeyFsType = "fsType"
+
+	NFSExportLocalPath  = "/"
+	NFSExportNamePrefix = "csishare-"
+
 	// DefaultVolumeSizeKiB is default volume sgolang/protobuf/blob/master/ptypesize
 	// to create on a scaleIO cluster when no size is given, expressed in KiB
 	DefaultVolumeSizeKiB = 16 * kiBytesInGiB
@@ -83,6 +98,7 @@ const (
 	removeModeOnlyMe                    = "ONLY_ME"
 	sioGatewayNotFound                  = "Not found"
 	sioGatewayVolumeNotFound            = "Could not find the volume"
+	sioGatewayFileSystemNotFound        = "couldn't find filesystem by id"
 	sioVolumeRemovalOperationInProgress = "A volume removal operation is currently in progress"
 	sioGatewayVolumeNameInUse           = "Volume name already in use. Please use a different name."
 	errNoMultiMap                       = "volume not enabled for mapping to multiple hosts"
@@ -136,9 +152,12 @@ func (s *service) CreateVolume(
 	s.logStatistics()
 
 	cr := req.GetCapacityRange()
-	sizeInKiB, err := validateVolSize(cr)
-	if err != nil {
-		return nil, err
+
+	// Check for filesystem type
+	isNFS := false
+	fsType := req.VolumeCapabilities[0].GetMount().GetFsType()
+	if fsType == "nfs" {
+		isNFS = true
 	}
 
 	// validate AccessibleTopology
@@ -150,7 +169,6 @@ func (s *service) CreateVolume(
 	var volumeTopology []*csi.Topology
 	systemSegments := map[string]string{} // topology segments matching requested system for a volume
 	if accessibility != nil && len(accessibility.GetPreferred()) > 0 {
-
 		requestedSystem := ""
 		sID := ""
 		system := s.systems[systemID]
@@ -170,6 +188,20 @@ func (s *service) CreateVolume(
 					constraint = tokens[1]
 				}
 				Log.Printf("Found topology constraint: VxFlex OS system: %s", constraint)
+
+				// Update constraint wrt to topology specified for NFS volume
+				if isNFS {
+					nfsTokens := strings.Split(constraint, "-")
+					nfsLabel := ""
+					if len(nfsTokens) > 1 {
+						constraint = nfsTokens[0]
+						nfsLabel = nfsTokens[1]
+						if nfsLabel != "nfs" {
+							return nil, status.Errorf(codes.InvalidArgument,
+								"Invalid topology requested for NFS Volume. Please validate your storage class has nfs topology.")
+						}
+					}
+				}
 				if constraint == sID || constraint == sName {
 					if constraint == sID {
 						requestedSystem = sID
@@ -199,28 +231,16 @@ func (s *service) CreateVolume(
 		}
 	}
 
-	params = mergeStringMaps(params, req.GetSecrets())
-
-	// We require the storagePool name for creation
-	sp, ok := params[KeyStoragePool]
-	if !ok {
-		return nil, status.Errorf(codes.InvalidArgument,
-			"%s is a required parameter", KeyStoragePool)
-	}
-
-	pdID := ""
-	pd, ok := params[KeyProtectionDomain]
-	if !ok {
-		Log.Printf("Protection Domain name not provided; there could be conflicts if two storage pools share a name")
-	} else {
-		pdID, err = s.getProtectionDomainIDFromName(systemID, pd)
-		if err != nil {
-			return nil, err
+	if req.VolumeCapabilities[0].GetBlock() != nil {
+		// We need to check if user requests raw block access from nfs and prevent that
+		fsType, ok := params[KeyFsType]
+		// FsType can be empty
+		if ok && fsType == "nfs" {
+			return nil, status.Errorf(codes.InvalidArgument, "raw block requested from NFS Volume")
 		}
 	}
 
-	volType := s.getVolProvisionType(params) // Thick or Thin
-
+	// fetch volume name
 	name := req.GetName()
 	if name == "" {
 		return nil, status.Error(codes.InvalidArgument,
@@ -233,121 +253,267 @@ func (s *service) CreateVolume(
 		req.Name = name
 	}
 
-	contentSource := req.GetVolumeContentSource()
-	if contentSource != nil {
-		volumeSource := contentSource.GetVolume()
-		if volumeSource != nil {
-			Log.Printf("volume %s specified as volume content source", volumeSource.VolumeId)
-			return s.Clone(req, volumeSource, name, sizeInKiB, sp)
+	nfsAcls := s.opts.NfsAcls
+	var arr *ArrayConnectionData
+	sysID := s.opts.defaultSystemID
+	arr = s.opts.arrays[sysID]
+	volName := name
+
+	if isNFS {
+		// fetch NAS server ID
+		nasName, ok := params[KeyNasName]
+		if !ok {
+			return nil, status.Errorf(codes.InvalidArgument, "`%s` is a required parameter", KeyNasName)
 		}
-		snapshotSource := contentSource.GetSnapshot()
-		if snapshotSource != nil {
-			Log.Printf("snapshot %s specified as volume content source", snapshotSource.SnapshotId)
-			return s.createVolumeFromSnapshot(req, snapshotSource, name, sizeInKiB, sp)
-		}
-	}
-
-	// TODO handle Access mode in volume capability
-
-	fields := map[string]interface{}{
-		"name":                               name,
-		"sizeInKiB":                          sizeInKiB,
-		"storagePool":                        sp,
-		"volType":                            volType,
-		HeaderPersistentVolumeName:           params[CSIPersistentVolumeName],
-		HeaderPersistentVolumeClaimName:      params[CSIPersistentVolumeClaimName],
-		HeaderPersistentVolumeClaimNamespace: params[CSIPersistentVolumeClaimNamespace],
-	}
-
-	Log.WithFields(fields).Info("creating volume")
-
-	volumeParam := &siotypes.VolumeParam{
-		Name:           name,
-		VolumeSizeInKb: fmt.Sprintf("%d", sizeInKiB),
-		VolumeType:     volType,
-	}
-
-	// If the VolumeParam has a MetaData method, set the values accordingly.
-	if t, ok := interface{}(volumeParam).(interface {
-		MetaData() http.Header
-	}); ok {
-		t.MetaData().Set(HeaderPersistentVolumeName, params[CSIPersistentVolumeName])
-		t.MetaData().Set(HeaderPersistentVolumeClaimName, params[CSIPersistentVolumeClaimName])
-		t.MetaData().Set(HeaderPersistentVolumeClaimNamespace, params[CSIPersistentVolumeClaimNamespace])
-		t.MetaData().Set(HeaderCSIPluginIdentifier, Name)
-		t.MetaData().Set(HeaderSystemIdentifier, systemID)
-	} else {
-		Log.Println("warning: goscaleio.VolumeParam: no MetaData method exists, consider updating goscaleio library.")
-	}
-
-	createResp, err := s.adminClients[systemID].CreateVolume(volumeParam, sp, pdID)
-	if err != nil {
-		// handle case where volume already exists
-		if !strings.EqualFold(err.Error(), sioGatewayVolumeNameInUse) {
-			Log.Printf("error creating volume: %s pool %s error: %s", name, sp, err.Error())
-			return nil, status.Errorf(codes.Internal,
-				"error when creating volume %s storagepool %s: %s", name, sp, err.Error())
-		}
-	}
-
-	var id string
-	if createResp == nil {
-		// volume already exists, look it up by name
-		id, err = s.adminClients[systemID].FindVolumeID(name)
+		nasServerID, err := s.getNASServerIDFromName(systemID, nasName)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, err.Error())
+			return nil, err
+		}
+
+		// fetch storage pool ID
+		pdID := ""
+		pd, ok := params[KeyProtectionDomain]
+		if !ok {
+			Log.Printf("Protection Domain name not provided; there could be conflicts if two storage pools share a name")
+		} else {
+			pdID, err = s.getProtectionDomainIDFromName(systemID, pd)
+			if err != nil {
+				return nil, err
+			}
+
+		}
+
+		storagePoolName, ok := params[KeyStoragePool]
+		if !ok {
+			return nil, status.Errorf(codes.InvalidArgument,
+				"%s is a required parameter", KeyStoragePool)
+		}
+		storagePoolID, err := s.getStoragePoolID(storagePoolName, systemID, pdID)
+		if err != nil {
+			return nil, err
+		}
+
+		// fetch NFS ACL
+		if params[KeyNfsACL] != "" {
+			nfsAcls = params[KeyNfsACL] // Storage class takes precedence
+		} else if arr.NfsAcls != "" {
+			nfsAcls = arr.NfsAcls // Secrets next
+		}
+
+		// fetch volume size
+		size := cr.GetRequiredBytes()
+
+		// log all parameters used in CreateVolume call
+		fields := map[string]interface{}{
+			"Name":                               volName,
+			"SizeInB":                            size,
+			"StoragePoolID":                      storagePoolID,
+			"NasServerID":                        nasServerID,
+			HeaderPersistentVolumeName:           params[CSIPersistentVolumeName],
+			HeaderPersistentVolumeClaimName:      params[CSIPersistentVolumeClaimName],
+			HeaderPersistentVolumeClaimNamespace: params[CSIPersistentVolumeClaimNamespace],
+		}
+		Log.WithFields(fields).Info("Executing CreateVolume with following fields")
+
+		volumeParam := &siotypes.FsCreate{
+			Name:          volName,
+			SizeTotal:     int(size),
+			StoragePoolID: storagePoolID,
+			NasServerID:   nasServerID,
+		}
+
+		//Idempotency check
+		system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
+		if err != nil {
+			return nil, err
+		}
+		existingFS, err := system.GetFileSystemByIDName("", volName)
+
+		if existingFS != nil {
+			if existingFS.SizeTotal == int(size) {
+				vi := s.getCSIVolumeFromFilesystem(existingFS, systemID)
+				vi.VolumeContext[KeyNasName] = nasName
+				vi.VolumeContext[KeyNfsACL] = nfsAcls
+				vi.VolumeContext[KeyFsType] = fsType
+				nfsTopology := s.GetNfsTopology(systemID)
+				vi.AccessibleTopology = nfsTopology
+				csiResp := &csi.CreateVolumeResponse{
+					Volume: vi,
+				}
+				Log.Info("Volume exists in the requested state with same size")
+				return csiResp, nil
+			}
+			Log.Info("'Volume name' already exists and size is different")
+			return nil, status.Error(codes.AlreadyExists, "'Volume name' already exists and size is different.")
+		}
+		Log.Debug("Volume does not exist, proceeding to create new volume")
+		fsResp, err := system.CreateFileSystem(volumeParam)
+		if err != nil {
+			Log.Debugf("Create volume response error:%v", err)
+			return nil, status.Errorf(codes.Unknown, "Create Volume %s failed with error: %v", volName, err)
+		}
+
+		newFs, err := system.GetFileSystemByIDName(fsResp.ID, "")
+		if err != nil {
+			Log.Debugf("Find Volume response: %v Error: %v", newFs, err)
+		}
+		if newFs != nil {
+			vi := s.getCSIVolumeFromFilesystem(newFs, systemID)
+			vi.VolumeContext[KeyNasName] = nasName
+			vi.VolumeContext[KeyNfsACL] = nfsAcls
+			vi.VolumeContext[KeyFsType] = fsType
+			nfsTopology := s.GetNfsTopology(systemID)
+			vi.AccessibleTopology = nfsTopology
+			csiResp := &csi.CreateVolumeResponse{
+				Volume: vi,
+			}
+			return csiResp, nil
 		}
 	} else {
-		id = createResp.ID
-	}
+		size, err := validateVolSize(cr)
+		if err != nil {
+			return nil, err
+		}
 
-	vol, err := s.getVolByID(id, systemID)
-	if err != nil {
-		return nil, status.Errorf(codes.Unavailable,
-			"error retrieving volume details: %s", err.Error())
-	}
-	vi := s.getCSIVolume(vol, systemID)
-	vi.AccessibleTopology = volumeTopology
+		params = mergeStringMaps(params, req.GetSecrets())
 
-	// since the volume could have already exists, double check that the
-	// volume has the expected parameters
-	spID, err := s.getStoragePoolID(sp, systemID, pdID)
-	if err != nil {
-		return nil, status.Errorf(codes.Unavailable,
-			"volume exists, but could not verify parameters: %s",
-			err.Error())
-	}
-	if vol.StoragePoolID != spID {
-		return nil, status.Errorf(codes.AlreadyExists,
-			"volume exists in %s, but in different storage pool than requested %s", vol.StoragePoolID, spID)
-	}
+		// We require the storagePool name for creation
+		sp, ok := params[KeyStoragePool]
+		if !ok {
+			return nil, status.Errorf(codes.InvalidArgument,
+				"%s is a required parameter", KeyStoragePool)
+		}
 
-	if (vi.CapacityBytes / bytesInKiB) != sizeInKiB {
-		return nil, status.Errorf(codes.AlreadyExists,
-			"volume exists, but at different size than requested")
-	}
-	copyInterestingParameters(req.GetParameters(), vi.VolumeContext)
+		pdID := ""
+		pd, ok := params[KeyProtectionDomain]
+		if !ok {
+			Log.Printf("Protection Domain name not provided; there could be conflicts if two storage pools share a name")
+		} else {
+			pdID, err = s.getProtectionDomainIDFromName(systemID, pd)
+			if err != nil {
+				return nil, err
+			}
+		}
 
-	Log.Printf("volume %s (%s) created %s\n", vi.VolumeContext["Name"], vi.VolumeId, vi.VolumeContext["CreationTime"])
+		volType := s.getVolProvisionType(params) // Thick or Thin
 
-	csiResp := &csi.CreateVolumeResponse{
-		Volume: vi,
-	}
+		contentSource := req.GetVolumeContentSource()
+		if contentSource != nil {
+			volumeSource := contentSource.GetVolume()
+			if volumeSource != nil {
+				Log.Printf("volume %s specified as volume content source", volumeSource.VolumeId)
+				return s.Clone(req, volumeSource, name, size, sp)
+			}
+			snapshotSource := contentSource.GetSnapshot()
+			if snapshotSource != nil {
+				Log.Printf("snapshot %s specified as volume content source", snapshotSource.SnapshotId)
+				return s.createVolumeFromSnapshot(req, snapshotSource, name, size, sp)
+			}
+		}
 
-	s.clearCache()
+		// TODO handle Access mode in volume capability
 
-	volumeID := getVolumeIDFromCsiVolumeID(vi.VolumeId)
-	vol, err = s.getVolByID(volumeID, systemID)
+		fields := map[string]interface{}{
+			"name":                               name,
+			"sizeInKiB":                          size,
+			"storagePool":                        sp,
+			"volType":                            volType,
+			HeaderPersistentVolumeName:           params[CSIPersistentVolumeName],
+			HeaderPersistentVolumeClaimName:      params[CSIPersistentVolumeClaimName],
+			HeaderPersistentVolumeClaimNamespace: params[CSIPersistentVolumeClaimNamespace],
+		}
 
-	counter := 0
+		Log.WithFields(fields).Info("Executing CreateVolume with following fields")
 
-	for err != nil && counter < 100 {
-		time.Sleep(3 * time.Millisecond)
+		volumeParam := &siotypes.VolumeParam{
+			Name:           name,
+			VolumeSizeInKb: fmt.Sprintf("%d", size),
+			VolumeType:     volType,
+		}
+
+		// If the VolumeParam has a MetaData method, set the values accordingly.
+		if t, ok := interface{}(volumeParam).(interface {
+			MetaData() http.Header
+		}); ok {
+			t.MetaData().Set(HeaderPersistentVolumeName, params[CSIPersistentVolumeName])
+			t.MetaData().Set(HeaderPersistentVolumeClaimName, params[CSIPersistentVolumeClaimName])
+			t.MetaData().Set(HeaderPersistentVolumeClaimNamespace, params[CSIPersistentVolumeClaimNamespace])
+			t.MetaData().Set(HeaderCSIPluginIdentifier, Name)
+			t.MetaData().Set(HeaderSystemIdentifier, systemID)
+		} else {
+			Log.Println("warning: goscaleio.VolumeParam: no MetaData method exists, consider updating goscaleio library.")
+		}
+
+		createResp, err := s.adminClients[systemID].CreateVolume(volumeParam, sp, pdID)
+		if err != nil {
+			// handle case where volume already exists
+			if !strings.EqualFold(err.Error(), sioGatewayVolumeNameInUse) {
+				Log.Printf("error creating volume: %s pool %s error: %s", name, sp, err.Error())
+				return nil, status.Errorf(codes.Internal,
+					"error when creating volume %s storagepool %s: %s", name, sp, err.Error())
+			}
+		}
+
+		var id string
+		if createResp == nil {
+			// volume already exists, look it up by name
+			id, err = s.adminClients[systemID].FindVolumeID(name)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, err.Error())
+			}
+		} else {
+			id = createResp.ID
+		}
+
+		vol, err := s.getVolByID(id, systemID)
+		if err != nil {
+			return nil, status.Errorf(codes.Unavailable,
+				"error retrieving volume details: %s", err.Error())
+		}
+		vi := s.getCSIVolume(vol, systemID)
+		vi.AccessibleTopology = volumeTopology
+
+		// since the volume could have already exists, double check that the
+		// volume has the expected parameters
+		spID, err := s.getStoragePoolID(sp, systemID, pdID)
+		if err != nil {
+			return nil, status.Errorf(codes.Unavailable,
+				"volume exists, but could not verify parameters: %s",
+				err.Error())
+		}
+		if vol.StoragePoolID != spID {
+			return nil, status.Errorf(codes.AlreadyExists,
+				"volume exists in %s, but in different storage pool than requested %s", vol.StoragePoolID, spID)
+		}
+
+		if (vi.CapacityBytes / bytesInKiB) != size {
+			return nil, status.Errorf(codes.AlreadyExists,
+				"volume exists, but at different size than requested")
+		}
+		copyInterestingParameters(req.GetParameters(), vi.VolumeContext)
+
+		Log.Printf("volume %s (%s) created %s\n", vi.VolumeContext["Name"], vi.VolumeId, vi.VolumeContext["CreationTime"])
+
+		vi.VolumeContext[KeyFsType] = fsType
+		csiResp := &csi.CreateVolumeResponse{
+			Volume: vi,
+		}
+		s.clearCache()
+
+		volumeID := getVolumeIDFromCsiVolumeID(vi.VolumeId)
 		vol, err = s.getVolByID(volumeID, systemID)
-		counter = counter + 1
-	}
 
-	return csiResp, err
+		counter := 0
+
+		for err != nil && counter < 100 {
+			time.Sleep(3 * time.Millisecond)
+			vol, err = s.getVolByID(volumeID, systemID)
+			counter = counter + 1
+		}
+		return csiResp, err
+	}
+	//return csiResp, err
+	return nil, status.Errorf(codes.NotFound, "Volume/Filesystem not found after create. %v", err)
 }
 
 // Copies the interesting parameters to the output map.
@@ -508,7 +674,6 @@ func validateVolSize(cr *csi.CapacityRange) (int64, error) {
 
 	minSize := cr.GetRequiredBytes()
 	maxSize := cr.GetLimitBytes()
-
 	if minSize < 0 || maxSize < 0 {
 		return 0, status.Errorf(
 			codes.OutOfRange,
@@ -562,12 +727,79 @@ func (s *service) DeleteVolume(
 		return nil, status.Error(codes.InvalidArgument,
 			"volume ID is required")
 	}
+
+	isNFS := strings.Contains(csiVolID, "/")
+
 	//ensure no ambiguity if legacy vol
 	err := s.checkVolumesMap(csiVolID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal,
 			"checkVolumesMap for id: %s failed : %s", csiVolID, err.Error())
 
+	}
+
+	if isNFS {
+		// get systemID from req
+		systemID := s.getSystemIDFromCsiVolumeID(csiVolID)
+		if systemID == "" {
+			// use default system
+			systemID = s.opts.defaultSystemID
+		}
+
+		if systemID == "" {
+			return nil, status.Error(codes.InvalidArgument,
+				"systemID is not found in the request and there is no default system")
+		}
+
+		if err := s.requireProbe(ctx, systemID); err != nil {
+			return nil, err
+		}
+
+		s.logStatistics()
+		system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
+		if err != nil {
+			return nil, err
+		}
+		fsID := getFilesystemIDFromCsiVolumeID(csiVolID)
+		toBeDeletedFS, err := system.GetFileSystemByIDName(fsID, "")
+		if err != nil {
+			if strings.Contains(err.Error(), sioGatewayFileSystemNotFound) {
+				Log.WithFields(logrus.Fields{"id": fsID}).Debug("File System does not exist", fsID)
+				return &csi.DeleteVolumeResponse{}, nil
+			}
+		}
+
+		fsName := toBeDeletedFS.Name
+
+		// Check if nfs export exists for the File system
+		client := s.adminClients[systemID]
+
+		nfsExport, err := s.getNFSExport(toBeDeletedFS, client)
+		if err != nil {
+			if !strings.Contains(err.Error(), "not found") {
+				return nil, status.Errorf(codes.Internal,
+					"error getting the NFS Export for the fs: %s", err.Error())
+			}
+
+		} else {
+			if nfsExport != nil {
+				return nil, status.Errorf(codes.FailedPrecondition, "Filesystem %s can not be deleted as it has associated NFS Export.", fsID)
+			}
+		}
+
+		Log.WithFields(logrus.Fields{"name": fsName, "id": fsID}).Info("Deleting FileSystem")
+		err = system.DeleteFileSystem(fsName)
+
+		if err != nil {
+			if strings.Contains(err.Error(), sioGatewayFileSystemNotFound) {
+				return &csi.DeleteVolumeResponse{}, nil
+			} else {
+				return nil, status.Errorf(codes.Internal,
+					"error removing filesystem: %s", err.Error())
+			}
+		}
+
+		return &csi.DeleteVolumeResponse{}, nil
 	}
 
 	// get systemID from req
@@ -670,7 +902,14 @@ func (s *service) ControllerPublishVolume(
 		}
 	}
 
+	// create publish context
+	publishContext := make(map[string]string)
+	publishContext[KeyNasName] = volumeContext[KeyNasName]
+	publishContext[KeyNfsACL] = volumeContext[KeyNfsACL]
+
 	csiVolID := req.GetVolumeId()
+	publishContext["volumeContextId"] = csiVolID
+
 	if csiVolID == "" {
 		return nil, status.Error(codes.InvalidArgument,
 			"volume ID is required")
@@ -702,138 +941,184 @@ func (s *service) ControllerPublishVolume(
 
 	}
 
-	volID := getVolumeIDFromCsiVolumeID(csiVolID)
-	vol, err := s.getVolByID(volID, systemID)
-
-	if err != nil {
-		if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
-			return nil, status.Error(codes.NotFound,
-				"volume not found")
-		}
-		return nil, status.Errorf(codes.Internal,
-			"failure checking volume status before controller publish: %s",
-			err.Error())
-	}
-
 	nodeID := req.GetNodeId()
 	if nodeID == "" {
 		return nil, status.Error(codes.InvalidArgument,
 			"node ID is required")
 	}
 
-	sdcID, err := s.getSDCID(nodeID, systemID)
-	if err != nil {
-		return nil, status.Errorf(codes.NotFound, err.Error())
+	// Check for NFS protocol
+	fsType := volumeContext[KeyFsType]
+	isNFS := false
+	if fsType == "nfs" {
+		isNFS = true
 	}
+	if isNFS {
+		fsID := getFilesystemIDFromCsiVolumeID(csiVolID)
+		fs, err := s.getFilesystemByID(fsID, systemID)
+		if err != nil {
+			if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
+				return nil, status.Error(codes.NotFound,
+					"volume not found")
+			}
+			return nil, status.Errorf(codes.Internal,
+				"failure checking volume status before controller publish: %s",
+				err.Error())
+		}
 
-	vc := req.GetVolumeCapability()
-	if vc == nil {
-		return nil, status.Error(codes.InvalidArgument,
-			"volume capability is required")
-	}
+		sdcIP, err := s.getSDCIP(nodeID, systemID)
+		if err != nil {
+			return nil, status.Errorf(codes.NotFound, err.Error())
+		}
 
-	am := vc.GetAccessMode()
-	if am == nil {
-		return nil, status.Error(codes.InvalidArgument,
-			"access mode is required")
-	}
+		publishContext["host"] = sdcIP
 
-	if am.Mode == csi.VolumeCapability_AccessMode_UNKNOWN {
-		return nil, status.Error(codes.InvalidArgument,
-			errUnknownAccessMode)
-	}
-	// Check if volume is published to any node already
-	allowMultipleMappings := "FALSE"
-	vcs := []*csi.VolumeCapability{req.GetVolumeCapability()}
-	isBlock := accTypeIsBlock(vcs)
+		fsc := req.GetVolumeCapability()
+		if fsc == nil {
+			return nil, status.Error(codes.InvalidArgument,
+				"volume capability is required")
+		}
 
-	if len(vol.MappedSdcInfo) > 0 {
-		for _, sdc := range vol.MappedSdcInfo {
-			if sdc.SdcID == sdcID {
-				// TODO check if published volume is compatible with this request
-				// volume already mapped
-				Log.Debug("volume already mapped")
+		am := fsc.GetAccessMode()
+		if am == nil {
+			return nil, status.Error(codes.InvalidArgument,
+				"access mode is required")
+		}
+		if am.Mode == csi.VolumeCapability_AccessMode_UNKNOWN {
+			return nil, status.Error(codes.InvalidArgument,
+				errUnknownAccessMode)
+		}
+		//Export for NFS
+		resp, err := s.exportFilesystem(ctx, req, adminClient, fs, sdcIP, nodeID, publishContext, am)
+		return resp, err
+	} else {
+		volID := getVolumeIDFromCsiVolumeID(csiVolID)
+		vol, err := s.getVolByID(volID, systemID)
 
-				// check for QoS limits of mapped volume
-				bandwidthLimit := volumeContext[KeyBandwidthLimitInKbps]
-				iopsLimit := volumeContext[KeyIopsLimit]
-				// validate requested QoS parameters
-				if err := validateQoSParameters(bandwidthLimit, iopsLimit, vol.Name); err != nil {
-					return nil, err
+		if err != nil {
+			if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
+				return nil, status.Error(codes.NotFound,
+					"volume not found")
+			}
+			return nil, status.Errorf(codes.Internal,
+				"failure checking volume status before controller publish: %s",
+				err.Error())
+		}
+
+		sdcID, err := s.getSDCID(nodeID, systemID)
+		if err != nil {
+			return nil, status.Errorf(codes.NotFound, err.Error())
+		}
+
+		vc := req.GetVolumeCapability()
+		if vc == nil {
+			return nil, status.Error(codes.InvalidArgument,
+				"volume capability is required")
+		}
+
+		am := vc.GetAccessMode()
+		if am == nil {
+			return nil, status.Error(codes.InvalidArgument,
+				"access mode is required")
+		}
+
+		if am.Mode == csi.VolumeCapability_AccessMode_UNKNOWN {
+			return nil, status.Error(codes.InvalidArgument,
+				errUnknownAccessMode)
+		}
+		// Check if volume is published to any node already
+		allowMultipleMappings := "FALSE"
+		vcs := []*csi.VolumeCapability{req.GetVolumeCapability()}
+		isBlock := accTypeIsBlock(vcs)
+
+		if len(vol.MappedSdcInfo) > 0 {
+			for _, sdc := range vol.MappedSdcInfo {
+				if sdc.SdcID == sdcID {
+					// TODO check if published volume is compatible with this request
+					// volume already mapped
+					Log.Debug("volume already mapped")
+
+					// check for QoS limits of mapped volume
+					bandwidthLimit := volumeContext[KeyBandwidthLimitInKbps]
+					iopsLimit := volumeContext[KeyIopsLimit]
+					// validate requested QoS parameters
+					if err := validateQoSParameters(bandwidthLimit, iopsLimit, vol.Name); err != nil {
+						return nil, err
+					}
+
+					// check if volume QoS is same as requested QoS settings
+					if len(bandwidthLimit) > 0 && strconv.Itoa(sdc.LimitBwInMbps*1024) != bandwidthLimit {
+						return nil, status.Errorf(codes.InvalidArgument,
+							"volume %s already published with bandwidth limit: %d, but does not match the requested bandwidth limit: %s", vol.Name, sdc.LimitBwInMbps*1024, bandwidthLimit)
+					} else if len(iopsLimit) > 0 && strconv.Itoa(sdc.LimitIops) != iopsLimit {
+						return nil, status.Errorf(codes.InvalidArgument,
+							"volume %s already published with IOPS limit: %d, but does not match the requested IOPS limits: %s", vol.Name, sdc.LimitIops, iopsLimit)
+					}
+
+					return &csi.ControllerPublishVolumeResponse{}, nil
 				}
+			}
 
-				// check if volume QoS is same as requested QoS settings
-				if len(bandwidthLimit) > 0 && strconv.Itoa(sdc.LimitBwInMbps*1024) != bandwidthLimit {
-					return nil, status.Errorf(codes.InvalidArgument,
-						"volume %s already published with bandwidth limit: %d, but does not match the requested bandwidth limit: %s", vol.Name, sdc.LimitBwInMbps*1024, bandwidthLimit)
-				} else if len(iopsLimit) > 0 && strconv.Itoa(sdc.LimitIops) != iopsLimit {
-					return nil, status.Errorf(codes.InvalidArgument,
-						"volume %s already published with IOPS limit: %d, but does not match the requested IOPS limits: %s", vol.Name, sdc.LimitIops, iopsLimit)
-				}
+			// If volume has SINGLE_NODE cap, go no farther
+			switch am.Mode {
+			case csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+				csi.VolumeCapability_AccessMode_SINGLE_NODE_MULTI_WRITER,
+				csi.VolumeCapability_AccessMode_SINGLE_NODE_SINGLE_WRITER,
+				csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY:
+				return nil, status.Errorf(codes.FailedPrecondition,
+					"volume already published to SDC id: %s", vol.MappedSdcInfo[0].SdcID)
+			}
 
-				return &csi.ControllerPublishVolumeResponse{}, nil
+			// All remaining cases are MULTI_NODE:
+			// This original code precludes block multi-writers,
+			// and is based on a faulty test that the Volume MappingToAllSdcsEnabled
+			// attribute must be set to allow multiple writers, which is not true.
+			// The proper way to control multiple mappings is with the allowMultipleMappings
+			// attribute passed in the MapVolumeSdcParameter. Unfortunately you cannot
+			// read this parameter back.
+
+			allowMultipleMappings, err = shouldAllowMultipleMappings(isBlock, am)
+			if err != nil {
+				return nil, status.Errorf(codes.InvalidArgument, err.Error())
+			}
+
+			if err := validateAccessType(am, isBlock); err != nil {
+				return nil, err
+			}
+		} else {
+			allowMultipleMappings, err = shouldAllowMultipleMappings(isBlock, am)
+			if err != nil {
+				return nil, status.Errorf(codes.InvalidArgument, err.Error())
 			}
 		}
 
-		// If volume has SINGLE_NODE cap, go no farther
-		switch am.Mode {
-		case csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
-			csi.VolumeCapability_AccessMode_SINGLE_NODE_MULTI_WRITER,
-			csi.VolumeCapability_AccessMode_SINGLE_NODE_SINGLE_WRITER,
-			csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY:
-			return nil, status.Errorf(codes.FailedPrecondition,
-				"volume already published to SDC id: %s", vol.MappedSdcInfo[0].SdcID)
+		mapVolumeSdcParam := &siotypes.MapVolumeSdcParam{
+			SdcID:                 sdcID,
+			AllowMultipleMappings: allowMultipleMappings,
+			AllSdcs:               "",
 		}
 
-		// All remaining cases are MULTI_NODE:
-		// This original code precludes block multi-writers,
-		// and is based on a faulty test that the Volume MappingToAllSdcsEnabled
-		// attribute must be set to allow multiple writers, which is not true.
-		// The proper way to control multiple mappings is with the allowMultipleMappings
-		// attribute passed in the MapVolumeSdcParameter. Unfortunately you cannot
-		// read this parameter back.
+		targetVolume := goscaleio.NewVolume(adminClient)
+		targetVolume.Volume = &siotypes.Volume{ID: vol.ID}
 
-		allowMultipleMappings, err = shouldAllowMultipleMappings(isBlock, am)
+		err = targetVolume.MapVolumeSdc(mapVolumeSdcParam)
 		if err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, err.Error())
+			return nil, status.Errorf(codes.Internal,
+				"error mapping volume to node: %s", err.Error())
 		}
 
-		if err := validateAccessType(am, isBlock); err != nil {
+		bandwidthLimit := volumeContext[KeyBandwidthLimitInKbps]
+		iopsLimit := volumeContext[KeyIopsLimit]
+
+		// validate requested QoS parameters
+		if err := validateQoSParameters(bandwidthLimit, iopsLimit, vol.Name); err != nil {
 			return nil, err
 		}
-	} else {
-		allowMultipleMappings, err = shouldAllowMultipleMappings(isBlock, am)
-		if err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, err.Error())
-		}
-	}
-
-	mapVolumeSdcParam := &siotypes.MapVolumeSdcParam{
-		SdcID:                 sdcID,
-		AllowMultipleMappings: allowMultipleMappings,
-		AllSdcs:               "",
-	}
-
-	targetVolume := goscaleio.NewVolume(adminClient)
-	targetVolume.Volume = &siotypes.Volume{ID: vol.ID}
-
-	err = targetVolume.MapVolumeSdc(mapVolumeSdcParam)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal,
-			"error mapping volume to node: %s", err.Error())
-	}
-
-	bandwidthLimit := volumeContext[KeyBandwidthLimitInKbps]
-	iopsLimit := volumeContext[KeyIopsLimit]
-
-	// validate requested QoS parameters
-	if err := validateQoSParameters(bandwidthLimit, iopsLimit, vol.Name); err != nil {
-		return nil, err
-	}
-	// check for atleast one of the QoS params should exist in storage class
-	if len(bandwidthLimit) > 0 || len(iopsLimit) > 0 {
-		if err = s.setQoSParameters(ctx, systemID, sdcID, bandwidthLimit, iopsLimit, vol.Name, csiVolID, nodeID); err != nil {
-			return nil, err
+		// check for atleast one of the QoS params should exist in storage class
+		if len(bandwidthLimit) > 0 || len(iopsLimit) > 0 {
+			if err = s.setQoSParameters(ctx, systemID, sdcID, bandwidthLimit, iopsLimit, vol.Name, csiVolID, nodeID); err != nil {
+				return nil, err
+			}
 		}
 	}
 

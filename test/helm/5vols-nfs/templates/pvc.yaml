@@ -1,0 +1,70 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pvol0
+  namespace: helmtest-vxflexos
+spec:
+  accessModes:
+  - ReadWriteOnce
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 8Gi
+  storageClassName: vxflexos-nfs
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pvol1
+  namespace: helmtest-vxflexos
+spec:
+  accessModes:
+  - ReadWriteOnce
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 8Gi
+  storageClassName: vxflexos-nfs
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pvol2
+  namespace: helmtest-vxflexos
+spec:
+  accessModes:
+  - ReadWriteOnce
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 8Gi
+  storageClassName: vxflexos-nfs
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pvol3
+  namespace: helmtest-vxflexos
+spec:
+  accessModes:
+  - ReadWriteOnce
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 8Gi
+  storageClassName: vxflexos-nfs
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pvol4
+  namespace: helmtest-vxflexos
+spec:
+  accessModes:
+  - ReadWriteOnce
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 8Gi
+  storageClassName: vxflexos-nfs
+---

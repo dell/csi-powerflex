@@ -397,6 +397,14 @@ spec:
               value: "{{ .Values.controller.healthMonitor.enabled }}"
             {{- end }}
             {{- end }}
+            {{- if hasKey .Values "nfsAcls" }}
+            - name: X_CSI_NFS_ACLS
+              value: "{{ .Values.nfsAcls }}"
+            {{- end }}
+            {{- if hasKey .Values "externalAccess" }}
+            - name: X_CSI_POWERFLEX_EXTERNAL_ACCESS
+              value: "{{ .Values.externalAccess }}"
+            {{- end }}
           volumeMounts:
             - name: socket-dir
               mountPath: /var/run/csi

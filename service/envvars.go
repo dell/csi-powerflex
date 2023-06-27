@@ -52,9 +52,15 @@ const (
 	// carried out or not.
 	EnvIsApproveSDCEnabled = "X_CSI_APPROVE_SDC_ENABLED"
 
-	// EnvReplicationContextPrefix enables sidecars to read required information from volume context
+	// EnvReplicationContextPrefix enables sidecars to read required information from volume context.
 	EnvReplicationContextPrefix = "X_CSI_REPLICATION_CONTEXT_PREFIX"
 
-	// EnvReplicationPrefix is used as a prefix to find out if replication is enabled
+	// EnvReplicationPrefix is used as a prefix to find out if replication is enabled.
 	EnvReplicationPrefix = "X_CSI_REPLICATION_PREFIX"
+
+	// EnvNfsAcls enables setting permissions on NFS mount directory.
+	EnvNfsAcls = "X_CSI_NFS_ACLS"
+
+	// EnvExternalAccess is used to specify additional entries for host to access NFS volumes.
+	EnvExternalAccess = "X_CSI_POWERFLEX_EXTERNAL_ACCESS"
 )

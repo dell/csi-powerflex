@@ -35,6 +35,7 @@ RUN microdnf update -y && \
         kmod \
         libaio \
         numactl \
+        nfs-utils \
         xfsprogs && \
     microdnf clean all
 ENTRYPOINT ["/csi-vxflexos.sh"]
