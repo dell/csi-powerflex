@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -969,9 +970,114 @@ func (s *service) getSystemIDFromCsiVolumeID(csiVolID string) string {
 	return ""
 }
 
+func Contains(slice []string, element string) bool {
+	for _, a := range slice {
+		if a == element {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnpublishVolumeRequest, client *goscaleio.Client, fs *siotypes.FileSystem, volumeContextID, nodeIP, nodeID string) error {
+
+	var nfsExportName string
+	nfsExportName = NFSExportNamePrefix + fs.Name
+
+	nfsExportExists := false
+	var nfsExportID string
+	deleteExport := true
+	// Check if nfs export exists for the File system
+	nfsExportList, err := client.GetNFSExport()
+
+	if err != nil {
+		return err
+	}
+
+	for _, nfsExport := range nfsExportList {
+		if nfsExport.FileSystemID == fs.ID {
+			nfsExportExists = true
+			if nfsExport.Name != nfsExportName {
+				//This means that share was created manually on array, hence don't delete via driver
+				deleteExport = false
+				nfsExportName = nfsExport.Name
+			}
+			nfsExportID = nfsExport.ID
+			nfsExportName = nfsExport.Name
+		}
+	}
+
+	if !nfsExportExists {
+		Log.Infof("NFS Share: %s not found on array.", nfsExportName)
+		return nil
+	}
+
+	// remove host access from NFS Export
+	nfsExportResp, err := client.GetNFSExportByIDName(nfsExportID, "")
+
+	if err != nil {
+		return status.Errorf(codes.NotFound, "Could not find NFS Export: %s", err)
+	}
+
+	fmt.Printf("%#v\n", nfsExportResp)
+
+	var modifyParam *siotypes.NFSExportModify = &siotypes.NFSExportModify{}
+
+	sort.Strings(nfsExportResp.ReadOnlyHosts)
+	index := sort.SearchStrings(nfsExportResp.ReadOnlyHosts, nodeIP)
+	if len(nfsExportResp.ReadOnlyHosts) > 0 {
+		if index >= 0 {
+			modifyParam.RemoveReadOnlyHosts = []string{nodeIP + "/255.255.255.255"} // we can't remove without netmask
+			Log.Debug("Going to remove IP from ROHosts: ", modifyParam.RemoveReadOnlyHosts[0])
+		}
+	}
+
+	sort.Strings(nfsExportResp.ReadOnlyRootHosts)
+	index = sort.SearchStrings(nfsExportResp.ReadOnlyRootHosts, nodeIP)
+	if len(nfsExportResp.ReadOnlyRootHosts) > 0 {
+		if index >= 0 {
+			modifyParam.RemoveReadOnlyRootHosts = []string{nodeIP + "/255.255.255.255"} // we can't remove without netmask
+			Log.Debug("Going to remove IP from RORootHosts: ", modifyParam.RemoveReadOnlyRootHosts[0])
+		}
+	}
+
+	if Contains(nfsExportResp.ReadWriteHosts, nodeIP+"/255.255.255.255") {
+		modifyParam.RemoveReadWriteHosts = []string{nodeIP + "/255.255.255.255"} // we can't remove without netmask
+		Log.Debug("Going to remove IP from RWHosts: ", modifyParam.RemoveReadWriteHosts[0])
+	}
+
+	if Contains(nfsExportResp.ReadWriteRootHosts, nodeIP+"/255.255.255.255") {
+		modifyParam.RemoveReadWriteRootHosts = []string{nodeIP + "/255.255.255.255"} // we can't remove without netmask
+		Log.Debug("Going to remove IP from RWRootHosts: ", modifyParam.RemoveReadWriteRootHosts[0])
+	}
+
+	err = client.ModifyNFSExport(modifyParam, nfsExportID)
+
+	if err != nil {
+		return status.Errorf(codes.NotFound, "Allocating host %s access to NFS Export failed. Error: %v", nodeID, err)
+
+	}
+	Log.Debugf("Host: %s access is removed from NFS Share: %s", nodeID, nfsExportID)
+
+	if deleteExport {
+		err = client.DeleteNFSExport(nfsExportID)
+
+		if err != nil {
+			return status.Errorf(codes.NotFound, "delete NFS Export failed. Error:%v", err)
+		}
+
+		Log.Printf("NFS export %s  deleted successfully", nfsExportID)
+	}
+
+	Log.Debugf("ControllerUnpublishVolume successful for volid: [%s]", volumeContextID)
+
+	return nil
+
+}
+
 // exportFilesystem - Method to export filesystem with idempotency
 func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPublishVolumeRequest, client *goscaleio.Client, fs *siotypes.FileSystem, nodeIP, nodeID string, pContext map[string]string, am *csi.VolumeCapability_AccessMode) (*csi.ControllerPublishVolumeResponse, error) {
-
+	hostUrl := nodeIP + "/" + "255.255.255.255"
 	var nfsExportName string
 	nfsExportName = NFSExportNamePrefix + fs.Name
 
@@ -1027,7 +1133,7 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 	var readHostList, readWriteHostList []string
 
 	for _, host := range readOnlyHosts {
-		if host == nodeIP {
+		if host == hostUrl {
 			foundIncompatible = true
 			break
 		}
@@ -1036,7 +1142,7 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 	otherHostsWithAccess += len(readWriteHosts)
 	if !foundIncompatible {
 		for _, host := range readWriteHosts {
-			if host == nodeIP {
+			if host == hostUrl {
 				foundIncompatible = true
 				break
 			}
@@ -1047,7 +1153,7 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 	if !foundIncompatible {
 		for _, host := range readOnlyRootHosts {
 			readHostList = append(readHostList, host)
-			if host == nodeIP {
+			if host == hostUrl {
 				if am.Mode == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
 					foundIdempotent = true
 				} else {
@@ -1060,8 +1166,8 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 
 	if !foundIncompatible && !foundIdempotent {
 		for _, host := range readWriteRootHosts {
-			readWriteHostList = append(readWriteHostList, nodeIP)
-			if host == nodeIP {
+			readWriteHostList = append(readWriteHostList, hostUrl)
+			if host == hostUrl {
 				if am.Mode == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
 					foundIncompatible = true
 				} else {
@@ -1087,10 +1193,10 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 	}
 	//Allocate host access to NFS Share with appropriate access mode
 	if am.Mode == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
-		readHostList = append(readHostList, nodeIP)
+		readHostList = append(readHostList, hostUrl)
 		client.ModifyNFSExport(&siotypes.NFSExportModify{AddReadOnlyRootHosts: readHostList}, nfsExportID)
 	} else {
-		readWriteHostList = append(readWriteHostList, nodeIP)
+		readWriteHostList = append(readWriteHostList, hostUrl)
 		client.ModifyNFSExport(&siotypes.NFSExportModify{AddReadWriteRootHosts: readWriteHostList}, nfsExportID)
 	}
 
