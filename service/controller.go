@@ -1199,6 +1199,42 @@ func (s *service) ControllerUnpublishVolume(
 			"checkVolumesMap for id: %s failed : %s", csiVolID, err.Error())
 
 	}
+	nodeID := req.GetNodeId()
+	if nodeID == "" {
+		return nil, status.Error(codes.InvalidArgument,
+			"Node ID is required")
+	}
+
+	adminClient := s.adminClients[systemID]
+
+	isNFS := strings.Contains(csiVolID, "/")
+
+	if isNFS {
+		fsID := getFilesystemIDFromCsiVolumeID(csiVolID)
+		fs, err := s.getFilesystemByID(fsID, systemID)
+		if err != nil {
+			if strings.EqualFold(err.Error(), sioGatewayFileSystemNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
+				return nil, status.Error(codes.NotFound,
+					"volume not found")
+			}
+			return nil, status.Errorf(codes.Internal,
+				"failure checking volume status before controller publish: %s",
+				err.Error())
+		}
+
+		sdcIP, err := s.getSDCIP(nodeID, systemID)
+		if err != nil {
+			return nil, status.Errorf(codes.NotFound, err.Error())
+		}
+
+		//unexport for NFS
+		err = s.unexportFilesystem(ctx, req, adminClient, fs, req.GetVolumeId(), sdcIP, nodeID)
+		if err != nil {
+			return nil, err
+		}
+
+		return &csi.ControllerUnpublishVolumeResponse{}, nil
+	}
 
 	volID := getVolumeIDFromCsiVolumeID(csiVolID)
 	vol, err := s.getVolByID(volID, systemID)
@@ -1211,12 +1247,6 @@ func (s *service) ControllerUnpublishVolume(
 		return nil, status.Errorf(codes.Internal,
 			"failure checking volume status before controller unpublish: %s",
 			err.Error())
-	}
-
-	nodeID := req.GetNodeId()
-	if nodeID == "" {
-		return nil, status.Error(codes.InvalidArgument,
-			"Node ID is required")
 	}
 
 	sdcID, err := s.getSDCID(nodeID, systemID)
@@ -1237,7 +1267,6 @@ func (s *service) ControllerUnpublishVolume(
 		Log.Debug("volume already unpublished")
 		return &csi.ControllerUnpublishVolumeResponse{}, nil
 	}
-	adminClient := s.adminClients[systemID]
 	targetVolume := goscaleio.NewVolume(adminClient)
 	targetVolume.Volume = vol
 
