@@ -1077,7 +1077,7 @@ func (s *service) getSystemIDFromCsiVolumeID(csiVolID string) string {
 
 // exportFilesystem - Method to export filesystem with idempotency
 func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPublishVolumeRequest, client *goscaleio.Client, fs *siotypes.FileSystem, nodeIP, nodeID string, pContext map[string]string, am *csi.VolumeCapability_AccessMode) (*csi.ControllerPublishVolumeResponse, error) {
-
+	hostUrl := nodeIP + "/" + "255.255.255.255"
 	var nfsExportName string
 	nfsExportName = NFSExportNamePrefix + fs.Name
 
@@ -1133,7 +1133,7 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 	var readHostList, readWriteHostList []string
 
 	for _, host := range readOnlyHosts {
-		if host == nodeIP {
+		if host == hostUrl {
 			foundIncompatible = true
 			break
 		}
@@ -1142,7 +1142,7 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 	otherHostsWithAccess += len(readWriteHosts)
 	if !foundIncompatible {
 		for _, host := range readWriteHosts {
-			if host == nodeIP {
+			if host == hostUrl {
 				foundIncompatible = true
 				break
 			}
@@ -1153,7 +1153,7 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 	if !foundIncompatible {
 		for _, host := range readOnlyRootHosts {
 			readHostList = append(readHostList, host)
-			if host == nodeIP {
+			if host == hostUrl {
 				if am.Mode == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
 					foundIdempotent = true
 				} else {
@@ -1166,8 +1166,8 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 
 	if !foundIncompatible && !foundIdempotent {
 		for _, host := range readWriteRootHosts {
-			readWriteHostList = append(readWriteHostList, nodeIP)
-			if host == nodeIP {
+			readWriteHostList = append(readWriteHostList, hostUrl)
+			if host == hostUrl {
 				if am.Mode == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
 					foundIncompatible = true
 				} else {
@@ -1193,10 +1193,10 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 	}
 	//Allocate host access to NFS Share with appropriate access mode
 	if am.Mode == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
-		readHostList = append(readHostList, nodeIP)
+		readHostList = append(readHostList, hostUrl)
 		client.ModifyNFSExport(&siotypes.NFSExportModify{AddReadOnlyRootHosts: readHostList}, nfsExportID)
 	} else {
-		readWriteHostList = append(readWriteHostList, nodeIP)
+		readWriteHostList = append(readWriteHostList, hostUrl)
 		client.ModifyNFSExport(&siotypes.NFSExportModify{AddReadWriteRootHosts: readWriteHostList}, nfsExportID)
 	}
 
