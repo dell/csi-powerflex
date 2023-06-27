@@ -684,6 +684,7 @@ func (s *service) getCSIVolumeFromFilesystem(fs *siotypes.FileSystem, systemID s
 		"CreationTime":    time.Unix(int64(creationTime), 0).String(),
 		"InstallationID":  installationID,
 		"NasServerID":     fs.NasServerID,
+		"fsType":          "nfs",
 	}
 	hyphen := "/"
 
