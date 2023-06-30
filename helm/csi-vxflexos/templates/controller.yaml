@@ -319,7 +319,7 @@ spec:
 {{- if hasKey .Values.controller "resizer" }}
 {{- if eq .Values.controller.resizer.enabled true }}
         - name: resizer
-          image: {{ required "Must provide the CSI resizer container image." .Values.images.resizerImage }}
+          image: {{ required "Must provide the CSI resizer container image." .Values.images.resizer }}
           imagePullPolicy: {{ .Values.imagePullPolicy }}
           args:
             - "--csi-address=$(ADDRESS)"
