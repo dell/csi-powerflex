@@ -983,7 +983,11 @@ func (s *service) ControllerUnpublishVolume(
 	}
 
 	volID := getVolumeIDFromCsiVolumeID(csiVolID)
+	fmt.Println("*******volID******", volID)
+
 	vol, err := s.getVolByID(volID, systemID)
+
+	fmt.Println("*******vol******", vol)
 
 	if err != nil {
 		if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) {
@@ -996,6 +1000,9 @@ func (s *service) ControllerUnpublishVolume(
 	}
 
 	nodeID := req.GetNodeId()
+
+	fmt.Println("*******NODE******", nodeID)
+
 	if nodeID == "" {
 		return nil, status.Error(codes.InvalidArgument,
 			"Node ID is required")
