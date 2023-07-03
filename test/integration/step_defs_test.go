@@ -47,6 +47,8 @@ const (
 	RetrySleepTime = 10 * time.Second
 	SleepTime      = 100 * time.Millisecond
 	Pool1          = "pool1"
+	NfsPool        = "Env8-SP-SW_SSD-1"
+	NasName        = "env8nasserver"
 )
 
 // ArrayConnectionData contains data required to connect to array
@@ -207,6 +209,42 @@ func (f *feature) aBasicBlockVolumeRequest(name string, size int64) error {
 	blockType := new(csi.VolumeCapability_Block)
 	blockType.Block = block
 	capability.AccessType = blockType
+	accessMode := new(csi.VolumeCapability_AccessMode)
+	accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER
+	capability.AccessMode = accessMode
+	f.capability = capability
+	capabilities := make([]*csi.VolumeCapability, 0)
+	capabilities = append(capabilities, capability)
+	req.VolumeCapabilities = capabilities
+	f.createVolumeRequest = req
+	return nil
+}
+
+func (f *feature) aBasicNfsVolumeRequest(name string, size int64) error {
+	req := new(csi.CreateVolumeRequest)
+	params := make(map[string]string)
+
+	var array *ArrayConnectionData
+
+	NasNameValue := *array.NasName
+	params["nasName"] = NasNameValue
+	params["storagepool"] = NfsPool
+	params["thickprovisioning"] = "false"
+	if len(f.anotherSystemID) > 0 {
+		params["systemID"] = f.anotherSystemID
+	}
+	req.Parameters = params
+	makeAUniqueName(&name)
+	req.Name = name
+	capacityRange := new(csi.CapacityRange)
+	capacityRange.RequiredBytes = size * 1024 * 1024 * 1024
+	req.CapacityRange = capacityRange
+	capability := new(csi.VolumeCapability)
+	mount := new(csi.VolumeCapability_MountVolume)
+	mount.FsType = "nfs"
+	mountType := new(csi.VolumeCapability_Mount)
+	mountType.Mount = mount
+	capability.AccessType = mountType
 	accessMode := new(csi.VolumeCapability_AccessMode)
 	accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER
 	capability.AccessMode = accessMode
@@ -1809,4 +1847,5 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call NodeGetVolumeStats$`, f.iCallNodeGetVolumeStats)
 	s.Step(`^the VolumeCondition is "([^"]*)"$`, f.theVolumeConditionIs)
 	s.Step(`^I set wrongNasName$`, f.iSetBadNasName)
+	s.Step(`^a basic nfs volume request "([^"]*)" "(\d+)"$`, f.aBasicNfsVolumeRequest)
 }
