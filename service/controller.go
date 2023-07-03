@@ -2498,7 +2498,7 @@ func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.Controlle
 				fsName, requestedSize, allocatedSize)
 			return &csi.ControllerExpandVolumeResponse{
 				CapacityBytes:         int64(requestedSize),
-				NodeExpansionRequired: true}, nil
+				NodeExpansionRequired: false}, nil
 		}
 
 		system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
@@ -2516,7 +2516,7 @@ func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.Controlle
 		// NodeExpandVolume subsequently
 		csiResp := &csi.ControllerExpandVolumeResponse{
 			CapacityBytes:         int64(requestedSize),
-			NodeExpansionRequired: true,
+			NodeExpansionRequired: false,
 		}
 		return csiResp, nil
 
