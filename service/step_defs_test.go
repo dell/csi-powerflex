@@ -3523,7 +3523,7 @@ func (f *feature) iCallCreateStorageProtectionGroup() error {
 		req.VolumeHandle = ""
 	}
 	if stepHandlersErrors.BadVolIDError {
-		req.VolumeHandle = "0/"
+		req.VolumeHandle = "0%0"
 	}
 	f.createStorageProtectionGroupResponse, f.err = f.service.CreateStorageProtectionGroup(*ctx, req)
 	return nil
