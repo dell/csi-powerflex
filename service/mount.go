@@ -332,7 +332,7 @@ func publishVolume(
 }
 
 // publishNFS mounts the NFS Volume to the targetpath
-func publishNFS(ctx context.Context, req *csi.NodePublishVolumeRequest, nfsExportUrl string) error {
+func publishNFS(ctx context.Context, req *csi.NodePublishVolumeRequest, nfsExportURL string) error {
 	volCap := req.GetVolumeCapability()
 
 	if volCap == nil {
@@ -380,7 +380,7 @@ func publishNFS(ctx context.Context, req *csi.NodePublishVolumeRequest, nfsExpor
 	fields := map[string]interface{}{
 		"ID":         req.VolumeId,
 		"TargetPath": target,
-		"ExportPath": nfsExportUrl,
+		"ExportPath": nfsExportURL,
 		"AccessMode": am.GetMode(),
 	}
 	Log.WithFields(fields).Info("Node publish volume params ")
@@ -396,7 +396,7 @@ func publishNFS(ctx context.Context, req *csi.NodePublishVolumeRequest, nfsExpor
 		for _, m := range mnts {
 			// check for idempotency
 			//same volume
-			if m.Device == nfsExportUrl {
+			if m.Device == nfsExportURL {
 				if m.Path == target {
 					//as per specs, T1=T2, P1=P2 - return OK
 					if contains(m.Opts, rwOption) {
@@ -420,14 +420,14 @@ func publishNFS(ctx context.Context, req *csi.NodePublishVolumeRequest, nfsExpor
 	}
 
 	Log.Infof("The mountOptions being used for mount are: %s", mntOptions)
-	if err := gofsutil.Mount(context.Background(), nfsExportUrl, target, "nfs", mntOptions...); err != nil {
+	if err := gofsutil.Mount(context.Background(), nfsExportURL, target, "nfs", mntOptions...); err != nil {
 		var count = 0
 		var errmsg = err.Error()
 		//Both substring validation is for NFSv3 and NFSv4 errors resp.
 		for (strings.Contains(strings.ToLower(errmsg), "access denied by server while mounting") || (strings.Contains(strings.ToLower(errmsg), "no such file or directory"))) && count < 5 {
 			time.Sleep(2 * time.Second)
 			Log.Infof("Mount re-trial attempt-%d", count)
-			err = gofsutil.Mount(context.Background(), nfsExportUrl, target, "nfs", mntOptions...)
+			err = gofsutil.Mount(context.Background(), nfsExportURL, target, "nfs", mntOptions...)
 			if err != nil {
 				errmsg = err.Error()
 			} else {

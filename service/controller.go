@@ -71,7 +71,10 @@ const (
 	// volume create parameters map
 	KeyFsType = "fsType"
 
-	NFSExportLocalPath  = "/"
+	// NFSExportLocalPath is the local path for NFSExport
+	NFSExportLocalPath = "/"
+	// NFSExportNamePrefix is the prefix used for nfs exports created using
+	// csi-powerflex driver
 	NFSExportNamePrefix = "csishare-"
 
 	// DefaultVolumeSizeKiB is default volume sgolang/protobuf/blob/master/ptypesize
@@ -155,9 +158,12 @@ func (s *service) CreateVolume(
 
 	// Check for filesystem type
 	isNFS := false
-	fsType := req.VolumeCapabilities[0].GetMount().GetFsType()
-	if fsType == "nfs" {
-		isNFS = true
+	var fsType string
+	if len(req.VolumeCapabilities) != 0 {
+		fsType := req.VolumeCapabilities[0].GetMount().GetFsType()
+		if fsType == "nfs" {
+			isNFS = true
+		}
 	}
 
 	// validate AccessibleTopology
@@ -231,12 +237,14 @@ func (s *service) CreateVolume(
 		}
 	}
 
-	if req.VolumeCapabilities[0].GetBlock() != nil {
-		// We need to check if user requests raw block access from nfs and prevent that
-		fsType, ok := params[KeyFsType]
-		// FsType can be empty
-		if ok && fsType == "nfs" {
-			return nil, status.Errorf(codes.InvalidArgument, "raw block requested from NFS Volume")
+	if len(req.VolumeCapabilities) != 0 {
+		if req.VolumeCapabilities[0].GetBlock() != nil {
+			// We need to check if user requests raw block access from nfs and prevent that
+			fsType, ok := params[KeyFsType]
+			// FsType can be empty
+			if ok && fsType == "nfs" {
+				return nil, status.Errorf(codes.InvalidArgument, "raw block requested from NFS Volume")
+			}
 		}
 	}
 
@@ -792,10 +800,10 @@ func (s *service) DeleteVolume(
 		if err != nil {
 			if strings.Contains(err.Error(), sioGatewayFileSystemNotFound) {
 				return &csi.DeleteVolumeResponse{}, nil
-			} else {
-				return nil, status.Errorf(codes.Internal,
-					"error removing filesystem: %s", err.Error())
 			}
+			return nil, status.Errorf(codes.Internal,
+				"error removing filesystem: %s", err.Error())
+
 		}
 
 		return &csi.DeleteVolumeResponse{}, nil
@@ -990,134 +998,133 @@ func (s *service) ControllerPublishVolume(
 		//Export for NFS
 		resp, err := s.exportFilesystem(ctx, req, adminClient, fs, sdcIP, nodeID, publishContext, am)
 		return resp, err
-	} else {
-		volID := getVolumeIDFromCsiVolumeID(csiVolID)
-		vol, err := s.getVolByID(volID, systemID)
+	}
+	volID := getVolumeIDFromCsiVolumeID(csiVolID)
+	vol, err := s.getVolByID(volID, systemID)
 
-		if err != nil {
-			if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
-				return nil, status.Error(codes.NotFound,
-					"volume not found")
-			}
-			return nil, status.Errorf(codes.Internal,
-				"failure checking volume status before controller publish: %s",
-				err.Error())
+	if err != nil {
+		if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
+			return nil, status.Error(codes.NotFound,
+				"volume not found")
 		}
+		return nil, status.Errorf(codes.Internal,
+			"failure checking volume status before controller publish: %s",
+			err.Error())
+	}
 
-		sdcID, err := s.getSDCID(nodeID, systemID)
-		if err != nil {
-			return nil, status.Errorf(codes.NotFound, err.Error())
-		}
+	sdcID, err := s.getSDCID(nodeID, systemID)
+	if err != nil {
+		return nil, status.Errorf(codes.NotFound, err.Error())
+	}
 
-		vc := req.GetVolumeCapability()
-		if vc == nil {
-			return nil, status.Error(codes.InvalidArgument,
-				"volume capability is required")
-		}
+	vc := req.GetVolumeCapability()
+	if vc == nil {
+		return nil, status.Error(codes.InvalidArgument,
+			"volume capability is required")
+	}
 
-		am := vc.GetAccessMode()
-		if am == nil {
-			return nil, status.Error(codes.InvalidArgument,
-				"access mode is required")
-		}
+	am := vc.GetAccessMode()
+	if am == nil {
+		return nil, status.Error(codes.InvalidArgument,
+			"access mode is required")
+	}
 
-		if am.Mode == csi.VolumeCapability_AccessMode_UNKNOWN {
-			return nil, status.Error(codes.InvalidArgument,
-				errUnknownAccessMode)
-		}
-		// Check if volume is published to any node already
-		allowMultipleMappings := "FALSE"
-		vcs := []*csi.VolumeCapability{req.GetVolumeCapability()}
-		isBlock := accTypeIsBlock(vcs)
+	if am.Mode == csi.VolumeCapability_AccessMode_UNKNOWN {
+		return nil, status.Error(codes.InvalidArgument,
+			errUnknownAccessMode)
+	}
+	// Check if volume is published to any node already
+	allowMultipleMappings := "FALSE"
+	vcs := []*csi.VolumeCapability{req.GetVolumeCapability()}
+	isBlock := accTypeIsBlock(vcs)
 
-		if len(vol.MappedSdcInfo) > 0 {
-			for _, sdc := range vol.MappedSdcInfo {
-				if sdc.SdcID == sdcID {
-					// TODO check if published volume is compatible with this request
-					// volume already mapped
-					Log.Debug("volume already mapped")
+	if len(vol.MappedSdcInfo) > 0 {
+		for _, sdc := range vol.MappedSdcInfo {
+			if sdc.SdcID == sdcID {
+				// TODO check if published volume is compatible with this request
+				// volume already mapped
+				Log.Debug("volume already mapped")
 
-					// check for QoS limits of mapped volume
-					bandwidthLimit := volumeContext[KeyBandwidthLimitInKbps]
-					iopsLimit := volumeContext[KeyIopsLimit]
-					// validate requested QoS parameters
-					if err := validateQoSParameters(bandwidthLimit, iopsLimit, vol.Name); err != nil {
-						return nil, err
-					}
-
-					// check if volume QoS is same as requested QoS settings
-					if len(bandwidthLimit) > 0 && strconv.Itoa(sdc.LimitBwInMbps*1024) != bandwidthLimit {
-						return nil, status.Errorf(codes.InvalidArgument,
-							"volume %s already published with bandwidth limit: %d, but does not match the requested bandwidth limit: %s", vol.Name, sdc.LimitBwInMbps*1024, bandwidthLimit)
-					} else if len(iopsLimit) > 0 && strconv.Itoa(sdc.LimitIops) != iopsLimit {
-						return nil, status.Errorf(codes.InvalidArgument,
-							"volume %s already published with IOPS limit: %d, but does not match the requested IOPS limits: %s", vol.Name, sdc.LimitIops, iopsLimit)
-					}
-
-					return &csi.ControllerPublishVolumeResponse{}, nil
+				// check for QoS limits of mapped volume
+				bandwidthLimit := volumeContext[KeyBandwidthLimitInKbps]
+				iopsLimit := volumeContext[KeyIopsLimit]
+				// validate requested QoS parameters
+				if err := validateQoSParameters(bandwidthLimit, iopsLimit, vol.Name); err != nil {
+					return nil, err
 				}
-			}
 
-			// If volume has SINGLE_NODE cap, go no farther
-			switch am.Mode {
-			case csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
-				csi.VolumeCapability_AccessMode_SINGLE_NODE_MULTI_WRITER,
-				csi.VolumeCapability_AccessMode_SINGLE_NODE_SINGLE_WRITER,
-				csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY:
-				return nil, status.Errorf(codes.FailedPrecondition,
-					"volume already published to SDC id: %s", vol.MappedSdcInfo[0].SdcID)
-			}
+				// check if volume QoS is same as requested QoS settings
+				if len(bandwidthLimit) > 0 && strconv.Itoa(sdc.LimitBwInMbps*1024) != bandwidthLimit {
+					return nil, status.Errorf(codes.InvalidArgument,
+						"volume %s already published with bandwidth limit: %d, but does not match the requested bandwidth limit: %s", vol.Name, sdc.LimitBwInMbps*1024, bandwidthLimit)
+				} else if len(iopsLimit) > 0 && strconv.Itoa(sdc.LimitIops) != iopsLimit {
+					return nil, status.Errorf(codes.InvalidArgument,
+						"volume %s already published with IOPS limit: %d, but does not match the requested IOPS limits: %s", vol.Name, sdc.LimitIops, iopsLimit)
+				}
 
-			// All remaining cases are MULTI_NODE:
-			// This original code precludes block multi-writers,
-			// and is based on a faulty test that the Volume MappingToAllSdcsEnabled
-			// attribute must be set to allow multiple writers, which is not true.
-			// The proper way to control multiple mappings is with the allowMultipleMappings
-			// attribute passed in the MapVolumeSdcParameter. Unfortunately you cannot
-			// read this parameter back.
-
-			allowMultipleMappings, err = shouldAllowMultipleMappings(isBlock, am)
-			if err != nil {
-				return nil, status.Errorf(codes.InvalidArgument, err.Error())
-			}
-
-			if err := validateAccessType(am, isBlock); err != nil {
-				return nil, err
-			}
-		} else {
-			allowMultipleMappings, err = shouldAllowMultipleMappings(isBlock, am)
-			if err != nil {
-				return nil, status.Errorf(codes.InvalidArgument, err.Error())
+				return &csi.ControllerPublishVolumeResponse{}, nil
 			}
 		}
 
-		mapVolumeSdcParam := &siotypes.MapVolumeSdcParam{
-			SdcID:                 sdcID,
-			AllowMultipleMappings: allowMultipleMappings,
-			AllSdcs:               "",
+		// If volume has SINGLE_NODE cap, go no farther
+		switch am.Mode {
+		case csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+			csi.VolumeCapability_AccessMode_SINGLE_NODE_MULTI_WRITER,
+			csi.VolumeCapability_AccessMode_SINGLE_NODE_SINGLE_WRITER,
+			csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY:
+			return nil, status.Errorf(codes.FailedPrecondition,
+				"volume already published to SDC id: %s", vol.MappedSdcInfo[0].SdcID)
 		}
 
-		targetVolume := goscaleio.NewVolume(adminClient)
-		targetVolume.Volume = &siotypes.Volume{ID: vol.ID}
+		// All remaining cases are MULTI_NODE:
+		// This original code precludes block multi-writers,
+		// and is based on a faulty test that the Volume MappingToAllSdcsEnabled
+		// attribute must be set to allow multiple writers, which is not true.
+		// The proper way to control multiple mappings is with the allowMultipleMappings
+		// attribute passed in the MapVolumeSdcParameter. Unfortunately you cannot
+		// read this parameter back.
 
-		err = targetVolume.MapVolumeSdc(mapVolumeSdcParam)
+		allowMultipleMappings, err = shouldAllowMultipleMappings(isBlock, am)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal,
-				"error mapping volume to node: %s", err.Error())
+			return nil, status.Errorf(codes.InvalidArgument, err.Error())
 		}
 
-		bandwidthLimit := volumeContext[KeyBandwidthLimitInKbps]
-		iopsLimit := volumeContext[KeyIopsLimit]
-
-		// validate requested QoS parameters
-		if err := validateQoSParameters(bandwidthLimit, iopsLimit, vol.Name); err != nil {
+		if err := validateAccessType(am, isBlock); err != nil {
 			return nil, err
 		}
-		// check for atleast one of the QoS params should exist in storage class
-		if len(bandwidthLimit) > 0 || len(iopsLimit) > 0 {
-			if err = s.setQoSParameters(ctx, systemID, sdcID, bandwidthLimit, iopsLimit, vol.Name, csiVolID, nodeID); err != nil {
-				return nil, err
-			}
+	} else {
+		allowMultipleMappings, err = shouldAllowMultipleMappings(isBlock, am)
+		if err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, err.Error())
+		}
+	}
+
+	mapVolumeSdcParam := &siotypes.MapVolumeSdcParam{
+		SdcID:                 sdcID,
+		AllowMultipleMappings: allowMultipleMappings,
+		AllSdcs:               "",
+	}
+
+	targetVolume := goscaleio.NewVolume(adminClient)
+	targetVolume.Volume = &siotypes.Volume{ID: vol.ID}
+
+	err = targetVolume.MapVolumeSdc(mapVolumeSdcParam)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal,
+			"error mapping volume to node: %s", err.Error())
+	}
+
+	bandwidthLimit := volumeContext[KeyBandwidthLimitInKbps]
+	iopsLimit := volumeContext[KeyIopsLimit]
+
+	// validate requested QoS parameters
+	if err := validateQoSParameters(bandwidthLimit, iopsLimit, vol.Name); err != nil {
+		return nil, err
+	}
+	// check for atleast one of the QoS params should exist in storage class
+	if len(bandwidthLimit) > 0 || len(iopsLimit) > 0 {
+		if err = s.setQoSParameters(ctx, systemID, sdcID, bandwidthLimit, iopsLimit, vol.Name, csiVolID, nodeID); err != nil {
+			return nil, err
 		}
 	}
 
