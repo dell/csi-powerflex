@@ -1195,10 +1195,16 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 	//Allocate host access to NFS Share with appropriate access mode
 	if am.Mode == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
 		readHostList = append(readHostList, hostURL)
-		client.ModifyNFSExport(&siotypes.NFSExportModify{AddReadOnlyRootHosts: readHostList}, nfsExportID)
+		err := client.ModifyNFSExport(&siotypes.NFSExportModify{AddReadOnlyRootHosts: readHostList}, nfsExportID)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Allocating host access failed with the error: %v", err)
+		}
 	} else {
 		readWriteHostList = append(readWriteHostList, hostURL)
-		client.ModifyNFSExport(&siotypes.NFSExportModify{AddReadWriteRootHosts: readWriteHostList}, nfsExportID)
+		err := client.ModifyNFSExport(&siotypes.NFSExportModify{AddReadWriteRootHosts: readWriteHostList}, nfsExportID)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Allocating host access failed with the error: %v", err)
+		}
 	}
 
 	if err != nil {
