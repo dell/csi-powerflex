@@ -47,8 +47,7 @@ const (
 	RetrySleepTime = 10 * time.Second
 	SleepTime      = 100 * time.Millisecond
 	Pool1          = "pool1"
-	NfsPool        = "Env8-SP-SW_SSD-1"
-	NasName        = "env8nasserver"
+	NfsPool        = "Env7-SP-SW_SSD-1"
 )
 
 // ArrayConnectionData contains data required to connect to array
@@ -60,7 +59,7 @@ type ArrayConnectionData struct {
 	Insecure       bool    `json:"insecure,omitempty"`
 	IsDefault      bool    `json:"isDefault,omitempty"`
 	AllSystemNames string  `json:"allSystemNames"`
-	NasName        *string `json:"nasname"`
+	NasName        *string `json:"nasName"`
 	NfsAcls        string  `json:"nfsAcls"`
 }
 
@@ -146,6 +145,8 @@ func (f *feature) getArrayConfig() (map[string]*ArrayConnectionData, error) {
 				"isDefault":      c.IsDefault,
 				"systemID":       c.SystemID,
 				"allSystemNames": c.AllSystemNames,
+				"nasName":        c.NasName,
+				"nfsAcls":        c.NfsAcls,
 			}
 
 			fmt.Printf("array found  %s %#v\n", c.SystemID, fields)

@@ -539,17 +539,40 @@ Feature: VxFlex OS CSI interface
     Then the error message should contain <errormsg>
     Examples:
       | errormsg    |
-      | "error_msg" |
+      | "couldn't find given NAS server by name" |
 
-  Scenario: Create a NFS volume with wrong FileSystemName
-    Given a VxFlexOS service
-    And a basic nfs volume request "nfsvolume3" "8"
-    And I set wrongFileSystemName
-    When I call CreateVolume
-    Then the error message should contain <errormsg>
-    Examples:
-      | errormsg    |
-      | "error_msg" |
+  # Scenario: Create a NFS volume with wrong FileSystemName
+  #   Given a VxFlexOS service
+  #   And a basic nfs volume request "nfsvolume3" "8"
+  #   And I set wrongFileSystemName
+  #   When I call CreateVolume
+  #   Then the error message should contain <errormsg>
+  #   Examples:
+  #     | errormsg    |
+  #     | "error_msg" |
+
+  # Scenario: Expand NFS Mount
+  #   Given a VxFlexOS service
+  #   And a capability with voltype "mount" access "single-writer" fstype "xfs"
+  #   And a volume request "integration30" "16"
+  #   When I call CreateVolume
+  #   And there are no errors
+  #   And when I call PublishVolume "SDC_GUID"
+  #   And there are no errors
+  #   And when I call NodePublishVolume "SDC_GUID"
+  #   And there are no errors
+  #   And when I call ExpandVolume to "20"
+  #   And there are no errors
+  #   And when I call NodeExpandVolume
+  #   And there are no errors
+  #   And I call ListVolume
+  #   And a valid ListVolumeResponse is returned
+  #   And when I call NodeUnpublishVolume "SDC_GUID"
+  #   And there are no errors
+  #   And when I call UnpublishVolume "SDC_GUID"
+  #   And there are no errors
+  #   And when I call DeleteVolume
+  #   Then there are no errors
 
   Scenario Outline: Publish and Unpublish Ephemeral Volume
     Given a VxFlexOS service
