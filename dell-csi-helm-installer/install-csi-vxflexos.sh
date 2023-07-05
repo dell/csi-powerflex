@@ -22,7 +22,7 @@ function install_mdm_secret() {
     log error "secret ${SECRET} in namespace ${NS} not found"
   else
     JSON=$(kubectl get secret ${SECRET} -n ${NS} -o go-template='{{ .data.config }}' | base64 --decode)
-    DATA=$(echo "${JSON}" | grep mdm | awk -F "\"" '{ print $(NF-1)}')
+    DATA=$(echo "${JSON}" | grep -v '^#' | grep mdm | awk -F "\"" '{ print $(NF-1)}')
     MDM=$(echo ${DATA} | sed "s/ /\&/g")
     if [ "${MDM}" != "" ]; then
       ENC=$(echo ${MDM} | base64 | tr -d "\n")

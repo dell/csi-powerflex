@@ -26,18 +26,7 @@ RUN CGO_ENABLED=0 \
     make build
 
 # Stage to build the driver image
-FROM $BASEIMAGE@${DIGEST} AS final
-# install necessary packages
-# alphabetical order for easier maintenance
-RUN microdnf update -y && \
-    microdnf install -y  \
-        e4fsprogs \
-        kmod \
-        libaio \
-        numactl \
-        nfs-utils \
-        xfsprogs && \
-    microdnf clean all
+FROM $BASEIMAGE AS final
 ENTRYPOINT ["/csi-vxflexos.sh"]
 # copy in the driver
 COPY --from=builder /go/src/csi-vxflexos /
@@ -47,7 +36,7 @@ LABEL vendor="Dell Inc." \
     name="csi-powerflex" \
     summary="CSI Driver for Dell EMC PowerFlex" \
     description="CSI Driver for provisioning persistent storage from Dell EMC PowerFlex" \
-    version="2.6.0" \
+    version="2.7.0" \
     license="Apache-2.0"
 COPY ./licenses /licenses
 

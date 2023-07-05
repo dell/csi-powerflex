@@ -3,9 +3,8 @@
 #
 
 # DEFAULT values
-DEFAULT_BASEIMAGE="registry.access.redhat.com/ubi8/ubi-minimal"
-# digest for 8.7-1085
-DEFAULT_DIGEST="sha256:ab03679e683010d485ef0399e056b09a38d7843ba4a36ee7dec337dd0037f7a7"
+# ubi8/ubi-micro:8.8-1
+DEFAULT_BASEIMAGE="registry.access.redhat.com/ubi8/ubi-micro:8.8-1"
 DEFAULT_GOVERSION="1.20"
 DEFAULT_REGISTRY="sample_registry"
 DEFAULT_IMAGENAME="csi-vxflexos"
@@ -17,10 +16,6 @@ ifeq ($(BASEIMAGE),)
 export BASEIMAGE="$(DEFAULT_BASEIMAGE)"
 endif
 
-# set the IMAGEDIGEST if needed
-ifeq ($(DIGEST),)
-export DIGEST="$(DEFAULT_DIGEST)"
-endif
 
 # set the GOVERSION if needed
 ifeq ($(GOVERSION),)
@@ -63,8 +58,6 @@ overrides-help:
 	@echo "              Current setting is: $(GOVERSION)"
 	@echo "BASEIMAGE   - The base container image to build from, default is: $(DEFAULT_BASEIMAGE)"
 	@echo "              Current setting is: $(BASEIMAGE)"
-	@echo "IMAGEDIGEST - The digest of baseimage, default is: $(DEFAULT_DIGEST)"
-	@echo "              Current setting is: $(DIGEST)"
 	@echo "REGISTRY    - The registry to push images to, default is: $(DEFAULT_REGISTRY)"
 	@echo "              Current setting is: $(REGISTRY)"
 	@echo "IMAGENAME   - The image name to be built, defaut is: $(DEFAULT_IMAGENAME)"
