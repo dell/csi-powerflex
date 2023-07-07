@@ -160,7 +160,7 @@ func (s *service) CreateVolume(
 	isNFS := false
 	var fsType string
 	if len(req.VolumeCapabilities) != 0 {
-		fsType := req.VolumeCapabilities[0].GetMount().GetFsType()
+		fsType = req.VolumeCapabilities[0].GetMount().GetFsType()
 		if fsType == "nfs" {
 			isNFS = true
 		}
@@ -2450,6 +2450,82 @@ func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.Controlle
 		return nil, status.Errorf(codes.Internal,
 			"checkVolumesMap for id: %s failed : %s", csiVolID, err.Error())
 
+	}
+
+	isNFS := strings.Contains(csiVolID, "/")
+
+	if isNFS {
+		fsID := getFilesystemIDFromCsiVolumeID(csiVolID)
+		systemID := s.getSystemIDFromCsiVolumeID(csiVolID)
+		if systemID == "" {
+			// use default system
+			systemID = s.opts.defaultSystemID
+		}
+
+		if systemID == "" {
+			return nil, status.Error(codes.InvalidArgument,
+				"systemID is not found in the request and there is no default system")
+		}
+
+		if err := s.requireProbe(ctx, systemID); err != nil {
+			return nil, err
+		}
+		fs, err := s.getFilesystemByID(fsID, systemID)
+		if err != nil {
+			if strings.EqualFold(err.Error(), sioGatewayFileSystemNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
+				return nil, status.Error(codes.NotFound,
+					"volume not found")
+			} else {
+				return nil, status.Errorf(codes.Internal, "failure to load volume: %s", err.Error())
+			}
+
+		}
+
+		fsName := fs.Name
+		cr := req.GetCapacityRange()
+		Log.Printf("cr:%d", cr)
+		requestedSize := int(cr.GetRequiredBytes())
+
+		Log.Printf("req.size:%d", requestedSize)
+		fields := map[string]interface{}{
+			"RequestID":      reqID,
+			"fileSystemName": fsName,
+			"RequestedSize":  requestedSize,
+		}
+		Log.WithFields(fields).Info("Executing ExpandVolume with following fields")
+		allocatedSize := fs.SizeTotal
+		Log.Printf("allocatedsize:%d", allocatedSize)
+
+		// nil response returned if volume shrink operation is tried
+		if requestedSize < allocatedSize {
+			Log.Printf("volume shrink tried")
+			return &csi.ControllerExpandVolumeResponse{}, nil
+		}
+
+		// idempotency check
+		if requestedSize == allocatedSize {
+			Log.Infof("Idempotent call detected for volume (%s) with requested size (%d) SizeInKb and allocated size (%d) SizeInKb",
+				fsName, requestedSize, allocatedSize)
+			return &csi.ControllerExpandVolumeResponse{
+				CapacityBytes:         int64(requestedSize),
+				NodeExpansionRequired: false}, nil
+		}
+
+		system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
+		if err != nil {
+			return nil, err
+		}
+
+		if err := system.ModifyFileSystem(&siotypes.FSModify{Size: requestedSize}, fsID); err != nil {
+			Log.Errorf("NFS volume expansion failed with error: %s", err.Error())
+			return nil, status.Error(codes.Internal, err.Error())
+		}
+
+		csiResp := &csi.ControllerExpandVolumeResponse{
+			CapacityBytes:         int64(requestedSize),
+			NodeExpansionRequired: false,
+		}
+		return csiResp, nil
 	}
 
 	volID := getVolumeIDFromCsiVolumeID(csiVolID)
