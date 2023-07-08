@@ -61,6 +61,8 @@ var (
 		CreateSnapshotError           bool
 		RemoveVolumeError             bool
 		VolumeInstancesError          bool
+		FileSystemInstancesError      bool
+		NasServerNotFoundError        bool
 		BadVolIDError                 bool
 		NoCsiVolIDError               bool
 		WrongVolIDError               bool
@@ -71,6 +73,7 @@ var (
 		NoSysNameError                bool
 		NoAdminError                  bool
 		WrongSysNameError             bool
+		BadCapacityError              bool
 		NoVolumeIDError               bool
 		SetVolumeSizeError            bool
 		systemNameMatchingError       bool
@@ -200,6 +203,9 @@ func getRouter() http.Handler {
 	scaleioRouter.HandleFunc("/api/login", handleLogin)
 	scaleioRouter.HandleFunc("/api/version", handleVersion)
 	scaleioRouter.HandleFunc("/api/types/System/instances", handleSystemInstances)
+	scaleioRouter.HandleFunc("/rest/v1/nas-servers", handleNasInstances)
+	scaleioRouter.HandleFunc("/rest/v1/file-systems", handleFileSystems)
+	scaleioRouter.HandleFunc("/rest/v1/file-systems/{id}", handleGetFileSystems)
 	scaleioRouter.HandleFunc("/api/types/Volume/instances", handleVolumeInstances)
 	scaleioRouter.HandleFunc("/api/types/StoragePool/instances", handleStoragePoolInstances)
 	scaleioRouter.HandleFunc("{Volume}/relationship/Statistics", handleVolumeStatistics)
@@ -279,6 +285,137 @@ func handleSystemInstances(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handleSystemInstances implements GET /api/types/System/instances
+func handleNasInstances(w http.ResponseWriter, r *http.Request) {
+
+	if stepHandlersErrors.NasServerNotFoundError {
+		writeError(w, "nas server not found", http.StatusNotFound, codes.NotFound)
+	}
+
+	returnJSONFile("features", "get_nas_servers.json", w, nil)
+}
+
+func handleFileSystems(w http.ResponseWriter, r *http.Request) {
+
+	// if stepHandlersErrors.BadCapacityError {
+	// 	writeError(w, "bad capacity error", http.StatusBadRequest, codes.InvalidArgument)
+	// 	return
+	// }
+	// returnJSONFile("features", "create_file_system_response.json", w, nil)
+
+	if fileSystemIDName == nil {
+		fileSystemIDName = make(map[string]string)
+		fileSystemNameToID = make(map[string]string)
+		fileSystemIDToSizeTotal = make(map[string]string)
+	}
+
+	if stepHandlersErrors.FileSystemInstancesError {
+		writeError(w, "induced error", http.StatusRequestTimeout, codes.Internal)
+		return
+	}
+
+	if stepHandlersErrors.BadCapacityError {
+		writeError(w, "bad capacity error", http.StatusBadRequest, codes.InvalidArgument)
+		return
+	}
+
+	switch r.Method {
+
+	// Post is CreateVolume; here just return a volume id encoded from the name
+	case http.MethodPost:
+		if inducedError.Error() == "CreateVolumeError" {
+			writeError(w, "create volume induced error", http.StatusRequestTimeout, codes.Internal)
+			return
+		}
+
+		req := types.FsCreate{}
+		decoder := json.NewDecoder(r.Body)
+		err := decoder.Decode(&req)
+		if err != nil {
+			log.Printf("error decoding json: %s\n", err.Error())
+		}
+
+		// good response
+		resp := new(types.FileSystemResp)
+		resp.ID = hex.EncodeToString([]byte(req.Name))
+		fileSystemIDName[resp.ID] = req.Name
+		fileSystemNameToID[req.Name] = resp.ID
+		fileSystemIDToSizeTotal[resp.ID] = strconv.Itoa(req.SizeTotal)
+
+		if array, ok := systemArrays[r.Host]; ok {
+			fmt.Printf("Host Endpoint %s\n", r.Host)
+			//array.fileSystems = make(map[string]map[string]string)
+			array.fileSystems[resp.ID] = make(map[string]string)
+			array.fileSystems[resp.ID]["name"] = req.Name
+			array.fileSystems[resp.ID]["id"] = resp.ID
+			array.fileSystems[resp.ID]["size_total"] = strconv.Itoa(req.SizeTotal)
+		}
+
+		if debug {
+			log.Printf("request name: %s id: %s\n", req.Name, resp.ID)
+		}
+		encoder := json.NewEncoder(w)
+		err = encoder.Encode(resp)
+		if err != nil {
+			log.Printf("error encoding json: %s\n", err.Error())
+		}
+
+		log.Printf("end make fileSystems")
+	// Read all the Volumes
+	case http.MethodGet:
+		instances := make([]*types.FileSystem, 0)
+		fileSystems := make(map[string]map[string]string)
+
+		if array, ok := systemArrays[r.Host]; ok {
+			fileSystems = array.fileSystems
+
+			for _, fs := range fileSystems {
+				replacementMap := make(map[string]string)
+				replacementMap["__ID__"] = fs["id"]
+				replacementMap["__NAME__"] = fs["name"]
+				replacementMap["__SIZE_IN_Total__"] = fs["size_total"]
+				data := returnJSONFile("features", "filesystem.json.template", nil, replacementMap)
+				fs := new(types.FileSystem)
+				err := json.Unmarshal(data, fs)
+				if err != nil {
+					log.Printf("error unmarshalling json: %s\n", string(data))
+				}
+				instances = append(instances, fs)
+			}
+		}
+
+		// Add none-created volumes (old)
+		for id, name := range fileSystemIDName {
+			if _, ok := fileSystems[id]; ok {
+				continue
+			}
+
+			name = id
+			replacementMap := make(map[string]string)
+			replacementMap["__ID__"] = id
+			replacementMap["__NAME__"] = name
+			replacementMap["__SIZE_IN_Total__"] = fileSystemIDToSizeTotal[id]
+			data := returnJSONFile("features", "filesystem.json.template", nil, replacementMap)
+			fs := new(types.FileSystem)
+			err := json.Unmarshal(data, fs)
+			if err != nil {
+				log.Printf("error unmarshalling json: %s\n", string(data))
+			}
+			instances = append(instances, fs)
+		}
+
+		encoder := json.NewEncoder(w)
+		err := encoder.Encode(instances)
+		if err != nil {
+			log.Printf("error encoding json: %s\n", err)
+		}
+	}
+}
+
+func handleGetFileSystems(w http.ResponseWriter, r *http.Request) {
+	returnJSONFile("features", "get_file_system_response.json", w, nil)
+}
+
 // handleStoragePoolInstances implements GET /api/types/StoragePool/instances
 func handleStoragePoolInstances(w http.ResponseWriter, r *http.Request) {
 	if stepHandlersErrors.GetStoragePoolsError {
@@ -332,8 +469,14 @@ func returnJSONFile(directory, filename string, w http.ResponseWriter, replaceme
 // Map of volume ID to name
 var volumeIDToName map[string]string
 
+// Map of FileSystem ID to name
+var fileSystemIDName map[string]string
+
 // Map of volume name to ID
 var volumeNameToID map[string]string
+
+// Map of FileSystem Name to ID
+var fileSystemNameToID map[string]string
 
 // Map of volume ID to ancestor ID
 var volumeIDToAncestorID map[string]string
@@ -350,6 +493,9 @@ var volumeIDToReplicationState map[string]string
 // Map of volume ID to size in KB
 var volumeIDToSizeInKB map[string]string
 
+// Map of FileSystem ID to size Total
+var fileSystemIDToSizeTotal map[string]string
+
 // Replication group state to replace for.
 var replicationGroupState string
 
@@ -358,12 +504,14 @@ type systemArray struct {
 	ID                           string
 	replicationSystem            *systemArray
 	volumes                      map[string]map[string]string
+	fileSystems                  map[string]map[string]string
 	replicationConsistencyGroups map[string]map[string]string
 	replicationPairs             map[string]map[string]string
 }
 
 func (s *systemArray) Init() {
 	s.volumes = make(map[string]map[string]string)
+	s.fileSystems = make(map[string]map[string]string)
 	s.replicationConsistencyGroups = make(map[string]map[string]string)
 	s.replicationPairs = make(map[string]map[string]string)
 }

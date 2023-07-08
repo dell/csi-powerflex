@@ -31,6 +31,15 @@ Feature: VxFlex OS CSI interface
     And I call DeleteVolume with "single-writer"
     And I call DeleteVolume with "single-writer"
     Then a valid DeleteVolumeResponse is returned
+    
+  # Scenario: Test Basic nfs delete FileSystem
+  #   Given a VxFlexOS service
+  #   And a valid FileSystem
+  #   When I call Probe
+  #   And I call DeleteVolume nfs with "single-writer"
+  #   Then a valid DeleteVolumeResponse is returned
+    
+    
 
   Scenario: Delete volume with induced getVolByID error
     Given a VxFlexOS service

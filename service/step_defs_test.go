@@ -141,6 +141,8 @@ type feature struct {
 	clusterUID                            string
 	createStorageProtectionGroupResponse  *replication.CreateStorageProtectionGroupResponse
 	deleteStorageProtectionGroupResponse  *replication.DeleteStorageProtectionGroupResponse
+	fileSystemID                          string
+	systemID                              string
 }
 
 func (f *feature) checkGoRoutines(tag string) {
@@ -635,6 +637,34 @@ func getTypicalCreateVolumeRequest() *csi.CreateVolumeRequest {
 	return req
 }
 
+func getTypicalNFSCreateVolumeRequest() *csi.CreateVolumeRequest {
+	req := new(csi.CreateVolumeRequest)
+	params := make(map[string]string)
+	params["storagepool"] = "viki_pool_HDD_20181031"
+	req.Parameters = params
+	req.Name = "mount1"
+	capacityRange := new(csi.CapacityRange)
+	capacityRange.RequiredBytes = 32 * 1024 * 1024 * 1024
+	req.CapacityRange = capacityRange
+	capability := new(csi.VolumeCapability)
+	mountVolume := new(csi.VolumeCapability_MountVolume)
+	mountVolume.FsType = "nfs"
+	if mountVolume.FsType == "nfs" {
+		req.Parameters["nasName"] = "dummy-nas-server"
+	}
+	mountVolume.MountFlags = make([]string, 0)
+	mount := new(csi.VolumeCapability_Mount)
+	mount.Mount = mountVolume
+	capability.AccessType = mount
+	accessMode := new(csi.VolumeCapability_AccessMode)
+	accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER
+	capability.AccessMode = accessMode
+	capabilities := make([]*csi.VolumeCapability, 0)
+	capabilities = append(capabilities, capability)
+	req.VolumeCapabilities = capabilities
+	return req
+}
+
 func (f *feature) iSpecifyCreateVolumeMountRequest(fstype string) error {
 	req := new(csi.CreateVolumeRequest)
 	params := make(map[string]string)
@@ -647,6 +677,9 @@ func (f *feature) iSpecifyCreateVolumeMountRequest(fstype string) error {
 	capability := new(csi.VolumeCapability)
 	mountVolume := new(csi.VolumeCapability_MountVolume)
 	mountVolume.FsType = fstype
+	if mountVolume.FsType == "nfs" {
+		req.Parameters["nasName"] = "dummy-nas-server"
+	}
 	mountVolume.MountFlags = make([]string, 0)
 	mount := new(csi.VolumeCapability_Mount)
 	mount.Mount = mountVolume
@@ -671,8 +704,11 @@ func (f *feature) iCallCreateVolume(name string) error {
 	req.Name = name
 
 	if stepHandlersErrors.NoAdminError {
+		fmt.Println("I am in Noadmin error.....")
 		f.service.adminClients[arrayID] = nil
 	}
+
+	fmt.Println("I am in iCallCreateVolume fn.....")
 
 	f.createVolumeResponse, f.err = f.service.CreateVolume(*ctx, req)
 	if f.err != nil {
@@ -862,7 +898,13 @@ func (f *feature) iSpecifyMULTINODEWRITER() error {
 }
 
 func (f *feature) iSpecifyABadCapacity() error {
-	req := getTypicalCreateVolumeRequest()
+	var req *csi.CreateVolumeRequest
+	if f.createVolumeRequest == nil {
+		req = getTypicalCreateVolumeRequest()
+	} else {
+		req = f.createVolumeRequest
+	}
+
 	capacityRange := new(csi.CapacityRange)
 	capacityRange.RequiredBytes = -32 * 1024 * 1024 * 1024
 	req.CapacityRange = capacityRange
@@ -881,7 +923,39 @@ func (f *feature) iSpecifyNoStoragePool() error {
 
 func (f *feature) iCallCreateVolumeSize(name string, size int64) error {
 	ctx := new(context.Context)
-	req := getTypicalCreateVolumeRequest()
+	var req *csi.CreateVolumeRequest
+	if f.createVolumeRequest == nil {
+		req = getTypicalCreateVolumeRequest()
+	} else {
+		req = f.createVolumeRequest
+	}
+
+	capacityRange := new(csi.CapacityRange)
+	capacityRange.RequiredBytes = size * 1024 * 1024 * 1024
+	req.CapacityRange = capacityRange
+	req.Name = name
+	f.createVolumeRequest = req
+
+	f.createVolumeResponse, f.err = f.service.CreateVolume(*ctx, req)
+	if f.err != nil {
+		log.Printf("CreateVolumeSize called failed: %s\n", f.err.Error())
+	}
+	if f.createVolumeResponse != nil {
+		log.Printf("vol id %s\n", f.createVolumeResponse.GetVolume().VolumeId)
+	}
+
+	return nil
+}
+
+func (f *feature) iCallCreateVolumeSizeNFS(name string, size int64) error {
+	ctx := new(context.Context)
+	var req *csi.CreateVolumeRequest
+	if f.createVolumeRequest == nil {
+		req = getTypicalNFSCreateVolumeRequest()
+	} else {
+		req = f.createVolumeRequest
+	}
+
 	capacityRange := new(csi.CapacityRange)
 	capacityRange.RequiredBytes = size * 1024 * 1024 * 1024
 	req.CapacityRange = capacityRange
@@ -900,9 +974,9 @@ func (f *feature) iCallCreateVolumeSize(name string, size int64) error {
 }
 
 func (f *feature) iChangeTheStoragePool(storagePoolName string) error {
-	params := make(map[string]string)
-	params["storagepool"] = storagePoolName
-	f.createVolumeRequest.Parameters = params
+	// params := make(map[string]string)
+	// params["storagepool"] = storagePoolName
+	f.createVolumeRequest.Parameters["storagepool"] = storagePoolName
 	return nil
 }
 
@@ -912,6 +986,8 @@ func (f *feature) iInduceError(errtype string) error {
 	switch errtype {
 	case "WrongSysNameError":
 		stepHandlersErrors.WrongSysNameError = true
+	case "BadCapacityError":
+		stepHandlersErrors.BadCapacityError = true
 	case "NoAdminError":
 		stepHandlersErrors.NoAdminError = true
 	case "NoUserError":
@@ -1002,6 +1078,10 @@ func (f *feature) iInduceError(errtype string) error {
 		stepHandlersErrors.RemoveVolumeError = true
 	case "VolumeInstancesError":
 		stepHandlersErrors.VolumeInstancesError = true
+	case "FileSystemInstancesError":
+		stepHandlersErrors.FileSystemInstancesError = true
+	case "NasNotFoundError":
+		stepHandlersErrors.NasServerNotFoundError = true
 	case "NoVolumeIDError":
 		stepHandlersErrors.NoVolumeIDError = true
 	case "BadVolIDJSON":
@@ -1261,6 +1341,43 @@ func (f *feature) getControllerDeleteVolumeRequest(accessType string) *csi.Delet
 	return req
 }
 
+func (f *feature) getControllerDeleteVolumeRequestNFS(accessType string) *csi.DeleteVolumeRequest {
+	capability := new(csi.VolumeCapability)
+
+	mountVolume := new(csi.VolumeCapability_MountVolume)
+	mountVolume.FsType = "nfs"
+	mountVolume.MountFlags = make([]string, 0)
+	mount := new(csi.VolumeCapability_Mount)
+	mount.Mount = mountVolume
+	capability.AccessType = mount
+
+	accessMode := new(csi.VolumeCapability_AccessMode)
+	switch accessType {
+	case "single-writer":
+		accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER
+	case "multiple-reader":
+		accessMode.Mode = csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY
+	case "multiple-writer":
+		accessMode.Mode = csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER
+	case "unknown":
+		accessMode.Mode = csi.VolumeCapability_AccessMode_UNKNOWN
+	}
+	if !f.omitAccessMode {
+		capability.AccessMode = accessMode
+	}
+	fmt.Printf("capability.AccessType %v\n", capability.AccessType)
+	fmt.Printf("capability.AccessMode %v\n", capability.AccessMode)
+	req := new(csi.DeleteVolumeRequest)
+	if !f.noVolumeID {
+		if f.invalidVolumeID {
+			req.VolumeId = badVolumeID2
+		} else {
+			req.VolumeId = goodVolumeID
+		}
+	}
+	return req
+}
+
 func (f *feature) iCallPublishVolumeWith(arg1 string) error {
 	ctx := new(context.Context)
 	req := f.publishVolumeRequest
@@ -1300,6 +1417,18 @@ func (f *feature) aValidVolume() error {
 	volumeNameToID[goodVolumeName] = volIDtoUse
 	volumeIDToSizeInKB[volIDtoUse] = defaultVolumeSize
 	volumeIDToReplicationState[volIDtoUse] = unmarkedForReplication
+	return nil
+}
+
+func (f *feature) aValidFileSystem() error {
+	//this prevents the step handler from returning the volume '111' as found in the non default array
+	fsIDToUse := "14dbbf5617523654/766f6c756d6534"
+	// if stepHandlersErrors.LegacyVolumeConflictError {
+	// 	volIDtoUse = goodVolumeID
+	// }
+	fileSystemIDName[fsIDToUse] = goodVolumeName
+	fileSystemNameToID[goodVolumeName] = fsIDToUse
+	fileSystemIDToSizeTotal[fsIDToUse] = defaultVolumeSize
 	return nil
 }
 
@@ -1430,6 +1559,21 @@ func (f *feature) iCallDeleteVolumeWith(arg1 string) error {
 	req := f.deleteVolumeRequest
 	if f.deleteVolumeRequest == nil {
 		req = f.getControllerDeleteVolumeRequest(arg1)
+		f.deleteVolumeRequest = req
+	}
+	log.Printf("Calling DeleteVolume")
+	f.deleteVolumeResponse, f.err = f.service.DeleteVolume(*ctx, req)
+	if f.err != nil {
+		log.Printf("DeleteVolume called failed: %s\n", f.err.Error())
+	}
+	return nil
+}
+
+func (f *feature) iCallDeleteVolumeNFSWith(arg1 string) error {
+	ctx := new(context.Context)
+	req := f.deleteVolumeRequest
+	if f.deleteVolumeRequest == nil {
+		req = f.getControllerDeleteVolumeRequestNFS(arg1)
 		f.deleteVolumeRequest = req
 	}
 	log.Printf("Calling DeleteVolume")
@@ -3182,12 +3326,40 @@ func (f *feature) iCallGetVolumeIDFromCsiVolumeID(csiVolID string) error {
 	return nil
 }
 
+func (f *feature) iCallGetFileSystemIDFromCsiVolumeID(csiVolID string) error {
+	fmt.Println("csiVolID", csiVolID)
+	v := getFilesystemIDFromCsiVolumeID(csiVolID)
+	fmt.Println("i got", v)
+	f.fileSystemID = v
+	return nil
+}
+
+func (f *feature) theFileSystemIDIs(fsID string) error {
+	if fsID == f.fileSystemID {
+		return nil
+	}
+	return fmt.Errorf("expected %s but got %s", fsID, f.fileSystemID)
+}
+
 func (f *feature) iCallGetSystemIDFromCsiVolumeID(csiVolID string) error {
 	s := f.service.getSystemIDFromCsiVolumeID(csiVolID)
 	fmt.Printf("DEBUG getSystem %s\n", s)
 	out := fmt.Sprintf("Got %s\n", s)
 	f.err = errors.New(out)
 	return nil
+}
+
+func (f *feature) iCallGetSystemIDFromCsiVolumeIDNfs(csiVolID string) error {
+	s := f.service.getSystemIDFromCsiVolumeID(csiVolID)
+	f.systemID = s
+	return nil
+}
+
+func (f *feature) theSystemIDIs(systemID string) error {
+	if systemID == f.systemID {
+		return nil
+	}
+	return fmt.Errorf("expected %s but got %s", systemID, f.fileSystemID)
 }
 
 func (f *feature) iCallGetSystemIDFromParameters(option string) error {
@@ -3677,6 +3849,8 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call Probe$`, f.iCallProbe)
 	s.Step(`^a valid ProbeResponse is returned$`, f.aValidProbeResponseIsReturned)
 	s.Step(`^the error contains "([^"]*)"$`, f.theErrorContains)
+	s.Step(`^the fileSystemID is "([^"]*)"$`, f.theFileSystemIDIs)
+	s.Step(`^the systemID is "([^"]*)"$`, f.theSystemIDIs)
 	s.Step(`^the possible error contains "([^"]*)"$`, f.thePossibleErrorContains)
 	s.Step(`^the Controller has no connection$`, f.theControllerHasNoConnection)
 	s.Step(`^there is a Node Probe Lsmod error$`, f.thereIsANodeProbeLsmodError)
@@ -3691,6 +3865,8 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I specify a BadCapacity$`, f.iSpecifyABadCapacity)
 	s.Step(`^I specify NoStoragePool$`, f.iSpecifyNoStoragePool)
 	s.Step(`^I call CreateVolumeSize "([^"]*)" "(\d+)"$`, f.iCallCreateVolumeSize)
+	s.Step(`^I call CreateVolumeSize nfs "([^"]*)" "(\d+)"$`, f.iCallCreateVolumeSizeNFS)
+
 	s.Step(`^I change the StoragePool "([^"]*)"$`, f.iChangeTheStoragePool)
 	s.Step(`^I induce error "([^"]*)"$`, f.iInduceError)
 	s.Step(`^I specify VolumeContentSource$`, f.iSpecifyVolumeContentSource)
@@ -3698,6 +3874,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call PublishVolume with "([^"]*)"$`, f.iCallPublishVolumeWith)
 	s.Step(`^a valid PublishVolumeResponse is returned$`, f.aValidPublishVolumeResponseIsReturned)
 	s.Step(`^a valid volume$`, f.aValidVolume)
+	s.Step(`^a valid FileSystem$`, f.aValidFileSystem)
 	s.Step(`^an invalid volume$`, f.anInvalidVolume)
 	s.Step(`^no volume$`, f.noVolume)
 	s.Step(`^no node$`, f.noNode)
@@ -3713,6 +3890,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call Node Probe$`, f.iCallNodeProbe)
 	s.Step(`^a valid NodeGetInfoResponse is returned$`, f.aValidNodeGetInfoResponseIsReturned)
 	s.Step(`^I call DeleteVolume with "([^"]*)"$`, f.iCallDeleteVolumeWith)
+	s.Step(`^I call DeleteVolume nfs with "([^"]*)"$`, f.iCallDeleteVolumeNFSWith)
 	s.Step(`^a valid DeleteVolumeResponse is returned$`, f.aValidDeleteVolumeResponseIsReturned)
 	s.Step(`^the volume is already mapped to an SDC$`, f.theVolumeIsAlreadyMappedToAnSDC)
 	s.Step(`^I call GetCapacity with storage pool "([^"]*)"$`, f.iCallGetCapacityWithStoragePool)
@@ -3790,7 +3968,9 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call EphemeralNodeUnpublish$`, f.iCallEphemeralNodeUnpublish)
 	s.Step(`^I call EphemeralNodePublish$`, f.iCallEphemeralNodePublish)
 	s.Step(`^I call getVolumeIDFromCsiVolumeID "([^"]*)"$`, f.iCallGetVolumeIDFromCsiVolumeID)
+	s.Step(`^I call getFilesystemIDFromCsiVolumeID "([^"]*)"$`, f.iCallGetFileSystemIDFromCsiVolumeID)
 	s.Step(`^I call getSystemIDFromCsiVolumeID "([^"]*)"$`, f.iCallGetSystemIDFromCsiVolumeID)
+	s.Step(`^I call getSystemIDFromCsiVolumeIDNfs "([^"]*)"$`, f.iCallGetSystemIDFromCsiVolumeIDNfs)
 	s.Step(`^I call GetSystemIDFromParameters with bad params "([^"]*)"$`, f.iCallGetSystemIDFromParameters)
 	s.Step(`^I call getSystemName$`, f.iCallGetSystemName)
 	s.Step(`^I call mount publishVolume$`, f.iCallMountPublishVolume)

@@ -160,7 +160,7 @@ func (s *service) CreateVolume(
 	isNFS := false
 	var fsType string
 	if len(req.VolumeCapabilities) != 0 {
-		fsType := req.VolumeCapabilities[0].GetMount().GetFsType()
+		fsType = req.VolumeCapabilities[0].GetMount().GetFsType()
 		if fsType == "nfs" {
 			isNFS = true
 		}
