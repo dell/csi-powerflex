@@ -84,8 +84,8 @@ Feature: VxFlex OS CSI interface
       | csiVolID        | fsID            |
       | "abcd/nfs123"   | "nfs123"        |
       | "badcsiVolID"   | ""              |
+      |  ""             | ""              |
 
-  
   Scenario Outline: multi array getSystemIDFromCsiVolumeID for nfs good and bad
     Given a VxFlexOS service
     And I call getSystemIDFromCsiVolumeIDNfs <csiVolID>
@@ -94,6 +94,7 @@ Feature: VxFlex OS CSI interface
       | csiVolID           | systemID |
       | "abcd/nfs123"      | "abcd"   |
       | "badSystemID"      | ""       |
+      |  ""                | ""       |
   
   Scenario Outline: multi array getSystemIDFromCsiVolumeID good and with errors
     Given a VxFlexOS service

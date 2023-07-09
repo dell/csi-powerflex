@@ -27,7 +27,33 @@ Feature: VxFlex OS CSI interface
     And I call UnpublishVolume nfs
     And no error was received
     Then a valid UnpublishVolumeResponse is returned
-    
+  
+  
+  Scenario: a Basic NFS controller Publish bad
+   Given a VxFlexOS service
+    And I call NFS PublishVolume with "single-writer"
+    Then the error contains "failure checking volume status before controller"
+  
+   Scenario: a Basic NFS controller Publish bad not found
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I set bad FileSystem Id
+    And I call NFS PublishVolume with "single-writer"
+    Then the error contains "volume not found"
+   
+  Scenario: a Basic NFS controller Publish and unpublish bad
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "single-writer"
+    Then a valid PublishVolumeResponse is returned
+    And I set bad FileSystem Id
+    And I call UnpublishVolume nfs
+    Then the error contains "volume not found"
+   
   Scenario: Publish legacy volume that is on non default array
     Given a VxFlexOS service
     And I induce error "LegacyVolumeConflictError"

@@ -964,7 +964,7 @@ func (s *service) ControllerPublishVolume(
 		fsID := getFilesystemIDFromCsiVolumeID(csiVolID)
 		fs, err := s.getFilesystemByID(fsID, systemID)
 		if err != nil {
-			if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
+			if strings.EqualFold(err.Error(), sioGatewayFileSystemNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
 				return nil, status.Error(codes.NotFound,
 					"volume not found")
 			}

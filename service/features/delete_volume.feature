@@ -41,6 +41,16 @@ Feature: VxFlex OS CSI interface
     And I call DeleteVolume nfs with "single-writer"
     Then a valid DeleteVolumeResponse is returned
   
+   Scenario: a Basic Nfs delete FileSystem Bad
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "single-writer"
+    Then a valid PublishVolumeResponse is returned
+     And I call DeleteVolume nfs with "single-writer"
+    Then the error contains "can not be deleted as it has associated NFS Export"
+  
   Scenario: Test Idempotent Basic nfs delete FileSystem 
     Given a VxFlexOS service
     When I call Probe

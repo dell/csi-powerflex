@@ -1499,6 +1499,13 @@ func (f *feature) aValidVolume() error {
 	return nil
 }
 
+func (f *feature) aBadFileSystem() error {
+	for key, _ := range fileSystemIDName {
+		fileSystemIDName[key] = ""
+	}
+	return nil
+}
+
 func (f *feature) anInvalidVolume() error {
 	f.invalidVolumeID = true
 	return nil
@@ -4012,6 +4019,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^a valid PublishVolumeResponse is returned$`, f.aValidPublishVolumeResponseIsReturned)
 	s.Step(`^a valid volume$`, f.aValidVolume)
 	s.Step(`^an invalid volume$`, f.anInvalidVolume)
+	s.Step(`^I set bad FileSystem Id`, f.aBadFileSystem)
 	s.Step(`^no volume$`, f.noVolume)
 	s.Step(`^no node$`, f.noNode)
 	s.Step(`^no volume capability$`, f.noVolumeCapability)
