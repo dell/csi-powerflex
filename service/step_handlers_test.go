@@ -154,6 +154,10 @@ func getHandler() http.Handler {
 	stepHandlersErrors.CreateSnapshotError = false
 	stepHandlersErrors.RemoveVolumeError = false
 	stepHandlersErrors.VolumeInstancesError = false
+	stepHandlersErrors.NasServerNotFoundError = false
+	stepHandlersErrors.FileSystemInstancesError = false
+	stepHandlersErrors.NasServerNotFoundError = false
+	stepHandlersErrors.BadCapacityError = false
 	stepHandlersErrors.BadVolIDError = false
 	stepHandlersErrors.NoCsiVolIDError = false
 	stepHandlersErrors.WrongVolIDError = false
