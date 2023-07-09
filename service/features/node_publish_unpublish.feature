@@ -65,6 +65,19 @@ Feature: VxFlex OS CSI interface
     Examples:
       | error                                    | errormsg                               |
       | "NodePublishPrivateTargetAlreadyMounted" | "Mount point already in use by device" |
+    
+  Scenario: a Basic NFS Node Publish Volume good
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "single-writer"
+    Then a valid PublishVolumeResponse is returned
+    And a capability with voltype "mount" access "single-writer" fstype "nfs"
+    Then I call NodePublishVolume NFS ""
+    Then the error contains "none"
+    Then I call NodeUnpublishVolume ""
+    Then the error contains "none"
 
   Scenario Outline: Node publish mount volumes various induced error use cases from examples
     Given a VxFlexOS service

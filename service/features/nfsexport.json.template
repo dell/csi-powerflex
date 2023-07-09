@@ -1,0 +1,20 @@
+{
+        "id": "__ID__",
+        "file_system_id": "__FS_ID__",
+        "name": "__NAME__",
+        "path": "__PATH__",
+        "description": null,
+        "default_access": "ROOT",
+        "min_security": "SYS",
+        "nfs_owner_username": "root",
+        "no_access_hosts": [],
+        "read_only_hosts": [],
+        "read_only_root_hosts": [],
+        "read_write_hosts": [],
+        "read_write_root_hosts": [],
+        "anonymous_UID": -2,
+        "anonymous_GID": -2,
+        "is_no_SUID": false,
+        "default_access_l10n": null,
+        "min_security_l10n": null
+}

@@ -1002,6 +1002,8 @@ func (f *feature) iInduceError(errtype string) error {
 		stepHandlersErrors.WrongVolIDError = true
 	case "WrongSystemError":
 		stepHandlersErrors.WrongSystemError = true
+	case "NFSExportsInstancesError":
+		stepHandlersErrors.NFSExportInstancesError = true
 	case "BadVolIDError":
 		stepHandlersErrors.BadVolIDError = true
 	case "NoCsiVolIDError":
@@ -1293,6 +1295,67 @@ func (f *feature) getControllerPublishVolumeRequest(accessType string) *csi.Cont
 	return req
 }
 
+func (f *feature) getControllerPublishVolumeRequestNFS(accessType string) *csi.ControllerPublishVolumeRequest {
+	capability := new(csi.VolumeCapability)
+	block := new(csi.VolumeCapability_Block)
+	block.Block = new(csi.VolumeCapability_BlockVolume)
+	if f.useAccessTypeMount {
+		mountVolume := new(csi.VolumeCapability_MountVolume)
+		mountVolume.FsType = "nfs"
+		mountVolume.MountFlags = make([]string, 0)
+		mount := new(csi.VolumeCapability_Mount)
+		mount.Mount = mountVolume
+		capability.AccessType = mount
+	} else {
+		capability.AccessType = block
+	}
+	accessMode := new(csi.VolumeCapability_AccessMode)
+	switch accessType {
+	case "multi-single-writer":
+		accessMode.Mode = csi.VolumeCapability_AccessMode_MULTI_NODE_SINGLE_WRITER
+	case "single-writer":
+		accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER
+	case "multiple-reader":
+		accessMode.Mode = csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY
+	case "multiple-writer":
+		accessMode.Mode = csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER
+	case "single-node-single-writer":
+		accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_SINGLE_WRITER
+	case "single-node-multi-writer":
+		accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_MULTI_WRITER
+	case "unknown":
+		accessMode.Mode = csi.VolumeCapability_AccessMode_UNKNOWN
+	}
+	if !f.omitAccessMode {
+		capability.AccessMode = accessMode
+	}
+	fmt.Printf("capability.AccessType %v\n", capability.AccessType)
+	fmt.Printf("capability.AccessMode %v\n", capability.AccessMode)
+	req := new(csi.ControllerPublishVolumeRequest)
+	if !f.noVolumeID {
+		if f.invalidVolumeID {
+			req.VolumeId = badVolumeID2
+		} else {
+			req.VolumeId = "14dbbf5617523654" + "/" + fileSystemNameToID["volume1"]
+		}
+	}
+
+	if stepHandlersErrors.VolumeIDTooShortError {
+		req.VolumeId = badVolumeID3
+	}
+
+	if !f.noNodeID {
+		req.NodeId = goodNodeID
+	}
+	req.Readonly = false
+	if !f.omitVolumeCapability {
+		req.VolumeCapability = capability
+	}
+	req.VolumeContext = make(map[string]string)
+	req.VolumeContext[KeyFsType] = "nfs"
+	return req
+}
+
 func (f *feature) getControllerListVolumesRequest(maxEntries int32, startingToken string) *csi.ListVolumesRequest {
 	return &csi.ListVolumesRequest{
 		MaxEntries:    maxEntries,
@@ -1372,7 +1435,7 @@ func (f *feature) getControllerDeleteVolumeRequestNFS(accessType string) *csi.De
 		if f.invalidVolumeID {
 			req.VolumeId = badVolumeID2
 		} else {
-			req.VolumeId = goodVolumeID
+			req.VolumeId = "14dbbf5617523654" + "/" + fileSystemNameToID["volume1"]
 		}
 	}
 	return req
@@ -1383,6 +1446,22 @@ func (f *feature) iCallPublishVolumeWith(arg1 string) error {
 	req := f.publishVolumeRequest
 	if f.publishVolumeRequest == nil {
 		req = f.getControllerPublishVolumeRequest(arg1)
+		f.publishVolumeRequest = req
+	}
+
+	log.Printf("Calling controllerPublishVolume")
+	f.publishVolumeResponse, f.err = f.service.ControllerPublishVolume(*ctx, req)
+	if f.err != nil {
+		log.Printf("PublishVolume call failed: %s\n", f.err.Error())
+	}
+	return nil
+}
+
+func (f *feature) iCallPublishVolumeWithNFS(arg1 string) error {
+	ctx := new(context.Context)
+	req := f.publishVolumeRequest
+	if f.publishVolumeRequest == nil {
+		req = f.getControllerPublishVolumeRequestNFS(arg1)
 		f.publishVolumeRequest = req
 	}
 
@@ -1417,18 +1496,6 @@ func (f *feature) aValidVolume() error {
 	volumeNameToID[goodVolumeName] = volIDtoUse
 	volumeIDToSizeInKB[volIDtoUse] = defaultVolumeSize
 	volumeIDToReplicationState[volIDtoUse] = unmarkedForReplication
-	return nil
-}
-
-func (f *feature) aValidFileSystem() error {
-	//this prevents the step handler from returning the volume '111' as found in the non default array
-	fsIDToUse := "14dbbf5617523654/766f6c756d6534"
-	// if stepHandlersErrors.LegacyVolumeConflictError {
-	// 	volIDtoUse = goodVolumeID
-	// }
-	fileSystemIDName[fsIDToUse] = goodVolumeName
-	fileSystemNameToID[goodVolumeName] = fsIDToUse
-	fileSystemIDToSizeTotal[fsIDToUse] = defaultVolumeSize
 	return nil
 }
 
@@ -1483,6 +1550,21 @@ func (f *feature) getControllerUnpublishVolumeRequest() *csi.ControllerUnpublish
 		if f.invalidVolumeID {
 			req.VolumeId = badVolumeID2
 		} else {
+			req.VolumeId = "14dbbf5617523654" + "/" + fileSystemNameToID["volume1"]
+		}
+	}
+	if !f.noNodeID {
+		req.NodeId = goodNodeID
+	}
+	return req
+}
+
+func (f *feature) getControllerUnpublishVolumeRequestNFS() *csi.ControllerUnpublishVolumeRequest {
+	req := new(csi.ControllerUnpublishVolumeRequest)
+	if !f.noVolumeID {
+		if f.invalidVolumeID {
+			req.VolumeId = badVolumeID2
+		} else {
 			req.VolumeId = goodVolumeID
 		}
 	}
@@ -1493,6 +1575,21 @@ func (f *feature) getControllerUnpublishVolumeRequest() *csi.ControllerUnpublish
 }
 
 func (f *feature) iCallUnpublishVolume() error {
+	ctx := new(context.Context)
+	req := f.unpublishVolumeRequest
+	if f.unpublishVolumeRequest == nil {
+		req = f.getControllerUnpublishVolumeRequest()
+		f.unpublishVolumeRequest = req
+	}
+	log.Printf("Calling controllerUnpublishVolume: %s", req.VolumeId)
+	f.unpublishVolumeResponse, f.err = f.service.ControllerUnpublishVolume(*ctx, req)
+	if f.err != nil {
+		log.Printf("UnpublishVolume call failed: %s\n", f.err.Error())
+	}
+	return nil
+}
+
+func (f *feature) iCallUnpublishVolumeNFS() error {
 	ctx := new(context.Context)
 	req := f.unpublishVolumeRequest
 	if f.unpublishVolumeRequest == nil {
@@ -2210,6 +2307,22 @@ func (f *feature) getNodePublishVolumeRequest() error {
 	return nil
 }
 
+func (f *feature) getNodePublishVolumeRequestNFS() error {
+	req := new(csi.NodePublishVolumeRequest)
+	req.VolumeId = "14dbbf5617523654" + "/" + fileSystemNameToID["volume1"]
+	req.Readonly = false
+	req.VolumeCapability = f.capability
+
+	mount := f.capability.GetMount()
+	if mount != nil {
+		req.TargetPath = datadir
+	}
+	req.VolumeContext = make(map[string]string)
+	req.VolumeContext[KeyFsType] = "nfs"
+	f.nodePublishVolumeRequest = req
+	return nil
+}
+
 func (f *feature) iGiveRequestVolumeContext() error {
 
 	volContext := map[string]string{
@@ -2265,6 +2378,29 @@ func (f *feature) iCallNodePublishVolume(arg1 string) error {
 	if req == nil {
 		fmt.Printf("Request was Nil \n")
 		_ = f.getNodePublishVolumeRequest()
+		req = f.nodePublishVolumeRequest
+	}
+	fmt.Printf("Calling NodePublishVolume\n")
+	fmt.Printf("nodePV req is: %v \n", req)
+	_, err := f.service.NodePublishVolume(ctx, req)
+	if err != nil {
+		fmt.Printf("NodePublishVolume failed: %s\n", err.Error())
+		if f.err == nil {
+			f.err = err
+		}
+	} else {
+		fmt.Printf("NodePublishVolume completed successfully\n")
+	}
+	return nil
+}
+
+func (f *feature) iCallNodePublishVolumeNFS(arg1 string) error {
+	header := metadata.New(map[string]string{"csi.requestid": "1"})
+	ctx := metadata.NewIncomingContext(context.Background(), header)
+	req := f.nodePublishVolumeRequest
+	if req == nil {
+		fmt.Printf("Request was Nil \n")
+		_ = f.getNodePublishVolumeRequestNFS()
 		req = f.nodePublishVolumeRequest
 	}
 	fmt.Printf("Calling NodePublishVolume\n")
@@ -3872,9 +4008,9 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I specify VolumeContentSource$`, f.iSpecifyVolumeContentSource)
 	s.Step(`^I specify CreateVolumeMountRequest "([^"]*)"$`, f.iSpecifyCreateVolumeMountRequest)
 	s.Step(`^I call PublishVolume with "([^"]*)"$`, f.iCallPublishVolumeWith)
+	s.Step(`^I call NFS PublishVolume with "([^"]*)"$`, f.iCallPublishVolumeWithNFS)
 	s.Step(`^a valid PublishVolumeResponse is returned$`, f.aValidPublishVolumeResponseIsReturned)
 	s.Step(`^a valid volume$`, f.aValidVolume)
-	s.Step(`^a valid FileSystem$`, f.aValidFileSystem)
 	s.Step(`^an invalid volume$`, f.anInvalidVolume)
 	s.Step(`^no volume$`, f.noVolume)
 	s.Step(`^no node$`, f.noNode)
@@ -3884,6 +4020,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I use AccessType Mount$`, f.iUseAccessTypeMount)
 	s.Step(`^no error was received$`, f.noErrorWasReceived)
 	s.Step(`^I call UnpublishVolume$`, f.iCallUnpublishVolume)
+	s.Step(`^I call UnpublishVolume nfs`, f.iCallUnpublishVolumeNFS)
 	s.Step(`^a valid UnpublishVolumeResponse is returned$`, f.aValidUnpublishVolumeResponseIsReturned)
 	s.Step(`^the number of SDC mappings is (\d+)$`, f.theNumberOfSDCMappingsIs)
 	s.Step(`^I call NodeGetInfo$`, f.iCallNodeGetInfo)
@@ -3909,6 +4046,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^a capability with voltype "([^"]*)" access "([^"]*)" fstype "([^"]*)"$`, f.aCapabilityWithVoltypeAccessFstype)
 	s.Step(`^a controller published volume$`, f.aControllerPublishedVolume)
 	s.Step(`^I call NodePublishVolume "([^"]*)"$`, f.iCallNodePublishVolume)
+	s.Step(`^I call NodePublishVolume NFS "([^"]*)"$`, f.iCallNodePublishVolumeNFS)
 	s.Step(`^I call CleanupPrivateTarget$`, f.iCallCleanupPrivateTarget)
 	s.Step(`^I call removeWithRetry$`, f.iCallRemoveWithRetry)
 	s.Step(`^I call evalSymlinks$`, f.iCallEvalSymlinks)

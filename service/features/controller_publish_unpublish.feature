@@ -16,7 +16,18 @@ Feature: VxFlex OS CSI interface
       | "single-writer"             |
       | "single-node-single-writer" |
       | "single-node-multi-writer"  |
-
+  
+  Scenario: a Basic NFS controller Publish and unpublish good
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "single-writer"
+    Then a valid PublishVolumeResponse is returned
+    And I call UnpublishVolume nfs
+    And no error was received
+    Then a valid UnpublishVolumeResponse is returned
+    
   Scenario: Publish legacy volume that is on non default array
     Given a VxFlexOS service
     And I induce error "LegacyVolumeConflictError"
@@ -245,6 +256,7 @@ Feature: VxFlex OS CSI interface
     And I call UnpublishVolume
     And no error was received
     Then a valid UnpublishVolumeResponse is returned
+    
 
   Scenario: Unpublish volume with no volume id
     Given a VxFlexOS service
