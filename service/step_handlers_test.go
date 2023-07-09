@@ -290,6 +290,7 @@ func handleNasInstances(w http.ResponseWriter, r *http.Request) {
 
 	if stepHandlersErrors.NasServerNotFoundError {
 		writeError(w, "nas server not found", http.StatusNotFound, codes.NotFound)
+		return
 	}
 
 	returnJSONFile("features", "get_nas_servers.json", w, nil)
