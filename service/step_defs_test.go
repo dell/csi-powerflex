@@ -1550,7 +1550,7 @@ func (f *feature) getControllerUnpublishVolumeRequest() *csi.ControllerUnpublish
 		if f.invalidVolumeID {
 			req.VolumeId = badVolumeID2
 		} else {
-			req.VolumeId = "14dbbf5617523654" + "/" + fileSystemNameToID["volume1"]
+			req.VolumeId = goodVolumeID
 		}
 	}
 	if !f.noNodeID {
@@ -1565,7 +1565,7 @@ func (f *feature) getControllerUnpublishVolumeRequestNFS() *csi.ControllerUnpubl
 		if f.invalidVolumeID {
 			req.VolumeId = badVolumeID2
 		} else {
-			req.VolumeId = goodVolumeID
+			req.VolumeId = "14dbbf5617523654" + "/" + fileSystemNameToID["volume1"]
 		}
 	}
 	if !f.noNodeID {
@@ -1593,7 +1593,7 @@ func (f *feature) iCallUnpublishVolumeNFS() error {
 	ctx := new(context.Context)
 	req := f.unpublishVolumeRequest
 	if f.unpublishVolumeRequest == nil {
-		req = f.getControllerUnpublishVolumeRequest()
+		req = f.getControllerUnpublishVolumeRequestNFS()
 		f.unpublishVolumeRequest = req
 	}
 	log.Printf("Calling controllerUnpublishVolume: %s", req.VolumeId)
