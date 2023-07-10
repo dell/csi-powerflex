@@ -346,15 +346,27 @@ func (f *feature) accessTypeIs(arg1 string) error {
 }
 
 func (f *feature) iCallCreateVolume() error {
-	volResp, err := f.createVolume(f.createVolumeRequest)
-	if err != nil {
-		fmt.Printf("CreateVolume %s:\n", err.Error())
-		f.addError(err)
+
+	// for _, a := range f.arrays {
+	// 	systemid := a.SystemID
+	// 	val, err := f.checkNFS(ctx, systemid)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+
+	if f.createVolumeRequest == nil {
+		return nil
 	} else {
-		fmt.Printf("CreateVolume %s (%s) %s\n", volResp.GetVolume().VolumeContext["Name"],
-			volResp.GetVolume().VolumeId, volResp.GetVolume().VolumeContext["CreationTime"])
-		f.volID = volResp.GetVolume().VolumeId
-		f.volIDList = append(f.volIDList, volResp.GetVolume().VolumeId)
+		volResp, err := f.createVolume(f.createVolumeRequest)
+		if err != nil {
+			fmt.Printf("CreateVolume %s:\n", err.Error())
+			f.addError(err)
+		} else {
+			fmt.Printf("CreateVolume %s (%s) %s\n", volResp.GetVolume().VolumeContext["Name"],
+				volResp.GetVolume().VolumeId, volResp.GetVolume().VolumeContext["CreationTime"])
+			f.volID = volResp.GetVolume().VolumeId
+			f.volIDList = append(f.volIDList, volResp.GetVolume().VolumeId)
+		}
 	}
 	return nil
 }
@@ -378,33 +390,42 @@ func (f *feature) createVolume(req *csi.CreateVolumeRequest) (*csi.CreateVolumeR
 }
 
 func (f *feature) whenICallDeleteVolume() error {
-	err := f.deleteVolume(f.volID)
-	if err != nil {
-		fmt.Printf("DeleteVolume %s:\n", err.Error())
-		f.addError(err)
+
+	if f.createVolumeRequest == nil {
+		return nil
 	} else {
-		fmt.Printf("DeleteVolume %s completed successfully\n", f.volID)
+		err := f.deleteVolume(f.volID)
+		if err != nil {
+			fmt.Printf("DeleteVolume %s:\n", err.Error())
+			f.addError(err)
+		} else {
+			fmt.Printf("DeleteVolume %s completed successfully\n", f.volID)
+		}
+		return nil
 	}
-	return nil
 }
 
 func (f *feature) deleteVolume(id string) error {
-	ctx := context.Background()
-	client := csi.NewControllerClient(grpcClient)
-	delVolReq := new(csi.DeleteVolumeRequest)
-	delVolReq.VolumeId = id
-	var err error
-	// Retry loop to deal with VxFlexOS API being overwhelmed
-	for i := 0; i < f.maxRetryCount; i++ {
-		_, err = client.DeleteVolume(ctx, delVolReq)
-		if err == nil || !strings.Contains(err.Error(), "Insufficient resources") {
-			// no need for retry
-			break
+	if f.createVolumeRequest == nil {
+		return nil
+	} else {
+		ctx := context.Background()
+		client := csi.NewControllerClient(grpcClient)
+		delVolReq := new(csi.DeleteVolumeRequest)
+		delVolReq.VolumeId = id
+		var err error
+		// Retry loop to deal with VxFlexOS API being overwhelmed
+		for i := 0; i < f.maxRetryCount; i++ {
+			_, err = client.DeleteVolume(ctx, delVolReq)
+			if err == nil || !strings.Contains(err.Error(), "Insufficient resources") {
+				// no need for retry
+				break
+			}
+			fmt.Printf("retry: %s\n", err.Error())
+			time.Sleep(RetrySleepTime)
 		}
-		fmt.Printf("retry: %s\n", err.Error())
-		time.Sleep(RetrySleepTime)
+		return err
 	}
-	return err
 }
 
 func (f *feature) thereAreNoErrors() error {
@@ -921,34 +942,42 @@ func (f *feature) iCallCloneManyVolumes() error {
 }
 
 func (f *feature) iCallListVolume() error {
-	var err error
-	ctx := context.Background()
-	req := &csi.ListVolumesRequest{}
-	client := csi.NewControllerClient(grpcClient)
-	f.listVolumesResponse, err = client.ListVolumes(ctx, req)
-	if err != nil {
-		return err
+	if f.createVolumeRequest == nil {
+		return nil
+	} else {
+		var err error
+		ctx := context.Background()
+		req := &csi.ListVolumesRequest{}
+		client := csi.NewControllerClient(grpcClient)
+		f.listVolumesResponse, err = client.ListVolumes(ctx, req)
+		if err != nil {
+			return err
+		}
+		return nil
 	}
-	return nil
 }
 
 func (f *feature) aValidListVolumeResponseIsReturned() error {
-	resp := f.listVolumesResponse
-	entries := resp.GetEntries()
-	if entries == nil {
-		return errors.New("expected ListVolumeResponse.Entries but none")
-	}
-	for _, entry := range entries {
-		vol := entry.GetVolume()
-		if vol != nil {
-			id := vol.VolumeId
-			capacity := vol.CapacityBytes
-			name := vol.VolumeContext["Name"]
-			creation := vol.VolumeContext["CreationTime"]
-			fmt.Printf("Volume ID: %s Name: %s Capacity: %d CreationTime: %s\n", id, name, capacity, creation)
+	if f.createVolumeRequest == nil {
+		return nil
+	} else {
+		resp := f.listVolumesResponse
+		entries := resp.GetEntries()
+		if entries == nil {
+			return errors.New("expected ListVolumeResponse.Entries but none")
 		}
+		for _, entry := range entries {
+			vol := entry.GetVolume()
+			if vol != nil {
+				id := vol.VolumeId
+				capacity := vol.CapacityBytes
+				name := vol.VolumeContext["Name"]
+				creation := vol.VolumeContext["CreationTime"]
+				fmt.Printf("Volume ID: %s Name: %s Capacity: %d CreationTime: %s\n", id, name, capacity, creation)
+			}
+		}
+		return nil
 	}
-	return nil
 }
 
 func (f *feature) iCallListSnapshotForSnap() error {
