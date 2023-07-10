@@ -20,10 +20,13 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"log"
+	"math"
 	"net/http"
 	"os"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -38,7 +41,9 @@ import (
 	"github.com/cucumber/godog"
 	csiext "github.com/dell/dell-csi-extensions/podmon"
 
+	"github.com/dell/csi-vxflexos/v2/service"
 	volGroupSnap "github.com/dell/dell-csi-extensions/volumeGroupSnapshot"
+	"github.com/dell/goscaleio"
 	"github.com/golang/protobuf/ptypes"
 )
 
@@ -47,7 +52,7 @@ const (
 	RetrySleepTime = 10 * time.Second
 	SleepTime      = 100 * time.Millisecond
 	Pool1          = "pool1"
-	NfsPool        = "Env7-SP-SW_SSD-1"
+	NfsPool        = "Env7-SP-SW_HDD-1"
 )
 
 // ArrayConnectionData contains data required to connect to array
@@ -85,6 +90,44 @@ type feature struct {
 	arrays                      map[string]*ArrayConnectionData
 	VolumeGroupSnapshot         *volGroupSnap.CreateVolumeGroupSnapshotResponse
 	VolumeGroupSnapshot2        *volGroupSnap.CreateVolumeGroupSnapshotResponse
+	service                     *service.Service
+}
+
+func (f *feature) getGoscaleioClient() (client *goscaleio.Client, err error) {
+	fmt.Println("f.arrays,len", f.arrays, f.arrays)
+
+	if f.arrays == nil {
+		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
+		var err error
+		f.arrays, err = f.getArrayConfig()
+		if err != nil {
+			return nil, errors.New("Get multi array config failed " + err.Error())
+		}
+	}
+
+	for _, a := range f.arrays {
+		client, err := goscaleio.NewClientWithArgs(a.Endpoint, "", math.MaxInt64, true, false)
+		if err != nil {
+			log.Fatalf("err getting client: %v", err)
+		}
+		_, err = client.Authenticate(&goscaleio.ConfigConnect{
+			Username: a.Username,
+			Password: a.Password,
+			Endpoint: a.Endpoint,
+		})
+		if err != nil {
+			log.Fatalf("error authenticating: %v", err)
+		}
+		systems, err := client.GetSystems()
+		if err != nil {
+			log.Fatal(err)
+		}
+		system := systems[0]
+		fmt.Println("systemid:", system.ID)
+
+		return client, nil
+	}
+	return nil, err
 }
 
 // there is no way to call service.go methods from here
@@ -137,6 +180,15 @@ func (f *feature) getArrayConfig() (map[string]*ArrayConnectionData, error) {
 				fmt.Printf("For systemID %s configured System Names found %#v ", systemID, names)
 			}
 
+			// for PowerFlex v4.0
+			str := ""
+			if c.NasName == nil || *(c.NasName) == "" {
+				c.NasName = &str
+			}
+			if c.NfsAcls == "" {
+				c.NfsAcls = str
+			}
+
 			fields := map[string]interface{}{
 				"endpoint":       c.Endpoint,
 				"user":           c.Username,
@@ -145,7 +197,7 @@ func (f *feature) getArrayConfig() (map[string]*ArrayConnectionData, error) {
 				"isDefault":      c.IsDefault,
 				"systemID":       c.SystemID,
 				"allSystemNames": c.AllSystemNames,
-				"nasName":        c.NasName,
+				"nasName":        *c.NasName,
 				"nfsAcls":        c.NfsAcls,
 			}
 
@@ -225,35 +277,62 @@ func (f *feature) aBasicNfsVolumeRequest(name string, size int64) error {
 	req := new(csi.CreateVolumeRequest)
 	params := make(map[string]string)
 
-	var array *ArrayConnectionData
+	ctx := context.Background()
 
-	NasNameValue := *array.NasName
-	params["nasName"] = NasNameValue
-	params["storagepool"] = NfsPool
-	params["thickprovisioning"] = "false"
-	if len(f.anotherSystemID) > 0 {
-		params["systemID"] = f.anotherSystemID
+	fmt.Println("f.arrays,len", f.arrays, f.arrays)
+
+	if f.arrays == nil {
+		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
+		var err error
+		f.arrays, err = f.getArrayConfig()
+		if err != nil {
+			return errors.New("Get multi array config failed " + err.Error())
+		}
 	}
-	req.Parameters = params
-	makeAUniqueName(&name)
-	req.Name = name
-	capacityRange := new(csi.CapacityRange)
-	capacityRange.RequiredBytes = size * 1024 * 1024 * 1024
-	req.CapacityRange = capacityRange
-	capability := new(csi.VolumeCapability)
-	mount := new(csi.VolumeCapability_MountVolume)
-	mount.FsType = "nfs"
-	mountType := new(csi.VolumeCapability_Mount)
-	mountType.Mount = mount
-	capability.AccessType = mountType
-	accessMode := new(csi.VolumeCapability_AccessMode)
-	accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER
-	capability.AccessMode = accessMode
-	f.capability = capability
-	capabilities := make([]*csi.VolumeCapability, 0)
-	capabilities = append(capabilities, capability)
-	req.VolumeCapabilities = capabilities
-	f.createVolumeRequest = req
+
+	for _, a := range f.arrays {
+		systemid := a.SystemID
+		val, err := f.checkNFS(ctx, systemid)
+		if err != nil {
+			return err
+		}
+
+		if val {
+			fmt.Printf("Got inside val = true")
+			if a.NasName != nil {
+				params["nasName"] = *a.NasName
+				params["nfsAcls"] = a.NfsAcls
+			}
+			params["storagepool"] = NfsPool
+			params["thickprovisioning"] = "false"
+			if len(f.anotherSystemID) > 0 {
+				params["systemID"] = f.anotherSystemID
+			}
+			req.Parameters = params
+			makeAUniqueName(&name)
+			req.Name = name
+			capacityRange := new(csi.CapacityRange)
+			capacityRange.RequiredBytes = size * 1024 * 1024 * 1024
+			req.CapacityRange = capacityRange
+			capability := new(csi.VolumeCapability)
+			mount := new(csi.VolumeCapability_MountVolume)
+			mount.FsType = "nfs"
+			mountType := new(csi.VolumeCapability_Mount)
+			mountType.Mount = mount
+			capability.AccessType = mountType
+			accessMode := new(csi.VolumeCapability_AccessMode)
+			accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER
+			capability.AccessMode = accessMode
+			f.capability = capability
+			capabilities := make([]*csi.VolumeCapability, 0)
+			capabilities = append(capabilities, capability)
+			req.VolumeCapabilities = capabilities
+			f.createVolumeRequest = req
+			return nil
+		}
+		fmt.Printf("Array with SystemId %s does not support NFS. Skipping this step", systemid)
+		return nil
+	}
 	return nil
 }
 
@@ -396,6 +475,10 @@ func (f *feature) getControllerPublishVolumeRequest() *csi.ControllerPublishVolu
 	req.VolumeId = f.volID
 	req.NodeId = os.Getenv("SDC_GUID")
 	fmt.Printf("req.NodeId %s\n", req.NodeId)
+	// if os.Getenv("NASNAME") != "" {
+	// 	req.VolumeContext["nasName"] = os.Getenv("NASNAME")
+	// 	req.VolumeContext["nasName"] = os.Getenv("NFSACLS")
+	// }
 	req.Readonly = false
 	req.VolumeCapability = f.capability
 	f.publishVolumeRequest = req
@@ -1774,18 +1857,108 @@ func (f *feature) restCallToSetName(auth string, url string, name string) (strin
 	return "", nil
 }
 
-func (f *feature) iSetBadNasName() error {
-	//wip
-	for _, a := range f.arrays {
-		if a.NasName != nil {
-			badNasName := "badNas"
-			a.NasName = &badNasName
-			fmt.Printf("set bad NasName done \n")
-			return nil
+func (f *feature) aBasicNfsVolumeRequestWithWrongNasName(name string, size int64) error {
+	req := new(csi.CreateVolumeRequest)
+	params := make(map[string]string)
+
+	fmt.Println("f.arrays,len", f.arrays, f.arrays)
+
+	if f.arrays == nil {
+		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
+		var err error
+		f.arrays, err = f.getArrayConfig()
+		if err != nil {
+			return errors.New("Get multi array config failed " + err.Error())
 		}
 	}
-	return fmt.Errorf("Error during set bad NasName")
+
+	wrongNasName := "wrongnas"
+
+	for _, a := range f.arrays {
+		if a.NasName != nil {
+			params["nasName"] = wrongNasName
+			params["nfsAcls"] = a.NfsAcls
+		}
+	}
+
+	params["storagepool"] = NfsPool
+	params["thickprovisioning"] = "false"
+	if len(f.anotherSystemID) > 0 {
+		params["systemID"] = f.anotherSystemID
+	}
+	req.Parameters = params
+	makeAUniqueName(&name)
+	req.Name = name
+	capacityRange := new(csi.CapacityRange)
+	capacityRange.RequiredBytes = size * 1024 * 1024 * 1024
+	req.CapacityRange = capacityRange
+	capability := new(csi.VolumeCapability)
+	mount := new(csi.VolumeCapability_MountVolume)
+	mount.FsType = "nfs"
+	mountType := new(csi.VolumeCapability_Mount)
+	mountType.Mount = mount
+	capability.AccessType = mountType
+	accessMode := new(csi.VolumeCapability_AccessMode)
+	accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER
+	capability.AccessMode = accessMode
+	f.capability = capability
+	capabilities := make([]*csi.VolumeCapability, 0)
+	capabilities = append(capabilities, capability)
+	req.VolumeCapabilities = capabilities
+	f.createVolumeRequest = req
+	return nil
+
 }
+
+func (f *feature) checkNFS(ctx context.Context, systemID string) (bool, error) {
+
+	c, err := f.getGoscaleioClient()
+	if err != nil {
+		return false, errors.New("Geting goscaleio client failed " + err.Error())
+	}
+	if c == nil {
+		return false, nil
+	}
+	version, err := c.GetVersion()
+	if err != nil {
+		return false, err
+	}
+	ver, err := strconv.ParseFloat(version, 64)
+	if err != nil {
+		return false, err
+	}
+	if ver >= 4.0 {
+		arrayConData, err := f.getArrayConfig()
+		if err != nil {
+			return false, err
+		}
+		array := arrayConData[systemID]
+		if array.NasName == nil || *(array.NasName) == "" {
+			return false, nil
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
+// func (f *feature) checkNfsSupportInArray(name string, size int64) error {
+// 	fmt.Println("f.arrays,len", f.arrays, f.arrays)
+
+// 	if f.arrays == nil {
+// 		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
+// 		var err error
+// 		f.arrays, err = f.getArrayConfig()
+// 		if err != nil {
+// 			return errors.New("Get multi array config failed " + err.Error())
+// 		}
+// 	}
+
+// 	for _, a := range f.arrays {
+// 		if a.NasName != nil {
+// 			return nil
+// 		}
+// 	}
+// }
 
 func FeatureContext(s *godog.ScenarioContext) {
 	f := &feature{}
@@ -1847,6 +2020,11 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^the volumecondition is "([^"]*)"$`, f.theVolumeconditionIs)
 	s.Step(`^I call NodeGetVolumeStats$`, f.iCallNodeGetVolumeStats)
 	s.Step(`^the VolumeCondition is "([^"]*)"$`, f.theVolumeConditionIs)
-	s.Step(`^I set wrongNasName$`, f.iSetBadNasName)
+	s.Step(`^a basic nfs volume request with wrong nasname "([^"]*)" "(\d+)"$`, f.aBasicNfsVolumeRequestWithWrongNasName)
 	s.Step(`^a basic nfs volume request "([^"]*)" "(\d+)"$`, f.aBasicNfsVolumeRequest)
+	//s.Step(`^an nfs volume request "([^"]*)" "(\d+)"$`, f.anNfsVolumeRequest)
+	//s.Step(`^find array support for nfs "([^"]*)" "(\d+)"$`, f.checkNfsSupportInArray)
+	// s.Step(`^I call nfs CreateVolume$`, f.iCallNfsCreateVolume)
+	// s.Step(`^I call nfs ListVolume$`, f.iCallNfsListVolume)
+	// s.Step(`^a valid nfs ListVolumeResponse is returned
 }

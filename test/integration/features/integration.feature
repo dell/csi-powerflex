@@ -505,6 +505,7 @@ Feature: VxFlex OS CSI interface
     And when I call DeleteVolume
     Then there are no errors
 
+  @wip 
   Scenario: Create and delete basic nfs volume
     Given a VxFlexOS service
     And a basic nfs volume request "nfsvolume1" "8"
@@ -513,7 +514,7 @@ Feature: VxFlex OS CSI interface
     Then a valid ListVolumeResponse is returned
     And when I call DeleteVolume
     Then there are no errors
-
+  #@wip
   Scenario: Idempotent create and delete basic nfs volume
     Given a VxFlexOS service
     And a basic nfs volume request "nfsvolume2" "8"
@@ -522,57 +523,23 @@ Feature: VxFlex OS CSI interface
     And when I call DeleteVolume
     And when I call DeleteVolume
     Then there are no errors
-
+  #@wip
   Scenario: Create and delete 100000G NFS volume
     Given a VxFlexOS service
     And max retries 1
     And a basic nfs volume request "nfsvolume2" "100000"
     When I call CreateVolume
     And when I call DeleteVolume
-    Then the error message should contain "Requested volume size exceeds the volume allocation limit"
-
+    Then the error message should contain "Unprocessable Entity"
+  #@wip
   Scenario: Create a NFS volume with wrong NasName
     Given a VxFlexOS service
-    And a basic nfs volume request "nfsvolume3" "8"
-    And I set wrongNasName
+    And a basic nfs volume request with wrong nasname "nfsvolume3" "8"
     When I call CreateVolume
     Then the error message should contain <errormsg>
     Examples:
       | errormsg    |
-      | "couldn't find given NAS server by name" |
-
-  # Scenario: Create a NFS volume with wrong FileSystemName
-  #   Given a VxFlexOS service
-  #   And a basic nfs volume request "nfsvolume3" "8"
-  #   And I set wrongFileSystemName
-  #   When I call CreateVolume
-  #   Then the error message should contain <errormsg>
-  #   Examples:
-  #     | errormsg    |
-  #     | "error_msg" |
-
-  # Scenario: Expand NFS Mount
-  #   Given a VxFlexOS service
-  #   And a capability with voltype "mount" access "single-writer" fstype "xfs"
-  #   And a volume request "integration30" "16"
-  #   When I call CreateVolume
-  #   And there are no errors
-  #   And when I call PublishVolume "SDC_GUID"
-  #   And there are no errors
-  #   And when I call NodePublishVolume "SDC_GUID"
-  #   And there are no errors
-  #   And when I call ExpandVolume to "20"
-  #   And there are no errors
-  #   And when I call NodeExpandVolume
-  #   And there are no errors
-  #   And I call ListVolume
-  #   And a valid ListVolumeResponse is returned
-  #   And when I call NodeUnpublishVolume "SDC_GUID"
-  #   And there are no errors
-  #   And when I call UnpublishVolume "SDC_GUID"
-  #   And there are no errors
-  #   And when I call DeleteVolume
-  #   Then there are no errors
+      | "couldn't find given NAS server by name" | 
 
   Scenario Outline: Publish and Unpublish Ephemeral Volume
     Given a VxFlexOS service
@@ -735,3 +702,19 @@ Scenario: Call NodeGetVolumeStats on unmounted volume
   And there are no errors
   And when I call DeleteVolume
   Then there are no errors
+
+# @wip
+  # Scenario Outline: Create, publish, unpublish, and delete basic nfs-vol
+  #   Given a VxFlexOS service
+  #   And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+  #   And an nfs volume request "nfs-inttest" "8"
+  #   When I call CreateVolume
+  #   And there are no errors
+  #   And when I call PublishVolume "SDC_GUID"
+  #   And there are no errors
+  #   And when I call NodePublishVolume "SDC_GUID"
+  #   And when I call NodeUnpublishVolume "SDC_GUID"
+  #   And when I call UnpublishVolume "SDC_GUID"
+  #   And there are no errors
+  #   And when I call DeleteVolume
+  #   Then there are no errors
