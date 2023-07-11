@@ -24,7 +24,7 @@ export SDC_GUID=$(/bin/emc/scaleio/drv_cfg --query_guid)
 export ALT_GUID=
 
 #Debug variables for goscaleio library
-export GOSCALEIO_SHOWHTTP="false"
+export GOSCALEIO_SHOWHTTP="true"
 
 #If you put the system ID in your config.json, put the
 #system's name here, and vice versa. If your instance does not have a name,
