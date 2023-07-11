@@ -23,15 +23,6 @@ export SDC_GUID=$(/bin/emc/scaleio/drv_cfg --query_guid)
 # Alternate GUID is for another system for testing expose volume to multiple hosts
 export ALT_GUID=
 
-#get nas server name if using nfs protocol(4.0 array)
-#export NAS_NAME="env7nasserver"
-export NASNAME="env7nasserver"
-export NFSACLS="0755"
-#NASNAME=`grep nasname ../../config.json | awk -F":" '{print $2}'`
-echo $NASNAME
-# export NAS_NAME=NASNAME
-# echo $NAS_NAME
-
 #Debug variables for goscaleio library
 export GOSCALEIO_SHOWHTTP="false"
 

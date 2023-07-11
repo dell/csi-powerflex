@@ -437,22 +437,27 @@ func (f *feature) thereAreNoErrors() error {
 
 func (f *feature) theErrorMessageShouldContain(expected string) error {
 	// If arg1 is none, we expect no error, any error received is unexpected
-	if expected == "none" {
-		if len(f.errs) == 0 {
-			return nil
+
+	if f.createVolumeRequest == nil {
+		return nil
+	} else {
+		if expected == "none" {
+			if len(f.errs) == 0 {
+				return nil
+			}
+			return fmt.Errorf("Unexpected error(s): %s", f.errs[0])
 		}
-		return fmt.Errorf("Unexpected error(s): %s", f.errs[0])
+		// We expect an error...
+		if len(f.errs) == 0 {
+			return errors.New("there were no errors but we expected: " + expected)
+		}
+		err0 := f.errs[0]
+		if !strings.Contains(err0.Error(), expected) {
+			return fmt.Errorf("Error %s does not contain the expected message: %s", err0.Error(), expected)
+		}
+		f.errs = nil
+		return nil
 	}
-	// We expect an error...
-	if len(f.errs) == 0 {
-		return errors.New("there were no errors but we expected: " + expected)
-	}
-	err0 := f.errs[0]
-	if !strings.Contains(err0.Error(), expected) {
-		return fmt.Errorf("Error %s does not contain the expected message: %s", err0.Error(), expected)
-	}
-	f.errs = nil
-	return nil
 }
 
 func (f *feature) aMountVolumeRequest(name string) error {
@@ -1890,6 +1895,8 @@ func (f *feature) aBasicNfsVolumeRequestWithWrongNasName(name string, size int64
 	req := new(csi.CreateVolumeRequest)
 	params := make(map[string]string)
 
+	ctx := context.Background()
+
 	fmt.Println("f.arrays,len", f.arrays, f.arrays)
 
 	if f.arrays == nil {
@@ -1904,39 +1911,49 @@ func (f *feature) aBasicNfsVolumeRequestWithWrongNasName(name string, size int64
 	wrongNasName := "wrongnas"
 
 	for _, a := range f.arrays {
-		if a.NasName != nil {
-			params["nasName"] = wrongNasName
-			params["nfsAcls"] = a.NfsAcls
+		systemid := a.SystemID
+		val, err := f.checkNFS(ctx, systemid)
+		if err != nil {
+			return err
 		}
-	}
 
-	params["storagepool"] = NfsPool
-	params["thickprovisioning"] = "false"
-	if len(f.anotherSystemID) > 0 {
-		params["systemID"] = f.anotherSystemID
+		if val {
+			if a.NasName != nil {
+				params["nasName"] = wrongNasName
+				params["nfsAcls"] = a.NfsAcls
+			}
+
+			params["storagepool"] = NfsPool
+			params["thickprovisioning"] = "false"
+			if len(f.anotherSystemID) > 0 {
+				params["systemID"] = f.anotherSystemID
+			}
+			req.Parameters = params
+			makeAUniqueName(&name)
+			req.Name = name
+			capacityRange := new(csi.CapacityRange)
+			capacityRange.RequiredBytes = size * 1024 * 1024 * 1024
+			req.CapacityRange = capacityRange
+			capability := new(csi.VolumeCapability)
+			mount := new(csi.VolumeCapability_MountVolume)
+			mount.FsType = "nfs"
+			mountType := new(csi.VolumeCapability_Mount)
+			mountType.Mount = mount
+			capability.AccessType = mountType
+			accessMode := new(csi.VolumeCapability_AccessMode)
+			accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER
+			capability.AccessMode = accessMode
+			f.capability = capability
+			capabilities := make([]*csi.VolumeCapability, 0)
+			capabilities = append(capabilities, capability)
+			req.VolumeCapabilities = capabilities
+			f.createVolumeRequest = req
+			return nil
+		}
+		fmt.Printf("Array with SystemId %s does not support NFS. Skipping this step", systemid)
+		return nil
 	}
-	req.Parameters = params
-	makeAUniqueName(&name)
-	req.Name = name
-	capacityRange := new(csi.CapacityRange)
-	capacityRange.RequiredBytes = size * 1024 * 1024 * 1024
-	req.CapacityRange = capacityRange
-	capability := new(csi.VolumeCapability)
-	mount := new(csi.VolumeCapability_MountVolume)
-	mount.FsType = "nfs"
-	mountType := new(csi.VolumeCapability_Mount)
-	mountType.Mount = mount
-	capability.AccessType = mountType
-	accessMode := new(csi.VolumeCapability_AccessMode)
-	accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER
-	capability.AccessMode = accessMode
-	f.capability = capability
-	capabilities := make([]*csi.VolumeCapability, 0)
-	capabilities = append(capabilities, capability)
-	req.VolumeCapabilities = capabilities
-	f.createVolumeRequest = req
 	return nil
-
 }
 
 func (f *feature) checkNFS(ctx context.Context, systemID string) (bool, error) {
@@ -1969,25 +1986,6 @@ func (f *feature) checkNFS(ctx context.Context, systemID string) (bool, error) {
 	}
 	return false, nil
 }
-
-// func (f *feature) checkNfsSupportInArray(name string, size int64) error {
-// 	fmt.Println("f.arrays,len", f.arrays, f.arrays)
-
-// 	if f.arrays == nil {
-// 		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
-// 		var err error
-// 		f.arrays, err = f.getArrayConfig()
-// 		if err != nil {
-// 			return errors.New("Get multi array config failed " + err.Error())
-// 		}
-// 	}
-
-// 	for _, a := range f.arrays {
-// 		if a.NasName != nil {
-// 			return nil
-// 		}
-// 	}
-// }
 
 func FeatureContext(s *godog.ScenarioContext) {
 	f := &feature{}
@@ -2051,9 +2049,4 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^the VolumeCondition is "([^"]*)"$`, f.theVolumeConditionIs)
 	s.Step(`^a basic nfs volume request with wrong nasname "([^"]*)" "(\d+)"$`, f.aBasicNfsVolumeRequestWithWrongNasName)
 	s.Step(`^a basic nfs volume request "([^"]*)" "(\d+)"$`, f.aBasicNfsVolumeRequest)
-	//s.Step(`^an nfs volume request "([^"]*)" "(\d+)"$`, f.anNfsVolumeRequest)
-	//s.Step(`^find array support for nfs "([^"]*)" "(\d+)"$`, f.checkNfsSupportInArray)
-	// s.Step(`^I call nfs CreateVolume$`, f.iCallNfsCreateVolume)
-	// s.Step(`^I call nfs ListVolume$`, f.iCallNfsListVolume)
-	// s.Step(`^a valid nfs ListVolumeResponse is returned
 }
