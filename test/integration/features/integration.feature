@@ -538,7 +538,25 @@ Feature: VxFlex OS CSI interface
     Then the error message should contain <errormsg>
     Examples:
       | errormsg    |
-      | "couldn't find given NAS server by name" | 
+      | "couldn't find given NAS server by name" |
+
+  Scenario Outline: Create publish, node-publish, node-unpublish, unpublish, and delete nfs volume
+    Given a VxFlexOS service
+    And a nfs capability with voltype <voltype> access <access> fstype <fstype>
+    And a nfs volume request "nfsinttestvol" "8"
+    When I call CreateVolume
+    And there are no errors
+    And when I call PublishVolume for nfs "SDC_GUID"
+    And when I call NodePublishVolume for nfs "SDC_GUID"
+    And there are no errors
+    And when I call NodeUnpublishVolume for nfs "SDC_GUID"
+    And when I call UnpublishVolume for nfs "SDC_GUID"
+    And there are no errors
+    And when I call DeleteVolume
+    Then there are no errors
+    Examples:
+      | voltype | access          | fstype | errormsg |
+      | "mount" | "single-writer" | "nfs"  | "none"   | 
 
   Scenario Outline: Publish and Unpublish Ephemeral Volume
     Given a VxFlexOS service

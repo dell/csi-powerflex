@@ -41,7 +41,6 @@ import (
 	"github.com/cucumber/godog"
 	csiext "github.com/dell/dell-csi-extensions/podmon"
 
-	"github.com/dell/csi-vxflexos/v2/service"
 	volGroupSnap "github.com/dell/dell-csi-extensions/volumeGroupSnapshot"
 	"github.com/dell/goscaleio"
 	"github.com/golang/protobuf/ptypes"
@@ -52,7 +51,7 @@ const (
 	RetrySleepTime = 10 * time.Second
 	SleepTime      = 100 * time.Millisecond
 	Pool1          = "pool1"
-	NfsPool        = "Env7-SP-SW_HDD-1"
+	NfsPool        = "Env8-SP-SW_SSD-1"
 )
 
 // ArrayConnectionData contains data required to connect to array
@@ -90,7 +89,6 @@ type feature struct {
 	arrays                      map[string]*ArrayConnectionData
 	VolumeGroupSnapshot         *volGroupSnap.CreateVolumeGroupSnapshotResponse
 	VolumeGroupSnapshot2        *volGroupSnap.CreateVolumeGroupSnapshotResponse
-	service                     *service.Service
 }
 
 func (f *feature) getGoscaleioClient() (client *goscaleio.Client, err error) {
@@ -298,7 +296,6 @@ func (f *feature) aBasicNfsVolumeRequest(name string, size int64) error {
 		}
 
 		if val {
-			fmt.Printf("Got inside val = true")
 			if a.NasName != nil {
 				params["nasName"] = *a.NasName
 				params["nfsAcls"] = a.NfsAcls
@@ -346,14 +343,6 @@ func (f *feature) accessTypeIs(arg1 string) error {
 }
 
 func (f *feature) iCallCreateVolume() error {
-
-	// for _, a := range f.arrays {
-	// 	systemid := a.SystemID
-	// 	val, err := f.checkNFS(ctx, systemid)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-
 	if f.createVolumeRequest == nil {
 		return nil
 	} else {
@@ -1956,6 +1945,292 @@ func (f *feature) aBasicNfsVolumeRequestWithWrongNasName(name string, size int64
 	return nil
 }
 
+func (f *feature) aNfsCapabilityWithVoltypeAccessFstype(voltype, access, fstype string) error {
+	// Construct the volume capabilities
+	ctx := context.Background()
+
+	fmt.Println("f.arrays,len", f.arrays, f.arrays)
+
+	if f.arrays == nil {
+		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
+		var err error
+		f.arrays, err = f.getArrayConfig()
+		if err != nil {
+			return errors.New("Get multi array config failed " + err.Error())
+		}
+	}
+
+	for _, a := range f.arrays {
+		systemid := a.SystemID
+		val, err := f.checkNFS(ctx, systemid)
+		if err != nil {
+			return err
+		}
+
+		if val {
+			capability := new(csi.VolumeCapability)
+			switch voltype {
+			case "block":
+				blockVolume := new(csi.VolumeCapability_BlockVolume)
+				block := new(csi.VolumeCapability_Block)
+				block.Block = blockVolume
+				capability.AccessType = block
+			case "mount":
+				mountVolume := new(csi.VolumeCapability_MountVolume)
+				mountVolume.FsType = fstype
+				mountVolume.MountFlags = make([]string, 0)
+				mount := new(csi.VolumeCapability_Mount)
+				mount.Mount = mountVolume
+				capability.AccessType = mount
+			}
+			accessMode := new(csi.VolumeCapability_AccessMode)
+			switch access {
+			case "single-writer":
+				accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER
+			case "multi-writer":
+				accessMode.Mode = csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER
+			case "multi-reader":
+				accessMode.Mode = csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY
+			case "multi-node-single-writer":
+				accessMode.Mode = csi.VolumeCapability_AccessMode_MULTI_NODE_SINGLE_WRITER
+			case "single-node-single-writer":
+				accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_SINGLE_WRITER
+			case "single-node-multi-writer":
+				accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_MULTI_WRITER
+			}
+			capability.AccessMode = accessMode
+			f.capabilities = make([]*csi.VolumeCapability, 0)
+			f.capabilities = append(f.capabilities, capability)
+			f.capability = capability
+			return nil
+		}
+		fmt.Printf("Array with SystemId %s does not support NFS. Skipping this step", systemid)
+		return nil
+	}
+	return nil
+}
+
+func (f *feature) aNfsVolumeRequest(name string, size int64) error {
+	ctx := context.Background()
+
+	fmt.Println("f.arrays,len", f.arrays, f.arrays)
+
+	if f.arrays == nil {
+		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
+		var err error
+		f.arrays, err = f.getArrayConfig()
+		if err != nil {
+			return errors.New("Get multi array config failed " + err.Error())
+		}
+	}
+
+	for _, a := range f.arrays {
+		systemid := a.SystemID
+		val, err := f.checkNFS(ctx, systemid)
+		if err != nil {
+			return err
+		}
+
+		if val {
+			req := new(csi.CreateVolumeRequest)
+			params := make(map[string]string)
+			if a.NasName != nil {
+				params["nasName"] = *a.NasName
+				params["nfsAcls"] = a.NfsAcls
+			}
+			params["storagepool"] = NfsPool
+			params["thickprovisioning"] = "false"
+			if len(f.anotherSystemID) > 0 {
+				params["systemID"] = f.anotherSystemID
+			}
+			req.Parameters = params
+			makeAUniqueName(&name)
+			req.Name = name
+			capacityRange := new(csi.CapacityRange)
+			capacityRange.RequiredBytes = size * 1024 * 1024 * 1024
+			req.CapacityRange = capacityRange
+			req.VolumeCapabilities = f.capabilities
+			f.createVolumeRequest = req
+			return nil
+		}
+		fmt.Printf("Array with SystemId %s does not support NFS. Skipping this step", systemid)
+		return nil
+	}
+	return nil
+}
+
+func (f *feature) whenICallPublishVolumeForNfs(nodeIDEnvVar string) error {
+	if f.createVolumeRequest == nil {
+		return nil
+	} else {
+		err := f.controllerPublishVolumeForNfs(f.volID, nodeIDEnvVar)
+		if err != nil {
+			fmt.Printf("ControllerPublishVolume %s:\n", err.Error())
+			f.addError(err)
+		} else {
+			fmt.Printf("ControllerPublishVolume completed successfully\n")
+		}
+		time.Sleep(SleepTime)
+		return nil
+	}
+}
+
+func (f *feature) controllerPublishVolumeForNfs(id string, nodeIDEnvVar string) error {
+	if f.createVolumeRequest == nil {
+		return nil
+	} else {
+		req := f.getControllerPublishVolumeRequest()
+		req.VolumeId = id
+		req.NodeId = os.Getenv(nodeIDEnvVar)
+
+		if f.arrays == nil {
+			fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
+			var err error
+			f.arrays, err = f.getArrayConfig()
+			if err != nil {
+				return errors.New("Get multi array config failed " + err.Error())
+			}
+		}
+
+		for _, a := range f.arrays {
+			req.VolumeContext = make(map[string]string)
+			req.VolumeContext["nasName"] = *a.NasName
+			req.VolumeContext["nfsAcls"] = a.NfsAcls
+			req.VolumeContext["fsType"] = "nfs"
+			ctx := context.Background()
+			client := csi.NewControllerClient(grpcClient)
+			_, err := client.ControllerPublishVolume(ctx, req)
+			return err
+		}
+	}
+	return nil
+}
+
+func (f *feature) getNodePublishVolumeRequestForNfs() *csi.NodePublishVolumeRequest {
+	if f.createVolumeRequest == nil {
+		return nil
+	} else {
+		req := new(csi.NodePublishVolumeRequest)
+		req.VolumeId = f.volID
+		req.Readonly = false
+		req.VolumeContext = make(map[string]string)
+		req.VolumeContext["fsType"] = "nfs"
+
+		if f.capability.AccessMode.Mode == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
+			req.Readonly = true
+		}
+
+		req.VolumeCapability = f.capability
+		block := f.capability.GetBlock()
+		if block != nil {
+			req.TargetPath = datafile
+		}
+		mount := f.capability.GetMount()
+		if mount != nil {
+			req.TargetPath = datadir
+		}
+		f.nodePublishVolumeRequest = req
+		return req
+	}
+}
+
+func (f *feature) whenICallNodePublishVolumeForNfs(arg1 string) error {
+	if f.createVolumeRequest == nil {
+		return nil
+	} else {
+		err := f.nodePublishVolumeForNfs(f.volID, "")
+		if err != nil {
+			fmt.Printf("NodePublishVolume failed: %s\n", err.Error())
+			f.addError(err)
+		} else {
+			fmt.Printf("NodePublishVolume completed successfully\n")
+		}
+		time.Sleep(SleepTime)
+		return nil
+	}
+}
+
+func (f *feature) nodePublishVolumeForNfs(id string, path string) error {
+	if f.createVolumeRequest == nil {
+		return nil
+	} else {
+		req := f.getNodePublishVolumeRequestForNfs()
+		if path != "" {
+			block := f.capability.GetBlock()
+			if block != nil {
+				req.TargetPath = path
+			}
+			mount := f.capability.GetMount()
+			if mount != nil {
+				req.TargetPath = path
+			}
+		}
+		req.VolumeId = id
+		ctx := context.Background()
+		client := csi.NewNodeClient(grpcClient)
+		_, err := client.NodePublishVolume(ctx, req)
+		return err
+	}
+}
+
+func (f *feature) whenICallNodeUnpublishVolumeForNfs(arg1 string) error {
+	if f.createVolumeRequest == nil {
+		return nil
+	} else {
+		err := f.nodeUnpublishVolumeForNfs(f.volID, f.nodePublishVolumeRequest.TargetPath)
+		if err != nil {
+			fmt.Printf("NodeUnpublishVolume failed: %s\n", err.Error())
+			f.addError(err)
+		} else {
+			fmt.Printf("NodeUnpublishVolume completed successfully\n")
+		}
+		time.Sleep(SleepTime)
+		return nil
+	}
+}
+
+func (f *feature) nodeUnpublishVolumeForNfs(id string, path string) error {
+	if f.createVolumeRequest == nil {
+		return nil
+	} else {
+		req := &csi.NodeUnpublishVolumeRequest{VolumeId: id, TargetPath: path}
+		ctx := context.Background()
+		client := csi.NewNodeClient(grpcClient)
+		_, err := client.NodeUnpublishVolume(ctx, req)
+		return err
+	}
+}
+
+func (f *feature) whenICallUnpublishVolumeForNfs(nodeIDEnvVar string) error {
+	if f.createVolumeRequest == nil {
+		return nil
+	} else {
+		err := f.controllerUnpublishVolumeForNfs(f.publishVolumeRequest.VolumeId, nodeIDEnvVar)
+		if err != nil {
+			fmt.Printf("ControllerUnpublishVolume failed: %s\n", err.Error())
+			f.addError(err)
+		} else {
+			fmt.Printf("ControllerUnpublishVolume completed successfully\n")
+		}
+		time.Sleep(SleepTime)
+		return nil
+	}
+}
+
+func (f *feature) controllerUnpublishVolumeForNfs(id string, nodeIDEnvVar string) error {
+	if f.createVolumeRequest == nil {
+		return nil
+	} else {
+		req := new(csi.ControllerUnpublishVolumeRequest)
+		req.VolumeId = id
+		req.NodeId = os.Getenv(nodeIDEnvVar)
+		ctx := context.Background()
+		client := csi.NewControllerClient(grpcClient)
+		_, err := client.ControllerUnpublishVolume(ctx, req)
+		return err
+	}
+}
+
 func (f *feature) checkNFS(ctx context.Context, systemID string) (bool, error) {
 
 	c, err := f.getGoscaleioClient()
@@ -2049,4 +2324,10 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^the VolumeCondition is "([^"]*)"$`, f.theVolumeConditionIs)
 	s.Step(`^a basic nfs volume request with wrong nasname "([^"]*)" "(\d+)"$`, f.aBasicNfsVolumeRequestWithWrongNasName)
 	s.Step(`^a basic nfs volume request "([^"]*)" "(\d+)"$`, f.aBasicNfsVolumeRequest)
+	s.Step(`^a nfs capability with voltype "([^"]*)" access "([^"]*)" fstype "([^"]*)"$`, f.aNfsCapabilityWithVoltypeAccessFstype)
+	s.Step(`^a nfs volume request "([^"]*)" "(\d+)"$`, f.aNfsVolumeRequest)
+	s.Step(`^when I call PublishVolume for nfs "([^"]*)"$`, f.whenICallPublishVolumeForNfs)
+	s.Step(`^when I call NodePublishVolume for nfs "([^"]*)"$`, f.whenICallNodePublishVolumeForNfs)
+	s.Step(`^when I call NodeUnpublishVolume for nfs "([^"]*)"$`, f.whenICallNodeUnpublishVolumeForNfs)
+	s.Step(`^when I call UnpublishVolume for nfs "([^"]*)"$`, f.whenICallUnpublishVolumeForNfs)
 }
