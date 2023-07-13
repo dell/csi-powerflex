@@ -2231,6 +2231,44 @@ func (f *feature) controllerUnpublishVolumeForNfs(id string, nodeIDEnvVar string
 	}
 }
 
+func (f *feature) whenICallNfsExpandVolumeTo(size int64) error {
+	if f.createVolumeRequest == nil {
+		return nil
+	} else {
+		err := f.controllerExpandVolumeForNfs(f.volID, size)
+		if err != nil {
+			fmt.Printf("ControllerExpandVolume %s:\n", err.Error())
+			f.addError(err)
+		} else {
+			fmt.Printf("ControllerExpandVolume completed successfully\n")
+		}
+		time.Sleep(SleepTime)
+		return nil
+	}
+}
+
+func (f *feature) controllerExpandVolumeForNfs(volID string, size int64) error {
+	const bytesInKiB = 1024
+	var resp *csi.ControllerExpandVolumeResponse
+	var err error
+	req := &csi.ControllerExpandVolumeRequest{
+		VolumeId:      volID,
+		CapacityRange: &csi.CapacityRange{RequiredBytes: size * bytesInKiB * bytesInKiB * bytesInKiB},
+	}
+	ctx := context.Background()
+	client := csi.NewControllerClient(grpcClient)
+	for i := 0; i < f.maxRetryCount; i++ {
+		resp, err = client.ControllerExpandVolume(ctx, req)
+		if err == nil {
+			break
+		}
+		fmt.Printf("Controller ExpandVolume retry: %s\n", err.Error())
+		time.Sleep(RetrySleepTime)
+	}
+	f.expandVolumeResponse = resp
+	return err
+}
+
 func (f *feature) checkNFS(ctx context.Context, systemID string) (bool, error) {
 
 	c, err := f.getGoscaleioClient()
@@ -2330,4 +2368,5 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^when I call NodePublishVolume for nfs "([^"]*)"$`, f.whenICallNodePublishVolumeForNfs)
 	s.Step(`^when I call NodeUnpublishVolume for nfs "([^"]*)"$`, f.whenICallNodeUnpublishVolumeForNfs)
 	s.Step(`^when I call UnpublishVolume for nfs "([^"]*)"$`, f.whenICallUnpublishVolumeForNfs)
+	s.Step(`^when I call NfsExpandVolume to "([^"]*)"$`, f.whenICallNfsExpandVolumeTo)
 }
