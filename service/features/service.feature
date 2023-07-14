@@ -1089,3 +1089,20 @@ Feature: VxFlex OS CSI interface
     And a controller published volume
     When I call ControllerExpandVolume set to "8"
     Then no error was received
+
+  Scenario: Controller expand volume for NFS - idempotent case
+    Given a VxFlexOS service
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+    When I call CreateVolumeSize nfs "vol-inttest-nfs" "10"
+    And a controller published volume
+    When I call ControllerExpandVolume set to "10"
+    Then no error was received
+
+  Scenario: Controller expand volume for NFS - incorrect system name
+    Given a VxFlexOS service
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+    When I call CreateVolumeSize nfs "vol-inttest-nfs" "10"
+    And a controller published volume
+    And I induce error "WrongSysNameError"
+    When I call ControllerExpandVolume set to "16"
+    Then the error contains "failure to load volume"
