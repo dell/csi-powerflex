@@ -1106,3 +1106,12 @@ Feature: VxFlex OS CSI interface
     And I induce error "WrongSysNameError"
     When I call ControllerExpandVolume set to "16"
     Then the error contains "failure to load volume"
+
+  Scenario: Call ControllerExpandVolume for NFS - volume ID not found
+    Given a VxFlexOS service
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+    And I call CreateVolumeSize nfs "vol-inttest-nfs" "10"
+    And a controller published volume
+    And I induce error "NoVolumeIDError"
+    Then I call ControllerExpandVolume set to "16"
+    And the error contains "volume ID is required"
