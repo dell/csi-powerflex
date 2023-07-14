@@ -4092,6 +4092,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^the snapshot ID is "([^"]*)"$`, f.theSnapshotIDIs)
 	s.Step(`^I invalidate the Probe cache$`, f.iInvalidateTheProbeCache)
 	s.Step(`^I call ControllerExpandVolume set to (\d+)$`, f.iCallControllerExpandVolume)
+	s.Step(`^I call ControllerExpandVolume set to "([^"]*)"$`, f.iCallControllerExpandVolume)
 	s.Step(`^I call NodeExpandVolume with volumePath as "([^"]*)"$`, f.iCallNodeExpandVolume)
 	s.Step(`^I call NodeGetVolumeStats$`, f.iCallNodeGetVolumeStats)
 	s.Step(`^a correct NodeGetVolumeStats Response is returned$`, f.aCorrectNodeGetVolumeStatsResponse)
