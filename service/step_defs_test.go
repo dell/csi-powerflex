@@ -1500,7 +1500,7 @@ func (f *feature) aValidVolume() error {
 }
 
 func (f *feature) aBadFileSystem() error {
-	for key, _ := range fileSystemIDName {
+	for key := range fileSystemIDName {
 		fileSystemIDName[key] = ""
 	}
 	return nil

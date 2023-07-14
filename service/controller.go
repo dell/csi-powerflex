@@ -2475,10 +2475,8 @@ func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.Controlle
 			if strings.EqualFold(err.Error(), sioGatewayFileSystemNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
 				return nil, status.Error(codes.NotFound,
 					"volume not found")
-			} else {
-				return nil, status.Errorf(codes.Internal, "failure to load volume: %s", err.Error())
 			}
-
+			return nil, status.Errorf(codes.Internal, "failure to load volume: %s", err.Error())
 		}
 
 		fsName := fs.Name
