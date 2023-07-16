@@ -79,6 +79,98 @@ Feature: VxFlex OS CSI interface
     Then I call NodeUnpublishVolume ""
     Then the error contains "none"
 
+   Scenario: a Basic NFS Node Publish Volume good
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "single-node-single-writer"
+    Then a valid PublishVolumeResponse is returned
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+    Then I call NodePublishVolume NFS ""
+    Then the error contains "none"
+    Then I call NodeUnpublishVolume ""
+    Then the error contains "none"
+    
+    
+    Scenario: a Basic NFS Node Publish Volume good
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "single-node-single-writer"
+    Then a valid PublishVolumeResponse is returned
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+    Then I call NodePublishVolume NFS ""
+    Then the error contains "none"
+    Then I call NodePublishVolume NFS ""
+    Then the error contains "none"
+    Then I call NodeUnpublishVolume ""
+    Then the error contains "none"
+    
+    
+    Scenario: a Basic NFS Node Publish Volume good
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "single-node-single-writer"
+    Then a valid PublishVolumeResponse is returned
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+     And I induce error "NasNotFoundError"
+    Then I call NodePublishVolume NFS ""
+    Then the error contains "could not find NAS server by id"
+    
+    
+    Scenario: a Basic NFS Node Publish Volume good
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "single-node-single-writer"
+    Then a valid PublishVolumeResponse is returned
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+     And I induce error "fileInterfaceNotFoundError"
+    Then I call NodePublishVolume NFS ""
+    Then the error contains "could not find the File interface using id"
+    
+    
+    Scenario: a Basic NFS Node Publish Volume good
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "single-reader"
+    Then the error contains "access mode cannot be UNKNOWN"
+    
+    
+    Scenario: a Basic NFS Node Publish Volume good
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "multiple-writer"
+    Then a valid PublishVolumeResponse is returned
+    And a capability with voltype "mount" access "multiple-writer" fstype "nfs"
+    Then I call NodePublishVolume NFS ""
+    Then the error contains "none"
+    Then I call NodeUnpublishVolume ""
+    Then the error contains "none"
+    
+    
+    Scenario: a Basic NFS Node Publish Volume good
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "single-node-multi-writer"
+    Then a valid PublishVolumeResponse is returned
+    And a capability with voltype "mount" access "single-node-multi-writer" fstype "nfs"
+    Then I call NodePublishVolume NFS ""
+    Then the error contains "none"
+    Then I call NodeUnpublishVolume ""
+    Then the error contains "none"
+
   Scenario Outline: Node publish mount volumes various induced error use cases from examples
     Given a VxFlexOS service
     And a controller published volume

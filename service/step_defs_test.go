@@ -824,10 +824,97 @@ func (f *feature) iSpecifyAccessibilityRequirementsWithASystemIDOf(requestedSyst
 	return nil
 }
 
+func (f *feature) iSpecifyAccessibilityRequirementsNFSWithASystemIDOf(requestedSystem string) error {
+	if requestedSystem == "f.service.opt.SystemName" {
+		requestedSystem = f.service.opts.defaultSystemID
+	}
+	req := new(csi.CreateVolumeRequest)
+	params := make(map[string]string)
+	params["storagepool"] = "viki_pool_HDD_20181031"
+	req.Parameters = params
+	req.Name = "accessability"
+	capacityRange := new(csi.CapacityRange)
+	capacityRange.RequiredBytes = 32 * 1024 * 1024 * 1024
+	req.CapacityRange = capacityRange
+	req.AccessibilityRequirements = new(csi.TopologyRequirement)
+	top := new(csi.Topology)
+	top.Segments = map[string]string{
+		"csi-vxflexos.dellemc.com/" + requestedSystem + "-nfs": "powerflex.dellemc.com",
+	}
+	req.AccessibilityRequirements.Preferred = append(req.AccessibilityRequirements.Preferred, top)
+	req.AccessibilityRequirements.Preferred = append(req.AccessibilityRequirements.Preferred, top)
+	capability := new(csi.VolumeCapability)
+	mountVolume := new(csi.VolumeCapability_MountVolume)
+	mountVolume.FsType = "nfs"
+	if mountVolume.FsType == "nfs" {
+		req.Parameters["nasName"] = "dummy-nas-server"
+	}
+	mountVolume.MountFlags = make([]string, 0)
+	mount := new(csi.VolumeCapability_Mount)
+	mount.Mount = mountVolume
+	capability.AccessType = mount
+	accessMode := new(csi.VolumeCapability_AccessMode)
+	accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER
+	capability.AccessMode = accessMode
+	capabilities := make([]*csi.VolumeCapability, 0)
+	capabilities = append(capabilities, capability)
+	req.VolumeCapabilities = capabilities
+	f.createVolumeRequest = req
+	return nil
+}
+
+func (f *feature) iSpecifyBadAccessibilityRequirementsNFSWithASystemIDOf(requestedSystem string) error {
+	if requestedSystem == "f.service.opt.SystemName" {
+		requestedSystem = f.service.opts.defaultSystemID
+	}
+	req := new(csi.CreateVolumeRequest)
+	params := make(map[string]string)
+	params["storagepool"] = "viki_pool_HDD_20181031"
+	req.Parameters = params
+	req.Name = "accessability"
+	capacityRange := new(csi.CapacityRange)
+	capacityRange.RequiredBytes = 32 * 1024 * 1024 * 1024
+	req.CapacityRange = capacityRange
+	req.AccessibilityRequirements = new(csi.TopologyRequirement)
+	top := new(csi.Topology)
+	top.Segments = map[string]string{
+		"csi-vxflexos.dellemc.com/" + requestedSystem + "-abc": "powerflex.dellemc.com",
+	}
+	req.AccessibilityRequirements.Preferred = append(req.AccessibilityRequirements.Preferred, top)
+	capability := new(csi.VolumeCapability)
+	mountVolume := new(csi.VolumeCapability_MountVolume)
+	mountVolume.FsType = "nfs"
+	if mountVolume.FsType == "nfs" {
+		req.Parameters["nasName"] = "dummy-nas-server"
+	}
+	mountVolume.MountFlags = make([]string, 0)
+	mount := new(csi.VolumeCapability_Mount)
+	mount.Mount = mountVolume
+	capability.AccessType = mount
+	accessMode := new(csi.VolumeCapability_AccessMode)
+	accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER
+	capability.AccessMode = accessMode
+	capabilities := make([]*csi.VolumeCapability, 0)
+	capabilities = append(capabilities, capability)
+	req.VolumeCapabilities = capabilities
+	f.createVolumeRequest = req
+	return nil
+}
+
 func (f *feature) aValidCreateVolumeResponseWithTopologyIsReturned() error {
 	if f.err != nil {
 		return f.err
 	}
+
+	isNFS := false
+	var fsType string
+	if len(f.createVolumeRequest.VolumeCapabilities) != 0 {
+		fsType = f.createVolumeRequest.VolumeCapabilities[0].GetMount().GetFsType()
+		if fsType == "nfs" {
+			isNFS = true
+		}
+	}
+
 	f.volumeIDList = append(f.volumeIDList, f.createVolumeResponse.Volume.VolumeId)
 	topology := f.createVolumeResponse.Volume.AccessibleTopology
 	if len(topology) != 1 {
@@ -851,7 +938,20 @@ func (f *feature) aValidCreateVolumeResponseWithTopologyIsReturned() error {
 			if len(tokens) > 1 {
 				constraint = tokens[1]
 			}
+
 			log.Printf("Found topology constraint: VxFlex OS system: %s", constraint)
+			if isNFS {
+				nfsTokens := strings.Split(constraint, "-")
+				nfsLabel := ""
+				if len(nfsTokens) > 1 {
+					constraint = nfsTokens[0]
+					nfsLabel = nfsTokens[1]
+					if nfsLabel != "nfs" {
+						return status.Errorf(codes.InvalidArgument,
+							"Invalid topology requested for NFS Volume. Please validate your storage class has nfs topology.")
+					}
+				}
+			}
 			if constraint != requestedSystem {
 				fmt.Printf("Volume topology segement should have system %s. Found %s.", requestedSystem, constraint)
 				return errors.New("wrong systemID in AccessibleTopology")
@@ -1084,6 +1184,8 @@ func (f *feature) iInduceError(errtype string) error {
 		stepHandlersErrors.FileSystemInstancesError = true
 	case "NasNotFoundError":
 		stepHandlersErrors.NasServerNotFoundError = true
+	case "fileInterfaceNotFoundError":
+		stepHandlersErrors.FileInterfaceNotFoundError = true
 	case "NoVolumeIDError":
 		stepHandlersErrors.NoVolumeIDError = true
 	case "BadVolIDJSON":
@@ -1404,6 +1506,47 @@ func (f *feature) getControllerDeleteVolumeRequest(accessType string) *csi.Delet
 	return req
 }
 
+func (f *feature) getControllerDeleteVolumeRequestBad(accessType string) *csi.DeleteVolumeRequest {
+	capability := new(csi.VolumeCapability)
+	block := new(csi.VolumeCapability_Block)
+	block.Block = new(csi.VolumeCapability_BlockVolume)
+	if f.useAccessTypeMount {
+		mountVolume := new(csi.VolumeCapability_MountVolume)
+		mountVolume.FsType = "xfs"
+		mountVolume.MountFlags = make([]string, 0)
+		mount := new(csi.VolumeCapability_Mount)
+		mount.Mount = mountVolume
+		capability.AccessType = mount
+	} else {
+		capability.AccessType = block
+	}
+	accessMode := new(csi.VolumeCapability_AccessMode)
+	switch accessType {
+	case "single-writer":
+		accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER
+	case "multiple-reader":
+		accessMode.Mode = csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY
+	case "multiple-writer":
+		accessMode.Mode = csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER
+	case "unknown":
+		accessMode.Mode = csi.VolumeCapability_AccessMode_UNKNOWN
+	}
+	if !f.omitAccessMode {
+		capability.AccessMode = accessMode
+	}
+	fmt.Printf("capability.AccessType %v\n", capability.AccessType)
+	fmt.Printf("capability.AccessMode %v\n", capability.AccessMode)
+	req := new(csi.DeleteVolumeRequest)
+	if !f.noVolumeID {
+		if f.invalidVolumeID {
+			req.VolumeId = badVolumeID2
+		} else {
+			req.VolumeId = ""
+		}
+	}
+	return req
+}
+
 func (f *feature) getControllerDeleteVolumeRequestNFS(accessType string) *csi.DeleteVolumeRequest {
 	capability := new(csi.VolumeCapability)
 
@@ -1663,6 +1806,21 @@ func (f *feature) iCallDeleteVolumeWith(arg1 string) error {
 	req := f.deleteVolumeRequest
 	if f.deleteVolumeRequest == nil {
 		req = f.getControllerDeleteVolumeRequest(arg1)
+		f.deleteVolumeRequest = req
+	}
+	log.Printf("Calling DeleteVolume")
+	f.deleteVolumeResponse, f.err = f.service.DeleteVolume(*ctx, req)
+	if f.err != nil {
+		log.Printf("DeleteVolume called failed: %s\n", f.err.Error())
+	}
+	return nil
+}
+
+func (f *feature) iCallDeleteVolumeWithBad(arg1 string) error {
+	ctx := new(context.Context)
+	req := f.deleteVolumeRequest
+	if f.deleteVolumeRequest == nil {
+		req = f.getControllerDeleteVolumeRequestBad(arg1)
 		f.deleteVolumeRequest = req
 	}
 	log.Printf("Calling DeleteVolume")
@@ -4003,6 +4161,8 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call ValidateConnectivity$`, f.iCallValidateVolumeHostConnectivity)
 	s.Step(`^a valid CreateVolumeResponse is returned$`, f.aValidCreateVolumeResponseIsReturned)
 	s.Step(`^I specify AccessibilityRequirements with a SystemID of "([^"]*)"$`, f.iSpecifyAccessibilityRequirementsWithASystemIDOf)
+	s.Step(`^I specify NFS AccessibilityRequirements with a SystemID of "([^"]*)"$`, f.iSpecifyAccessibilityRequirementsNFSWithASystemIDOf)
+	s.Step(`^I specify bad NFS AccessibilityRequirements with a SystemID of "([^"]*)"$`, f.iSpecifyBadAccessibilityRequirementsNFSWithASystemIDOf)
 	s.Step(`^a valid CreateVolumeResponse with topology is returned$`, f.aValidCreateVolumeResponseWithTopologyIsReturned)
 	s.Step(`^I specify MULTINODE_WRITER$`, f.iSpecifyMULTINODEWRITER)
 	s.Step(`^I specify a BadCapacity$`, f.iSpecifyABadCapacity)
@@ -4035,6 +4195,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call Node Probe$`, f.iCallNodeProbe)
 	s.Step(`^a valid NodeGetInfoResponse is returned$`, f.aValidNodeGetInfoResponseIsReturned)
 	s.Step(`^I call DeleteVolume with "([^"]*)"$`, f.iCallDeleteVolumeWith)
+	s.Step(`^I call DeleteVolume with Bad "([^"]*)"$`, f.iCallDeleteVolumeWithBad)
 	s.Step(`^I call DeleteVolume nfs with "([^"]*)"$`, f.iCallDeleteVolumeNFSWith)
 	s.Step(`^a valid DeleteVolumeResponse is returned$`, f.aValidDeleteVolumeResponseIsReturned)
 	s.Step(`^the volume is already mapped to an SDC$`, f.theVolumeIsAlreadyMappedToAnSDC)

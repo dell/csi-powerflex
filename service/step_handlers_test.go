@@ -64,6 +64,7 @@ var (
 		FileSystemInstancesError      bool
 		NFSExportInstancesError       bool
 		NasServerNotFoundError        bool
+		FileInterfaceNotFoundError    bool
 		BadVolIDError                 bool
 		NoCsiVolIDError               bool
 		WrongVolIDError               bool
@@ -163,6 +164,7 @@ func getHandler() http.Handler {
 	stepHandlersErrors.RemoveVolumeError = false
 	stepHandlersErrors.VolumeInstancesError = false
 	stepHandlersErrors.NasServerNotFoundError = false
+	stepHandlersErrors.FileInterfaceNotFoundError = false
 	stepHandlersErrors.FileSystemInstancesError = false
 	stepHandlersErrors.NFSExportInstancesError = false
 	stepHandlersErrors.NasServerNotFoundError = false
@@ -325,8 +327,8 @@ func handleGetNasInstances(w http.ResponseWriter, r *http.Request) {
 
 func handleGetFileInterface(w http.ResponseWriter, r *http.Request) {
 
-	if stepHandlersErrors.NasServerNotFoundError {
-		writeError(w, "nas server not found", http.StatusNotFound, codes.NotFound)
+	if stepHandlersErrors.FileInterfaceNotFoundError {
+		writeError(w, "file interace not found", http.StatusNotFound, codes.NotFound)
 		return
 	}
 

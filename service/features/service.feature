@@ -266,6 +266,44 @@ Feature: VxFlex OS CSI interface
       | sysID                      |
       | "f.service.opt.SystemName" |
 
+
+  Scenario Outline: Create volume with Accessibility Requirements nfs
+    Given a VxFlexOS service
+    When I call Probe
+    And I specify NFS AccessibilityRequirements with a SystemID of <sysID>
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse with topology is returned
+    Examples:
+      | sysID                      |
+      | "f.service.opt.SystemName" |
+    
+  
+  Scenario Outline: Create volume with Accessiblity Requirements nfs
+    Given a VxFlexOS service
+    When I call Probe
+    And I specify bad NFS AccessibilityRequirements with a SystemID of <sysID>
+    And I call CreateVolume "volume1"
+    Then the error contains "Invalid topology requested for NFS Volume"
+    Examples:
+      | sysID                      |
+      | "f.service.opt.SystemName" |
+    
+
+   
+  Scenario Outline: Create volume with Accessibility Requirements
+    Given a VxFlexOS service
+    When I call Probe
+    And I specify NFS AccessibilityRequirements with a SystemID of <sysID>
+    And I call CreateVolume "volume1"
+    Then the error contains <errormsg>
+
+    Examples:
+      | sysID                      | errormsg                               |
+      | "f.service.opt.SystemName" | "none"                                 |
+      | ""                         | "is not accessible based on Preferred" |
+      | "Unknown"                  | "is not accessible based on Preferred" |
+      | "badSystem"                | "is not accessible based on Preferred" |
+
   Scenario: Create volume with AccessMode_MULTINODE_WRITER
     Given a VxFlexOS service
     When I call Probe
