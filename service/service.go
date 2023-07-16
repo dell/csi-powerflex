@@ -1110,7 +1110,7 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 		})
 
 		if err != nil {
-			return nil, status.Errorf(codes.NotFound, "create NFS Export failed. Error:%v", err)
+			return nil, status.Errorf(codes.Internal, "create NFS Export failed. Error:%v", err)
 		}
 
 		nfsExportID = resp.ID
@@ -1119,7 +1119,7 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 	nfsExportResp, err := client.GetNFSExportByIDName(nfsExportID, "")
 
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "Could not find NFS Export: %s", err)
+		return nil, status.Errorf(codes.Internal, "Could not find NFS Export: %s", err)
 	}
 
 	readOnlyHosts := nfsExportResp.ReadOnlyHosts
@@ -1131,6 +1131,8 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 	foundIdempotent := false
 	otherHostsWithAccess := len(readOnlyHosts)
 
+	fmt.Printf("afterReadOnlyHosts otherHostsWithAccess%#v\n", otherHostsWithAccess)
+
 	var readHostList, readWriteHostList []string
 
 	for _, host := range readOnlyHosts {
@@ -1141,6 +1143,7 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 	}
 
 	otherHostsWithAccess += len(readWriteHosts)
+	fmt.Printf("afterReadWriteHosts otherHostsWithAccess%#v\n", otherHostsWithAccess)
 	if !foundIncompatible {
 		for _, host := range readWriteHosts {
 			if host == hostURL {
@@ -1151,6 +1154,7 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 	}
 
 	otherHostsWithAccess += len(readOnlyRootHosts)
+	fmt.Printf("AFTERreadOnlyRootHosts otherHostsWithAccess%#v\n", otherHostsWithAccess)
 	if !foundIncompatible {
 		for _, host := range readOnlyRootHosts {
 			readHostList = append(readHostList, host)
@@ -1164,6 +1168,7 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 		}
 	}
 	otherHostsWithAccess += len(readWriteRootHosts)
+	fmt.Printf("AfterreadWriteRootHosts otherHostsWithAccess%#v\n", otherHostsWithAccess)
 
 	if !foundIncompatible && !foundIdempotent {
 		for _, host := range readWriteRootHosts {
@@ -1182,6 +1187,8 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 	if foundIncompatible {
 		return nil, status.Errorf(codes.NotFound, "Host: %s has access on NFS Export: %s with incompatible access mode.", nodeID, nfsExportID)
 	}
+
+	fmt.Printf("mode: %#v\n", am.Mode)
 
 	if (am.Mode == csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER || am.Mode == csi.VolumeCapability_AccessMode_SINGLE_NODE_SINGLE_WRITER || am.Mode == csi.VolumeCapability_AccessMode_SINGLE_NODE_MULTI_WRITER) && otherHostsWithAccess > 0 {
 		return nil, status.Errorf(codes.NotFound, "Other hosts have access on NFS Share: %s", nfsExportID)
