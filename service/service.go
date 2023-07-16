@@ -1207,7 +1207,10 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 			return nil, status.Errorf(codes.Internal, "Allocating host access failed with the error: %v", err)
 		}
 	} else {
+		fmt.Printf("%#vhostURL\n", hostURL)
 		readWriteHostList = append(readWriteHostList, hostURL)
+		fmt.Printf("%#vreadWriteHostList\n", readWriteHostList)
+		fmt.Printf("%#v presenthosts list\n", nfsExportResp)
 		err := client.ModifyNFSExport(&siotypes.NFSExportModify{AddReadWriteRootHosts: readWriteHostList}, nfsExportID)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "Allocating host access failed with the error: %v", err)
