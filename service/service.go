@@ -1172,7 +1172,7 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 
 	if !foundIncompatible && !foundIdempotent {
 		for _, host := range readWriteRootHosts {
-			readWriteHostList = append(readWriteHostList, host)
+			//readWriteHostList = append(readWriteHostList, host)
 			if host == hostURL {
 				if am.Mode == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
 					foundIncompatible = true
