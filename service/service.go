@@ -1157,7 +1157,7 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 	fmt.Printf("AFTERreadOnlyRootHosts otherHostsWithAccess%#v\n", otherHostsWithAccess)
 	if !foundIncompatible {
 		for _, host := range readOnlyRootHosts {
-			readHostList = append(readHostList, host)
+			//readHostList = append(readHostList, host)
 			if host == hostURL {
 				if am.Mode == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
 					foundIdempotent = true
@@ -1206,15 +1206,18 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "Allocating host access failed with the error: %v", err)
 		}
+		fmt.Printf("%#v nfsExport Response\n", nfsExportResp)
+
 	} else {
 		fmt.Printf("%#vhostURL\n", hostURL)
 		readWriteHostList = append(readWriteHostList, hostURL)
 		fmt.Printf("%#vreadWriteHostList\n", readWriteHostList)
-		fmt.Printf("%#v presenthosts list\n", nfsExportResp)
+		fmt.Printf("presenthosts list%#v \n", nfsExportResp)
 		err := client.ModifyNFSExport(&siotypes.NFSExportModify{AddReadWriteRootHosts: readWriteHostList}, nfsExportID)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "Allocating host access failed with the error: %v", err)
 		}
+		fmt.Printf("nfsExport Response%#v\n", nfsExportResp)
 	}
 
 	if err != nil {
