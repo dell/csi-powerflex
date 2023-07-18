@@ -16,6 +16,7 @@ package service
 import (
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"net/http"
 	"strconv"
@@ -2628,8 +2629,19 @@ func mergeStringMaps(base map[string]string, additional map[string]string) map[s
 func (s *service) Clone(req *csi.CreateVolumeRequest,
 	volumeSource *csi.VolumeContentSource_VolumeSource, name string, sizeInKbytes int64, storagePool string) (*csi.CreateVolumeResponse, error) {
 
+	// Check for filesystem type
+	isNFS := false
+	var fsType string
+	if len(req.VolumeCapabilities) != 0 {
+		fsType = req.VolumeCapabilities[0].GetMount().GetFsType()
+		if fsType == "nfs" {
+			isNFS = true
+		}
+	}
+
 	// get systemID from volume source CSI id
 	systemID := s.getSystemIDFromCsiVolumeID(volumeSource.VolumeId)
+	Log.Printf("System ID from volsource volID is: ", systemID)
 	if systemID == "" {
 		// use default system
 		systemID = s.opts.defaultSystemID
@@ -2639,85 +2651,179 @@ func (s *service) Clone(req *csi.CreateVolumeRequest,
 			"systemID is not found in source volume id and there is no default system")
 	}
 
-	// Look up the source volume
-	sourceVolID := getVolumeIDFromCsiVolumeID(volumeSource.VolumeId)
-	srcVol, err := s.getVolByID(sourceVolID, systemID)
-	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "Volume not found: %s", volumeSource.VolumeId)
-	}
-
-	// Validate the size is the same
-	if int64(srcVol.SizeInKb) != sizeInKbytes {
-		return nil, status.Errorf(codes.InvalidArgument,
-			"Volume %s has incompatible size %d kbytes with requested %d kbytes",
-			volumeSource.VolumeId, srcVol.SizeInKb, sizeInKbytes)
-	}
-
-	adminClient := s.adminClients[systemID]
-	// Validate the storage pool is the same
-	volStoragePool := s.getStoragePoolNameFromID(systemID, srcVol.StoragePoolID)
-	if volStoragePool != storagePool {
-		return nil, status.Errorf(codes.InvalidArgument,
-			"Volume storage pool %s is different from the requested storage pool %s", volStoragePool, storagePool)
-	}
-
-	// Check for idempotent request
-	existingVols, err := adminClient.GetVolume("", "", "", name, false)
-	noVolErrString1 := "Error: problem finding volume: Volume not found"
-	noVolErrString2 := "Error: problem finding volume: Could not find the volume"
-	if (err != nil) && !(strings.Contains(err.Error(), noVolErrString1) || strings.Contains(err.Error(), noVolErrString2)) {
-		Log.Printf("[Clone] Idempotency check: GetVolume returned error: %s", err.Error())
-		return nil, status.Errorf(codes.Internal, "Failed to create clone -- GetVolume returned unexpected error: %s", err.Error())
-	}
-
-	for _, vol := range existingVols {
-		if vol.Name == name && vol.StoragePoolID == srcVol.StoragePoolID {
-			Log.Printf("Requested volume %s already exists", name)
-			csiVolume := s.getCSIVolume(vol, systemID)
-			csiVolume.ContentSource = req.GetVolumeContentSource()
-			copyInterestingParameters(req.GetParameters(), csiVolume.VolumeContext)
-			Log.Printf("Requested volume (from clone) already exists %s (%s) storage pool %s",
-				csiVolume.VolumeContext["Name"], csiVolume.VolumeId, csiVolume.VolumeContext["StoragePoolName"])
-			return &csi.CreateVolumeResponse{Volume: csiVolume}, nil
-
+	if isNFS {
+		log.Printf("[clonevolume]Inside isNFS condition")
+		sourceFsID := getFilesystemIDFromCsiVolumeID(volumeSource.VolumeId)
+		srcFS, err := s.getFilesystemByID(sourceFsID, systemID)
+		if strings.EqualFold(err.Error(), sioGatewayFileSystemNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
+			return nil, status.Error(codes.NotFound,
+				"volume not found")
 		}
+
+		if int64(srcFS.SizeTotal) != sizeInKbytes {
+			return nil, status.Errorf(codes.InvalidArgument,
+				"Volume %s has incompatible size %d kbytes with requested %d kbytes",
+				volumeSource.VolumeId, srcFS.SizeTotal, sizeInKbytes)
+		}
+
+		// Validate the storage pool is the same
+		log.Printf("[clonevolume]Proceeding to validate SP")
+		volStoragePool := s.getStoragePoolNameFromID(systemID, srcFS.StoragePoolID)
+		if volStoragePool != storagePool {
+			return nil, status.Errorf(codes.InvalidArgument,
+				"Volume storage pool %s is different from the requested storage pool %s", volStoragePool, storagePool)
+		}
+
+		// Check for idempotent system
+		log.Printf("[clonevolume]Proceeding to check for Idempotent system")
+		system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
+		if err != nil {
+			return nil, err
+		}
+
+		existingFSs, err := system.GetAllFileSystems()
+		noFSErrString1 := "Error: couldn't find file system by name"
+		noFSErrString2 := "Error: file system name or ID is mandatory, please enter a valid value"
+		if (err != nil) && !(strings.Contains(err.Error(), noFSErrString1) || strings.Contains(err.Error(), noFSErrString2)) {
+			Log.Printf("[Clone] Idempotency check: GetVolume returned error: %s", err.Error())
+			return nil, status.Errorf(codes.Internal, "Failed to create clone -- GetVolume returned unexpected error: %s", err.Error())
+		}
+
+		for _, fs := range existingFSs {
+			if fs.Name == name && fs.StoragePoolID == srcFS.StoragePoolID {
+				existingFs, err := system.GetFileSystemByIDName("", fs.Name)
+				if err != nil {
+					return nil, err
+				}
+				Log.Printf("Requested volume %s already exists", name)
+				csiVolume := s.getCSIVolumeFromFilesystem(existingFs, systemID)
+				csiVolume.ContentSource = req.GetVolumeContentSource()
+				copyInterestingParameters(req.GetParameters(), csiVolume.VolumeContext)
+				Log.Printf("Requested volume (from clone) already exists %s (%s) storage pool %s",
+					csiVolume.VolumeContext["Name"], csiVolume.VolumeId, csiVolume.VolumeContext["StoragePoolName"])
+				return &csi.CreateVolumeResponse{Volume: csiVolume}, nil
+
+			}
+		}
+
+		log.Printf("[clonevolume]Proceeding to create snapshot of source volumes")
+		// Snapshot the source volumes
+		snapshotDefs := make([]*siotypes.SnapshotDef, 0)
+		snapDef := &siotypes.SnapshotDef{VolumeID: sourceFsID, SnapshotName: name}
+		snapshotDefs = append(snapshotDefs, snapDef)
+		snapParam := &siotypes.SnapshotVolumesParam{SnapshotDefs: snapshotDefs}
+
+		// Create snapshot
+		//system := s.systems[systemID]
+		log.Printf("[clonevolume]Proceeding to call create snapshot consistency group")
+		snapResponse, err := system.CreateSnapshotConsistencyGroup(snapParam)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Failed to call CreateSnapshotConsistencyGroup to clone volume: %s", err.Error())
+		}
+
+		if len(snapResponse.VolumeIDList) != 1 {
+			return nil, status.Errorf(codes.Internal, "Expected volume ID to be returned but it was not")
+		}
+
+		// Retrieve created destination volume
+		log.Printf("[clonevolume]Proceeding to retrieve created destination volume")
+		destID := snapResponse.VolumeIDList[0]
+		destVol, err := s.getFilesystemByID(destID, systemID)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not retrieve created volume: %s", destID)
+		}
+
+		log.Printf("[clonevolume]Proceeding to create a volume response")
+		// Create a volume response and return it
+		s.clearCache()
+		csiVolume := s.getCSIVolumeFromFilesystem(destVol, systemID)
+		csiVolume.ContentSource = req.GetVolumeContentSource()
+		copyInterestingParameters(req.GetParameters(), csiVolume.VolumeContext)
+
+		Log.Printf("Volume (from volume clone) %s (%s) storage pool %s",
+			csiVolume.VolumeContext["Name"], csiVolume.VolumeId, csiVolume.VolumeContext["storagePoolName"])
+
+		return &csi.CreateVolumeResponse{Volume: csiVolume}, nil
+	} else {
+		// Look up the source volume
+		sourceVolID := getVolumeIDFromCsiVolumeID(volumeSource.VolumeId)
+		srcVol, err := s.getVolByID(sourceVolID, systemID)
+		if err != nil {
+			return nil, status.Errorf(codes.NotFound, "Volume not found: %s", volumeSource.VolumeId)
+		}
+
+		// Validate the size is the same
+		if int64(srcVol.SizeInKb) != sizeInKbytes {
+			return nil, status.Errorf(codes.InvalidArgument,
+				"Volume %s has incompatible size %d kbytes with requested %d kbytes",
+				volumeSource.VolumeId, srcVol.SizeInKb, sizeInKbytes)
+		}
+
+		adminClient := s.adminClients[systemID]
+		// Validate the storage pool is the same
+		volStoragePool := s.getStoragePoolNameFromID(systemID, srcVol.StoragePoolID)
+		if volStoragePool != storagePool {
+			return nil, status.Errorf(codes.InvalidArgument,
+				"Volume storage pool %s is different from the requested storage pool %s", volStoragePool, storagePool)
+		}
+
+		// Check for idempotent request
+		existingVols, err := adminClient.GetVolume("", "", "", name, false)
+		noVolErrString1 := "Error: problem finding volume: Volume not found"
+		noVolErrString2 := "Error: problem finding volume: Could not find the volume"
+		if (err != nil) && !(strings.Contains(err.Error(), noVolErrString1) || strings.Contains(err.Error(), noVolErrString2)) {
+			Log.Printf("[Clone] Idempotency check: GetVolume returned error: %s", err.Error())
+			return nil, status.Errorf(codes.Internal, "Failed to create clone -- GetVolume returned unexpected error: %s", err.Error())
+		}
+
+		for _, vol := range existingVols {
+			if vol.Name == name && vol.StoragePoolID == srcVol.StoragePoolID {
+				Log.Printf("Requested volume %s already exists", name)
+				csiVolume := s.getCSIVolume(vol, systemID)
+				csiVolume.ContentSource = req.GetVolumeContentSource()
+				copyInterestingParameters(req.GetParameters(), csiVolume.VolumeContext)
+				Log.Printf("Requested volume (from clone) already exists %s (%s) storage pool %s",
+					csiVolume.VolumeContext["Name"], csiVolume.VolumeId, csiVolume.VolumeContext["StoragePoolName"])
+				return &csi.CreateVolumeResponse{Volume: csiVolume}, nil
+
+			}
+		}
+
+		// Snapshot the source volumes
+		snapshotDefs := make([]*siotypes.SnapshotDef, 0)
+		snapDef := &siotypes.SnapshotDef{VolumeID: sourceVolID, SnapshotName: name}
+		snapshotDefs = append(snapshotDefs, snapDef)
+		snapParam := &siotypes.SnapshotVolumesParam{SnapshotDefs: snapshotDefs}
+
+		// Create snapshot
+		system := s.systems[systemID]
+		snapResponse, err := system.CreateSnapshotConsistencyGroup(snapParam)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Failed to call CreateSnapshotConsistencyGroup to clone volume: %s", err.Error())
+		}
+
+		if len(snapResponse.VolumeIDList) != 1 {
+			return nil, status.Errorf(codes.Internal, "Expected volume ID to be returned but it was not")
+		}
+
+		// Retrieve created destination volume
+		destID := snapResponse.VolumeIDList[0]
+		destVol, err := s.getVolByID(destID, systemID)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not retrieve created volume: %s", destID)
+		}
+
+		// Create a volume response and return it
+		s.clearCache()
+		csiVolume := s.getCSIVolume(destVol, systemID)
+		csiVolume.ContentSource = req.GetVolumeContentSource()
+		copyInterestingParameters(req.GetParameters(), csiVolume.VolumeContext)
+
+		Log.Printf("Volume (from volume clone) %s (%s) storage pool %s",
+			csiVolume.VolumeContext["Name"], csiVolume.VolumeId, csiVolume.VolumeContext["storagePoolName"])
+
+		return &csi.CreateVolumeResponse{Volume: csiVolume}, nil
 	}
-
-	// Snapshot the source volumes
-	snapshotDefs := make([]*siotypes.SnapshotDef, 0)
-	snapDef := &siotypes.SnapshotDef{VolumeID: sourceVolID, SnapshotName: name}
-	snapshotDefs = append(snapshotDefs, snapDef)
-	snapParam := &siotypes.SnapshotVolumesParam{SnapshotDefs: snapshotDefs}
-
-	// Create snapshot
-	system := s.systems[systemID]
-	snapResponse, err := system.CreateSnapshotConsistencyGroup(snapParam)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Failed to call CreateSnapshotConsistencyGroup to clone volume: %s", err.Error())
-	}
-
-	if len(snapResponse.VolumeIDList) != 1 {
-		return nil, status.Errorf(codes.Internal, "Expected volume ID to be returned but it was not")
-	}
-
-	// Retrieve created destination volume
-	destID := snapResponse.VolumeIDList[0]
-	destVol, err := s.getVolByID(destID, systemID)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not retrieve created volume: %s", destID)
-	}
-
-	// Create a volume response and return it
-	s.clearCache()
-	csiVolume := s.getCSIVolume(destVol, systemID)
-	csiVolume.ContentSource = req.GetVolumeContentSource()
-	copyInterestingParameters(req.GetParameters(), csiVolume.VolumeContext)
-
-	Log.Printf("Volume (from volume clone) %s (%s) storage pool %s",
-		csiVolume.VolumeContext["Name"], csiVolume.VolumeId, csiVolume.VolumeContext["storagePoolName"])
-
-	return &csi.CreateVolumeResponse{Volume: csiVolume}, nil
-
 }
 
 // ControllerGetVolume fetch current information about a volume
