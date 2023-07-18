@@ -312,6 +312,17 @@ func (s *service) CreateVolume(
 		// fetch volume size
 		size := cr.GetRequiredBytes()
 
+		//clone a File System
+		contentSource := req.GetVolumeContentSource()
+		if contentSource != nil {
+			volumeSource := contentSource.GetVolume()
+			if volumeSource != nil {
+				Log.Printf("volume %s specified as volume content source", volumeSource.VolumeId)
+				Log.Printf("Calling clone inside NFS code block")
+				return s.Clone(req, volumeSource, name, size, storagePoolName)
+			}
+		}
+
 		// log all parameters used in CreateVolume call
 		fields := map[string]interface{}{
 			"Name":                               volName,
