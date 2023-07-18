@@ -314,11 +314,13 @@ func (s *service) CreateVolume(
 
 		//clone a File System
 		contentSource := req.GetVolumeContentSource()
+		Log.Printf("got contentSource")
 		if contentSource != nil {
 			volumeSource := contentSource.GetVolume()
 			if volumeSource != nil {
 				Log.Printf("volume %s specified as volume content source", volumeSource.VolumeId)
 				Log.Printf("Calling clone inside NFS code block")
+				Log.Printf("name in clone vol call is %s and %s", name, storagePoolName)
 				return s.Clone(req, volumeSource, name, size, storagePoolName)
 			}
 		}
@@ -2652,7 +2654,7 @@ func (s *service) Clone(req *csi.CreateVolumeRequest,
 
 	// get systemID from volume source CSI id
 	systemID := s.getSystemIDFromCsiVolumeID(volumeSource.VolumeId)
-	Log.Printf("System ID from volsource volID is: ", systemID)
+	Log.Printf("System ID from volsource volID is %s", systemID)
 	if systemID == "" {
 		// use default system
 		systemID = s.opts.defaultSystemID
@@ -2665,7 +2667,10 @@ func (s *service) Clone(req *csi.CreateVolumeRequest,
 	if isNFS {
 		log.Printf("[clonevolume]Inside isNFS condition")
 		sourceFsID := getFilesystemIDFromCsiVolumeID(volumeSource.VolumeId)
+		log.Printf("[clonevolume]Got sourceFsID: %s", sourceFsID)
 		srcFS, err := s.getFilesystemByID(sourceFsID, systemID)
+		log.Printf("[clonevolume]Got File System from sourceFsID. ID is: %s", srcFS.ID)
+		log.Printf("[clonevolume]Got File System from sourceFsID, NasServer ID is: %s", srcFS.NasServerID)
 		if strings.EqualFold(err.Error(), sioGatewayFileSystemNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
 			return nil, status.Error(codes.NotFound,
 				"volume not found")
