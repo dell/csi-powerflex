@@ -1182,6 +1182,8 @@ func (f *feature) iInduceError(errtype string) error {
 		stepHandlersErrors.VolumeInstancesError = true
 	case "FileSystemInstancesError":
 		stepHandlersErrors.FileSystemInstancesError = true
+	case "GetFileSystemsByIdError":
+		stepHandlersErrors.GetFileSystemsByIdError = true
 	case "NasNotFoundError":
 		stepHandlersErrors.NasServerNotFoundError = true
 	case "fileInterfaceNotFoundError":
@@ -1645,6 +1647,13 @@ func (f *feature) aValidVolume() error {
 func (f *feature) aBadFileSystem() error {
 	for key := range fileSystemIDName {
 		fileSystemIDName[key] = ""
+	}
+	return nil
+}
+
+func (f *feature) aBadNFSExport() error {
+	for key := range nfsExportIDName {
+		nfsExportIDName[key] = ""
 	}
 	return nil
 }
@@ -2871,6 +2880,16 @@ func (f *feature) iCallBeforeServe() error {
 	stringSlice = append(stringSlice, "X_CSI_PRIVATE_MOUNT_DIR=/csi")
 	stringSlice = append(stringSlice, "X_CSI_VXFLEXOS_ENABLESNAPSHOTCGDELETE=true")
 	stringSlice = append(stringSlice, "X_CSI_VXFLEXOS_ENABLELISTVOLUMESNAPSHOTS=true")
+	stringSlice = append(stringSlice, "X_CSI_HEALTH_MONITOR_ENABLED=true")
+	stringSlice = append(stringSlice, "X_CSI_RENAME_SDC_ENABLED=true")
+	stringSlice = append(stringSlice, "X_CSI_RENAME_SDC_PREFIX=test")
+	stringSlice = append(stringSlice, "X_CSI_NFS_ACLS=777")
+	stringSlice = append(stringSlice, "X_CSI_APPROVE_SDC_ENABLED=true")
+	stringSlice = append(stringSlice, "X_CSI_REPLICATION_CONTEXT_PREFIX=test")
+	stringSlice = append(stringSlice, "X_CSI_REPLICATION_PREFIX=test")
+	stringSlice = append(stringSlice, "X_CSI_POWERFLEX_EXTERNAL_ACCESS=test")
+	stringSlice = append(stringSlice, "X_CSI_VXFLEXOS_THICKPROVISIONING=dummy")
+
 	if os.Getenv("ALLOW_RWO_MULTI_POD") == "true" {
 		fmt.Printf("debug set ALLOW_RWO_MULTI_POD\n")
 		stringSlice = append(stringSlice, "X_CSI_ALLOW_RWO_MULTI_POD_ACCESS=true")
@@ -4180,6 +4199,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^a valid volume$`, f.aValidVolume)
 	s.Step(`^an invalid volume$`, f.anInvalidVolume)
 	s.Step(`^I set bad FileSystem Id`, f.aBadFileSystem)
+	s.Step(`^I set bad NFSExport Id`, f.aBadNFSExport)
 	s.Step(`^no volume$`, f.noVolume)
 	s.Step(`^no node$`, f.noNode)
 	s.Step(`^no volume capability$`, f.noVolumeCapability)

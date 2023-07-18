@@ -62,6 +62,7 @@ var (
 		RemoveVolumeError             bool
 		VolumeInstancesError          bool
 		FileSystemInstancesError      bool
+		GetFileSystemsByIdError       bool
 		NFSExportInstancesError       bool
 		NasServerNotFoundError        bool
 		FileInterfaceNotFoundError    bool
@@ -170,6 +171,7 @@ func getHandler() http.Handler {
 	stepHandlersErrors.NasServerNotFoundError = false
 	stepHandlersErrors.BadCapacityError = false
 	stepHandlersErrors.BadVolIDError = false
+	stepHandlersErrors.GetFileSystemsByIdError = false
 	stepHandlersErrors.NoCsiVolIDError = false
 	stepHandlersErrors.WrongVolIDError = false
 	stepHandlersErrors.WrongSystemError = false
@@ -356,7 +358,7 @@ func handleNFSExports(w http.ResponseWriter, r *http.Request) {
 	// Post is CreateVolume; here just return a volume id encoded from the name
 	case http.MethodPost:
 		if inducedError.Error() == "nfsExportError" {
-			writeError(w, "nfs export induced error", http.StatusRequestTimeout, codes.Internal)
+			writeError(w, "create NFS Export failed", http.StatusRequestTimeout, codes.Internal)
 			return
 		}
 
@@ -462,6 +464,11 @@ func handleGetNFSExports(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("id:", id)
 		fmt.Println("fsidname", nfsExportIDName[id])
 
+		if inducedError.Error() == "nfsExportNotFoundError" {
+			writeError(w, "Could not find NFS Export", http.StatusNotFound, codes.NotFound)
+			return
+		}
+
 		// Insert to map if it doesn't exist.
 		if nfsExportIDName[id] == "" {
 			log.Printf("Did not find id %s \n", id)
@@ -525,6 +532,17 @@ func handleGetNFSExports(w http.ResponseWriter, r *http.Request) {
 		nfsExportNameID[nfsExp["name"]] = ""
 		nfsExportIDPath[id] = ""
 		nfsExportIDtoFsID[id] = ""
+	case http.MethodPatch:
+		vars := mux.Vars(r)
+		id := vars["id"]
+		fmt.Println("id:", id)
+		fmt.Println("fsidname", nfsExportIDName[id])
+
+		if nfsExportIDName[id] == "" {
+			log.Printf("Did not find id %s \n", id)
+			writeError(w, "could not find nfsExport ", http.StatusNotFound, codes.NotFound)
+			return
+		}
 
 	}
 
@@ -657,6 +675,11 @@ func handleGetFileSystems(w http.ResponseWriter, r *http.Request) {
 
 		fmt.Println("id:", id)
 		fmt.Println("fsidname", fileSystemIDName[id])
+
+		if stepHandlersErrors.GetFileSystemsByIdError {
+			writeError(w, "induced error", http.StatusRequestTimeout, codes.Internal)
+			return
+		}
 
 		// Insert to map if it doesn't exist.
 		if fileSystemIDName[id] == "" {

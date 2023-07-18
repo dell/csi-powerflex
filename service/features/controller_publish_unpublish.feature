@@ -16,6 +16,23 @@ Feature: VxFlex OS CSI interface
       | "single-writer"             |
       | "single-node-single-writer" |
       | "single-node-multi-writer"  |
+   
+     
+  Scenario: a Basic NFS controller Publish and unpublish good
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with <access>
+    Then a valid PublishVolumeResponse is returned
+    Examples:
+      | access                      |
+      | "single-writer"             |
+      | "single-node-single-writer" |
+      | "single-node-multi-writer"  |
+      | "multiple-reader"           |
+      | "multiple-writer"           |
+    
   
   Scenario: a Basic NFS controller Publish and unpublish good
     Given a VxFlexOS service
@@ -27,6 +44,42 @@ Feature: VxFlex OS CSI interface
     And I call UnpublishVolume nfs
     And no error was received
     Then a valid UnpublishVolumeResponse is returned
+  
+  Scenario: a Basic NFS controller Publish and unpublish good
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "single-writer"
+    Then a valid PublishVolumeResponse is returned
+    And I call NFS PublishVolume with "single-writer"
+    Then a valid PublishVolumeResponse is returned
+    And I call UnpublishVolume nfs
+    And no error was received
+    Then a valid UnpublishVolumeResponse is returned
+    
+    Scenario: a Basic NFS controller Publish and unpublish good
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "multiple-reader"
+    Then a valid PublishVolumeResponse is returned
+    And I call NFS PublishVolume with "multiple-reader"
+    Then a valid PublishVolumeResponse is returned
+    And I call UnpublishVolume nfs
+    And no error was received
+    Then a valid UnpublishVolumeResponse is returned
+    
+     
+     Scenario: a Basic NFS controller Publish and unpublish good
+      Given a VxFlexOS service
+      When I specify CreateVolumeMountRequest "nfs"
+      And I call CreateVolume "volume1"
+      Then a valid CreateVolumeResponse is returned
+      And I induce error "nfsExportError"
+      And I call NFS PublishVolume with "single-writer"
+      Then the error contains "create NFS Export failed"
   
   
   Scenario: a Basic NFS controller Publish bad
@@ -42,6 +95,16 @@ Feature: VxFlex OS CSI interface
     And I set bad FileSystem Id
     And I call NFS PublishVolume with "single-writer"
     Then the error contains "volume not found"
+    
+    
+    Scenario: a Basic NFS controller Publish bad not found
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I induce error "nfsExportNotFoundError"
+    And I call NFS PublishVolume with "single-writer"
+    Then the error contains "Could not find NFS Export"
    
   Scenario: a Basic NFS controller Publish and unpublish bad
     Given a VxFlexOS service

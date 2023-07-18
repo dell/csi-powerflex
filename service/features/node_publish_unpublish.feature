@@ -78,6 +78,32 @@ Feature: VxFlex OS CSI interface
     Then the error contains "none"
     Then I call NodeUnpublishVolume ""
     Then the error contains "none"
+    
+   
+   Scenario: a Basic NFS Node Publish Volume bad
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "single-writer"
+    Then a valid PublishVolumeResponse is returned
+    And a capability with voltype "mount" access "single-writer" fstype "nfs"
+    And I set bad FileSystem Id 
+    Then I call NodePublishVolume NFS ""
+    Then the error contains "filesystem not found"
+    
+    
+    Scenario: a Basic NFS Node Publish Volume bad
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "single-writer"
+    Then a valid PublishVolumeResponse is returned
+    And a capability with voltype "mount" access "single-writer" fstype "nfs"
+    And I induce error "GetFileSystemsByIdError"
+    Then I call NodePublishVolume NFS ""
+    Then the error contains "filesystem not found"
 
    Scenario: a Basic NFS Node Publish Volume good
     Given a VxFlexOS service
@@ -109,7 +135,7 @@ Feature: VxFlex OS CSI interface
     Then the error contains "none"
     
     
-    Scenario: a Basic NFS Node Publish Volume good
+    Scenario: a Basic NFS Node Publish Volume bad
     Given a VxFlexOS service
     When I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume1"
@@ -122,7 +148,7 @@ Feature: VxFlex OS CSI interface
     Then the error contains "could not find NAS server by id"
     
     
-    Scenario: a Basic NFS Node Publish Volume good
+    Scenario: a Basic NFS Node Publish Volume bad
     Given a VxFlexOS service
     When I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume1"
@@ -135,7 +161,7 @@ Feature: VxFlex OS CSI interface
     Then the error contains "could not find the File interface using id"
     
     
-    Scenario: a Basic NFS Node Publish Volume good
+    Scenario: a Basic NFS Node Publish Volume bad
     Given a VxFlexOS service
     When I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume1"
@@ -156,6 +182,37 @@ Feature: VxFlex OS CSI interface
     Then the error contains "none"
     Then I call NodeUnpublishVolume ""
     Then the error contains "none"
+    
+    
+    
+    Scenario: a Basic NFS Node Publish Volume bad
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "multiple-writer"
+    Then a valid PublishVolumeResponse is returned
+    And a capability with voltype "mount" access "multiple-writer" fstype "nfs"
+    Then I call NodePublishVolume NFS ""
+    Then the error contains "none"
+    And I set bad FileSystem Id 
+    Then I call NodeUnpublishVolume ""
+    Then the error contains "filesystem not found"
+    
+    
+    Scenario: a Basic NFS Node Publish Volume bad
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "multiple-writer"
+    Then a valid PublishVolumeResponse is returned
+    And a capability with voltype "mount" access "multiple-writer" fstype "nfs"
+    Then I call NodePublishVolume NFS ""
+    Then the error contains "none"
+    And I induce error "GetFileSystemsByIdError"
+    Then I call NodeUnpublishVolume ""
+    Then the error contains "filesystem not found"
     
     
     Scenario: a Basic NFS Node Publish Volume good

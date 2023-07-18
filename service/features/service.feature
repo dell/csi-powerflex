@@ -75,6 +75,7 @@ Feature: VxFlex OS CSI interface
       | "a:b"    | "a:b"    |
       | "a:b"    | "a:b"    |
       | ""       | ""       |
+      | "a/b"    | ""       |
     
   Scenario Outline: multi array getFilesystemIDFromCsiVolumeID for nfs good and bad
     Given a VxFlexOS service
@@ -172,7 +173,7 @@ Feature: VxFlex OS CSI interface
       | "volume1"                                           |
       | "thisnameiswaytoolongtopossiblybeunder31characters" |
 
-
+  
   Scenario: Create volume with admin error
     Given a VxFlexOS service
     When I call Probe
@@ -345,6 +346,16 @@ Feature: VxFlex OS CSI interface
     When I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume1"
     Then a valid CreateVolumeResponse is returned
+    
+     
+     Scenario: Create Volume with invalid probe cache, no endpoint, and no admin
+     Given a VxFlexOS service
+     When I induce error "NoAdminError"
+     And I induce error "NoEndpointError"
+     And I invalidate the Probe cache
+      When I specify CreateVolumeMountRequest "nfs"
+     And I call CreateVolume "volume1"
+     Then the error contains "No system ID is found in parameters or as default"
     
     
     Scenario: Create mount volume bad scenario nfs

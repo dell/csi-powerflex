@@ -182,13 +182,10 @@ func (s *service) NodePublishVolume(
 
 		fs, err := s.getFilesystemByID(fsID, systemID)
 		if err != nil {
-			if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
+			if strings.EqualFold(err.Error(), sioGatewayFileSystemNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
 				return nil, status.Error(codes.NotFound,
 					"filesystem not found")
 			}
-			return nil, status.Errorf(codes.Internal,
-				"failure checking filesystem status before controller publish: %s",
-				err.Error())
 		}
 
 		client := s.adminClients[systemID]
@@ -294,9 +291,7 @@ func (s *service) NodeUnpublishVolume(
 				return nil, status.Error(codes.NotFound,
 					"filesystem not found")
 			}
-			return nil, status.Errorf(codes.Internal,
-				"failure checking filesystem status before nodeunpublish: %s",
-				err.Error())
+
 		}
 
 		// Probe the system to make sure it is managed by driver

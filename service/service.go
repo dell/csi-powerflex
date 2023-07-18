@@ -391,15 +391,11 @@ func (s *service) BeforeServe(
 		if healthMonitor == "true" {
 			opts.IsHealthMonitorEnabled = true
 		}
-	} else {
-		opts.IsHealthMonitorEnabled = false
 	}
 	if renameSDC, ok := csictx.LookupEnv(ctx, EnvIsSDCRenameEnabled); ok {
 		if renameSDC == "true" {
 			opts.IsSdcRenameEnabled = true
 		}
-	} else {
-		opts.IsSdcRenameEnabled = false
 	}
 	if sdcPrefix, ok := csictx.LookupEnv(ctx, EnvSDCPrefix); ok {
 		opts.SdcPrefix = sdcPrefix
@@ -1110,7 +1106,7 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 		})
 
 		if err != nil {
-			return nil, status.Errorf(codes.NotFound, "create NFS Export failed. Error:%v", err)
+			return nil, status.Errorf(codes.Internal, "create NFS Export failed. Error:%v", err)
 		}
 
 		nfsExportID = resp.ID
