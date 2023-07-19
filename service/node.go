@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -40,6 +41,10 @@ var (
 	publishGetMappedVolMaxRetry   = 30
 	unpublishGetMappedVolMaxRetry = 5
 	getMappedVolDelay             = (1 * time.Second)
+)
+
+const (
+	maxVxflexosVolumesPerNodeLabel = "max-vxflexos-volumes-per-node"
 )
 
 func (s *service) NodeStageVolume(
@@ -749,11 +754,40 @@ func (s *service) NodeGetInfo(
 		topology[Name+"/"+sysID] = SystemTopologySystemValue
 	}
 
+	var maxVxflexosVolumesPerNode int64
+	if len(connectedSystemID) != 0 {
+		// Check for node label 'max-vxflexos-volumes-per-node'. If present set 'MaxVolumesPerNode' to this value.
+		// If node label is not present, set 'MaxVolumesPerNode' to default value i.e., 0
+
+		labels, err := s.GetNodeLabels(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		if val, ok := labels[maxVxflexosVolumesPerNodeLabel]; ok {
+			maxVxflexosVolumesPerNode, err = strconv.ParseInt(val, 10, 64)
+
+			if err != nil {
+				return nil, status.Error(codes.InvalidArgument, GetMessage("invalid value '%s' specified for 'max-vxflexos-volumes-per-node' node label", val))
+			}
+		} else {
+			// As per the csi spec the plugin MUST NOT set negative values to
+			// 'MaxVolumesPerNode' in the NodeGetInfoResponse response
+			if s.opts.MaxVolumesPerNode < 0 {
+				return nil, status.Error(codes.InvalidArgument, GetMessage("maxVxflexosVolumesPerNode MUST NOT be set to negative value"))
+			}
+			maxVxflexosVolumesPerNode = s.opts.MaxVolumesPerNode
+		}
+	}
+
+	Log.Debugf("MaxVolumesPerNode: %v\n", maxVxflexosVolumesPerNode)
+
 	return &csi.NodeGetInfoResponse{
 		NodeId: s.opts.SdcGUID,
 		AccessibleTopology: &csi.Topology{
 			Segments: topology,
 		},
+		MaxVolumesPerNode: maxVxflexosVolumesPerNode,
 	}, nil
 }
 
