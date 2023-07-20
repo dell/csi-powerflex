@@ -1203,9 +1203,6 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 		}
 	}
 
-	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "Allocating host %s access to NFS Export failed. Error: %v", nodeID, err)
-	}
 	Log.Debugf("NFS Export: %s is accessible to host: %s with access mode: %s", nfsExportID, nodeID, am.Mode)
 	Log.Debugf("ControllerPublishVolume successful for volid: [%s]", pContext["volumeContextId"])
 

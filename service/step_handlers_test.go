@@ -62,7 +62,7 @@ var (
 		RemoveVolumeError             bool
 		VolumeInstancesError          bool
 		FileSystemInstancesError      bool
-		GetFileSystemsByIdError       bool
+		GetFileSystemsByIDError       bool
 		NFSExportInstancesError       bool
 		NasServerNotFoundError        bool
 		FileInterfaceNotFoundError    bool
@@ -142,6 +142,10 @@ func getHandler() http.Handler {
 	volumeIDToConsistencyGroupID = make(map[string]string)
 	volumeIDToReplicationState = make(map[string]string)
 	volumeIDToSizeInKB = make(map[string]string)
+	nfsExportIDReadOnlyRootHosts = make(map[string][]string)
+	nfsExportIDReadWriteRootHosts = make(map[string][]string)
+	nfsExportIDReadWriteHosts = make(map[string][]string)
+	nfsExportIDReadOnlyHosts = make(map[string][]string)
 	debug = false
 	stepHandlersErrors.FindVolumeIDError = false
 	stepHandlersErrors.GetVolByIDError = false
@@ -171,7 +175,7 @@ func getHandler() http.Handler {
 	stepHandlersErrors.NasServerNotFoundError = false
 	stepHandlersErrors.BadCapacityError = false
 	stepHandlersErrors.BadVolIDError = false
-	stepHandlersErrors.GetFileSystemsByIdError = false
+	stepHandlersErrors.GetFileSystemsByIDError = false
 	stepHandlersErrors.NoCsiVolIDError = false
 	stepHandlersErrors.WrongVolIDError = false
 	stepHandlersErrors.WrongSystemError = false
@@ -384,6 +388,22 @@ func handleNFSExports(w http.ResponseWriter, r *http.Request) {
 			array.nfsExports[resp.ID]["id"] = resp.ID
 			array.nfsExports[resp.ID]["path"] = req.Path
 			array.nfsExports[resp.ID]["file_system_id"] = req.FileSystemID
+
+			if len(req.ReadOnlyRootHosts) != 0 {
+				array.nfsExports[resp.ID]["read_root_hosts"] = req.ReadOnlyRootHosts[0]
+			} else if len(req.ReadWriteRootHosts) != 0 {
+				array.nfsExports[resp.ID]["write_root_hosts"] = req.ReadWriteRootHosts[0]
+			} else if len(req.ReadOnlyHosts) != 0 {
+				array.nfsExports[resp.ID]["read_hosts"] = req.ReadOnlyHosts[0]
+			} else if len(req.ReadWriteHosts) != 0 {
+				array.nfsExports[resp.ID]["write_hosts"] = req.ReadWriteHosts[0]
+			} else {
+				array.nfsExports[resp.ID]["read_hosts"] = ""
+				array.nfsExports[resp.ID]["write_hosts"] = ""
+				array.nfsExports[resp.ID]["read_root_hosts"] = ""
+				array.nfsExports[resp.ID]["write_root_hosts"] = ""
+			}
+
 		}
 
 		if debug {
@@ -409,11 +429,16 @@ func handleNFSExports(w http.ResponseWriter, r *http.Request) {
 			nfsExports = array.nfsExports
 
 			for _, nfsExp := range nfsExports {
+
 				replacementMap := make(map[string]string)
 				replacementMap["__ID__"] = nfsExp["id"]
 				replacementMap["__NAME__"] = nfsExp["name"]
 				replacementMap["__PATH__"] = nfsExp["path"]
 				replacementMap["__FS_ID__"] = nfsExp["file_system_id"]
+				replacementMap["__READ_HOSTS__"] = nfsExp["read_hosts"]
+				replacementMap["__WRITE_HOSTS__"] = nfsExp["write_hosts"]
+				replacementMap["__READ_ROOT_HOSTS__"] = nfsExp["read_root_hosts"]
+				replacementMap["__WRITE_ROOT_HOSTS__"] = nfsExp["write_root_hosts"]
 				data := returnJSONFile("features", "nfsexport.json.template", nil, replacementMap)
 				nfsExp := new(types.NFSExport)
 				err := json.Unmarshal(data, nfsExp)
@@ -436,6 +461,20 @@ func handleNFSExports(w http.ResponseWriter, r *http.Request) {
 			replacementMap["__NAME__"] = name
 			replacementMap["__PATH__"] = nfsExportIDPath[id]
 			replacementMap["__FS_ID__"] = nfsExportIDtoFsID[id]
+			if len(nfsExportIDReadOnlyRootHosts[id]) != 0 {
+				replacementMap["__READ_HOSTS__"] = nfsExportIDReadOnlyHosts[id][0]
+			} else if len(nfsExportIDReadWriteRootHosts[id]) != 0 {
+				replacementMap["__WRITE_HOSTS__"] = nfsExportIDReadWriteHosts[id][0]
+			} else if len(nfsExportIDReadWriteRootHosts[id]) != 0 {
+				replacementMap["__WRITE_ROOT_HOSTS__"] = nfsExportIDReadWriteRootHosts[id][0]
+			} else if len(nfsExportIDReadOnlyRootHosts[id]) != 0 {
+				replacementMap["__READ_ROOT_HOSTS__"] = nfsExportIDReadOnlyRootHosts[id][0]
+			} else {
+				replacementMap["__READ_HOSTS__"] = ""
+				replacementMap["__WRITE_HOSTS__"] = ""
+				replacementMap["__READ_ROOT_HOSTS__"] = ""
+				replacementMap["__WRITE_ROOT_HOSTS__"] = ""
+			}
 			data := returnJSONFile("features", "nfsexport.json.template", nil, replacementMap)
 			nfsExp := new(types.NFSExport)
 			err := json.Unmarshal(data, nfsExp)
@@ -483,17 +522,42 @@ func handleGetNFSExports(w http.ResponseWriter, r *http.Request) {
 		}
 
 		log.Printf("Get id %s\n", id)
-		fmt.Printf("nfsExp:%#v\n", nfsExp)
 		if nfsExp != nil {
 			replacementMap["__ID__"] = nfsExp["id"]
 			replacementMap["__NAME__"] = nfsExp["name"]
 			replacementMap["__PATH__"] = nfsExp["path"]
 			replacementMap["__FS_ID__"] = nfsExp["file_system_id"]
+			replacementMap["__READ_HOSTS__"] = nfsExp["read_hosts"]
+			replacementMap["__WRITE_HOSTS__"] = nfsExp["write_hosts"]
+			replacementMap["__READ_ROOT_HOSTS__"] = nfsExp["read_root_hosts"]
+			replacementMap["__WRITE_ROOT_HOSTS__"] = nfsExp["write_root_hosts"]
 		} else {
 			replacementMap["__ID__"] = id
 			replacementMap["__NAME__"] = nfsExportIDName[id]
 			replacementMap["__PATH__"] = nfsExportIDPath[id]
 			replacementMap["__FS_ID__"] = nfsExportIDtoFsID[id]
+			if len(nfsExportIDReadOnlyRootHosts["id"]) != 0 {
+				replacementMap["__READ_HOSTS__"] = nfsExportIDReadOnlyHosts["id"][0]
+			} else if len(nfsExportIDReadWriteRootHosts["id"]) != 0 {
+				replacementMap["__WRITE_HOSTS__"] = nfsExportIDReadWriteHosts["id"][0]
+			} else if len(nfsExportIDReadWriteRootHosts["id"]) != 0 {
+				replacementMap["__WRITE_ROOT_HOSTS__"] = nfsExportIDReadWriteRootHosts["id"][0]
+			} else if len(nfsExportIDReadOnlyRootHosts["id"]) != 0 {
+				replacementMap["__READ_ROOT_HOSTS__"] = nfsExportIDReadOnlyRootHosts["id"][0]
+			} else {
+				replacementMap["__READ_HOSTS__"] = ""
+				replacementMap["__WRITE_HOSTS__"] = ""
+				replacementMap["__READ_ROOT_HOSTS__"] = ""
+				replacementMap["__WRITE_ROOT_HOSTS__"] = ""
+			}
+		}
+
+		if inducedError.Error() == "readHostsIncompatible" {
+			replacementMap["__READ_HOSTS__"] = "127.1.1.11/255.255.255.255"
+		}
+
+		if inducedError.Error() == "writeHostsIncompatible" {
+			replacementMap["__WRITE_HOSTS__"] = "127.1.1.11/255.255.255.255"
 		}
 
 		data := returnJSONFile("features", "nfsexport.json.template", nil, replacementMap)
@@ -512,13 +576,15 @@ func handleGetNFSExports(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
 		id := vars["id"]
 
-		fmt.Println("id:", id)
-		fmt.Println("fsidname", nfsExportIDName[id])
-
 		// Insert to map if it doesn't exist.
 		if nfsExportIDName[id] == "" {
 			log.Printf("Did not find id %s \n", id)
 			writeError(w, "could not find nfsExport ", http.StatusNotFound, codes.NotFound)
+			return
+		}
+
+		if inducedError.Error() == "deleteNFSExportError" {
+			writeError(w, "delete NFS Export failed", http.StatusNotFound, codes.NotFound)
 			return
 		}
 
@@ -543,6 +609,44 @@ func handleGetNFSExports(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "could not find nfsExport ", http.StatusNotFound, codes.NotFound)
 			return
 		}
+
+		if inducedError.Error() == "nfsExportModifyError" {
+			writeError(w, "Allocating host access failed", http.StatusGatewayTimeout, codes.Internal)
+			return
+		}
+
+		req := types.NFSExportModify{}
+		decoder := json.NewDecoder(r.Body)
+		err := decoder.Decode(&req)
+
+		if err != nil {
+			log.Printf("error decoding json: %s\n", err.Error())
+		}
+		fmt.Printf("patchReq:%#v\n", req)
+		if len(req.AddReadOnlyRootHosts) != 0 {
+			nfsExportIDReadOnlyRootHosts[id] = req.AddReadOnlyRootHosts
+		} else if len(req.AddReadWriteRootHosts) != 0 {
+			nfsExportIDReadWriteRootHosts[id] = req.AddReadWriteRootHosts
+		}
+		if array, ok := systemArrays[r.Host]; ok {
+			if len(req.AddReadOnlyRootHosts) != 0 {
+				array.nfsExports[id]["read_root_hosts"] = req.AddReadOnlyRootHosts[0]
+			} else if len(req.AddReadWriteRootHosts) != 0 {
+				array.nfsExports[id]["write_root_hosts"] = req.AddReadWriteRootHosts[0]
+			} else if len(req.AddReadOnlyHosts) != 0 {
+				array.nfsExports[id]["read_hosts"] = req.AddReadOnlyHosts[0]
+			} else if len(req.AddReadWriteHosts) != 0 {
+				array.nfsExports[id]["write_hosts"] = req.AddReadWriteHosts[0]
+			} else {
+				array.nfsExports[id]["read_hosts"] = ""
+				array.nfsExports[id]["write_hosts"] = ""
+				array.nfsExports[id]["read_root_hosts"] = ""
+				array.nfsExports[id]["write_root_hosts"] = ""
+			}
+
+		}
+
+		w.WriteHeader(http.StatusNoContent)
 
 	}
 
@@ -673,10 +777,7 @@ func handleGetFileSystems(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
 		id := vars["id"]
 
-		fmt.Println("id:", id)
-		fmt.Println("fsidname", fileSystemIDName[id])
-
-		if stepHandlersErrors.GetFileSystemsByIdError {
+		if stepHandlersErrors.GetFileSystemsByIDError {
 			writeError(w, "induced error", http.StatusRequestTimeout, codes.Internal)
 			return
 		}
@@ -695,7 +796,6 @@ func handleGetFileSystems(w http.ResponseWriter, r *http.Request) {
 		}
 
 		log.Printf("Get id %s\n", id)
-		fmt.Printf("fs:%#v\n", fs)
 		if fs != nil {
 			replacementMap["__ID__"] = fs["id"]
 			replacementMap["__NAME__"] = fs["name"]
@@ -721,9 +821,6 @@ func handleGetFileSystems(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		vars := mux.Vars(r)
 		id := vars["id"]
-
-		fmt.Println("id:", id)
-		fmt.Println("fsidname", fileSystemIDName[id])
 
 		// Insert to map if it doesn't exist.
 		if fileSystemIDName[id] == "" {
@@ -776,8 +873,24 @@ func returnJSONFile(directory, filename string, w http.ResponseWriter, replaceme
 	if replacements != nil {
 		jsonString := string(jsonBytes)
 		for key, value := range replacements {
+			if value == "" {
+				if key == "__READ_HOSTS__" {
+					jsonString = strings.ReplaceAll(jsonString, `"read_only_hosts": ["__READ_HOSTS__"],`, "")
+					continue
+				} else if key == "__READ_ROOT_HOSTS__" {
+					jsonString = strings.ReplaceAll(jsonString, `"read_only_root_hosts": ["__READ_ROOT_HOSTS__"],`, "")
+					continue
+				} else if key == "__WRITE_HOSTS__" {
+					jsonString = strings.ReplaceAll(jsonString, `"read_write_hosts": ["__WRITE_HOSTS__"],`, "")
+					continue
+				} else if key == "__WRITE_ROOT_HOSTS__" {
+					jsonString = strings.ReplaceAll(jsonString, `"read_write_root_hosts": ["__WRITE_ROOT_HOSTS__"],`, "")
+					continue
+				}
+			}
 			jsonString = strings.Replace(jsonString, key, value, -1)
 		}
+
 		if debug {
 			log.Printf("Edited payload:\n%s\n", jsonString)
 		}
@@ -820,6 +933,11 @@ var nfsExportIDtoFsID map[string]string
 
 // Map of NFSExport ID to path
 var nfsExportIDPath map[string]string
+
+var nfsExportIDReadWriteRootHosts map[string][]string
+var nfsExportIDReadOnlyRootHosts map[string][]string
+var nfsExportIDReadOnlyHosts map[string][]string
+var nfsExportIDReadWriteHosts map[string][]string
 
 // Map of volume ID to ancestor ID
 var volumeIDToAncestorID map[string]string

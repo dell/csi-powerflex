@@ -1183,7 +1183,7 @@ func (f *feature) iInduceError(errtype string) error {
 	case "FileSystemInstancesError":
 		stepHandlersErrors.FileSystemInstancesError = true
 	case "GetFileSystemsByIdError":
-		stepHandlersErrors.GetFileSystemsByIdError = true
+		stepHandlersErrors.GetFileSystemsByIDError = true
 	case "NasNotFoundError":
 		stepHandlersErrors.NasServerNotFoundError = true
 	case "fileInterfaceNotFoundError":
@@ -1608,6 +1608,29 @@ func (f *feature) iCallPublishVolumeWithNFS(arg1 string) error {
 	if f.publishVolumeRequest == nil {
 		req = f.getControllerPublishVolumeRequestNFS(arg1)
 		f.publishVolumeRequest = req
+	} else {
+		capability := new(csi.VolumeCapability)
+		accessMode := new(csi.VolumeCapability_AccessMode)
+		switch arg1 {
+		case "multi-single-writer":
+			accessMode.Mode = csi.VolumeCapability_AccessMode_MULTI_NODE_SINGLE_WRITER
+		case "single-writer":
+			accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER
+		case "multiple-reader":
+			accessMode.Mode = csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY
+		case "multiple-writer":
+			accessMode.Mode = csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER
+		case "single-node-single-writer":
+			accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_SINGLE_WRITER
+		case "single-node-multi-writer":
+			accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_MULTI_WRITER
+		case "unknown":
+			accessMode.Mode = csi.VolumeCapability_AccessMode_UNKNOWN
+		}
+		if !f.omitAccessMode {
+			capability.AccessMode = accessMode
+		}
+		req.VolumeCapability.AccessMode = accessMode
 	}
 
 	log.Printf("Calling controllerPublishVolume")
@@ -4247,6 +4270,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call blockValidateMountVolCapabilities$`, f.iCallBlockValidateVolCapabilities)
 	s.Step(`^I call UnmountAndDeleteTarget$`, f.iCallUnmountAndDeleteTarget)
 	s.Step(`^get Node Publish Volume Request$`, f.getNodePublishVolumeRequest)
+	s.Step(`^get Node Publish Volume Request NFS$`, f.getNodePublishVolumeRequestNFS)
 	s.Step(`^get Node Publish Ephemeral Volume Request with name "([^"]*)" size "([^"]*)" storagepool "([^"]*)" and systemName "([^"]*)"$`, f.getNodeEphemeralVolumePublishRequest)
 	s.Step(`^I mark request read only$`, f.iMarkRequestReadOnly)
 	s.Step(`^I call NodeUnpublishVolume "([^"]*)"$`, f.iCallNodeUnpublishVolume)

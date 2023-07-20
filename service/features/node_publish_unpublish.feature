@@ -65,8 +65,8 @@ Feature: VxFlex OS CSI interface
     Examples:
       | error                                    | errormsg                               |
       | "NodePublishPrivateTargetAlreadyMounted" | "Mount point already in use by device" |
-    
-  Scenario: a Basic NFS Node Publish Volume good
+  
+  Scenario: a Basic NFS Node Publish unpublish Volume good
     Given a VxFlexOS service
     When I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume1"
@@ -80,7 +80,7 @@ Feature: VxFlex OS CSI interface
     Then the error contains "none"
     
    
-   Scenario: a Basic NFS Node Publish Volume bad
+   Scenario: a Basic NFS Node Publish Volume not found
     Given a VxFlexOS service
     When I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume1"
@@ -104,8 +104,9 @@ Feature: VxFlex OS CSI interface
     And I induce error "GetFileSystemsByIdError"
     Then I call NodePublishVolume NFS ""
     Then the error contains "filesystem not found"
-
-   Scenario: a Basic NFS Node Publish Volume good
+   
+   
+   Scenario: a Basic NFS Node Publish unpublish Volume good
     Given a VxFlexOS service
     When I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume1"
@@ -119,7 +120,7 @@ Feature: VxFlex OS CSI interface
     Then the error contains "none"
     
     
-    Scenario: a Basic NFS Node Publish Volume good
+    Scenario: a Basic NFS Node Publish Unpublish Volume good
     Given a VxFlexOS service
     When I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume1"
@@ -161,7 +162,7 @@ Feature: VxFlex OS CSI interface
     Then the error contains "could not find the File interface using id"
     
     
-    Scenario: a Basic NFS Node Publish Volume bad
+    Scenario: a Basic NFS Node Publish Volume bad unknown access mode
     Given a VxFlexOS service
     When I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume1"
@@ -170,7 +171,7 @@ Feature: VxFlex OS CSI interface
     Then the error contains "access mode cannot be UNKNOWN"
     
     
-    Scenario: a Basic NFS Node Publish Volume good
+    Scenario: a Basic NFS Node Publish Unpublish Volume good
     Given a VxFlexOS service
     When I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume1"
@@ -185,7 +186,7 @@ Feature: VxFlex OS CSI interface
     
     
     
-    Scenario: a Basic NFS Node Publish Volume bad
+    Scenario: a Basic NFS Node Publish Unpublish Volume bad
     Given a VxFlexOS service
     When I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume1"
@@ -200,7 +201,7 @@ Feature: VxFlex OS CSI interface
     Then the error contains "filesystem not found"
     
     
-    Scenario: a Basic NFS Node Publish Volume bad
+    Scenario: a Basic NFS Node Publish Unpublish Volume bad
     Given a VxFlexOS service
     When I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume1"
@@ -213,9 +214,34 @@ Feature: VxFlex OS CSI interface
     And I induce error "GetFileSystemsByIdError"
     Then I call NodeUnpublishVolume ""
     Then the error contains "filesystem not found"
+   
+   
+    Scenario Outline: Node Publish Unpublish mount volumes various induced error use cases from examples nfs
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "multiple-writer"
+    Then a valid PublishVolumeResponse is returned
+    And a capability with voltype "mount" access "multiple-writer" fstype "nfs"
+    Then I call NodePublishVolume NFS ""
+    Then the error contains "none"
+    And I induce error <error>
+    And I call NodeUnpublishVolume ""
+    Then the error contains <errormsg>
+
+    Examples:
+      | error                                    | errormsg                                             |
+      | "NodeUnpublishBadVolume"                 | "none"                                               |
+      | "GOFSMockGetMountsError"                 | "could not reliably determine existing mount status" |
+      | "NodeUnpublishNoTargetPath"              | "target path argument is required"                   |
+      | "GOFSMockUnmountError"                   | "error unmounting target"                            |
+      | "PrivateDirectoryNotExistForNodePublish" | "none"                                               |
+      | "NoCsiVolIDError"                        | "volume ID is required"                              |
+      | "none"                                   | "none"                                               |
     
     
-    Scenario: a Basic NFS Node Publish Volume good
+    Scenario: a Basic NFS Node Publish Unpublish Volume good
     Given a VxFlexOS service
     When I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume1"
@@ -227,6 +253,91 @@ Feature: VxFlex OS CSI interface
     Then the error contains "none"
     Then I call NodeUnpublishVolume ""
     Then the error contains "none"
+    
+    
+    Scenario: a Basic NFS Node Publish Unpublish Volume bad
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "single-node-multi-writer"
+    Then a valid PublishVolumeResponse is returned
+    And a capability with voltype "mount" access "single-node-multi-writer" fstype "nfs"
+    And get Node Publish Volume Request NFS
+    And I induce error "NodePublishNoTargetPath"
+    Then I call NodePublishVolume NFS ""
+    Then the error contains "Target Path is required"
+    
+    
+    Scenario: a Basic NFS Node Publish Unpublish Volume bad
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "single-node-multi-writer"
+    Then a valid PublishVolumeResponse is returned
+    And a capability with voltype "mount" access "single-node-multi-writer" fstype "nfs"
+    And get Node Publish Volume Request NFS
+    And I induce error "NodePublishNoAccessMode"
+    Then I call NodePublishVolume NFS ""
+    Then the error contains "Volume Access Mode is required"
+    
+    
+    Scenario: a Basic NFS Node Publish Volume bad
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "single-node-multi-writer"
+    Then a valid PublishVolumeResponse is returned
+    And a capability with voltype "mount" access "single-node-multi-writer" fstype "nfs"
+    And get Node Publish Volume Request NFS
+    And I induce error "NodePublishNoVolumeCapability"
+    Then I call NodePublishVolume NFS ""
+    Then the error contains " Volume Capability is required"
+    
+    Scenario: a Basic NFS Node Publish Volume bad
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "single-node-multi-writer"
+    Then a valid PublishVolumeResponse is returned
+    And a capability with voltype "mount" access "single-node-multi-writer" fstype "nfs"
+    And get Node Publish Volume Request NFS
+    And I induce error "NoCsiVolIDError"
+    Then I call NodePublishVolume NFS ""
+    Then the error contains "volume ID is required"
+    
+  
+  Scenario Outline: Node publish mount volumes various induced error use cases from examples nfs
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "single-node-multi-writer"
+    Then a valid PublishVolumeResponse is returned
+    And a capability with voltype "mount" access "single-node-multi-writer" fstype "nfs"
+    And get Node Publish Volume Request NFS
+    And I induce error <error>
+    And I induce error <errorb>
+    When I call Probe
+    Then I call NodePublishVolume NFS ""
+    Then the error contains <errormsg>
+
+    Examples:
+      | error                                    | errorb                   | errormsg                                                    |
+      | "GOFSMockDevMountsError"                 | "none"                   | "none"                                                      |
+      | "GOFSMockMountError"                     | "none"                   | "mount induced error"                                       |
+      | "GOFSMockGetMountsError"                 | "none"                   | "could not reliably determine existing mount status"        |
+      | "TargetNotCreatedForNodePublish"         | "none"                   | "none"                                                      |
+      | "NodePublishNoTargetPath"                | "none"                   | "Target Path is required"                                   |                            
+      | "NodePublishNoVolumeCapability"          | "none"                   | "Volume Capability is required"                             |                          
+      | "NodePublishNoAccessMode"                | "none"                   | "Volume Access Mode is required"                            |
+      | "NodePublishNoAccessType"                | "none"                   | "Invalid access type"                                       |
+      | "NodePublishPrivateTargetAlreadyMounted" | "GOFSMockGetMountsError" | "could not reliably determine existing mount status"        |
+      | "NodePublishBadTargetPath"               | "none"                   | "cannot find the path specified@@no such file or directory" |
+      | "NoCsiVolIDError"                        | "none"                   | "volume ID is required"                                     |   
 
   Scenario Outline: Node publish mount volumes various induced error use cases from examples
     Given a VxFlexOS service

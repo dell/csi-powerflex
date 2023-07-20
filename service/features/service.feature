@@ -268,7 +268,7 @@ Feature: VxFlex OS CSI interface
       | "f.service.opt.SystemName" |
 
 
-  Scenario Outline: Create volume with Accessibility Requirements nfs
+  Scenario Outline: Create volume with Accessibility Requirements nfs good
     Given a VxFlexOS service
     When I call Probe
     And I specify NFS AccessibilityRequirements with a SystemID of <sysID>
@@ -279,7 +279,7 @@ Feature: VxFlex OS CSI interface
       | "f.service.opt.SystemName" |
     
   
-  Scenario Outline: Create volume with Accessiblity Requirements nfs
+  Scenario Outline: Create volume with Accessiblity Requirements nfs bad
     Given a VxFlexOS service
     When I call Probe
     And I specify bad NFS AccessibilityRequirements with a SystemID of <sysID>
@@ -348,7 +348,7 @@ Feature: VxFlex OS CSI interface
     Then a valid CreateVolumeResponse is returned
     
      
-     Scenario: Create Volume with invalid probe cache, no endpoint, and no admin
+     Scenario: Create Volume with invalid probe cache, no endpoint, and no admin nfs
      Given a VxFlexOS service
      When I induce error "NoAdminError"
      And I induce error "NoEndpointError"

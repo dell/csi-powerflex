@@ -446,10 +446,6 @@ func publishNFS(ctx context.Context, req *csi.NodePublishVolumeRequest, nfsExpor
 
 func unpublishNFS(ctx context.Context, req *csi.NodeUnpublishVolumeRequest, filterStr string) error {
 	target := req.GetTargetPath()
-	if target == "" {
-		return status.Error(codes.InvalidArgument,
-			"Target Path is required")
-	}
 
 	Log.Debugf("attempting to unmount '%s'", target)
 	isMounted, err := isVolumeMounted(ctx, filterStr, target)
