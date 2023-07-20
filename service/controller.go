@@ -2669,6 +2669,26 @@ func (s *service) Clone(req *csi.CreateVolumeRequest,
 		sourceFsID := getFilesystemIDFromCsiVolumeID(volumeSource.VolumeId)
 		log.Printf("[clonevolume]Got sourceFsID: %s", sourceFsID)
 		srcFS, err := s.getFilesystemByID(sourceFsID, systemID)
+
+		params := req.GetParameters()
+
+		nfsAcls := s.opts.NfsAcls
+		var arr *ArrayConnectionData
+		sysID := s.opts.defaultSystemID
+		arr = s.opts.arrays[sysID]
+
+		nasName, ok := params[KeyNasName]
+		if !ok {
+			return nil, status.Errorf(codes.InvalidArgument, "`%s` is a required parameter", KeyNasName)
+		}
+
+		// fetch NFS ACL
+		if params[KeyNfsACL] != "" {
+			nfsAcls = params[KeyNfsACL] // Storage class takes precedence
+		} else if arr.NfsAcls != "" {
+			nfsAcls = arr.NfsAcls // Secrets next
+		}
+
 		log.Printf("[clonevolume]Got File System from sourceFsID. ID is: %s", srcFS.ID)
 		log.Printf("[clonevolume]Got File System from sourceFsID, NasServer ID is: %s", srcFS.NasServerID)
 		if strings.EqualFold(err.Error(), sioGatewayFileSystemNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
@@ -2722,44 +2742,33 @@ func (s *service) Clone(req *csi.CreateVolumeRequest,
 			}
 		}
 
-		log.Printf("[clonevolume]Proceeding to create snapshot of source volumes")
-		// Snapshot the source volumes
-		snapshotDefs := make([]*siotypes.SnapshotDef, 0)
-		snapDef := &siotypes.SnapshotDef{VolumeID: sourceFsID, SnapshotName: name}
-		snapshotDefs = append(snapshotDefs, snapDef)
-		snapParam := &siotypes.SnapshotVolumesParam{SnapshotDefs: snapshotDefs}
+		fscloneParam := &siotypes.FsClone{
+			Name: name,
+		}
 
-		// Create snapshot
-		//system := s.systems[systemID]
-		log.Printf("[clonevolume]Proceeding to call create snapshot consistency group")
-		snapResponse, err := system.CreateSnapshotConsistencyGroup(snapParam)
+		fsResp, err := system.CreateFileSystemClone(fscloneParam, sourceFsID)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Failed to call CreateSnapshotConsistencyGroup to clone volume: %s", err.Error())
+			Log.Debugf("Clone volume response error:%v", err)
+			return nil, status.Errorf(codes.Unknown, "Clone Volume %s failed with error: %v", name, err)
 		}
 
-		if len(snapResponse.VolumeIDList) != 1 {
-			return nil, status.Errorf(codes.Internal, "Expected volume ID to be returned but it was not")
-		}
-
-		// Retrieve created destination volume
-		log.Printf("[clonevolume]Proceeding to retrieve created destination volume")
-		destID := snapResponse.VolumeIDList[0]
-		destVol, err := s.getFilesystemByID(destID, systemID)
+		newFs, err := system.GetFileSystemByIDName(fsResp.ID, "")
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not retrieve created volume: %s", destID)
+			Log.Debugf("Find Volume response: %v Error: %v", newFs, err)
 		}
 
-		log.Printf("[clonevolume]Proceeding to create a volume response")
-		// Create a volume response and return it
-		s.clearCache()
-		csiVolume := s.getCSIVolumeFromFilesystem(destVol, systemID)
-		csiVolume.ContentSource = req.GetVolumeContentSource()
-		copyInterestingParameters(req.GetParameters(), csiVolume.VolumeContext)
-
-		Log.Printf("Volume (from volume clone) %s (%s) storage pool %s",
-			csiVolume.VolumeContext["Name"], csiVolume.VolumeId, csiVolume.VolumeContext["storagePoolName"])
-
-		return &csi.CreateVolumeResponse{Volume: csiVolume}, nil
+		if newFs != nil {
+			vi := s.getCSIVolumeFromFilesystem(newFs, systemID)
+			vi.VolumeContext[KeyNasName] = nasName
+			vi.VolumeContext[KeyNfsACL] = nfsAcls
+			vi.VolumeContext[KeyFsType] = fsType
+			nfsTopology := s.GetNfsTopology(systemID)
+			vi.AccessibleTopology = nfsTopology
+			csiResp := &csi.CreateVolumeResponse{
+				Volume: vi,
+			}
+			return csiResp, nil
+		}
 	} else {
 		// Look up the source volume
 		sourceVolID := getVolumeIDFromCsiVolumeID(volumeSource.VolumeId)
@@ -2840,6 +2849,8 @@ func (s *service) Clone(req *csi.CreateVolumeRequest,
 
 		return &csi.CreateVolumeResponse{Volume: csiVolume}, nil
 	}
+	//return csiResp, err
+	return nil, status.Errorf(codes.NotFound, "Volume/Filesystem not found after create. %v", err)
 }
 
 // ControllerGetVolume fetch current information about a volume
