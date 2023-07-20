@@ -16,9 +16,8 @@ Feature: VxFlex OS CSI interface
       | "single-writer"             |
       | "single-node-single-writer" |
       | "single-node-multi-writer"  |
-   
   
-  Scenario: a Basic NFS controller Publish  good
+  Scenario: a Basic NFS controller Publish no error
     Given a VxFlexOS service
     When I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume1"
@@ -33,8 +32,7 @@ Feature: VxFlex OS CSI interface
       | "multiple-reader"           |
       | "multiple-writer"           |
     
-  
-  Scenario: a Basic NFS controller Publish and unpublish good
+  Scenario: a Basic NFS controller Publish and unpublish no error
     Given a VxFlexOS service
     When I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume1"
@@ -45,8 +43,7 @@ Feature: VxFlex OS CSI interface
     And no error was received
     Then a valid UnpublishVolumeResponse is returned
     
-    
-    Scenario: a Basic NFS controller Publish and unpublish bad
+    Scenario: a Basic NFS controller Publish and unpublish NFS export not found error
     Given a VxFlexOS service
     When I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume1"
@@ -57,9 +54,7 @@ Feature: VxFlex OS CSI interface
     And I call UnpublishVolume nfs
     Then the error contains "Could not find NFS Export"
     
-    
-    
-    Scenario: a Basic NFS controller Publish and unpublish bad
+    Scenario: a Basic NFS controller Publish and unpublish get NFS exports error
     Given a VxFlexOS service
     When I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume1"
@@ -68,11 +63,9 @@ Feature: VxFlex OS CSI interface
     Then a valid PublishVolumeResponse is returned
     And I induce error "NFSExportsInstancesError"
     And I call UnpublishVolume nfs
-    Then the error contains "error getting the nfs Exports"
+    Then the error contains "error getting the NFS Exports"
     
-    
-    
-    Scenario: a Basic NFS controller Publish and unpublish bad
+    Scenario: a Basic NFS controller Publish and unpublish modify NFS export error
     Given a VxFlexOS service
     When I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume1"
@@ -83,8 +76,7 @@ Feature: VxFlex OS CSI interface
     And I call UnpublishVolume nfs
     Then the error contains "Allocating host access failed"
     
-     
-    Scenario: a Basic NFS controller Publish and unpublish good
+    Scenario: a Basic NFS controller Publish and unpublish no error
     Given a VxFlexOS service
     When I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume1"
@@ -95,8 +87,7 @@ Feature: VxFlex OS CSI interface
     And I call UnpublishVolume nfs
     Then the error contains "none"
     
-     
-    Scenario: a Basic NFS controller Publish and unpublish good
+    Scenario: a Basic NFS controller Publish and unpublish no error
     Given a VxFlexOS service
     When I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume1"
@@ -107,8 +98,7 @@ Feature: VxFlex OS CSI interface
     And I call UnpublishVolume nfs
     Then the error contains "none"
     
-     
-    Scenario: a Basic NFS controller Publish and unpublish bad
+    Scenario: a Basic NFS controller Publish and unpublish delete NFS export error
     Given a VxFlexOS service
     When I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume1"
@@ -119,8 +109,7 @@ Feature: VxFlex OS CSI interface
     And I call UnpublishVolume nfs
     Then the error contains "delete NFS Export failed"
     
-    
-    Scenario: a Basic NFS controller Publish Idempotent good
+    Scenario: a Basic NFS controller Publish Idempotent no error
     Given a VxFlexOS service
     When I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume1"
@@ -130,8 +119,7 @@ Feature: VxFlex OS CSI interface
     And I call NFS PublishVolume with "single-writer"
     Then a valid PublishVolumeResponse is returned
     
-    
-    Scenario: a Basic NFS controller Publish Idempotent good
+    Scenario: a Basic NFS controller Publish Idempotent no error
     Given a VxFlexOS service
     When I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume1"
@@ -141,8 +129,7 @@ Feature: VxFlex OS CSI interface
     And I call NFS PublishVolume with "single-node-multi-writer"
     Then a valid PublishVolumeResponse is returned
     
-    
-    Scenario: a Basic NFS controller Publish bad
+    Scenario: a Basic NFS controller Publish incompatible access mode error
     Given a VxFlexOS service
     When I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume1"
@@ -151,8 +138,7 @@ Feature: VxFlex OS CSI interface
     And I call NFS PublishVolume with "single-writer"
     Then the error contains "with incompatible access mode"
     
-    
-    Scenario: a Basic NFS controller Publish bad
+    Scenario: a Basic NFS controller Publish incompatible access mode error
     Given a VxFlexOS service
     When I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume1"
@@ -161,8 +147,7 @@ Feature: VxFlex OS CSI interface
     And I call NFS PublishVolume with "single-writer"
     Then the error contains "with incompatible access mode"
     
-     
-    Scenario: a Basic NFS controller Publish bad
+    Scenario: a Basic NFS controller Publish incompatible access mode error
     Given a VxFlexOS service
     When I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume1"
@@ -172,8 +157,7 @@ Feature: VxFlex OS CSI interface
     And I call NFS PublishVolume with "multiple-reader"
     Then the error contains "with incompatible access mode"
     
-    
-    Scenario: a Basic NFS controller Publish Idempotent
+    Scenario: a Basic NFS controller Publish Idempotent no error
     Given a VxFlexOS service
     When I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume1"
@@ -183,8 +167,7 @@ Feature: VxFlex OS CSI interface
     And I call NFS PublishVolume with "multiple-reader"
     Then a valid PublishVolumeResponse is returned
     
-    
-    Scenario: a Basic NFS controller Publish bad
+    Scenario: a Basic NFS controller Publish incompatible access mode error
     Given a VxFlexOS service
     When I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume1"
@@ -193,11 +176,8 @@ Feature: VxFlex OS CSI interface
     Then a valid PublishVolumeResponse is returned
     And I call NFS PublishVolume with "single-writer"
     Then the error contains "with incompatible access mode"
-    
-    
   
-  
-  Scenario: a Basic NFS controller Publish and unpublish good
+  Scenario: a Basic NFS controller Publish and unpublish no error
     Given a VxFlexOS service
     When I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume1"
@@ -210,8 +190,7 @@ Feature: VxFlex OS CSI interface
     And no error was received
     Then a valid UnpublishVolumeResponse is returned
     
-    
-    Scenario: a Basic NFS controller Publish and unpublish good
+    Scenario: a Basic NFS controller Publish and unpublish no error
     Given a VxFlexOS service
     When I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume1"
@@ -224,8 +203,7 @@ Feature: VxFlex OS CSI interface
     And no error was received
     Then a valid UnpublishVolumeResponse is returned
     
-     
-     Scenario: a Basic NFS controller Publish bad
+     Scenario: a Basic NFS controller Publish NFS export create error
       Given a VxFlexOS service
       When I specify CreateVolumeMountRequest "nfs"
       And I call CreateVolume "volume1"
@@ -234,8 +212,7 @@ Feature: VxFlex OS CSI interface
       And I call NFS PublishVolume with "single-writer"
       Then the error contains "create NFS Export failed"
       
-      
-      Scenario: a Basic NFS controller Publish bad
+      Scenario: a Basic NFS controller Publish modify NFS export error
       Given a VxFlexOS service
       When I specify CreateVolumeMountRequest "nfs"
       And I call CreateVolume "volume1"
@@ -244,8 +221,7 @@ Feature: VxFlex OS CSI interface
       And I call NFS PublishVolume with "single-writer"
       Then the error contains "Allocating host access failed"
       
-      
-      Scenario: a Basic NFS controller Publish bad
+      Scenario: a Basic NFS controller Publish modify NFS export error
       Given a VxFlexOS service
       When I specify CreateVolumeMountRequest "nfs"
       And I call CreateVolume "volume1"
@@ -254,13 +230,12 @@ Feature: VxFlex OS CSI interface
       And I call NFS PublishVolume with "multiple-reader"
       Then the error contains "Allocating host access failed"
   
-  
-  Scenario: a Basic NFS controller Publish bad
+  Scenario: a Basic NFS controller Publish failure to check volume status error
    Given a VxFlexOS service
     And I call NFS PublishVolume with "single-writer"
     Then the error contains "failure checking volume status before controller"
    
-   Scenario: a Basic NFS controller Publish bad not found
+   Scenario: a Basic NFS controller Publish volume not found error
     Given a VxFlexOS service
     When I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume1"
@@ -269,8 +244,7 @@ Feature: VxFlex OS CSI interface
     And I call NFS PublishVolume with "single-writer"
     Then the error contains "volume not found"
     
-    
-    Scenario: a Basic NFS controller Publish bad not found
+    Scenario: a Basic NFS controller Publish NFS export not found error
     Given a VxFlexOS service
     When I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume1"
@@ -279,8 +253,7 @@ Feature: VxFlex OS CSI interface
     And I call NFS PublishVolume with "single-writer"
     Then the error contains "Could not find NFS Export"
    
-   
-  Scenario: a Basic NFS controller Publish and unpublish bad
+  Scenario: a Basic NFS controller Publish and unpublish volume not found error
     Given a VxFlexOS service
     When I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume1"

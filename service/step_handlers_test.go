@@ -347,16 +347,6 @@ func handleNFSExports(w http.ResponseWriter, r *http.Request) {
 		nfsExportNameID = make(map[string]string)
 	}
 
-	// if stepHandlersErrors.FileSystemInstancesError {
-	// 	writeError(w, "induced error", http.StatusRequestTimeout, codes.Internal)
-	// 	return
-	// }
-
-	// if stepHandlersErrors.BadCapacityError {
-	// 	writeError(w, "bad capacity error", http.StatusBadRequest, codes.InvalidArgument)
-	// 	return
-	// }
-
 	switch r.Method {
 
 	// Post is CreateVolume; here just return a volume id encoded from the name
@@ -419,7 +409,7 @@ func handleNFSExports(w http.ResponseWriter, r *http.Request) {
 	// Read all the Volumes
 	case http.MethodGet:
 		if stepHandlersErrors.NFSExportInstancesError {
-			writeError(w, "error getting the nfs Exports", http.StatusInternalServerError, codes.Internal)
+			writeError(w, "error getting the NFS Exports", http.StatusInternalServerError, codes.Internal)
 			return
 		}
 		instances := make([]*types.NFSExport, 0)
@@ -653,12 +643,6 @@ func handleGetNFSExports(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleFileSystems(w http.ResponseWriter, r *http.Request) {
-
-	// if stepHandlersErrors.BadCapacityError {
-	// 	writeError(w, "bad capacity error", http.StatusBadRequest, codes.InvalidArgument)
-	// 	return
-	// }
-	// returnJSONFile("features", "create_file_system_response.json", w, nil)
 
 	if fileSystemIDName == nil {
 		fileSystemIDName = make(map[string]string)

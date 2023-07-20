@@ -77,7 +77,7 @@ Feature: VxFlex OS CSI interface
       | ""       | ""       |
       | "a/b"    | ""       |
     
-  Scenario Outline: multi array getFilesystemIDFromCsiVolumeID for nfs good and bad
+  Scenario Outline: multi array getFilesystemIDFromCsiVolumeID for NFS volumes with different examples
     Given a VxFlexOS service
     And I call getFilesystemIDFromCsiVolumeID <csiVolID>
     Then the fileSystemID is <fsID>
@@ -87,7 +87,7 @@ Feature: VxFlex OS CSI interface
       | "badcsiVolID"   | ""              |
       |  ""             | ""              |
 
-  Scenario Outline: multi array getSystemIDFromCsiVolumeID for nfs good and bad
+  Scenario Outline: multi array getSystemIDFromCsiVolumeID for NFS volumes with different examples
     Given a VxFlexOS service
     And I call getSystemIDFromCsiVolumeIDNfs <csiVolID>
     Then the systemID is <systemID>
@@ -267,19 +267,9 @@ Feature: VxFlex OS CSI interface
       | sysID                      |
       | "f.service.opt.SystemName" |
 
-
-  Scenario Outline: Create volume with Accessibility Requirements nfs good
-    Given a VxFlexOS service
-    When I call Probe
-    And I specify NFS AccessibilityRequirements with a SystemID of <sysID>
-    And I call CreateVolume "volume1"
-    Then a valid CreateVolumeResponse with topology is returned
-    Examples:
-      | sysID                      |
-      | "f.service.opt.SystemName" |
     
   
-  Scenario Outline: Create volume with Accessiblity Requirements nfs bad
+  Scenario Outline: Create volume with Accessiblity Requirements NFS volumes Invalid topology error
     Given a VxFlexOS service
     When I call Probe
     And I specify bad NFS AccessibilityRequirements with a SystemID of <sysID>
@@ -290,8 +280,8 @@ Feature: VxFlex OS CSI interface
       | "f.service.opt.SystemName" |
     
 
-   
-  Scenario Outline: Create volume with Accessibility Requirements
+ 
+  Scenario Outline: Create volume with Accessibility Requirements for NFS volumes with different examples
     Given a VxFlexOS service
     When I call Probe
     And I specify NFS AccessibilityRequirements with a SystemID of <sysID>
@@ -340,7 +330,7 @@ Feature: VxFlex OS CSI interface
     Then a valid CreateVolumeResponse is returned
    
    
-   Scenario: Create mount volume good scenario nfs
+   Scenario: Create mount volume NFS no error
     Given a VxFlexOS service
     When I call Probe
     When I specify CreateVolumeMountRequest "nfs"
@@ -348,7 +338,7 @@ Feature: VxFlex OS CSI interface
     Then a valid CreateVolumeResponse is returned
     
      
-     Scenario: Create Volume with invalid probe cache, no endpoint, and no admin nfs
+     Scenario: Create Volume with invalid probe cache, no endpoint, and no admin NFS system ID not found error
      Given a VxFlexOS service
      When I induce error "NoAdminError"
      And I induce error "NoEndpointError"
@@ -358,7 +348,7 @@ Feature: VxFlex OS CSI interface
      Then the error contains "No system ID is found in parameters or as default"
     
     
-    Scenario: Create mount volume bad scenario nfs
+    Scenario: Create mount volume NFS nas server not found error
     Given a VxFlexOS service
     When I call Probe
     When I specify CreateVolumeMountRequest "nfs"
@@ -367,7 +357,7 @@ Feature: VxFlex OS CSI interface
     Then the error contains "nas server not found"
     
     
-    Scenario: Idempotent create mount volume with bad storage pool nfs
+    Scenario: Idempotent create mount volume NFS storage pool not found error
     Given a VxFlexOS service
     When I call Probe
     When I specify CreateVolumeMountRequest "nfs"
@@ -380,7 +370,7 @@ Feature: VxFlex OS CSI interface
     
     
     
-    Scenario: Create mount volume nfs with NoAdmin
+    Scenario: Create mount volume NFS with NoAdmin
     Given a VxFlexOS service
     When I call Probe
     When I specify CreateVolumeMountRequest "nfs"
@@ -397,7 +387,7 @@ Feature: VxFlex OS CSI interface
     Then a valid CreateVolumeResponse is returned
    
    
-   Scenario: Create mount volume idempotent test nfs
+   Scenario: Create mount volume idempotent NFS no error
     Given a VxFlexOS service
     When I call Probe
     When I specify CreateVolumeMountRequest "nfs"
@@ -406,7 +396,7 @@ Feature: VxFlex OS CSI interface
     Then a valid CreateVolumeResponse is returned
     
     
-    Scenario: Create mount volume with bad capacity nfs
+    Scenario: Create mount volume with bad capacity NFS bad capacity error
     Given a VxFlexOS service
     When I call Probe
     When I specify CreateVolumeMountRequest "nfs"
@@ -416,7 +406,7 @@ Feature: VxFlex OS CSI interface
     Then the error contains "bad capacity"
     
     
-    Scenario: Idempotent create mount volume with different sizes nfs
+    Scenario: Idempotent create mount volume with different sizes NFS different size error
     Given a VxFlexOS service
     When I call Probe
     And I call CreateVolumeSize nfs "volume3" "8"

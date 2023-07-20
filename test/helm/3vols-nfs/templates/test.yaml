@@ -13,7 +13,7 @@ spec:
     selector:
         matchLabels:
           app: vxflextest
-    serviceName: 7vols
+    serviceName: 3vols-nfs
     template:
       metadata:
         labels:

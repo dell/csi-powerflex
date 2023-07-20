@@ -23,7 +23,7 @@ spec:
   volumeMode: Filesystem
   resources:
     requests:
-      storage: 8Gi
+      storage: 12Gi
   storageClassName: vxflexos-nfs
 ---
 kind: PersistentVolumeClaim
@@ -37,6 +37,6 @@ spec:
   volumeMode: Filesystem
   resources:
     requests:
-      storage: 8Gi
+      storage: 16Gi
   storageClassName: vxflexos-nfs
 
