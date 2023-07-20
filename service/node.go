@@ -142,6 +142,13 @@ func (s *service) NodePublishVolume(
 	}
 	Log.Printf("[NodePublishVolume] csiVolID: %s", csiVolID)
 
+	// Check for NFS protocol
+	fsType := volumeContext[KeyFsType]
+	isNFS := false
+	if fsType == "nfs" {
+		isNFS = true
+	}
+
 	volID := getVolumeIDFromCsiVolumeID(csiVolID)
 	Log.Printf("[NodePublishVolume] volumeID: %s", volID)
 
@@ -168,6 +175,41 @@ func (s *service) NodePublishVolume(
 		return nil, status.Errorf(codes.Internal,
 			"checkVolumesMap for id: %s failed : %s", csiVolID, err.Error())
 
+	}
+	// handle NFS nodePublish separately
+	if isNFS {
+		fsID := getFilesystemIDFromCsiVolumeID(csiVolID)
+
+		fs, err := s.getFilesystemByID(fsID, systemID)
+		if err != nil {
+			if strings.EqualFold(err.Error(), sioGatewayFileSystemNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
+				return nil, status.Error(codes.NotFound,
+					"filesystem not found")
+			}
+		}
+
+		client := s.adminClients[systemID]
+
+		NFSExport, err := s.getNFSExport(fs, client)
+
+		if err != nil {
+			return nil, err
+		}
+
+		fileInterface, err := s.getFileInterface(systemID, fs, client)
+		if err != nil {
+			return nil, err
+		}
+		// Formulating nfsExportURl
+		// NFSExportURL = "nas_server_ip:NFSExport_Path"
+		// NFSExportURL = 10.1.1.1.1:/nfs-volume
+		path := fmt.Sprintf("%s:%s", fileInterface.IPAddress, NFSExport.Path)
+
+		if err := publishNFS(ctx, req, path); err != nil {
+			return nil, err
+		}
+
+		return &csi.NodePublishVolumeResponse{}, nil
 	}
 
 	sdcMappedVol, err := s.getSDCMappedVol(volID, systemID, publishGetMappedVolMaxRetry)
@@ -209,6 +251,7 @@ func (s *service) NodeUnpublishVolume(
 			"volume ID is required")
 	}
 
+	isNFS := strings.Contains(csiVolID, "/")
 	var ephemeralVolume bool
 	//For ephemeral volumes, kubernetes gives us an internal ID, so we need to use the lockfile to find the Powerflex ID this is mapped to.
 	lockFile := ephemeralStagingMountPath + csiVolID + "/id"
@@ -224,6 +267,51 @@ func (s *service) NodeUnpublishVolume(
 		//Convert volume id from []byte to string format
 		csiVolID = string(idFromFile)
 		Log.Infof("Read volume ID: %s from lockfile: %s ", csiVolID, lockFile)
+
+	}
+
+	if isNFS {
+		fsID := getFilesystemIDFromCsiVolumeID(csiVolID)
+		Log.Printf("NodeUnpublishVolume fileSystemID: %s", fsID)
+
+		systemID := s.getSystemIDFromCsiVolumeID(csiVolID)
+		if systemID == "" {
+			// use default system
+			systemID = s.opts.defaultSystemID
+		}
+		Log.Printf("NodeUnpublishVolume systemID: %s", systemID)
+		if systemID == "" {
+			return nil, status.Error(codes.InvalidArgument,
+				"systemID is not found in the request and there is no default system")
+		}
+
+		fs, err := s.getFilesystemByID(fsID, systemID)
+		if err != nil {
+			if strings.EqualFold(err.Error(), sioGatewayFileSystemNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
+				return nil, status.Error(codes.NotFound,
+					"filesystem not found")
+			}
+
+		}
+
+		// Probe the system to make sure it is managed by driver
+		if err := s.requireProbe(ctx, systemID); err != nil {
+			return nil, err
+		}
+
+		//ensure no ambiguity if legacy vol
+		err = s.checkVolumesMap(csiVolID)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal,
+				"checkVolumesMap for id: %s failed : %s", csiVolID, err.Error())
+
+		}
+
+		if err := unpublishNFS(ctx, req, fs.Name); err != nil {
+			return nil, err
+		}
+
+		return &csi.NodeUnpublishVolumeResponse{}, nil
 
 	}
 
@@ -651,6 +739,13 @@ func (s *service) NodeGetInfo(
 	// csi-vxflexos.dellemc.com/<systemID>: <provisionerName>
 	topology := map[string]string{}
 	for _, sysID := range connectedSystemID {
+		isNFS, err := s.checkNFS(ctx, sysID)
+		if err != nil {
+			return nil, err
+		}
+		if isNFS {
+			topology[Name+"/"+sysID+"-nfs"] = "true"
+		}
 		topology[Name+"/"+sysID] = SystemTopologySystemValue
 	}
 

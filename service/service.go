@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -46,6 +47,9 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -92,14 +96,16 @@ var Log = logrus.New()
 
 // ArrayConnectionData contains data required to connect to array
 type ArrayConnectionData struct {
-	SystemID                  string `json:"systemID"`
-	Username                  string `json:"username"`
-	Password                  string `json:"password"`
-	Endpoint                  string `json:"endpoint"`
-	SkipCertificateValidation bool   `json:"skipCertificateValidation,omitempty"`
-	Insecure                  bool   `json:"insecure,omitempty"`
-	IsDefault                 bool   `json:"isDefault,omitempty"`
-	AllSystemNames            string `json:"allSystemNames"`
+	SystemID                  string  `json:"systemID"`
+	Username                  string  `json:"username"`
+	Password                  string  `json:"password"`
+	Endpoint                  string  `json:"endpoint"`
+	SkipCertificateValidation bool    `json:"skipCertificateValidation,omitempty"`
+	Insecure                  bool    `json:"insecure,omitempty"`
+	IsDefault                 bool    `json:"isDefault,omitempty"`
+	AllSystemNames            string  `json:"allSystemNames"`
+	NasName                   *string `json:"nasName"`
+	NfsAcls                   string  `json:"nfsAcls"`
 }
 
 // Manifest is the SP's manifest.
@@ -140,6 +146,8 @@ type Opts struct {
 	IsApproveSDCEnabled        bool
 	replicationContextPrefix   string
 	replicationPrefix          string
+	NfsAcls                    string
+	ExternalAccess             string
 }
 
 type service struct {
@@ -331,6 +339,8 @@ func (s *service) BeforeServe(
 			"IsSdcRenameEnabled":     s.opts.IsSdcRenameEnabled,
 			"sdcPrefix":              s.opts.SdcPrefix,
 			"IsApproveSDCEnabled":    s.opts.IsApproveSDCEnabled,
+			"nfsAcls":                s.opts.NfsAcls,
+			"externalAccess":         s.opts.ExternalAccess,
 		}
 
 		Log.WithFields(fields).Infof("configured %s", Name)
@@ -381,15 +391,11 @@ func (s *service) BeforeServe(
 		if healthMonitor == "true" {
 			opts.IsHealthMonitorEnabled = true
 		}
-	} else {
-		opts.IsHealthMonitorEnabled = false
 	}
 	if renameSDC, ok := csictx.LookupEnv(ctx, EnvIsSDCRenameEnabled); ok {
 		if renameSDC == "true" {
 			opts.IsSdcRenameEnabled = true
 		}
-	} else {
-		opts.IsSdcRenameEnabled = false
 	}
 	if sdcPrefix, ok := csictx.LookupEnv(ctx, EnvSDCPrefix); ok {
 		opts.SdcPrefix = sdcPrefix
@@ -410,6 +416,13 @@ func (s *service) BeforeServe(
 
 	if replicationPrefix, ok := csictx.LookupEnv(ctx, EnvReplicationPrefix); ok {
 		opts.replicationPrefix = replicationPrefix
+	}
+
+	if nfsAcls, ok := csictx.LookupEnv(ctx, EnvNfsAcls); ok {
+		opts.NfsAcls = nfsAcls
+	}
+	if externalAccess, ok := csictx.LookupEnv(ctx, EnvExternalAccess); ok {
+		opts.ExternalAccess = externalAccess
 	}
 
 	// log csiNode topology keys
@@ -443,6 +456,39 @@ func (s *service) BeforeServe(
 		return s.doProbe(ctx)
 	}
 	return nil
+}
+
+func (s *service) checkNFS(ctx context.Context, systemID string) (bool, error) {
+
+	err := s.systemProbeAll(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	c := s.adminClients[systemID]
+	if c == nil {
+		return false, nil
+	}
+	version, err := c.GetVersion()
+	if err != nil {
+		return false, err
+	}
+	ver, err := strconv.ParseFloat(version, 64)
+	if err != nil {
+		return false, err
+	}
+	if ver >= 4.0 {
+		arrayConData, err := getArrayConfig(ctx)
+		if err != nil {
+			return false, err
+		}
+		array := arrayConData[systemID]
+		if array.NasName == nil || *(array.NasName) == "" {
+			return false, nil
+		}
+		return true, nil
+	}
+	return false, nil
 }
 
 // Probe all systems managed by driver
@@ -520,6 +566,26 @@ func (s *service) getVolByID(id string, systemID string) (*siotypes.Volume, erro
 	return vols[0], nil
 }
 
+// getFilesystemByID returns the PowerFlex filesystem from the given Powerflex filesystem ID
+func (s *service) getFilesystemByID(id string, systemID string) (*siotypes.FileSystem, error) {
+
+	adminClient := s.adminClients[systemID]
+	if adminClient == nil {
+		return nil, fmt.Errorf("can't find adminClient by id %s", systemID)
+	}
+	system, err := adminClient.FindSystem(systemID, "", "")
+	if err != nil {
+		return nil, fmt.Errorf("can't find system by id %s", systemID)
+	}
+	// The GetFileSystemByIDName API returns a filesystem, but when only passing
+	// in a filesystem ID or name, the response will be just the one filesystem
+	fs, err := system.GetFileSystemByIDName(id, "")
+	if err != nil {
+		return nil, err
+	}
+	return fs, nil
+}
+
 // getSDCID returns SDC ID from the given sdc GUID and system ID.
 func (s *service) getSDCID(sdcGUID string, systemID string) (string, error) {
 	sdcGUID = strings.ToUpper(sdcGUID)
@@ -535,6 +601,23 @@ func (s *service) getSDCID(sdcGUID string, systemID string) (string, error) {
 	}
 
 	return id.Sdc.ID, nil
+}
+
+// getSDCID returns SDC ID from the given sdc GUID and system ID.
+func (s *service) getSDCIP(sdcGUID string, systemID string) (string, error) {
+	sdcGUID = strings.ToUpper(sdcGUID)
+
+	// Need to translate sdcGUID to fmt.Errorf("getSDCIP error systemID not found: %s", systemID)
+	if s.systems[systemID] == nil {
+		return "", fmt.Errorf("getSDCIP error systemID not found: %s", systemID)
+	}
+	id, err := s.systems[systemID].FindSdc("SdcGUID", sdcGUID)
+	if err != nil {
+		return "", fmt.Errorf("error finding SDC from GUID: %s, err: %s",
+			sdcGUID, err.Error())
+	}
+
+	return id.Sdc.SdcIP, nil
 }
 
 // getStoragePoolID returns pool ID from the given name, system ID, and protectionDomain name
@@ -572,6 +655,39 @@ func (s *service) getCSIVolume(vol *siotypes.Volume, systemID string) *csi.Volum
 	vi := &csi.Volume{
 		VolumeId:      systemID + dash + vol.ID,
 		CapacityBytes: int64(vol.SizeInKb * bytesInKiB),
+		VolumeContext: attributes,
+	}
+
+	return vi
+}
+
+// getCSIVolumeFromFilesystem converts the given siotypes.FileSystem to a CSI volume
+func (s *service) getCSIVolumeFromFilesystem(fs *siotypes.FileSystem, systemID string) *csi.Volume {
+
+	// Get storage pool name; add to cache of ID to Name if not present
+	storagePoolName := s.getStoragePoolNameFromID(systemID, fs.StoragePoolID)
+	installationID, err := s.getArrayInstallationID(systemID)
+	if err != nil {
+		Log.Printf("getCSIVolumeFromFilesystem error system not found: %s with error: %v\n", systemID, err)
+	}
+
+	// Make the additional volume attributes
+	creationTime, _ := strconv.Atoi(fs.CreationTimestamp)
+	attributes := map[string]string{
+		"Name":            fs.Name,
+		"StoragePoolID":   fs.StoragePoolID,
+		"StoragePoolName": storagePoolName,
+		"StorageSystem":   systemID,
+		"CreationTime":    time.Unix(int64(creationTime), 0).String(),
+		"InstallationID":  installationID,
+		"NasServerID":     fs.NasServerID,
+		"fsType":          "nfs",
+	}
+	hyphen := "/"
+
+	vi := &csi.Volume{
+		VolumeId:      systemID + hyphen + fs.ID,
+		CapacityBytes: int64(fs.SizeTotal),
 		VolumeContext: attributes,
 	}
 
@@ -688,6 +804,15 @@ func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error
 				Log.Printf("Powerflex systemID %s AllSytemNames given %#v\n", systemID, names)
 			}
 
+			// for PowerFlex v4.0
+			str := ""
+			if c.NasName == nil || *(c.NasName) == "" {
+				c.NasName = &str
+			}
+			if c.NfsAcls == "" {
+				c.NfsAcls = str
+			}
+
 			skipCertificateValidation := c.SkipCertificateValidation || c.Insecure
 
 			fields := map[string]interface{}{
@@ -698,6 +823,8 @@ func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error
 				"isDefault":                 c.IsDefault,
 				"systemID":                  c.SystemID,
 				"allSystemNames":            c.AllSystemNames,
+				"nasName":                   c.NasName,
+				"nfsAcls":                   c.NfsAcls,
 			}
 
 			Log.WithFields(fields).Infof("configured %s", c.SystemID)
@@ -738,27 +865,348 @@ func getVolumeIDFromCsiVolumeID(csiVolID string) string {
 	}
 	err := errors.New("csiVolID unexpected string")
 	Log.WithError(err).Errorf("%s format error", csiVolID)
-
 	return ""
+}
+
+// getFilesystemIDFromCsiVolumeID returns PowerFlex filesystem ID from CSI volume ID
+func getFilesystemIDFromCsiVolumeID(csiVolID string) string {
+	if csiVolID == "" {
+		return ""
+	}
+	containsHyphen := strings.Contains(csiVolID, "/")
+	if containsHyphen {
+		i := strings.LastIndex(csiVolID, "/")
+		if i == -1 {
+			return csiVolID
+		}
+		tokens := strings.Split(csiVolID, "/")
+		index := len(tokens)
+		if index > 0 {
+			return tokens[index-1]
+		}
+	}
+	err := errors.New("csiVolID unexpected string")
+	Log.WithError(err).Errorf("%s format error", csiVolID)
+	return ""
+}
+
+// getNFSExport method returns the NFSExport for a given filesystem
+// and returns a not found error if the NFSExport does not exist for filesystem.
+func (s *service) getNFSExport(fs *siotypes.FileSystem, client *goscaleio.Client) (*siotypes.NFSExport, error) {
+
+	nfsExportList, err := client.GetNFSExport()
+
+	if err != nil {
+		return nil, err
+	}
+
+	for _, nfsExport := range nfsExportList {
+		if nfsExport.FileSystemID == fs.ID {
+			return &nfsExport, nil
+		}
+	}
+
+	return nil, status.Errorf(codes.NotFound, "NFS Export for the file system: %s not found", fs.Name)
+
+}
+
+// getFileInterface method returns the FileInterface for the given filesytem.
+func (s *service) getFileInterface(systemID string, fs *siotypes.FileSystem, client *goscaleio.Client) (*siotypes.FileInterface, error) {
+	system, err := client.FindSystem(systemID, "", "")
+
+	if err != nil {
+		return nil, err
+	}
+
+	nas, err := system.GetNASByIDName(fs.NasServerID, "")
+
+	if err != nil {
+		return nil, err
+	}
+
+	fileInterface, err := system.GetFileInterface(nas.CurrentPreferredIPv4InterfaceID)
+
+	if err != nil {
+		return nil, err
+	}
+	return fileInterface, err
 }
 
 // getSystemIDFromCsiVolumeId returns PowerFlex volume ID from CSI volume ID
 func (s *service) getSystemIDFromCsiVolumeID(csiVolID string) string {
-	i := strings.LastIndex(csiVolID, "-")
-	if i == -1 {
-		return ""
-	}
-	tokens := strings.Split(csiVolID, "-")
-	if len(tokens) > 1 {
-		sys := csiVolID[:i]
-		if id, ok := s.connectedSystemNameToID[sys]; ok {
-			return id
+	containsHyphen := strings.Contains(csiVolID, "/")
+	if containsHyphen {
+		i := strings.LastIndex(csiVolID, "/")
+		if i == -1 {
+			return ""
 		}
-		return sys
+		tokens := strings.Split(csiVolID, "/")
+		if len(tokens) > 1 {
+			sys := csiVolID[:i]
+			if id, ok := s.connectedSystemNameToID[sys]; ok {
+				return id
+			}
+			return sys
+		}
+	} else {
+		i := strings.LastIndex(csiVolID, "-")
+		if i == -1 {
+			return ""
+		}
+		tokens := strings.Split(csiVolID, "-")
+		if len(tokens) > 1 {
+			sys := csiVolID[:i]
+			if id, ok := s.connectedSystemNameToID[sys]; ok {
+				return id
+			}
+			return sys
+		}
 	}
-
 	// There is only volume ID in csi volume ID
 	return ""
+}
+
+// Contains checks if the a string is present in a slice of strings
+func Contains(slice []string, element string) bool {
+	for _, a := range slice {
+		if a == element {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnpublishVolumeRequest, client *goscaleio.Client, fs *siotypes.FileSystem, volumeContextID, nodeIP, nodeID string) error {
+
+	var nfsExportName string
+	nfsExportName = NFSExportNamePrefix + fs.Name
+
+	nfsExportExists := false
+	var nfsExportID string
+	deleteExport := true
+	// Check if nfs export exists for the File system
+	nfsExportList, err := client.GetNFSExport()
+
+	if err != nil {
+		return err
+	}
+
+	for _, nfsExport := range nfsExportList {
+		if nfsExport.FileSystemID == fs.ID {
+			nfsExportExists = true
+			if nfsExport.Name != nfsExportName {
+				//This means that share was created manually on array, hence don't delete via driver
+				deleteExport = false
+				nfsExportName = nfsExport.Name
+			}
+			nfsExportID = nfsExport.ID
+			nfsExportName = nfsExport.Name
+		}
+	}
+
+	if !nfsExportExists {
+		Log.Infof("NFS Share: %s not found on array.", nfsExportName)
+		return nil
+	}
+
+	// remove host access from NFS Export
+	nfsExportResp, err := client.GetNFSExportByIDName(nfsExportID, "")
+
+	if err != nil {
+		return status.Errorf(codes.NotFound, "Could not find NFS Export: %s", err)
+	}
+
+	fmt.Printf("%#v\n", nfsExportResp)
+
+	var modifyParam *siotypes.NFSExportModify = &siotypes.NFSExportModify{}
+
+	sort.Strings(nfsExportResp.ReadOnlyHosts)
+	index := sort.SearchStrings(nfsExportResp.ReadOnlyHosts, nodeIP)
+	if len(nfsExportResp.ReadOnlyHosts) > 0 {
+		if index >= 0 {
+			modifyParam.RemoveReadOnlyHosts = []string{nodeIP + "/255.255.255.255"} // we can't remove without netmask
+			Log.Debug("Going to remove IP from ROHosts: ", modifyParam.RemoveReadOnlyHosts[0])
+		}
+	}
+
+	sort.Strings(nfsExportResp.ReadOnlyRootHosts)
+	index = sort.SearchStrings(nfsExportResp.ReadOnlyRootHosts, nodeIP)
+	if len(nfsExportResp.ReadOnlyRootHosts) > 0 {
+		if index >= 0 {
+			modifyParam.RemoveReadOnlyRootHosts = []string{nodeIP + "/255.255.255.255"} // we can't remove without netmask
+			Log.Debug("Going to remove IP from RORootHosts: ", modifyParam.RemoveReadOnlyRootHosts[0])
+		}
+	}
+
+	if Contains(nfsExportResp.ReadWriteHosts, nodeIP+"/255.255.255.255") {
+		modifyParam.RemoveReadWriteHosts = []string{nodeIP + "/255.255.255.255"} // we can't remove without netmask
+		Log.Debug("Going to remove IP from RWHosts: ", modifyParam.RemoveReadWriteHosts[0])
+	}
+
+	if Contains(nfsExportResp.ReadWriteRootHosts, nodeIP+"/255.255.255.255") {
+		modifyParam.RemoveReadWriteRootHosts = []string{nodeIP + "/255.255.255.255"} // we can't remove without netmask
+		Log.Debug("Going to remove IP from RWRootHosts: ", modifyParam.RemoveReadWriteRootHosts[0])
+	}
+
+	err = client.ModifyNFSExport(modifyParam, nfsExportID)
+
+	if err != nil {
+		return status.Errorf(codes.NotFound, "Allocating host %s access to NFS Export failed. Error: %v", nodeID, err)
+
+	}
+	Log.Debugf("Host: %s access is removed from NFS Share: %s", nodeID, nfsExportID)
+
+	if deleteExport {
+		err = client.DeleteNFSExport(nfsExportID)
+
+		if err != nil {
+			return status.Errorf(codes.NotFound, "delete NFS Export failed. Error:%v", err)
+		}
+
+		Log.Printf("NFS export %s  deleted successfully", nfsExportID)
+	}
+
+	Log.Debugf("ControllerUnpublishVolume successful for volid: [%s]", volumeContextID)
+
+	return nil
+
+}
+
+// exportFilesystem - Method to export filesystem with idempotency
+func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPublishVolumeRequest, client *goscaleio.Client, fs *siotypes.FileSystem, nodeIP, nodeID string, pContext map[string]string, am *csi.VolumeCapability_AccessMode) (*csi.ControllerPublishVolumeResponse, error) {
+	hostURL := nodeIP + "/" + "255.255.255.255"
+	var nfsExportName string
+	nfsExportName = NFSExportNamePrefix + fs.Name
+
+	nfsExportExists := false
+	var nfsExportID string
+
+	// Check if nfs export exists for the File system
+	nfsExportList, err := client.GetNFSExport()
+
+	if err != nil {
+		return nil, err
+	}
+
+	for _, nfsExport := range nfsExportList {
+		if nfsExport.FileSystemID == fs.ID {
+			nfsExportExists = true
+			nfsExportID = nfsExport.ID
+			nfsExportName = nfsExport.Name
+		}
+	}
+
+	// Create NFS export if it doesn't exist
+	if !nfsExportExists {
+		Log.Debugf("NFS Export does not exist for fs: %s ,proceeding to create NFS Export", fs.Name)
+		resp, err := client.CreateNFSExport(&siotypes.NFSExportCreate{
+			Name:         nfsExportName,
+			FileSystemID: fs.ID,
+			Path:         NFSExportLocalPath + fs.Name,
+		})
+
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "create NFS Export failed. Error:%v", err)
+		}
+
+		nfsExportID = resp.ID
+	}
+
+	nfsExportResp, err := client.GetNFSExportByIDName(nfsExportID, "")
+
+	if err != nil {
+		return nil, status.Errorf(codes.NotFound, "Could not find NFS Export: %s", err)
+	}
+
+	readOnlyHosts := nfsExportResp.ReadOnlyHosts
+	readWriteHosts := nfsExportResp.ReadWriteHosts
+	readOnlyRootHosts := nfsExportResp.ReadOnlyRootHosts
+	readWriteRootHosts := nfsExportResp.ReadWriteRootHosts
+
+	foundIncompatible := false
+	foundIdempotent := false
+	otherHostsWithAccess := len(readOnlyHosts)
+
+	var readHostList, readWriteHostList []string
+
+	for _, host := range readOnlyHosts {
+		if host == hostURL {
+			foundIncompatible = true
+			break
+		}
+	}
+
+	otherHostsWithAccess += len(readWriteHosts)
+	if !foundIncompatible {
+		for _, host := range readWriteHosts {
+			if host == hostURL {
+				foundIncompatible = true
+				break
+			}
+		}
+	}
+
+	otherHostsWithAccess += len(readOnlyRootHosts)
+	if !foundIncompatible {
+		for _, host := range readOnlyRootHosts {
+			readHostList = append(readHostList, host)
+			if host == hostURL {
+				if am.Mode == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
+					foundIdempotent = true
+				} else {
+					foundIncompatible = true
+				}
+			}
+		}
+	}
+	otherHostsWithAccess += len(readWriteRootHosts)
+
+	if !foundIncompatible && !foundIdempotent {
+		for _, host := range readWriteRootHosts {
+			readWriteHostList = append(readWriteHostList, hostURL)
+			if host == hostURL {
+				if am.Mode == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
+					foundIncompatible = true
+				} else {
+					foundIdempotent = true
+					otherHostsWithAccess--
+				}
+			}
+		}
+	}
+
+	if foundIncompatible {
+		return nil, status.Errorf(codes.NotFound, "Host: %s has access on NFS Export: %s with incompatible access mode.", nodeID, nfsExportID)
+	}
+
+	if (am.Mode == csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER || am.Mode == csi.VolumeCapability_AccessMode_SINGLE_NODE_SINGLE_WRITER || am.Mode == csi.VolumeCapability_AccessMode_SINGLE_NODE_MULTI_WRITER) && otherHostsWithAccess > 0 {
+		return nil, status.Errorf(codes.NotFound, "Other hosts have access on NFS Share: %s", nfsExportID)
+	}
+
+	//Idempotent case
+	if foundIdempotent {
+		Log.Info("Host has access to the given host and exists in the required state.")
+		return &csi.ControllerPublishVolumeResponse{PublishContext: pContext}, nil
+	}
+	//Allocate host access to NFS Share with appropriate access mode
+	if am.Mode == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
+		readHostList = append(readHostList, hostURL)
+		err := client.ModifyNFSExport(&siotypes.NFSExportModify{AddReadOnlyRootHosts: readHostList}, nfsExportID)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Allocating host access failed with the error: %v", err)
+		}
+	} else {
+		readWriteHostList = append(readWriteHostList, hostURL)
+		err := client.ModifyNFSExport(&siotypes.NFSExportModify{AddReadWriteRootHosts: readWriteHostList}, nfsExportID)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Allocating host access failed with the error: %v", err)
+		}
+	}
+
+	Log.Debugf("NFS Export: %s is accessible to host: %s with access mode: %s", nfsExportID, nodeID, am.Mode)
+	Log.Debugf("ControllerPublishVolume successful for volid: [%s]", pContext["volumeContextId"])
+
+	return &csi.ControllerPublishVolumeResponse{PublishContext: pContext}, nil
 }
 
 // this function updates volumePrefixToSystems, a map of volume ID prefixes -> system IDs
@@ -1038,4 +1486,26 @@ func (s *service) expandReplicationPair(ctx context.Context, req *csi.Controller
 	}
 
 	return nil
+}
+
+func (s *service) getNASServerIDFromName(systemID, nasName string) (string, error) {
+	if nasName == "" {
+		Log.Printf("NAS server not provided.")
+		return "", nil
+	}
+	system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
+	if err != nil {
+		return "", err
+	}
+	nas, err := system.GetNASByIDName("", nasName)
+	if err != nil {
+		return "", err
+	}
+	return nas.ID, nil
+}
+
+func (s *service) GetNfsTopology(systemID string) []*csi.Topology {
+	nfsTopology := new(csi.Topology)
+	nfsTopology.Segments = map[string]string{Name + "/" + systemID + "-nfs": "true"}
+	return []*csi.Topology{nfsTopology}
 }

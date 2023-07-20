@@ -38,6 +38,11 @@ kubeletConfigDir: /var/lib/kubelet
 # Default value: none
 defaultFsType: ext4
 
+# externalAccess: allows to specify additional entries for host to access NFS volumes. Both single IP address and subnet are valid entries.
+# Allowed Values: x.x.x.x/xx or x.x.x.x
+# Default Value: None
+externalAccess:
+
 # imagePullPolicy: Policy to determine if the image should be pulled prior to starting the container.
 # Allowed values:
 #  Always: Always pull the image.
@@ -45,6 +50,21 @@ defaultFsType: ext4
 #  Never: Never pull the image.
 # Default value: None
 imagePullPolicy: IfNotPresent
+
+# nfsAcls: enables setting permissions on NFS mount directory
+# This value acts as default value for NFS ACL (nfsAcls), if not specified for an array config in secret
+# Permissions can be specified in two formats:
+#   1) Unix mode (NFSv3)
+#   2) NFSv4 ACLs (NFSv4)
+#      NFSv4 ACLs are supported on NFSv4 share only.
+# Allowed values:
+#   1) Unix mode: valid octal mode number
+#      Examples: "0777", "777", "0755"
+#   2) NFSv4 acls: valid NFSv4 acls, seperated by comma
+#      Examples: "A::OWNER@:RWX,A::GROUP@:RWX", "A::OWNER@:rxtncy"
+# Optional: true
+# Default value: "0777"
+nfsAcls: "0777"
 
 # "enablesnapshotcgdelete"- a boolean that, when enabled, will delete all snapshots in a consistency group
 # everytime a snap in the group is deleted
