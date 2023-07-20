@@ -1,0 +1,25 @@
+
+    {
+        "id": "63ec8e0d-4551-29a7-e79c-b202f2b914f3",
+        "name": "dummy-nas-server",
+        "protection_domain_id": "b8b3919900000000",
+        "storage_pool_id": "e65f9c2700000000",
+        "description": "",
+        "operational_status": "Started",
+        "primary_node_id": "63ec82a8-e065-1fdf-05e0-c4c77e59be30",
+        "backup_node_id": "63ec82df-d022-5bfa-7877-e8030994cee3",
+        "default_unix_user": null,
+        "default_windows_user": null,
+        "nfs_servers": null,
+        "current_unix_directory_service": "None",
+        "is_username_translation_enabled": false,
+        "is_auto_user_mapping_enabled": false,
+        "production_IPv4_interface_id": null,
+        "production_IPv6_interface_id": null,
+        "backup_IPv4_interface_id": null,
+        "backup_IPv6_interface_id": null,
+        "current_preferred_IPv4_interface_id": "63ec8e22-c679-f44e-1fd2-b202f2b914f3",
+        "current_preferred_IPv6_interface_id": null,
+        "operational_status_l10n": null,
+        "current_unix_directory_service_l10n": null
+   }

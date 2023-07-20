@@ -505,6 +505,51 @@ Feature: VxFlex OS CSI interface
     And when I call DeleteVolume
     Then there are no errors
 
+  Scenario: Create and delete basic nfs volume
+    Given a VxFlexOS service
+    And a basic nfs volume request "nfsvolume1" "8"
+    When I call CreateVolume
+    When I call ListVolume
+    Then a valid ListVolumeResponse is returned
+    And when I call DeleteVolume
+    Then there are no errors
+
+  Scenario: Idempotent create and delete basic nfs volume
+    Given a VxFlexOS service
+    And a basic nfs volume request "nfsvolume2" "8"
+    When I call CreateVolume
+    And I call CreateVolume
+    And when I call DeleteVolume
+    And when I call DeleteVolume
+    Then there are no errors
+
+  Scenario: Create and delete 100000G NFS volume
+    Given a VxFlexOS service
+    And max retries 1
+    And a basic nfs volume request "nfsvolume2" "100000"
+    When I call CreateVolume
+    And when I call DeleteVolume
+    Then the error message should contain "Requested volume size exceeds the volume allocation limit"
+
+  Scenario: Create a NFS volume with wrong NasName
+    Given a VxFlexOS service
+    And a basic nfs volume request "nfsvolume3" "8"
+    And I set wrongNasName
+    When I call CreateVolume
+    Then the error message should contain <errormsg>
+    Examples:
+      | errormsg    |
+      | "error_msg" |
+
+  Scenario: Create a NFS volume with wrong FileSystemName
+    Given a VxFlexOS service
+    And a basic nfs volume request "nfsvolume3" "8"
+    And I set wrongFileSystemName
+    When I call CreateVolume
+    Then the error message should contain <errormsg>
+    Examples:
+      | errormsg    |
+      | "error_msg" |
 
   Scenario Outline: Publish and Unpublish Ephemeral Volume
     Given a VxFlexOS service

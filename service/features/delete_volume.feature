@@ -31,6 +31,46 @@ Feature: VxFlex OS CSI interface
     And I call DeleteVolume with "single-writer"
     And I call DeleteVolume with "single-writer"
     Then a valid DeleteVolumeResponse is returned
+  
+  Scenario: Test Basic nfs delete FileSystem
+    Given a VxFlexOS service
+    When I call Probe
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call DeleteVolume nfs with "single-writer"
+    Then a valid DeleteVolumeResponse is returned
+  
+   Scenario: a Basic Nfs delete FileSystem Bad
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "single-writer"
+    Then a valid PublishVolumeResponse is returned
+     And I call DeleteVolume nfs with "single-writer"
+    Then the error contains "can not be deleted as it has associated NFS Export"
+  
+  Scenario: Test Idempotent Basic nfs delete FileSystem 
+    Given a VxFlexOS service
+    When I call Probe
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call DeleteVolume nfs with "single-writer"
+    Then a valid DeleteVolumeResponse is returned
+    And I call DeleteVolume nfs with "single-writer"
+    Then a valid DeleteVolumeResponse is returned
+    
+    Scenario: Test Basic nfs delete FileSystem
+    Given a VxFlexOS service
+    When I call Probe
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I induce error "NFSExportsInstancesError"
+    And I call DeleteVolume nfs with "single-writer"
+    Then the error contains "error getting the NFS Export"
 
   Scenario: Delete volume with induced getVolByID error
     Given a VxFlexOS service
@@ -62,4 +102,10 @@ Feature: VxFlex OS CSI interface
     When I call Probe
     And I call DeleteVolume with "single-writer"
     Then a valid DeleteVolumeResponse is returned
+
+  Scenario: Delete Volume negative
+   Given a VxFlexOS service
+   When I call Probe
+   And I call DeleteVolume with Bad "single-writer"
+   Then the error contains "volume ID is required"
 

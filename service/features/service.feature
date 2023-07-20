@@ -75,7 +75,28 @@ Feature: VxFlex OS CSI interface
       | "a:b"    | "a:b"    |
       | "a:b"    | "a:b"    |
       | ""       | ""       |
+      | "a/b"    | ""       |
+    
+  Scenario Outline: multi array getFilesystemIDFromCsiVolumeID for NFS volumes with different examples
+    Given a VxFlexOS service
+    And I call getFilesystemIDFromCsiVolumeID <csiVolID>
+    Then the fileSystemID is <fsID>
+    Examples:
+      | csiVolID        | fsID            |
+      | "abcd/nfs123"   | "nfs123"        |
+      | "badcsiVolID"   | ""              |
+      |  ""             | ""              |
 
+  Scenario Outline: multi array getSystemIDFromCsiVolumeID for NFS volumes with different examples
+    Given a VxFlexOS service
+    And I call getSystemIDFromCsiVolumeIDNfs <csiVolID>
+    Then the systemID is <systemID>
+    Examples:
+      | csiVolID           | systemID |
+      | "abcd/nfs123"      | "abcd"   |
+      | "badSystemID"      | ""       |
+      |  ""                | ""       |
+  
   Scenario Outline: multi array getSystemIDFromCsiVolumeID good and with errors
     Given a VxFlexOS service
     And I call getSystemIDFromCsiVolumeID <csiVolID>
@@ -152,7 +173,7 @@ Feature: VxFlex OS CSI interface
       | "volume1"                                           |
       | "thisnameiswaytoolongtopossiblybeunder31characters" |
 
-
+  
   Scenario: Create volume with admin error
     Given a VxFlexOS service
     When I call Probe
@@ -246,6 +267,34 @@ Feature: VxFlex OS CSI interface
       | sysID                      |
       | "f.service.opt.SystemName" |
 
+    
+  
+  Scenario Outline: Create volume with Accessiblity Requirements NFS volumes Invalid topology error
+    Given a VxFlexOS service
+    When I call Probe
+    And I specify bad NFS AccessibilityRequirements with a SystemID of <sysID>
+    And I call CreateVolume "volume1"
+    Then the error contains "Invalid topology requested for NFS Volume"
+    Examples:
+      | sysID                      |
+      | "f.service.opt.SystemName" |
+    
+
+ 
+  Scenario Outline: Create volume with Accessibility Requirements for NFS volumes with different examples
+    Given a VxFlexOS service
+    When I call Probe
+    And I specify NFS AccessibilityRequirements with a SystemID of <sysID>
+    And I call CreateVolume "volume1"
+    Then the error contains <errormsg>
+
+    Examples:
+      | sysID                      | errormsg                               |
+      | "f.service.opt.SystemName" | "none"                                 |
+      | ""                         | "is not accessible based on Preferred" |
+      | "Unknown"                  | "is not accessible based on Preferred" |
+      | "badSystem"                | "is not accessible based on Preferred" |
+
   Scenario: Create volume with AccessMode_MULTINODE_WRITER
     Given a VxFlexOS service
     When I call Probe
@@ -279,7 +328,56 @@ Feature: VxFlex OS CSI interface
     When I specify CreateVolumeMountRequest "xfs"
     And I call CreateVolume "volume1"
     Then a valid CreateVolumeResponse is returned
-
+   
+   
+   Scenario: Create mount volume NFS no error
+    Given a VxFlexOS service
+    When I call Probe
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    
+     
+     Scenario: Create Volume with invalid probe cache, no endpoint, and no admin NFS system ID not found error
+     Given a VxFlexOS service
+     When I induce error "NoAdminError"
+     And I induce error "NoEndpointError"
+     And I invalidate the Probe cache
+      When I specify CreateVolumeMountRequest "nfs"
+     And I call CreateVolume "volume1"
+     Then the error contains "No system ID is found in parameters or as default"
+    
+    
+    Scenario: Create mount volume NFS nas server not found error
+    Given a VxFlexOS service
+    When I call Probe
+    When I specify CreateVolumeMountRequest "nfs"
+    And I induce error "NasNotFoundError"
+    And I call CreateVolume "volume1"
+    Then the error contains "nas server not found"
+    
+    
+    Scenario: Idempotent create mount volume NFS storage pool not found error
+    Given a VxFlexOS service
+    When I call Probe
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume4"
+    When I specify CreateVolumeMountRequest "nfs"
+    And I change the StoragePool "no_storage_pool"
+    And I call CreateVolume "volume4"
+    Then the error contains "Couldn't find storage pool"
+    
+    
+    
+    
+    Scenario: Create mount volume NFS with NoAdmin
+    Given a VxFlexOS service
+    When I call Probe
+    When I specify CreateVolumeMountRequest "nfs"
+    And I induce error "NoAdminError"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+   
   Scenario: Create mount volume idempotent test
     Given a VxFlexOS service
     When I call Probe
@@ -287,6 +385,33 @@ Feature: VxFlex OS CSI interface
     And I call CreateVolume "volume2"
     And I call CreateVolume "volume2"
     Then a valid CreateVolumeResponse is returned
+   
+   
+   Scenario: Create mount volume idempotent NFS no error
+    Given a VxFlexOS service
+    When I call Probe
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume2"
+    And I call CreateVolume "volume2"
+    Then a valid CreateVolumeResponse is returned
+    
+    
+    Scenario: Create mount volume with bad capacity NFS bad capacity error
+    Given a VxFlexOS service
+    When I call Probe
+    When I specify CreateVolumeMountRequest "nfs"
+    And I specify a BadCapacity
+    And I induce error "BadCapacityError"
+    And I call CreateVolume "bad capacity"
+    Then the error contains "bad capacity"
+    
+    
+    Scenario: Idempotent create mount volume with different sizes NFS different size error
+    Given a VxFlexOS service
+    When I call Probe
+    And I call CreateVolumeSize nfs "volume3" "8"
+    And I call CreateVolumeSize nfs "volume3" "16"
+    Then the error contains "'Volume name' already exists and size is different"
 
   Scenario: Call NodeGetInfo and validate NodeId
     Given a VxFlexOS service
@@ -987,5 +1112,45 @@ Feature: VxFlex OS CSI interface
     And I call Probe
     When I call Node Probe
     Then the error contains "The given GUID is invalid"
-    
-    
+
+  Scenario: Controller expand volume for NFS
+    Given a VxFlexOS service
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+    When I call CreateVolumeSize nfs "vol-inttest-nfs" "8"
+    And a controller published volume
+    When I call ControllerExpandVolume set to "10"
+    Then no error was received
+
+  Scenario: Controller shrink volume for NFS
+    Given a VxFlexOS service
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+    When I call CreateVolumeSize nfs "vol-inttest-nfs" "16"
+    And a controller published volume
+    When I call ControllerExpandVolume set to "8"
+    Then no error was received
+
+  Scenario: Controller expand volume for NFS - idempotent case
+    Given a VxFlexOS service
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+    When I call CreateVolumeSize nfs "vol-inttest-nfs" "10"
+    And a controller published volume
+    When I call ControllerExpandVolume set to "10"
+    Then no error was received
+
+  Scenario: Controller expand volume for NFS - incorrect system name
+    Given a VxFlexOS service
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+    When I call CreateVolumeSize nfs "vol-inttest-nfs" "10"
+    And a controller published volume
+    And I induce error "WrongSysNameError"
+    When I call ControllerExpandVolume set to "16"
+    Then the error contains "failure to load volume"
+
+  Scenario: Call ControllerExpandVolume for NFS - volume ID not found
+    Given a VxFlexOS service
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+    And I call CreateVolumeSize nfs "vol-inttest-nfs" "10"
+    And a controller published volume
+    And I induce error "NoVolumeIDError"
+    Then I call ControllerExpandVolume set to "16"
+    And the error contains "volume ID is required"

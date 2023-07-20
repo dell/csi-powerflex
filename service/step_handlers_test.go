@@ -61,6 +61,11 @@ var (
 		CreateSnapshotError           bool
 		RemoveVolumeError             bool
 		VolumeInstancesError          bool
+		FileSystemInstancesError      bool
+		GetFileSystemsByIDError       bool
+		NFSExportInstancesError       bool
+		NasServerNotFoundError        bool
+		FileInterfaceNotFoundError    bool
 		BadVolIDError                 bool
 		NoCsiVolIDError               bool
 		WrongVolIDError               bool
@@ -71,6 +76,7 @@ var (
 		NoSysNameError                bool
 		NoAdminError                  bool
 		WrongSysNameError             bool
+		BadCapacityError              bool
 		NoVolumeIDError               bool
 		SetVolumeSizeError            bool
 		systemNameMatchingError       bool
@@ -124,11 +130,22 @@ func getHandler() http.Handler {
 		})
 	log.Printf("Clearing volume caches\n")
 	volumeIDToName = make(map[string]string)
+	fileSystemIDName = make(map[string]string)
+	fileSystemIDToSizeTotal = make(map[string]string)
+	nfsExportIDName = make(map[string]string)
+	fileSystemNameToID = make(map[string]string)
+	nfsExportNameID = make(map[string]string)
+	nfsExportIDtoFsID = make(map[string]string)
+	nfsExportIDPath = make(map[string]string)
 	volumeIDToAncestorID = make(map[string]string)
 	volumeNameToID = make(map[string]string)
 	volumeIDToConsistencyGroupID = make(map[string]string)
 	volumeIDToReplicationState = make(map[string]string)
 	volumeIDToSizeInKB = make(map[string]string)
+	nfsExportIDReadOnlyRootHosts = make(map[string][]string)
+	nfsExportIDReadWriteRootHosts = make(map[string][]string)
+	nfsExportIDReadWriteHosts = make(map[string][]string)
+	nfsExportIDReadOnlyHosts = make(map[string][]string)
 	debug = false
 	stepHandlersErrors.FindVolumeIDError = false
 	stepHandlersErrors.GetVolByIDError = false
@@ -151,7 +168,14 @@ func getHandler() http.Handler {
 	stepHandlersErrors.CreateSnapshotError = false
 	stepHandlersErrors.RemoveVolumeError = false
 	stepHandlersErrors.VolumeInstancesError = false
+	stepHandlersErrors.NasServerNotFoundError = false
+	stepHandlersErrors.FileInterfaceNotFoundError = false
+	stepHandlersErrors.FileSystemInstancesError = false
+	stepHandlersErrors.NFSExportInstancesError = false
+	stepHandlersErrors.NasServerNotFoundError = false
+	stepHandlersErrors.BadCapacityError = false
 	stepHandlersErrors.BadVolIDError = false
+	stepHandlersErrors.GetFileSystemsByIDError = false
 	stepHandlersErrors.NoCsiVolIDError = false
 	stepHandlersErrors.WrongVolIDError = false
 	stepHandlersErrors.WrongSystemError = false
@@ -200,6 +224,13 @@ func getRouter() http.Handler {
 	scaleioRouter.HandleFunc("/api/login", handleLogin)
 	scaleioRouter.HandleFunc("/api/version", handleVersion)
 	scaleioRouter.HandleFunc("/api/types/System/instances", handleSystemInstances)
+	scaleioRouter.HandleFunc("/rest/v1/nas-servers", handleNasInstances)
+	scaleioRouter.HandleFunc("/rest/v1/nas-servers/{id}", handleGetNasInstances)
+	scaleioRouter.HandleFunc("/rest/v1/file-systems", handleFileSystems)
+	scaleioRouter.HandleFunc("/rest/v1/nfs-exports", handleNFSExports)
+	scaleioRouter.HandleFunc("/rest/v1/file-systems/{id}", handleGetFileSystems)
+	scaleioRouter.HandleFunc("/rest/v1/nfs-exports/{id}", handleGetNFSExports)
+	scaleioRouter.HandleFunc("/rest/v1/file-interfaces/{id}", handleGetFileInterface)
 	scaleioRouter.HandleFunc("/api/types/Volume/instances", handleVolumeInstances)
 	scaleioRouter.HandleFunc("/api/types/StoragePool/instances", handleStoragePoolInstances)
 	scaleioRouter.HandleFunc("{Volume}/relationship/Statistics", handleVolumeStatistics)
@@ -250,7 +281,7 @@ func handleVersion(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusRequestTimeout)
 		return
 	}
-	w.Write([]byte("2.5"))
+	w.Write([]byte("4.0"))
 }
 
 // handleSystemInstances implements GET /api/types/System/instances
@@ -277,6 +308,524 @@ func handleSystemInstances(w http.ResponseWriter, r *http.Request) {
 	} else {
 		returnJSONFile("features", "get_system_instances.json", w, nil)
 	}
+}
+
+// handleSystemInstances implements GET /api/types/System/instances
+func handleNasInstances(w http.ResponseWriter, r *http.Request) {
+
+	if stepHandlersErrors.NasServerNotFoundError {
+		writeError(w, "nas server not found", http.StatusNotFound, codes.NotFound)
+		return
+	}
+
+	returnJSONFile("features", "get_nas_servers.json", w, nil)
+}
+
+func handleGetNasInstances(w http.ResponseWriter, r *http.Request) {
+
+	if stepHandlersErrors.NasServerNotFoundError {
+		writeError(w, "nas server not found", http.StatusNotFound, codes.NotFound)
+		return
+	}
+
+	returnJSONFile("features", "get_nas_server_id.json", w, nil)
+}
+
+func handleGetFileInterface(w http.ResponseWriter, r *http.Request) {
+
+	if stepHandlersErrors.FileInterfaceNotFoundError {
+		writeError(w, "file interace not found", http.StatusNotFound, codes.NotFound)
+		return
+	}
+
+	returnJSONFile("features", "get_file_interface.json", w, nil)
+}
+
+func handleNFSExports(w http.ResponseWriter, r *http.Request) {
+	if nfsExportIDName == nil {
+		nfsExportIDName = make(map[string]string)
+		nfsExportNameID = make(map[string]string)
+	}
+
+	switch r.Method {
+
+	// Post is CreateVolume; here just return a volume id encoded from the name
+	case http.MethodPost:
+		if inducedError.Error() == "nfsExportError" {
+			writeError(w, "create NFS Export failed", http.StatusRequestTimeout, codes.Internal)
+			return
+		}
+
+		req := types.NFSExportCreate{}
+		decoder := json.NewDecoder(r.Body)
+		err := decoder.Decode(&req)
+		if err != nil {
+			log.Printf("error decoding json: %s\n", err.Error())
+		}
+
+		// good response
+		resp := new(types.NFSExportCreateResponse)
+		resp.ID = hex.EncodeToString([]byte(req.Name))
+		nfsExportIDName[resp.ID] = req.Name
+		nfsExportIDtoFsID[req.Name] = resp.ID
+		nfsExportIDtoFsID[resp.ID] = req.FileSystemID
+		nfsExportIDPath[resp.ID] = req.Path
+
+		if array, ok := systemArrays[r.Host]; ok {
+			fmt.Printf("Host Endpoint %s\n", r.Host)
+			array.nfsExports[resp.ID] = make(map[string]string)
+			array.nfsExports[resp.ID]["name"] = req.Name
+			array.nfsExports[resp.ID]["id"] = resp.ID
+			array.nfsExports[resp.ID]["path"] = req.Path
+			array.nfsExports[resp.ID]["file_system_id"] = req.FileSystemID
+
+			if len(req.ReadOnlyRootHosts) != 0 {
+				array.nfsExports[resp.ID]["read_root_hosts"] = req.ReadOnlyRootHosts[0]
+			} else if len(req.ReadWriteRootHosts) != 0 {
+				array.nfsExports[resp.ID]["write_root_hosts"] = req.ReadWriteRootHosts[0]
+			} else if len(req.ReadOnlyHosts) != 0 {
+				array.nfsExports[resp.ID]["read_hosts"] = req.ReadOnlyHosts[0]
+			} else if len(req.ReadWriteHosts) != 0 {
+				array.nfsExports[resp.ID]["write_hosts"] = req.ReadWriteHosts[0]
+			} else {
+				array.nfsExports[resp.ID]["read_hosts"] = ""
+				array.nfsExports[resp.ID]["write_hosts"] = ""
+				array.nfsExports[resp.ID]["read_root_hosts"] = ""
+				array.nfsExports[resp.ID]["write_root_hosts"] = ""
+			}
+
+		}
+
+		if debug {
+			log.Printf("request name: %s id: %s\n", req.Name, resp.ID)
+		}
+		encoder := json.NewEncoder(w)
+		err = encoder.Encode(resp)
+		if err != nil {
+			log.Printf("error encoding json: %s\n", err.Error())
+		}
+
+		log.Printf("end make nfsExports")
+	// Read all the Volumes
+	case http.MethodGet:
+		if stepHandlersErrors.NFSExportInstancesError {
+			writeError(w, "error getting the NFS Exports", http.StatusInternalServerError, codes.Internal)
+			return
+		}
+		instances := make([]*types.NFSExport, 0)
+		nfsExports := make(map[string]map[string]string)
+
+		if array, ok := systemArrays[r.Host]; ok {
+			nfsExports = array.nfsExports
+
+			for _, nfsExp := range nfsExports {
+
+				replacementMap := make(map[string]string)
+				replacementMap["__ID__"] = nfsExp["id"]
+				replacementMap["__NAME__"] = nfsExp["name"]
+				replacementMap["__PATH__"] = nfsExp["path"]
+				replacementMap["__FS_ID__"] = nfsExp["file_system_id"]
+				replacementMap["__READ_HOSTS__"] = nfsExp["read_hosts"]
+				replacementMap["__WRITE_HOSTS__"] = nfsExp["write_hosts"]
+				replacementMap["__READ_ROOT_HOSTS__"] = nfsExp["read_root_hosts"]
+				replacementMap["__WRITE_ROOT_HOSTS__"] = nfsExp["write_root_hosts"]
+				data := returnJSONFile("features", "nfsexport.json.template", nil, replacementMap)
+				nfsExp := new(types.NFSExport)
+				err := json.Unmarshal(data, nfsExp)
+				if err != nil {
+					log.Printf("error unmarshalling json: %s\n", string(data))
+				}
+				instances = append(instances, nfsExp)
+			}
+		}
+
+		// Add none-created volumes (old)
+		for id, name := range nfsExportIDName {
+			if _, ok := nfsExports[id]; ok {
+				continue
+			}
+
+			name = id
+			replacementMap := make(map[string]string)
+			replacementMap["__ID__"] = id
+			replacementMap["__NAME__"] = name
+			replacementMap["__PATH__"] = nfsExportIDPath[id]
+			replacementMap["__FS_ID__"] = nfsExportIDtoFsID[id]
+			if len(nfsExportIDReadOnlyRootHosts[id]) != 0 {
+				replacementMap["__READ_HOSTS__"] = nfsExportIDReadOnlyHosts[id][0]
+			} else if len(nfsExportIDReadWriteRootHosts[id]) != 0 {
+				replacementMap["__WRITE_HOSTS__"] = nfsExportIDReadWriteHosts[id][0]
+			} else if len(nfsExportIDReadWriteRootHosts[id]) != 0 {
+				replacementMap["__WRITE_ROOT_HOSTS__"] = nfsExportIDReadWriteRootHosts[id][0]
+			} else if len(nfsExportIDReadOnlyRootHosts[id]) != 0 {
+				replacementMap["__READ_ROOT_HOSTS__"] = nfsExportIDReadOnlyRootHosts[id][0]
+			} else {
+				replacementMap["__READ_HOSTS__"] = ""
+				replacementMap["__WRITE_HOSTS__"] = ""
+				replacementMap["__READ_ROOT_HOSTS__"] = ""
+				replacementMap["__WRITE_ROOT_HOSTS__"] = ""
+			}
+			data := returnJSONFile("features", "nfsexport.json.template", nil, replacementMap)
+			nfsExp := new(types.NFSExport)
+			err := json.Unmarshal(data, nfsExp)
+			if err != nil {
+				log.Printf("error unmarshalling json: %s\n", string(data))
+			}
+			instances = append(instances, nfsExp)
+		}
+
+		encoder := json.NewEncoder(w)
+		err := encoder.Encode(instances)
+		if err != nil {
+			log.Printf("error encoding json: %s\n", err)
+		}
+	}
+
+}
+
+func handleGetNFSExports(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+
+		vars := mux.Vars(r)
+		id := vars["id"]
+
+		fmt.Println("id:", id)
+		fmt.Println("fsidname", nfsExportIDName[id])
+
+		if inducedError.Error() == "nfsExportNotFoundError" {
+			writeError(w, "Could not find NFS Export", http.StatusNotFound, codes.NotFound)
+			return
+		}
+
+		// Insert to map if it doesn't exist.
+		if nfsExportIDName[id] == "" {
+			log.Printf("Did not find id %s \n", id)
+			writeError(w, "could not find nfsExport ", http.StatusNotFound, codes.NotFound)
+			return
+		}
+
+		replacementMap := make(map[string]string)
+		nfsExp := make(map[string]string)
+		if array, ok := systemArrays[r.Host]; ok {
+			nfsExp = array.nfsExports[id]
+		}
+
+		log.Printf("Get id %s\n", id)
+		if nfsExp != nil {
+			replacementMap["__ID__"] = nfsExp["id"]
+			replacementMap["__NAME__"] = nfsExp["name"]
+			replacementMap["__PATH__"] = nfsExp["path"]
+			replacementMap["__FS_ID__"] = nfsExp["file_system_id"]
+			replacementMap["__READ_HOSTS__"] = nfsExp["read_hosts"]
+			replacementMap["__WRITE_HOSTS__"] = nfsExp["write_hosts"]
+			replacementMap["__READ_ROOT_HOSTS__"] = nfsExp["read_root_hosts"]
+			replacementMap["__WRITE_ROOT_HOSTS__"] = nfsExp["write_root_hosts"]
+		} else {
+			replacementMap["__ID__"] = id
+			replacementMap["__NAME__"] = nfsExportIDName[id]
+			replacementMap["__PATH__"] = nfsExportIDPath[id]
+			replacementMap["__FS_ID__"] = nfsExportIDtoFsID[id]
+			if len(nfsExportIDReadOnlyRootHosts["id"]) != 0 {
+				replacementMap["__READ_HOSTS__"] = nfsExportIDReadOnlyHosts["id"][0]
+			} else if len(nfsExportIDReadWriteRootHosts["id"]) != 0 {
+				replacementMap["__WRITE_HOSTS__"] = nfsExportIDReadWriteHosts["id"][0]
+			} else if len(nfsExportIDReadWriteRootHosts["id"]) != 0 {
+				replacementMap["__WRITE_ROOT_HOSTS__"] = nfsExportIDReadWriteRootHosts["id"][0]
+			} else if len(nfsExportIDReadOnlyRootHosts["id"]) != 0 {
+				replacementMap["__READ_ROOT_HOSTS__"] = nfsExportIDReadOnlyRootHosts["id"][0]
+			} else {
+				replacementMap["__READ_HOSTS__"] = ""
+				replacementMap["__WRITE_HOSTS__"] = ""
+				replacementMap["__READ_ROOT_HOSTS__"] = ""
+				replacementMap["__WRITE_ROOT_HOSTS__"] = ""
+			}
+		}
+
+		if inducedError.Error() == "readHostsIncompatible" {
+			replacementMap["__READ_HOSTS__"] = "127.1.1.11/255.255.255.255"
+		}
+
+		if inducedError.Error() == "writeHostsIncompatible" {
+			replacementMap["__WRITE_HOSTS__"] = "127.1.1.11/255.255.255.255"
+		}
+
+		data := returnJSONFile("features", "nfsexport.json.template", nil, replacementMap)
+		nfsExp1 := new(types.NFSExport)
+		err := json.Unmarshal(data, nfsExp1)
+		if err != nil {
+			log.Printf("error unmarshalling json: %s\n", string(data))
+		}
+
+		encoder := json.NewEncoder(w)
+		err = encoder.Encode(nfsExp1)
+		if err != nil {
+			log.Printf("error encoding json: %s\n", err)
+		}
+	case http.MethodDelete:
+		vars := mux.Vars(r)
+		id := vars["id"]
+
+		// Insert to map if it doesn't exist.
+		if nfsExportIDName[id] == "" {
+			log.Printf("Did not find id %s \n", id)
+			writeError(w, "could not find nfsExport ", http.StatusNotFound, codes.NotFound)
+			return
+		}
+
+		if inducedError.Error() == "deleteNFSExportError" {
+			writeError(w, "delete NFS Export failed", http.StatusNotFound, codes.NotFound)
+			return
+		}
+
+		nfsExp := make(map[string]string)
+
+		if array, ok := systemArrays[r.Host]; ok {
+			nfsExp = array.nfsExports[id]
+			delete(array.nfsExports, id)
+		}
+		nfsExportIDName[id] = ""
+		nfsExportNameID[nfsExp["name"]] = ""
+		nfsExportIDPath[id] = ""
+		nfsExportIDtoFsID[id] = ""
+	case http.MethodPatch:
+		vars := mux.Vars(r)
+		id := vars["id"]
+		fmt.Println("id:", id)
+		fmt.Println("fsidname", nfsExportIDName[id])
+
+		if nfsExportIDName[id] == "" {
+			log.Printf("Did not find id %s \n", id)
+			writeError(w, "could not find nfsExport ", http.StatusNotFound, codes.NotFound)
+			return
+		}
+
+		if inducedError.Error() == "nfsExportModifyError" {
+			writeError(w, "Allocating host access failed", http.StatusGatewayTimeout, codes.Internal)
+			return
+		}
+
+		req := types.NFSExportModify{}
+		decoder := json.NewDecoder(r.Body)
+		err := decoder.Decode(&req)
+
+		if err != nil {
+			log.Printf("error decoding json: %s\n", err.Error())
+		}
+		fmt.Printf("patchReq:%#v\n", req)
+		if len(req.AddReadOnlyRootHosts) != 0 {
+			nfsExportIDReadOnlyRootHosts[id] = req.AddReadOnlyRootHosts
+		} else if len(req.AddReadWriteRootHosts) != 0 {
+			nfsExportIDReadWriteRootHosts[id] = req.AddReadWriteRootHosts
+		}
+		if array, ok := systemArrays[r.Host]; ok {
+			if len(req.AddReadOnlyRootHosts) != 0 {
+				array.nfsExports[id]["read_root_hosts"] = req.AddReadOnlyRootHosts[0]
+			} else if len(req.AddReadWriteRootHosts) != 0 {
+				array.nfsExports[id]["write_root_hosts"] = req.AddReadWriteRootHosts[0]
+			} else if len(req.AddReadOnlyHosts) != 0 {
+				array.nfsExports[id]["read_hosts"] = req.AddReadOnlyHosts[0]
+			} else if len(req.AddReadWriteHosts) != 0 {
+				array.nfsExports[id]["write_hosts"] = req.AddReadWriteHosts[0]
+			} else {
+				array.nfsExports[id]["read_hosts"] = ""
+				array.nfsExports[id]["write_hosts"] = ""
+				array.nfsExports[id]["read_root_hosts"] = ""
+				array.nfsExports[id]["write_root_hosts"] = ""
+			}
+
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+
+	}
+
+}
+
+func handleFileSystems(w http.ResponseWriter, r *http.Request) {
+
+	if fileSystemIDName == nil {
+		fileSystemIDName = make(map[string]string)
+		fileSystemNameToID = make(map[string]string)
+		fileSystemIDToSizeTotal = make(map[string]string)
+	}
+
+	if stepHandlersErrors.FileSystemInstancesError {
+		writeError(w, "induced error", http.StatusRequestTimeout, codes.Internal)
+		return
+	}
+
+	if stepHandlersErrors.BadCapacityError {
+		writeError(w, "bad capacity error", http.StatusBadRequest, codes.InvalidArgument)
+		return
+	}
+
+	switch r.Method {
+
+	// Post is CreateVolume; here just return a volume id encoded from the name
+	case http.MethodPost:
+		if inducedError.Error() == "CreateVolumeError" {
+			writeError(w, "create volume induced error", http.StatusRequestTimeout, codes.Internal)
+			return
+		}
+
+		req := types.FsCreate{}
+		decoder := json.NewDecoder(r.Body)
+		err := decoder.Decode(&req)
+		if err != nil {
+			log.Printf("error decoding json: %s\n", err.Error())
+		}
+
+		// good response
+		resp := new(types.FileSystemResp)
+		resp.ID = hex.EncodeToString([]byte(req.Name))
+		fileSystemIDName[resp.ID] = req.Name
+		fileSystemNameToID[req.Name] = resp.ID
+		fileSystemIDToSizeTotal[resp.ID] = strconv.Itoa(req.SizeTotal)
+
+		if array, ok := systemArrays[r.Host]; ok {
+			fmt.Printf("Host Endpoint %s\n", r.Host)
+			//array.fileSystems = make(map[string]map[string]string)
+			array.fileSystems[resp.ID] = make(map[string]string)
+			array.fileSystems[resp.ID]["name"] = req.Name
+			array.fileSystems[resp.ID]["id"] = resp.ID
+			array.fileSystems[resp.ID]["size_total"] = strconv.Itoa(req.SizeTotal)
+		}
+
+		if debug {
+			log.Printf("request name: %s id: %s\n", req.Name, resp.ID)
+		}
+		encoder := json.NewEncoder(w)
+		err = encoder.Encode(resp)
+		if err != nil {
+			log.Printf("error encoding json: %s\n", err.Error())
+		}
+
+		log.Printf("end make fileSystems")
+	// Read all the Volumes
+	case http.MethodGet:
+		instances := make([]*types.FileSystem, 0)
+		fileSystems := make(map[string]map[string]string)
+
+		if array, ok := systemArrays[r.Host]; ok {
+			fileSystems = array.fileSystems
+
+			for _, fs := range fileSystems {
+				replacementMap := make(map[string]string)
+				replacementMap["__ID__"] = fs["id"]
+				replacementMap["__NAME__"] = fs["name"]
+				replacementMap["__SIZE_IN_Total__"] = fs["size_total"]
+				data := returnJSONFile("features", "filesystem.json.template", nil, replacementMap)
+				fs := new(types.FileSystem)
+				err := json.Unmarshal(data, fs)
+				if err != nil {
+					log.Printf("error unmarshalling json: %s\n", string(data))
+				}
+				instances = append(instances, fs)
+			}
+		}
+
+		// Add none-created volumes (old)
+		for id, name := range fileSystemIDName {
+			if _, ok := fileSystems[id]; ok {
+				continue
+			}
+
+			name = id
+			replacementMap := make(map[string]string)
+			replacementMap["__ID__"] = id
+			replacementMap["__NAME__"] = name
+			replacementMap["__SIZE_IN_Total__"] = fileSystemIDToSizeTotal[id]
+			data := returnJSONFile("features", "filesystem.json.template", nil, replacementMap)
+			fs := new(types.FileSystem)
+			err := json.Unmarshal(data, fs)
+			if err != nil {
+				log.Printf("error unmarshalling json: %s\n", string(data))
+			}
+			instances = append(instances, fs)
+		}
+
+		encoder := json.NewEncoder(w)
+		err := encoder.Encode(instances)
+		if err != nil {
+			log.Printf("error encoding json: %s\n", err)
+		}
+	}
+}
+
+func handleGetFileSystems(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+
+	// Post is CreateVolume; here just return a volume id encoded from the name
+	case http.MethodGet:
+		vars := mux.Vars(r)
+		id := vars["id"]
+
+		if stepHandlersErrors.GetFileSystemsByIDError {
+			writeError(w, "induced error", http.StatusRequestTimeout, codes.Internal)
+			return
+		}
+
+		// Insert to map if it doesn't exist.
+		if fileSystemIDName[id] == "" {
+			log.Printf("Did not find id %s \n", id)
+			writeError(w, "could not find filesystem ", http.StatusNotFound, codes.NotFound)
+			return
+		}
+
+		replacementMap := make(map[string]string)
+		fs := make(map[string]string)
+		if array, ok := systemArrays[r.Host]; ok {
+			fs = array.fileSystems[id]
+		}
+
+		log.Printf("Get id %s\n", id)
+		if fs != nil {
+			replacementMap["__ID__"] = fs["id"]
+			replacementMap["__NAME__"] = fs["name"]
+			replacementMap["__SIZE_IN_Total__"] = fs["size_total"]
+		} else {
+			replacementMap["__ID__"] = id
+			replacementMap["__NAME__"] = fileSystemIDName[id]
+			replacementMap["__SIZE_IN_Total__"] = fileSystemIDToSizeTotal[id]
+		}
+
+		data := returnJSONFile("features", "filesystem.json.template", nil, replacementMap)
+		fs1 := new(types.FileSystem)
+		err := json.Unmarshal(data, fs1)
+		if err != nil {
+			log.Printf("error unmarshalling json: %s\n", string(data))
+		}
+
+		encoder := json.NewEncoder(w)
+		err = encoder.Encode(fs1)
+		if err != nil {
+			log.Printf("error encoding json: %s\n", err)
+		}
+	case http.MethodDelete:
+		vars := mux.Vars(r)
+		id := vars["id"]
+
+		// Insert to map if it doesn't exist.
+		if fileSystemIDName[id] == "" {
+			log.Printf("Did not find id %s \n", id)
+			writeError(w, "could not find filesystem ", http.StatusNotFound, codes.NotFound)
+			return
+		}
+
+		fs := make(map[string]string)
+
+		if array, ok := systemArrays[r.Host]; ok {
+			fs = array.fileSystems[id]
+			delete(array.fileSystems, id)
+		}
+		fileSystemIDName[id] = ""
+		fileSystemNameToID[fs["name"]] = ""
+		fileSystemIDToSizeTotal[id] = ""
+
+	}
+
+	// returnJSONFile("features", "get_file_system_response.json", w, nil)
 }
 
 // handleStoragePoolInstances implements GET /api/types/StoragePool/instances
@@ -308,8 +857,24 @@ func returnJSONFile(directory, filename string, w http.ResponseWriter, replaceme
 	if replacements != nil {
 		jsonString := string(jsonBytes)
 		for key, value := range replacements {
+			if value == "" {
+				if key == "__READ_HOSTS__" {
+					jsonString = strings.ReplaceAll(jsonString, `"read_only_hosts": ["__READ_HOSTS__"],`, "")
+					continue
+				} else if key == "__READ_ROOT_HOSTS__" {
+					jsonString = strings.ReplaceAll(jsonString, `"read_only_root_hosts": ["__READ_ROOT_HOSTS__"],`, "")
+					continue
+				} else if key == "__WRITE_HOSTS__" {
+					jsonString = strings.ReplaceAll(jsonString, `"read_write_hosts": ["__WRITE_HOSTS__"],`, "")
+					continue
+				} else if key == "__WRITE_ROOT_HOSTS__" {
+					jsonString = strings.ReplaceAll(jsonString, `"read_write_root_hosts": ["__WRITE_ROOT_HOSTS__"],`, "")
+					continue
+				}
+			}
 			jsonString = strings.Replace(jsonString, key, value, -1)
 		}
+
 		if debug {
 			log.Printf("Edited payload:\n%s\n", jsonString)
 		}
@@ -332,8 +897,31 @@ func returnJSONFile(directory, filename string, w http.ResponseWriter, replaceme
 // Map of volume ID to name
 var volumeIDToName map[string]string
 
+// Map of FileSystem ID to name
+var fileSystemIDName map[string]string
+
+// Map of NFSExport ID to name
+var nfsExportIDName map[string]string
+
 // Map of volume name to ID
 var volumeNameToID map[string]string
+
+// Map of FileSystem Name to ID
+var fileSystemNameToID map[string]string
+
+// Map of NFSExport Name to ID
+var nfsExportNameID map[string]string
+
+// Map of NFSExport ID to FilesystemID
+var nfsExportIDtoFsID map[string]string
+
+// Map of NFSExport ID to path
+var nfsExportIDPath map[string]string
+
+var nfsExportIDReadWriteRootHosts map[string][]string
+var nfsExportIDReadOnlyRootHosts map[string][]string
+var nfsExportIDReadOnlyHosts map[string][]string
+var nfsExportIDReadWriteHosts map[string][]string
 
 // Map of volume ID to ancestor ID
 var volumeIDToAncestorID map[string]string
@@ -350,6 +938,9 @@ var volumeIDToReplicationState map[string]string
 // Map of volume ID to size in KB
 var volumeIDToSizeInKB map[string]string
 
+// Map of FileSystem ID to size Total
+var fileSystemIDToSizeTotal map[string]string
+
 // Replication group state to replace for.
 var replicationGroupState string
 
@@ -358,12 +949,16 @@ type systemArray struct {
 	ID                           string
 	replicationSystem            *systemArray
 	volumes                      map[string]map[string]string
+	fileSystems                  map[string]map[string]string
+	nfsExports                   map[string]map[string]string
 	replicationConsistencyGroups map[string]map[string]string
 	replicationPairs             map[string]map[string]string
 }
 
 func (s *systemArray) Init() {
 	s.volumes = make(map[string]map[string]string)
+	s.fileSystems = make(map[string]map[string]string)
+	s.nfsExports = make(map[string]map[string]string)
 	s.replicationConsistencyGroups = make(map[string]map[string]string)
 	s.replicationPairs = make(map[string]map[string]string)
 }

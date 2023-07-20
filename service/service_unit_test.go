@@ -18,6 +18,7 @@ import (
 
 	"errors"
 	"fmt"
+
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	siotypes "github.com/dell/goscaleio/types/v1"
 	"github.com/stretchr/testify/assert"

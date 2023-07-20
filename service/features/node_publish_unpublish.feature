@@ -65,6 +65,224 @@ Feature: VxFlex OS CSI interface
     Examples:
       | error                                    | errormsg                               |
       | "NodePublishPrivateTargetAlreadyMounted" | "Mount point already in use by device" |
+  
+  Scenario: a Basic NFS Node Publish unpublish Volume no error
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "single-writer"
+    Then a valid PublishVolumeResponse is returned
+    And a capability with voltype "mount" access "single-writer" fstype "nfs"
+    Then I call NodePublishVolume NFS ""
+    Then the error contains "none"
+    Then I call NodeUnpublishVolume ""
+    Then the error contains "none"
+    
+   
+   Scenario: a Basic NFS Node Publish filesystem not found error
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "single-writer"
+    Then a valid PublishVolumeResponse is returned
+    And a capability with voltype "mount" access "single-writer" fstype "nfs"
+    And I set bad FileSystem Id 
+    Then I call NodePublishVolume NFS ""
+    Then the error contains "filesystem not found"
+    
+    
+    Scenario: a Basic NFS Node Publish Volume GetFileSystemsById error
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "single-writer"
+    Then a valid PublishVolumeResponse is returned
+    And a capability with voltype "mount" access "single-writer" fstype "nfs"
+    And I induce error "GetFileSystemsByIdError"
+    Then I call NodePublishVolume NFS ""
+    Then the error contains "filesystem not found"
+   
+   
+   Scenario: a Basic NFS Node Publish unpublish Volume no error
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "single-node-single-writer"
+    Then a valid PublishVolumeResponse is returned
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+    Then I call NodePublishVolume NFS ""
+    Then the error contains "none"
+    Then I call NodeUnpublishVolume ""
+    Then the error contains "none"
+    
+    
+    Scenario: a Basic Idempotent NFS Node Publish Unpublish Volume no error
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "single-node-single-writer"
+    Then a valid PublishVolumeResponse is returned
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+    Then I call NodePublishVolume NFS ""
+    Then the error contains "none"
+    Then I call NodePublishVolume NFS ""
+    Then the error contains "none"
+    Then I call NodeUnpublishVolume ""
+    Then the error contains "none"
+    
+    
+    Scenario: a Basic NFS Node Publish Volume NAS server not found error
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "single-node-single-writer"
+    Then a valid PublishVolumeResponse is returned
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+     And I induce error "NasNotFoundError"
+    Then I call NodePublishVolume NFS ""
+    Then the error contains "could not find NAS server by id"
+    
+    
+    Scenario: a Basic NFS Node Publish Volume File interface not found error
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "single-node-single-writer"
+    Then a valid PublishVolumeResponse is returned
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+     And I induce error "fileInterfaceNotFoundError"
+    Then I call NodePublishVolume NFS ""
+    Then the error contains "could not find the File interface using id"
+    
+    
+    Scenario: a Basic NFS Node Publish Volume unknown access mode error
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "single-reader"
+    Then the error contains "access mode cannot be UNKNOWN"
+    
+    
+    Scenario: a Basic NFS Node Publish Unpublish Volume no error
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "multiple-writer"
+    Then a valid PublishVolumeResponse is returned
+    And a capability with voltype "mount" access "multiple-writer" fstype "nfs"
+    Then I call NodePublishVolume NFS ""
+    Then the error contains "none"
+    Then I call NodeUnpublishVolume ""
+    Then the error contains "none"
+    
+    
+    
+    Scenario: a Basic NFS Node Publish Unpublish Volume filesystem not found error
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "multiple-writer"
+    Then a valid PublishVolumeResponse is returned
+    And a capability with voltype "mount" access "multiple-writer" fstype "nfs"
+    Then I call NodePublishVolume NFS ""
+    Then the error contains "none"
+    And I set bad FileSystem Id 
+    Then I call NodeUnpublishVolume ""
+    Then the error contains "filesystem not found"
+    
+    
+    Scenario: a Basic NFS Node Publish Unpublish Volume GetFileSystemsById error
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "multiple-writer"
+    Then a valid PublishVolumeResponse is returned
+    And a capability with voltype "mount" access "multiple-writer" fstype "nfs"
+    Then I call NodePublishVolume NFS ""
+    Then the error contains "none"
+    And I induce error "GetFileSystemsByIdError"
+    Then I call NodeUnpublishVolume ""
+    Then the error contains "filesystem not found"
+   
+   
+    Scenario Outline: Node Publish Unpublish mount volumes various induced error use cases from examples NFS volumes
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "multiple-writer"
+    Then a valid PublishVolumeResponse is returned
+    And a capability with voltype "mount" access "multiple-writer" fstype "nfs"
+    Then I call NodePublishVolume NFS ""
+    Then the error contains "none"
+    And I induce error <error>
+    And I call NodeUnpublishVolume ""
+    Then the error contains <errormsg>
+
+    Examples:
+      | error                                    | errormsg                                             |
+      | "NodeUnpublishBadVolume"                 | "none"                                               |
+      | "GOFSMockGetMountsError"                 | "could not reliably determine existing mount status" |
+      | "NodeUnpublishNoTargetPath"              | "target path argument is required"                   |
+      | "GOFSMockUnmountError"                   | "error unmounting target"                            |
+      | "PrivateDirectoryNotExistForNodePublish" | "none"                                               |
+      | "NoCsiVolIDError"                        | "volume ID is required"                              |
+      | "none"                                   | "none"                                               |
+    
+    
+    Scenario: a Basic NFS Node Publish Unpublish Volume no error
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "single-node-multi-writer"
+    Then a valid PublishVolumeResponse is returned
+    And a capability with voltype "mount" access "single-node-multi-writer" fstype "nfs"
+    Then I call NodePublishVolume NFS ""
+    Then the error contains "none"
+    Then I call NodeUnpublishVolume ""
+    Then the error contains "none"
+    
+  
+  Scenario Outline: Node publish mount volumes various induced error use cases from examples NFS volumes
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call NFS PublishVolume with "single-node-multi-writer"
+    Then a valid PublishVolumeResponse is returned
+    And a capability with voltype "mount" access "single-node-multi-writer" fstype "nfs"
+    And get Node Publish Volume Request NFS
+    And I induce error <error>
+    And I induce error <errorb>
+    When I call Probe
+    Then I call NodePublishVolume NFS ""
+    Then the error contains <errormsg>
+
+    Examples:
+      | error                                    | errorb                   | errormsg                                                    |
+      | "GOFSMockDevMountsError"                 | "none"                   | "none"                                                      |
+      | "GOFSMockMountError"                     | "none"                   | "mount induced error"                                       |
+      | "GOFSMockGetMountsError"                 | "none"                   | "could not reliably determine existing mount status"        |
+      | "TargetNotCreatedForNodePublish"         | "none"                   | "none"                                                      |
+      | "NodePublishNoTargetPath"                | "none"                   | "Target Path is required"                                   |                            
+      | "NodePublishNoVolumeCapability"          | "none"                   | "Volume Capability is required"                             |                          
+      | "NodePublishNoAccessMode"                | "none"                   | "Volume Access Mode is required"                            |
+      | "NodePublishNoAccessType"                | "none"                   | "Invalid access type"                                       |
+      | "NodePublishPrivateTargetAlreadyMounted" | "GOFSMockGetMountsError" | "could not reliably determine existing mount status"        |
+      | "NodePublishBadTargetPath"               | "none"                   | "cannot find the path specified@@no such file or directory" |
+      | "NoCsiVolIDError"                        | "none"                   | "volume ID is required"                                     |   
 
   Scenario Outline: Node publish mount volumes various induced error use cases from examples
     Given a VxFlexOS service
@@ -157,7 +375,6 @@ Feature: VxFlex OS CSI interface
       | "mount" | "multiple-reader" | "ext4" | "none"                                              |
       | "mount" | "multiple-writer" | "ext4" | "do not support AccessMode MULTI_NODE_MULTI_WRITER" |
 
-
   Scenario: Node publish but access modes conflicts 
    Given a VxFlexOS service
     And a controller published volume
@@ -191,7 +408,6 @@ Feature: VxFlex OS CSI interface
       #| "mount" | "single-writer"   | "ext4" | "Access mode conflicts with existing mounts"        |
       | "mount" | "multiple-writer" | "ext4" | "do not support AccessMode MULTI_NODE_MULTI_WRITER" |
 
-
   Scenario:  Node publish when read-only mount volume already published and I change the target path, access mode conflicts
    Given a VxFlexOS service
    And a controller published volume
@@ -203,9 +419,6 @@ Feature: VxFlex OS CSI interface
    And I mark request read only
    And I call NodePublishVolume "SDC_GUID"
    Then the error contains "Access mode conflicts with existing mounts"
-
-
-
 
   Scenario: Node publish volume with volume context
     Given a VxFlexOS service

@@ -5,7 +5,8 @@
       "password": "Password123",
       "insecure": true,
       "isDefault": true,
-      "systemID": "14dbbf5617523654"
+      "systemID": "14dbbf5617523654",
+      "nasName": "dummy-name"
    },
    {
       "endpoint": "http://127.0.0.2",
@@ -14,6 +15,7 @@
       "skipCertificateValidation": true,
       "isDefault": false,
       "systemID": "15dbbf5617523655",
-      "AllSystemNames" : "15dbbf5617523655-previous-name"
+      "AllSystemNames" : "15dbbf5617523655-previous-name",
+      "nasName": "dummy-name"
    }
 ]

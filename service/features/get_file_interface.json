@@ -1,0 +1,12 @@
+{
+    "id": "63ec8e22-c679-f44e-1fd2-b202f2b914f3",
+    "nas_server_id": "63ec8e0d-4551-29a7-e79c-b202f2b914f3",
+    "ip_address": "1.2.3.4",
+    "prefix_length": 21,
+    "gateway": "1.2.3.4",
+    "vlan_id": 0,
+    "name": "dummy_6d0b7cdc848d_3",
+    "role": "dummy",
+    "is_disabled": false,
+    "role_l10n": null
+}
