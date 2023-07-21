@@ -405,6 +405,12 @@ spec:
             - name: X_CSI_POWERFLEX_EXTERNAL_ACCESS
               value: "{{ .Values.externalAccess }}"
             {{- end }}
+            {{- if hasKey .Values "enableQuota" }}
+            {{- if eq .Values.enableQuota true}}
+            - name: X_CSI_QUOTA_ENABLED
+              value: "{{ .Values.enableQuota }}"
+            {{- end }}
+            {{- end }}
           volumeMounts:
             - name: socket-dir
               mountPath: /var/run/csi

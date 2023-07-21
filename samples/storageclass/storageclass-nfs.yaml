@@ -81,6 +81,28 @@ parameters:
   # Optional: true
   # Default value: "0777"
   # nfsAcls: "0777"
+
+  # path: relative path to the root of the associated filesystem.
+  # Allowed values: string
+  # Optional: true
+  # Default value: None
+  # Examples: /fs, /csi
+  # path: /csi
+
+  # softLimit: set soft limit to quota.
+  # Specified as a percentage
+  # Allowed values: int
+  # Optional: true
+  # Default value: 0, unlimited quota
+  # softLimit: "80"
+
+  # gracePeriod: Grace period of tree quota, must be mentioned along with softLimit, in seconds.
+  # Soft Limit can be exceeded until the grace period.
+  # No hard limit when set to -1.
+  # Allowed values: int
+  # Optional: true
+  # Default value : 0
+  # gracePeriod: "86400"
   
 # volumeBindingMode determines how volume binding and dynamic provisioning should occur
 # Allowed values:

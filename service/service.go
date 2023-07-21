@@ -146,8 +146,9 @@ type Opts struct {
 	IsApproveSDCEnabled        bool
 	replicationContextPrefix   string
 	replicationPrefix          string
-	NfsAcls                    string
-	ExternalAccess             string
+	NfsAcls                    string // enables setting permissions on NFS mount directory
+	ExternalAccess             string // allow additional entries for host to access NFS volumes
+	IsQuotaEnabled             bool   // allow driver to enable quota limits for NFS volumes
 }
 
 type service struct {
@@ -341,6 +342,7 @@ func (s *service) BeforeServe(
 			"IsApproveSDCEnabled":    s.opts.IsApproveSDCEnabled,
 			"nfsAcls":                s.opts.NfsAcls,
 			"externalAccess":         s.opts.ExternalAccess,
+			"IsQuotaEnabled":         s.opts.IsQuotaEnabled,
 		}
 
 		Log.WithFields(fields).Infof("configured %s", Name)
@@ -403,6 +405,11 @@ func (s *service) BeforeServe(
 	if approveSDC, ok := csictx.LookupEnv(ctx, EnvIsApproveSDCEnabled); ok {
 		if approveSDC == "true" {
 			opts.IsApproveSDCEnabled = true
+		}
+	}
+	if quotaEnabled, ok := csictx.LookupEnv(ctx, EnvQuotaEnabled); ok {
+		if quotaEnabled == "true" {
+			opts.IsQuotaEnabled = true
 		}
 	}
 

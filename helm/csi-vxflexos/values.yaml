@@ -66,6 +66,14 @@ imagePullPolicy: IfNotPresent
 # Default value: "0777"
 nfsAcls: "0777"
 
+# enableQuota: a boolean that, when enabled, will set quota limit for a newly provisioned NFS volume.
+# Allowed values:
+#   true: set quota for volume
+#   false: do not set quota for volume
+# Optional: true
+# Default value: none
+enableQuota: "false"
+
 # "enablesnapshotcgdelete"- a boolean that, when enabled, will delete all snapshots in a consistency group
 # everytime a snap in the group is deleted
 # Allowed values: true, false
