@@ -41,7 +41,9 @@ var (
 	publishGetMappedVolMaxRetry   = 30
 	unpublishGetMappedVolMaxRetry = 5
 	getMappedVolDelay             = (1 * time.Second)
-	GetNodeLabels                 = getNodelabels
+
+	// GetNodeLabels - Get the node labels
+	GetNodeLabels = getNodelabels
 )
 
 const (
