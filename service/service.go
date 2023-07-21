@@ -79,7 +79,7 @@ const (
 var mx = sync.Mutex{}
 var px = sync.Mutex{}
 
-// LookuoEnv - Fetches the environment var value
+// LookupEnv - Fetches the environment var value
 var LookupEnv = lookupEnv
 
 // ArrayConfigFile is file name with array connection data

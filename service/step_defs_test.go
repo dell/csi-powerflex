@@ -1890,6 +1890,13 @@ func (f *feature) iCallGetNodeLabelsWithInvalidNode() error {
 	return nil
 }
 
+func (f *feature) iCallGetNodeLabelsWithUnsetKubernetesClient() error {
+	K8sClientset = nil
+	ctx := new(context.Context)
+	f.nodeLabels, f.err = f.service.GetNodeLabels(*ctx)
+	return nil
+}
+
 func (f *feature) iCallNodeProbe() error {
 	ctx := new(context.Context)
 	req := new(csi.ProbeRequest)
@@ -4347,6 +4354,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call GetNodeLabels with invalid node$`, f.iCallGetNodeLabelsWithInvalidNode)
 	s.Step(`^I call NodeGetInfo with valid volume limit node labels$`, f.iCallNodeGetInfoWithValidVolumeLimitNodeLabels)
 	s.Step(`^I call NodeGetInfo with invalid volume limit node labels$`, f.iCallNodeGetInfoWithInvalidVolumeLimitNodeLabels)
+	s.Step(`^I call GetNodeLabels with unset KubernetesClient$`, f.iCallGetNodeLabelsWithUnsetKubernetesClient)
 	s.Step(`^I call DeleteVolume with "([^"]*)"$`, f.iCallDeleteVolumeWith)
 	s.Step(`^I call DeleteVolume with Bad "([^"]*)"$`, f.iCallDeleteVolumeWithBad)
 	s.Step(`^I call DeleteVolume nfs with "([^"]*)"$`, f.iCallDeleteVolumeNFSWith)

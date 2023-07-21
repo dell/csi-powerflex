@@ -424,7 +424,7 @@ Feature: VxFlex OS CSI interface
     When I call NodeGetInfo
     Then the error contains "maxVxflexosVolumesPerNode MUST NOT be set to negative value"
 
-  Scenario: Call GetNodeLabels with valide labels
+  Scenario: Call GetNodeLabels with valid labels
     Given a VxFlexOS service
     When I call GetNodeLabels
     Then a valid label is returned 
@@ -448,6 +448,11 @@ Feature: VxFlex OS CSI interface
     Given a VxFlexOS service
     When I set invalid EnvMaxVolumesPerNode
     Then the error contains "invalid int64 value"
+
+  Scenario: Call GetNodeLabels with invalid KubernetesClient
+    Given a VxFlexOS service
+    When I call GetNodeLabels with unset KubernetesClient
+    Then the error contains "init client failed with error"
 
   Scenario: Call GetCapacity without specifying Storage Pool Name (this returns overall capacity)
     Given a VxFlexOS service
