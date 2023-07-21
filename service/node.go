@@ -41,6 +41,7 @@ var (
 	publishGetMappedVolMaxRetry   = 30
 	unpublishGetMappedVolMaxRetry = 5
 	getMappedVolDelay             = (1 * time.Second)
+	GetNodeLabels                 = getNodelabels
 )
 
 const (
@@ -759,7 +760,7 @@ func (s *service) NodeGetInfo(
 		// Check for node label 'max-vxflexos-volumes-per-node'. If present set 'MaxVolumesPerNode' to this value.
 		// If node label is not present, set 'MaxVolumesPerNode' to default value i.e., 0
 
-		labels, err := s.GetNodeLabels(ctx)
+		labels, err := GetNodeLabels(ctx, s)
 		if err != nil {
 			return nil, err
 		}
@@ -1049,4 +1050,8 @@ func (s *service) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolum
 	}
 
 	return &csi.NodeExpandVolumeResponse{}, nil
+}
+
+func getNodelabels(ctx context.Context, s *service) (map[string]string, error) {
+	return s.GetNodeLabels(ctx)
 }
