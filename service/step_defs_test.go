@@ -1873,6 +1873,17 @@ func (f *feature) aValidLabelIsReturned() error {
 	return nil
 }
 
+func (f *feature) iSetInvalidEnvMaxVolumesPerNode() error {
+	LookupEnv = mockLookupEnv
+	os.Setenv("X_CSI_MAX_VOLUMES_PER_NODE", "invalid_value")
+	_, f.err = ParseInt64FromContext(f.context, EnvMaxVolumesPerNode)
+	return nil
+}
+
+func mockLookupEnv(ctx context.Context, key string) (string, bool) {
+	return "invalid_value", true
+}
+
 func (f *feature) iCallGetNodeLabelsWithInvalidNode() error {
 	os.Setenv("HOSTNAME", "node2")
 	_, f.err = f.service.GetNodeLabels(f.context)
@@ -4332,6 +4343,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^an invalid MaxVolumesPerNode$`, f.anInvalidMaxVolumesPerNode)
 	s.Step(`^I call GetNodeLabels$`, f.iCallGetNodeLabels)
 	s.Step(`^a valid label is returned$`, f.aValidLabelIsReturned)
+	s.Step(`^I set invalid EnvMaxVolumesPerNode$`, f.iSetInvalidEnvMaxVolumesPerNode)
 	s.Step(`^I call GetNodeLabels with invalid node$`, f.iCallGetNodeLabelsWithInvalidNode)
 	s.Step(`^I call NodeGetInfo with valid volume limit node labels$`, f.iCallNodeGetInfoWithValidVolumeLimitNodeLabels)
 	s.Step(`^I call NodeGetInfo with invalid volume limit node labels$`, f.iCallNodeGetInfoWithInvalidVolumeLimitNodeLabels)

@@ -444,6 +444,11 @@ Feature: VxFlex OS CSI interface
     When I call NodeGetInfo with valid volume limit node labels
     Then the Volume limit is set
 
+  Scenario: Call ParseInt64FromContext to validate EnvMaxVolumesPerNode
+    Given a VxFlexOS service
+    When I set invalid EnvMaxVolumesPerNode
+    Then the error contains "invalid int64 value"
+
   Scenario: Call GetCapacity without specifying Storage Pool Name (this returns overall capacity)
     Given a VxFlexOS service
     When I call Probe

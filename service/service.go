@@ -79,6 +79,9 @@ const (
 var mx = sync.Mutex{}
 var px = sync.Mutex{}
 
+// LookuoEnv - Fetches the environment var value
+var LookupEnv = lookupEnv
+
 // ArrayConfigFile is file name with array connection data
 var ArrayConfigFile string
 
@@ -1548,7 +1551,7 @@ func GetMessage(format string, args ...interface{}) string {
 
 // ParseInt64FromContext parses an environment variable into an int64 value.
 func ParseInt64FromContext(ctx context.Context, key string) (int64, error) {
-	if val, ok := csictx.LookupEnv(ctx, key); ok {
+	if val, ok := LookupEnv(ctx, key); ok {
 		i, err := strconv.ParseInt(val, 10, 64)
 		if err != nil {
 			return 0, fmt.Errorf("invalid int64 value '%v' specified for '%s'", val, key)
@@ -1556,4 +1559,8 @@ func ParseInt64FromContext(ctx context.Context, key string) (int64, error) {
 		return i, nil
 	}
 	return 0, nil
+}
+
+func lookupEnv(ctx context.Context, key string) (string, bool) {
+	return csictx.LookupEnv(ctx, key)
 }
