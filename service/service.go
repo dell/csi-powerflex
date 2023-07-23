@@ -723,6 +723,26 @@ func (s *service) getCSISnapshot(vol *siotypes.Volume, systemID string) *csi.Sna
 	return snapshot
 }
 
+func (s *service) getCSISnapshotFromFileSystem(fs *siotypes.FileSystem, systemID string) *csi.Snapshot {
+	slash := "/"
+	snapshot := &csi.Snapshot{
+		SizeBytes:      int64(fs.SizeTotal),
+		SnapshotId:     systemID + slash + fs.ID,
+		SourceVolumeId: fs.ParentID,
+		ReadyToUse:     true,
+	}
+	creationTime, _ := strconv.Atoi(fs.CreationTimestamp)
+	// Convert array timestamp to CSI timestamp and add
+	csiTimestamp, err := ptypes.TimestampProto(time.Unix(int64(creationTime), 0))
+	if err != nil {
+		Log.Printf("Could not convert time %v to ptypes.Timestamp %v\n", creationTime, csiTimestamp)
+	}
+	if csiTimestamp != nil {
+		snapshot.CreationTime = csiTimestamp
+	}
+	return snapshot
+}
+
 // Returns storage pool name from the given storage pool ID and system ID
 func (s *service) getStoragePoolNameFromID(systemID, id string) string {
 	storagePoolName := s.storagePoolIDToName[id]
