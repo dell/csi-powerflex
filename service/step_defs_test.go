@@ -1100,6 +1100,10 @@ func (f *feature) iInduceError(errtype string) error {
 		stepHandlersErrors.NoEndpointError = true
 	case "WrongVolIDError":
 		stepHandlersErrors.WrongVolIDError = true
+	case "WrongFileSystemIDError":
+		stepHandlersErrors.WrongFileSystemIDError = true
+	case "NoFileSystemIDError":
+		stepHandlersErrors.NoFileSystemIDError = true
 	case "WrongSystemError":
 		stepHandlersErrors.WrongSystemError = true
 	case "NFSExportsInstancesError":
@@ -3362,6 +3366,30 @@ func (f *feature) iCallCreateSnapshot(snapName string) error {
 	return nil
 }
 
+func (f *feature) iCallCreateSnapshotNFS(snapName string) error {
+	ctx := new(context.Context)
+
+	req := &csi.CreateSnapshotRequest{
+		SourceVolumeId: "14dbbf5617523654" + "/" + fileSystemNameToID["volume1"],
+		Name:           snapName,
+	}
+
+	if stepHandlersErrors.WrongFileSystemIDError {
+		req.SourceVolumeId = "14dbbf5617523654" + "/" + fileSystemNameToID["A Different Volume"]
+	}
+
+	if stepHandlersErrors.NoFileSystemIDError {
+		req.SourceVolumeId = "14dbbf5617523654" + "/" + fileSystemNameToID["volume2"]
+	}
+
+	fmt.Println("snapName is: ", snapName)
+	fmt.Println("ctx: ", *ctx)
+	fmt.Println("req: ", req)
+
+	f.createSnapshotResponse, f.err = f.service.CreateSnapshot(*ctx, req)
+	return nil
+}
+
 func (f *feature) aValidCreateSnapshotResponseIsReturned() error {
 	if f.err != nil {
 		return f.err
@@ -3390,6 +3418,20 @@ func (f *feature) iCallDeleteSnapshot() error {
 	} else if f.noVolumeID {
 		req.SnapshotId = ""
 	}
+	_, f.err = f.service.DeleteSnapshot(*ctx, req)
+	return nil
+}
+
+func (f *feature) iCallDeleteSnapshotNFS() error {
+	ctx := new(context.Context)
+	var req *csi.DeleteSnapshotRequest = new(csi.DeleteSnapshotRequest)
+	if fileSystemNameToID["snap1"] == "" {
+		req = &csi.DeleteSnapshotRequest{SnapshotId: "14dbbf5617523654" + "/" + "1111111", Secrets: make(map[string]string)}
+	} else {
+		req = &csi.DeleteSnapshotRequest{SnapshotId: "14dbbf5617523654" + "/" + fileSystemNameToID["snap1"], Secrets: make(map[string]string)}
+	}
+
+	req.Secrets["x"] = "y"
 	_, f.err = f.service.DeleteSnapshot(*ctx, req)
 	return nil
 }
@@ -4281,9 +4323,11 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call NodeGetCapabilities "([^"]*)"$`, f.iCallNodeGetCapabilities)
 	s.Step(`^a valid NodeGetCapabilitiesResponse is returned$`, f.aValidNodeGetCapabilitiesResponseIsReturned)
 	s.Step(`^I call CreateSnapshot "([^"]*)"$`, f.iCallCreateSnapshot)
+	s.Step(`^I call CreateSnapshot NFS "([^"]*)"$`, f.iCallCreateSnapshotNFS)
 	s.Step(`^a valid CreateSnapshotResponse is returned$`, f.aValidCreateSnapshotResponseIsReturned)
 	s.Step(`^a valid snapshot$`, f.aValidSnapshot)
 	s.Step(`^I call DeleteSnapshot$`, f.iCallDeleteSnapshot)
+	s.Step(`^I call DeleteSnapshot NFS$`, f.iCallDeleteSnapshotNFS)
 	s.Step(`^a valid snapshot consistency group$`, f.aValidSnapshotConsistencyGroup)
 	s.Step(`^I call Create Volume from Snapshot$`, f.iCallCreateVolumeFromSnapshot)
 	s.Step(`^the wrong capacity$`, f.theWrongCapacity)

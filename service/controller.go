@@ -2412,7 +2412,6 @@ func (s *service) DeleteSnapshot(
 			if err == nil {
 				return &csi.DeleteSnapshotResponse{}, nil
 			}
-
 			if err != nil {
 				if strings.Contains(err.Error(), sioGatewayFileSystemNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
 					Log.Printf("Snapshot %s already deleted on system %s \n", snapID, systemID)
@@ -2420,7 +2419,13 @@ func (s *service) DeleteSnapshot(
 				}
 				return nil, err
 			}
-
+		}
+		if err != nil {
+			if strings.Contains(err.Error(), sioGatewayFileSystemNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
+				Log.Printf("Snapshot %s already deleted on system %s \n", snapID, systemID)
+				return &csi.DeleteSnapshotResponse{}, nil
+			}
+			return nil, err
 		}
 	}
 
