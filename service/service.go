@@ -1554,7 +1554,7 @@ func ParseInt64FromContext(ctx context.Context, key string) (int64, error) {
 	if val, ok := LookupEnv(ctx, key); ok {
 		i, err := strconv.ParseInt(val, 10, 64)
 		if err != nil {
-			return 0, fmt.Errorf("Invalid int64 value '%v' specified for '%s'", val, key)
+			return 0, fmt.Errorf("invalid int64 value '%v' specified for '%s'", val, key)
 		}
 		return i, nil
 	}
