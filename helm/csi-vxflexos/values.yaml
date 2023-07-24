@@ -99,6 +99,12 @@ allowRWOMultiPodAccess: "false"
 #   None: volumes will be mounted with no modifications.
 fsGroupPolicy: File
 
+# maxVxflexosVolumesPerNode - Maximum number of volumes that controller can publish to the node.
+# Allowed values: integer
+# Default value: 0
+# Examples : 0 , 1
+maxVxflexosVolumesPerNode: 0
+
 # "controller" allows to configure controller specific parameters
 controller:
 
