@@ -2152,7 +2152,8 @@ func (s *service) CreateSnapshot(
 
 	}
 
-	volID := getVolumeIDFromCsiVolumeID(csiVolID)
+	isNFS := strings.Contains(csiVolID, "/")
+
 	systemID := s.getSystemIDFromCsiVolumeID(csiVolID)
 
 	if systemID == "" {
@@ -2183,6 +2184,71 @@ func (s *service) CreateSnapshot(
 	if req.Name == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "snapshot name cannot be Nil")
 	}
+
+	if isNFS {
+		fileSystemID := getFilesystemIDFromCsiVolumeID(csiVolID)
+		_, err := s.getFilesystemByID(fileSystemID, systemID)
+
+		if err != nil {
+			if strings.EqualFold(err.Error(), sioGatewayFileSystemNotFound) {
+				return nil, status.Errorf(codes.NotFound, "volume %s was not found", fileSystemID)
+			}
+		}
+
+		system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
+		if err != nil {
+			return nil, err
+		}
+
+		existingSnap, err := system.GetFileSystemByIDName("", req.Name)
+
+		if err == nil {
+			if existingSnap.ParentID != fileSystemID {
+				return nil, status.Errorf(codes.AlreadyExists,
+					"snapshot with name '%s' exists, but SourceVolumeId %s doesn't match", req.Name, fileSystemID)
+			}
+			snapResponse := s.getCSISnapshotFromFileSystem(existingSnap, systemID)
+
+			return &csi.CreateSnapshotResponse{Snapshot: snapResponse}, nil
+		}
+
+		resp, err := system.CreateFileSystemSnapshot(&siotypes.CreateFileSystemSnapshotParam{
+			Name: req.Name,
+		}, fileSystemID)
+
+		if err != nil {
+			return nil, status.Errorf(codes.Internal,
+				"error creating snapshot with name %s for filesystemId %s", req.Name, fileSystemID)
+		}
+
+		newSnap, err := system.GetFileSystemByIDName(resp.ID, "")
+
+		if err != nil {
+			if strings.EqualFold(err.Error(), sioGatewayFileSystemNotFound) {
+				return nil, status.Errorf(codes.NotFound, "snapshot with id %s was not found", resp.ID)
+			}
+		}
+
+		creationTime, _ := strconv.Atoi(newSnap.CreationTimestamp)
+
+		creationTimeUnix := time.Unix(int64(creationTime), 0)
+		creationTimeStamp, _ := ptypes.TimestampProto(creationTimeUnix)
+		slash := "/"
+		csiSnapshotID := systemID + slash + newSnap.ID
+		snapshot := &csi.Snapshot{SizeBytes: int64(newSnap.SizeTotal),
+			SnapshotId:     csiSnapshotID,
+			SourceVolumeId: csiVolID, ReadyToUse: true,
+			CreationTime: creationTimeStamp}
+		csiSnapResponse := &csi.CreateSnapshotResponse{Snapshot: snapshot}
+		s.clearCache()
+
+		Log.Printf("createSnapshot: SnapshotId %s SourceVolumeId %s CreationTime %s",
+			snapshot.SnapshotId, snapshot.SourceVolumeId, ptypes.TimestampString(snapshot.CreationTime))
+		return csiSnapResponse, nil
+
+	}
+
+	volID := getVolumeIDFromCsiVolumeID(csiVolID)
 
 	// Check for idempotent request, i.e. the snapshot has been already created, by looking up the name.
 	existingVols, err := s.adminClients[systemID].GetVolume("", "", "", req.Name, false)
@@ -2315,6 +2381,8 @@ func (s *service) DeleteSnapshot(
 		return nil, status.Errorf(codes.InvalidArgument, "snapshot ID to be deleted is required")
 	}
 
+	isNFS := strings.Contains(csiSnapID, "/")
+
 	systemID := s.getSystemIDFromCsiVolumeID(csiSnapID)
 	if systemID == "" {
 		// use default system
@@ -2329,6 +2397,36 @@ func (s *service) DeleteSnapshot(
 	// Requires probe
 	if err := s.requireProbe(ctx, systemID); err != nil {
 		return nil, err
+	}
+
+	if isNFS {
+		snapID := getFilesystemIDFromCsiVolumeID(csiSnapID)
+		system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
+		if err != nil {
+			return nil, fmt.Errorf("can't find system by id %s", systemID)
+		}
+		snap, err := s.getFilesystemByID(snapID, systemID)
+		if err == nil {
+			err = system.DeleteFileSystem(snap.Name)
+
+			if err == nil {
+				return &csi.DeleteSnapshotResponse{}, nil
+			}
+			if err != nil {
+				if strings.Contains(err.Error(), sioGatewayFileSystemNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
+					Log.Printf("Snapshot %s already deleted on system %s \n", snapID, systemID)
+					return &csi.DeleteSnapshotResponse{}, nil
+				}
+				return nil, err
+			}
+		}
+		if err != nil {
+			if strings.Contains(err.Error(), sioGatewayFileSystemNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
+				Log.Printf("Snapshot %s already deleted on system %s \n", snapID, systemID)
+				return &csi.DeleteSnapshotResponse{}, nil
+			}
+			return nil, err
+		}
 	}
 
 	snapID := getVolumeIDFromCsiVolumeID(csiSnapID)

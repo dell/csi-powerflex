@@ -63,12 +63,14 @@ var (
 		VolumeInstancesError          bool
 		FileSystemInstancesError      bool
 		GetFileSystemsByIDError       bool
+		NoFileSystemIDError           bool
 		NFSExportInstancesError       bool
 		NasServerNotFoundError        bool
 		FileInterfaceNotFoundError    bool
 		BadVolIDError                 bool
 		NoCsiVolIDError               bool
 		WrongVolIDError               bool
+		WrongFileSystemIDError        bool
 		WrongSystemError              bool
 		NoEndpointError               bool
 		NoUserError                   bool
@@ -132,6 +134,7 @@ func getHandler() http.Handler {
 	volumeIDToName = make(map[string]string)
 	fileSystemIDName = make(map[string]string)
 	fileSystemIDToSizeTotal = make(map[string]string)
+	fileSystemIDParentID = make(map[string]string)
 	nfsExportIDName = make(map[string]string)
 	fileSystemNameToID = make(map[string]string)
 	nfsExportNameID = make(map[string]string)
@@ -178,6 +181,8 @@ func getHandler() http.Handler {
 	stepHandlersErrors.GetFileSystemsByIDError = false
 	stepHandlersErrors.NoCsiVolIDError = false
 	stepHandlersErrors.WrongVolIDError = false
+	stepHandlersErrors.WrongFileSystemIDError = false
+	stepHandlersErrors.NoFileSystemIDError = false
 	stepHandlersErrors.WrongSystemError = false
 	stepHandlersErrors.NoEndpointError = false
 	stepHandlersErrors.NoUserError = false
@@ -231,6 +236,7 @@ func getRouter() http.Handler {
 	scaleioRouter.HandleFunc("/rest/v1/file-systems/{id}", handleGetFileSystems)
 	scaleioRouter.HandleFunc("/rest/v1/nfs-exports/{id}", handleGetNFSExports)
 	scaleioRouter.HandleFunc("/rest/v1/file-interfaces/{id}", handleGetFileInterface)
+	scaleioRouter.HandleFunc("/rest/v1/file-systems/{id}/snapshot", handleNFSSnapshots)
 	scaleioRouter.HandleFunc("/api/types/Volume/instances", handleVolumeInstances)
 	scaleioRouter.HandleFunc("/api/types/StoragePool/instances", handleStoragePoolInstances)
 	scaleioRouter.HandleFunc("{Volume}/relationship/Statistics", handleVolumeStatistics)
@@ -308,6 +314,54 @@ func handleSystemInstances(w http.ResponseWriter, r *http.Request) {
 	} else {
 		returnJSONFile("features", "get_system_instances.json", w, nil)
 	}
+}
+
+func handleNFSSnapshots(w http.ResponseWriter, r *http.Request) {
+
+	switch r.Method {
+	case http.MethodPost:
+
+		if inducedError.Error() == "CreateSnapshotsError" {
+			writeError(w, "error creating snapshot", http.StatusRequestTimeout, codes.Internal)
+			return
+		}
+		vars := mux.Vars(r)
+		id := vars["id"]
+		req := types.CreateFileSystemSnapshotParam{}
+		decoder := json.NewDecoder(r.Body)
+		err := decoder.Decode(&req)
+		if err != nil {
+			log.Printf("error decoding json: %s\n", err.Error())
+		}
+		resp := types.CreateFileSystemSnapshotResponse{}
+		resp.ID = hex.EncodeToString([]byte(req.Name))
+		fileSystemIDName[resp.ID] = req.Name
+		fileSystemNameToID[req.Name] = resp.ID
+		fileSystemIDParentID[resp.ID] = id
+		sizeTotal := fileSystemIDToSizeTotal[id]
+		fileSystemIDToSizeTotal[resp.ID] = sizeTotal
+
+		if array, ok := systemArrays[r.Host]; ok {
+			fmt.Printf("Host Endpoint %s\n", r.Host)
+			array.fileSystems[resp.ID] = make(map[string]string)
+			array.fileSystems[resp.ID]["name"] = req.Name
+			array.fileSystems[resp.ID]["id"] = resp.ID
+			array.fileSystems[resp.ID]["parent_id"] = id
+			array.fileSystems[resp.ID]["size_total"] = sizeTotal
+		}
+		if debug {
+			log.Printf("request name: %s id: %s\n", req.Name, resp.ID)
+		}
+		encoder := json.NewEncoder(w)
+		err = encoder.Encode(resp)
+		if err != nil {
+			log.Printf("error encoding json: %s\n", err.Error())
+		}
+
+		log.Printf("end make fileSystemSnapshots")
+
+	}
+
 }
 
 // handleSystemInstances implements GET /api/types/System/instances
@@ -715,6 +769,7 @@ func handleFileSystems(w http.ResponseWriter, r *http.Request) {
 				replacementMap["__ID__"] = fs["id"]
 				replacementMap["__NAME__"] = fs["name"]
 				replacementMap["__SIZE_IN_Total__"] = fs["size_total"]
+				replacementMap["__PARENT_ID__"] = fs["parent_id"]
 				data := returnJSONFile("features", "filesystem.json.template", nil, replacementMap)
 				fs := new(types.FileSystem)
 				err := json.Unmarshal(data, fs)
@@ -736,6 +791,7 @@ func handleFileSystems(w http.ResponseWriter, r *http.Request) {
 			replacementMap["__ID__"] = id
 			replacementMap["__NAME__"] = name
 			replacementMap["__SIZE_IN_Total__"] = fileSystemIDToSizeTotal[id]
+			replacementMap["__PARENT_ID__"] = fileSystemIDParentID[id]
 			data := returnJSONFile("features", "filesystem.json.template", nil, replacementMap)
 			fs := new(types.FileSystem)
 			err := json.Unmarshal(data, fs)
@@ -784,10 +840,24 @@ func handleGetFileSystems(w http.ResponseWriter, r *http.Request) {
 			replacementMap["__ID__"] = fs["id"]
 			replacementMap["__NAME__"] = fs["name"]
 			replacementMap["__SIZE_IN_Total__"] = fs["size_total"]
+			replacementMap["__PARENT_ID__"] = fs["parent_id"]
+			if fs["parent_id"] != "" {
+				if inducedError.Error() == "GetSnashotByIdError" {
+					writeError(w, "could not find snapshot id", http.StatusNotFound, codes.NotFound)
+					return
+				}
+			}
 		} else {
 			replacementMap["__ID__"] = id
 			replacementMap["__NAME__"] = fileSystemIDName[id]
 			replacementMap["__SIZE_IN_Total__"] = fileSystemIDToSizeTotal[id]
+			replacementMap["__PARENT_ID__"] = fileSystemIDParentID[id]
+			if fileSystemIDParentID[id] != "" {
+				if inducedError.Error() == "GetSnashotByIdError" {
+					writeError(w, "could not find snapshot id", http.StatusNotFound, codes.NotFound)
+					return
+				}
+			}
 		}
 
 		data := returnJSONFile("features", "filesystem.json.template", nil, replacementMap)
@@ -803,6 +873,10 @@ func handleGetFileSystems(w http.ResponseWriter, r *http.Request) {
 			log.Printf("error encoding json: %s\n", err)
 		}
 	case http.MethodDelete:
+		if inducedError.Error() == "DeleteSnapshotError" {
+			writeError(w, "error while deleting the filesytem snapshot", http.StatusGatewayTimeout, codes.Internal)
+			return
+		}
 		vars := mux.Vars(r)
 		id := vars["id"]
 
@@ -899,6 +973,9 @@ var volumeIDToName map[string]string
 
 // Map of FileSystem ID to name
 var fileSystemIDName map[string]string
+
+// Map of FileSystem ID to parentID
+var fileSystemIDParentID map[string]string
 
 // Map of NFSExport ID to name
 var nfsExportIDName map[string]string
