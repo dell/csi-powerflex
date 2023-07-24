@@ -615,8 +615,7 @@ Feature: VxFlex OS CSI interface
     Then a valid CreateVolumeResponse is returned
     And I call CreateSnapshot NFS "snap1"
     And no error was received
-   
-    
+     
    Scenario: Idempotent Snapshot a single fileSystem Volume
     Given a VxFlexOS service
     When I call Probe
@@ -625,15 +624,6 @@ Feature: VxFlex OS CSI interface
     Then a valid CreateVolumeResponse is returned
     And I call CreateSnapshot NFS "snap1"
     And no error was received
-    And I call CreateSnapshot NFS "snap1"
-    And no error was received
-    
-    Scenario: Snapshot a single fileSystem Volume
-    Given a VxFlexOS service
-    When I call Probe
-    And I specify CreateVolumeMountRequest "nfs"
-    And I call CreateVolume "volume1"
-    Then a valid CreateVolumeResponse is returned
     And I call CreateSnapshot NFS "snap1"
     And no error was received
   
