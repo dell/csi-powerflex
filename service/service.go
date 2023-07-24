@@ -51,6 +51,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -77,6 +78,9 @@ const (
 
 var mx = sync.Mutex{}
 var px = sync.Mutex{}
+
+// LookupEnv - Fetches the environment var value
+var LookupEnv = lookupEnv
 
 // ArrayConfigFile is file name with array connection data
 var ArrayConfigFile string
@@ -148,6 +152,7 @@ type Opts struct {
 	replicationPrefix          string
 	NfsAcls                    string
 	ExternalAccess             string
+	MaxVolumesPerNode          int64
 }
 
 type service struct {
@@ -341,6 +346,7 @@ func (s *service) BeforeServe(
 			"IsApproveSDCEnabled":    s.opts.IsApproveSDCEnabled,
 			"nfsAcls":                s.opts.NfsAcls,
 			"externalAccess":         s.opts.ExternalAccess,
+			"MaxVolumesPerNode":      s.opts.MaxVolumesPerNode,
 		}
 
 		Log.WithFields(fields).Infof("configured %s", Name)
@@ -416,6 +422,12 @@ func (s *service) BeforeServe(
 
 	if replicationPrefix, ok := csictx.LookupEnv(ctx, EnvReplicationPrefix); ok {
 		opts.replicationPrefix = replicationPrefix
+	}
+	if MaxVolumesPerNode, err := ParseInt64FromContext(ctx, EnvMaxVolumesPerNode); err != nil {
+		Log.Warnf("error while parsing env variable '%s', %s, defaulting to 0", EnvMaxVolumesPerNode, err)
+		opts.MaxVolumesPerNode = 0
+	} else {
+		opts.MaxVolumesPerNode = MaxVolumesPerNode
 	}
 
 	if nfsAcls, ok := csictx.LookupEnv(ctx, EnvNfsAcls); ok {
@@ -1508,4 +1520,47 @@ func (s *service) GetNfsTopology(systemID string) []*csi.Topology {
 	nfsTopology := new(csi.Topology)
 	nfsTopology.Segments = map[string]string{Name + "/" + systemID + "-nfs": "true"}
 	return []*csi.Topology{nfsTopology}
+}
+func (s *service) GetNodeLabels(ctx context.Context) (map[string]string, error) {
+	if K8sClientset == nil {
+		err := k8sutils.CreateKubeClientSet(KubeConfig)
+		if err != nil {
+			return nil, status.Error(codes.Internal, GetMessage("init client failed with error: %v", err))
+		}
+		K8sClientset = k8sutils.Clientset
+	}
+	hostName, ok := os.LookupEnv("HOSTNAME")
+	if !ok {
+		return nil, status.Errorf(codes.FailedPrecondition, "%s not set", "HOSTNAME")
+	}
+	hostName = strings.ToLower(hostName)
+	// access the API to fetch node object
+	node, err := K8sClientset.CoreV1().Nodes().Get(context.TODO(), hostName, v1.GetOptions{})
+	if err != nil {
+		return nil, status.Error(codes.Internal, GetMessage("Unable to fetch the node labels. Error: %v", err))
+	}
+	Log.Debugf("Node labels: %v\n", node.Labels)
+	return node.Labels, nil
+}
+
+// GetMessage - Get message
+func GetMessage(format string, args ...interface{}) string {
+	str := fmt.Sprintf(format, args...)
+	return str
+}
+
+// ParseInt64FromContext parses an environment variable into an int64 value.
+func ParseInt64FromContext(ctx context.Context, key string) (int64, error) {
+	if val, ok := LookupEnv(ctx, key); ok {
+		i, err := strconv.ParseInt(val, 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("invalid int64 value '%v' specified for '%s'", val, key)
+		}
+		return i, nil
+	}
+	return 0, nil
+}
+
+func lookupEnv(ctx context.Context, key string) (string, bool) {
+	return csictx.LookupEnv(ctx, key)
 }

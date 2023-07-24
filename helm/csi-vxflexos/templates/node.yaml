@@ -197,6 +197,8 @@ spec:
               value: "{{ .Values.kubeletConfigDir }}/plugins/vxflexos.emc.dell.com/disks"
             - name: X_CSI_ALLOW_RWO_MULTI_POD_ACCESS
               value: "{{ required "Must provide a true/false string to allow RWO multi pod access." .Values.allowRWOMultiPodAccess }}"
+            - name: X_CSI_MAX_VOLUMES_PER_NODE
+              value: "{{ .Values.maxVxflexosVolumesPerNode }}"
             - name: SSL_CERT_DIR
               value: /certs
             {{- if hasKey .Values.node "healthMonitor" }}
