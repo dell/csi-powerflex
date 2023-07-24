@@ -2263,6 +2263,108 @@ func (f *feature) controllerExpandVolumeForNfs(volID string, size int64) error {
 	return err
 }
 
+func (f *feature) ICallListFileSystemSnapshot() error {
+	ctx := context.Background()
+	if f.arrays == nil {
+		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
+		var err error
+		f.arrays, err = f.getArrayConfig()
+		if err != nil {
+			return errors.New("Get multi array config failed " + err.Error())
+		}
+	}
+
+	for _, a := range f.arrays {
+		systemid := a.SystemID
+		val, err := f.checkNFS(ctx, systemid)
+		if err != nil {
+			return err
+		}
+
+		if val {
+			c, err := f.getGoscaleioClient()
+			if err != nil {
+				return errors.New("Geting goscaleio client failed " + err.Error())
+			}
+			system, err := c.FindSystem(systemid, "", "")
+			if err != nil {
+				return err
+			}
+
+			FileSystems, err := system.GetAllFileSystems()
+			if err != nil {
+				return err
+			}
+			var FOUND_SNAP bool
+			for j := 0; j < len(FileSystems); j++ {
+				fs := FileSystems[j]
+				fs_id := fs.ID
+
+				if f.snapshotID != "" && strings.Contains(f.snapshotID, fs_id) {
+					FOUND_SNAP = true
+					fmt.Printf("FOUND_SNAP changed to %v", FOUND_SNAP)
+
+				}
+			}
+			if f.snapshotID != "" && !FOUND_SNAP {
+				msg := "ListFileSystemSnapshot does not contain snap id " + f.snapshotID
+				fmt.Print(msg)
+				return errors.New(msg)
+			}
+			return nil
+		}
+		fmt.Printf("Array with SystemId %s does not support NFS. Skipping this step", systemid)
+		return nil
+	}
+	return nil
+}
+
+func (f *feature) iCallCreateSnapshotForFS() error {
+	if f.createVolumeRequest == nil {
+		return nil
+	} else {
+		var err error
+		ctx := context.Background()
+		client := csi.NewControllerClient(grpcClient)
+		req := &csi.CreateSnapshotRequest{
+			SourceVolumeId: f.volID,
+			Name:           "snapshot-9x89727a-0000-11e9-ab1c-005056a64ad3",
+		}
+		resp, err := client.CreateSnapshot(ctx, req)
+		if err != nil {
+			fmt.Printf("CreateSnapshot returned error: %s\n", err.Error())
+			f.addError(err)
+		} else {
+			f.snapshotID = resp.Snapshot.SnapshotId
+			fmt.Printf("createSnapshot: SnapshotId %s SourceVolumeId %s CreationTime %s\n",
+				resp.Snapshot.SnapshotId, resp.Snapshot.SourceVolumeId, ptypes.TimestampString(resp.Snapshot.CreationTime))
+		}
+		time.Sleep(RetrySleepTime)
+		return nil
+	}
+}
+
+func (f *feature) iCallDeleteSnapshotForFS() error {
+	if f.createVolumeRequest == nil {
+		return nil
+	} else {
+		ctx := context.Background()
+		client := csi.NewControllerClient(grpcClient)
+		req := &csi.DeleteSnapshotRequest{
+			SnapshotId: f.snapshotID,
+		}
+		_, err := client.DeleteSnapshot(ctx, req)
+		if err != nil {
+			fmt.Printf("DeleteSnapshot returned error: %s\n", err.Error())
+			f.addError(err)
+		} else {
+			fmt.Printf("DeleteSnapshot: SnapshotId %s\n", req.SnapshotId)
+		}
+		time.Sleep(RetrySleepTime)
+		return nil
+	}
+}
+
 func (f *feature) checkNFS(ctx context.Context, systemID string) (bool, error) {
 
 	c, err := f.getGoscaleioClient()
@@ -2363,4 +2465,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^when I call NodeUnpublishVolume for nfs "([^"]*)"$`, f.whenICallNodeUnpublishVolumeForNfs)
 	s.Step(`^when I call UnpublishVolume for nfs "([^"]*)"$`, f.whenICallUnpublishVolumeForNfs)
 	s.Step(`^when I call NfsExpandVolume to "([^"]*)"$`, f.whenICallNfsExpandVolumeTo)
+	s.Step(`^I call ListFileSystemSnapshot$`, f.ICallListFileSystemSnapshot)
+	s.Step(`^I call CreateSnapshotForFS$`, f.iCallCreateSnapshotForFS)
+	s.Step(`^I call DeleteSnapshotForFS$`, f.iCallDeleteSnapshotForFS)
 }
