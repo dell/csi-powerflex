@@ -2422,7 +2422,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^the VolumeCondition is "([^"]*)"$`, f.theVolumeConditionIs)
 	s.Step(`^a basic nfs volume request with wrong nasname "([^"]*)" "(\d+)"$`, f.aBasicNfsVolumeRequestWithWrongNasName)
 	s.Step(`^a basic nfs volume request "([^"]*)" "(\d+)"$`, f.aBasicNfsVolumeRequest)
-	s.Step(`^a nfs volume request with quota enabled volname "([^"]*)" volsize "(\d+)" path "([^"]*)" softlimit "([^"]*)" graceperiod "([^"]*)"$`, f.aNfsexpandVolumeRequestWithQuota)
+	s.Step(`^a basic nfs volume request with quota enabled volname "([^"]*)" volsize "(\d+)" path "([^"]*)" softlimit "([^"]*)" graceperiod "([^"]*)"$`, f.aNfsVolumeRequestWithQuota)
 	s.Step(`^a nfs capability with voltype "([^"]*)" access "([^"]*)" fstype "([^"]*)"$`, f.aNfsCapabilityWithVoltypeAccessFstype)
 	s.Step(`^a nfs volume request "([^"]*)" "(\d+)"$`, f.aNfsVolumeRequest)
 	s.Step(`^when I call PublishVolume for nfs "([^"]*)"$`, f.whenICallPublishVolumeForNfs)
