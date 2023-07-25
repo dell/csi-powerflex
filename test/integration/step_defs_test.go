@@ -333,6 +333,72 @@ func (f *feature) aBasicNfsVolumeRequest(name string, size int64) error {
 	return nil
 }
 
+func (f *feature) aNfsVolumeRequestWithQuota(volname string, volsize int64, path string, softlimit string, graceperiod string) error {
+	req := new(csi.CreateVolumeRequest)
+	params := make(map[string]string)
+
+	ctx := context.Background()
+
+	fmt.Println("f.arrays,len", f.arrays, f.arrays)
+
+	if f.arrays == nil {
+		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
+		var err error
+		f.arrays, err = f.getArrayConfig()
+		if err != nil {
+			return errors.New("Get multi array config failed " + err.Error())
+		}
+	}
+
+	for _, a := range f.arrays {
+		systemid := a.SystemID
+		val, err := f.checkNFS(ctx, systemid)
+		if err != nil {
+			return err
+		}
+
+		if val {
+			if a.NasName != nil {
+				params["nasName"] = *a.NasName
+				params["nfsAcls"] = a.NfsAcls
+			}
+			params["storagepool"] = NfsPool
+			params["thickprovisioning"] = "false"
+			params["isQuotaEnabled"] = "true"
+			params["softLimit"] = softlimit
+			params["path"] = path
+			params["gracePeriod"] = graceperiod
+			if len(f.anotherSystemID) > 0 {
+				params["systemID"] = f.anotherSystemID
+			}
+			req.Parameters = params
+			makeAUniqueName(&volname)
+			req.Name = volname
+			capacityRange := new(csi.CapacityRange)
+			capacityRange.RequiredBytes = volsize * 1024 * 1024 * 1024
+			req.CapacityRange = capacityRange
+			capability := new(csi.VolumeCapability)
+			mount := new(csi.VolumeCapability_MountVolume)
+			mount.FsType = "nfs"
+			mountType := new(csi.VolumeCapability_Mount)
+			mountType.Mount = mount
+			capability.AccessType = mountType
+			accessMode := new(csi.VolumeCapability_AccessMode)
+			accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER
+			capability.AccessMode = accessMode
+			f.capability = capability
+			capabilities := make([]*csi.VolumeCapability, 0)
+			capabilities = append(capabilities, capability)
+			req.VolumeCapabilities = capabilities
+			f.createVolumeRequest = req
+			return nil
+		}
+		fmt.Printf("Array with SystemId %s does not support NFS. Skipping this step", systemid)
+		return nil
+	}
+	return nil
+}
+
 func (f *feature) accessTypeIs(arg1 string) error {
 	switch arg1 {
 	case "multi-writer":
@@ -2356,6 +2422,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^the VolumeCondition is "([^"]*)"$`, f.theVolumeConditionIs)
 	s.Step(`^a basic nfs volume request with wrong nasname "([^"]*)" "(\d+)"$`, f.aBasicNfsVolumeRequestWithWrongNasName)
 	s.Step(`^a basic nfs volume request "([^"]*)" "(\d+)"$`, f.aBasicNfsVolumeRequest)
+	s.Step(`^a nfs volume request with quota enabled volname "([^"]*)" volsize "(\d+)" path "([^"]*)" softlimit "([^"]*)" graceperiod "([^"]*)"$`, f.aNfsexpandVolumeRequestWithQuota)
 	s.Step(`^a nfs capability with voltype "([^"]*)" access "([^"]*)" fstype "([^"]*)"$`, f.aNfsCapabilityWithVoltypeAccessFstype)
 	s.Step(`^a nfs volume request "([^"]*)" "(\d+)"$`, f.aNfsVolumeRequest)
 	s.Step(`^when I call PublishVolume for nfs "([^"]*)"$`, f.whenICallPublishVolumeForNfs)

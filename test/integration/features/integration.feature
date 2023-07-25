@@ -523,6 +523,33 @@ Feature: VxFlex OS CSI interface
     And when I call DeleteVolume
     Then there are no errors
 
+  Scenario: Create and delete basic nfs volume with tree quota enabled
+    Given a VxFlexOS service
+    And a basic nfs volume request with quota enabled volname "nfsvolume1" volsize "8" path "/nfs-quota" softlimit "80" graceperiod "86400"
+    When I call CreateVolume
+    When I call ListVolume
+    Then a valid ListVolumeResponse is returned
+    And when I call DeleteVolume
+    Then there are no errors    
+
+  Scenario: Create basic nfs volume with tree quota enabled with empty path value
+    Given a VxFlexOS service
+    And a basic nfs volume request with quota enabled volname "nfsvolume1" volsize "8" path "" softlimit "80" graceperiod "86400"
+    When I call CreateVolume
+    Then the error message should contain <errormsg>
+    Examples:
+      | errormsg    |
+      | "error creating quota, path cannot be empty" |
+
+  Scenario: Create basic nfs volume with tree quota enabled with empty path value
+    Given a VxFlexOS service
+    And a basic nfs volume request with quota enabled volname "nfsvolume00" volsize "8" path "/nfs12" softlimit "80" graceperiod ""
+    When I call CreateVolume
+    Then the error message should contain <errormsg>
+    Examples:
+      | errormsg    |
+      | "error creating quota, graceperiod cannot be empty" |      
+
   Scenario: Create and delete 100000G NFS volume
     Given a VxFlexOS service
     And max retries 1
