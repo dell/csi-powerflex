@@ -1265,12 +1265,14 @@ Feature: VxFlex OS CSI interface
     When I call Node Probe
     Then the error contains "The given GUID is invalid"
 
-  Scenario: Controller expand volume for NFS
+  Scenario: Controller expand volume for NFS with quota enabled
     Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I set quota with path "/fs" softLimit "20" graceperiod "86400"
     And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
     When I call CreateVolumeSize nfs "vol-inttest-nfs" "8"
     And a controller published volume
-    When I call ControllerExpandVolume set to "10"
+    When I call ControllerExpandVolume set to "12"
     Then no error was received
 
   Scenario: Controller shrink volume for NFS
