@@ -149,6 +149,11 @@ func getHandler() http.Handler {
 	nfsExportIDReadWriteRootHosts = make(map[string][]string)
 	nfsExportIDReadWriteHosts = make(map[string][]string)
 	nfsExportIDReadOnlyHosts = make(map[string][]string)
+	treeQuotaID = make(map[string]string)
+	treeQuotaIDToPath = make(map[string]string)
+	treeQuotaIDToSoftLimit = make(map[string]string)
+	treeQuotaIDToGracePeriod = make(map[string]string)
+	treeQuotaIDToHardLimit = make(map[string]string)
 	debug = false
 	stepHandlersErrors.FindVolumeIDError = false
 	stepHandlersErrors.GetVolByIDError = false
@@ -245,6 +250,8 @@ func getRouter() http.Handler {
 	scaleioRouter.HandleFunc("/api/types/PeerMdm/instances", handlePeerMdmInstances)
 	scaleioRouter.HandleFunc("/api/types/ReplicationConsistencyGroup/instances", handleReplicationConsistencyGroupInstances)
 	scaleioRouter.HandleFunc("/api/types/ReplicationPair/instances", handleReplicationPairInstances)
+	scaleioRouter.HandleFunc("/rest/v1/file-tree-quotas", handleFileTreeQuotas)
+	scaleioRouter.HandleFunc("/rest/v1/file-tree-quotas/{id}", handleGetFileTreeQuotas)
 	return scaleioRouter
 }
 
@@ -896,7 +903,28 @@ func handleGetFileSystems(w http.ResponseWriter, r *http.Request) {
 		fileSystemIDName[id] = ""
 		fileSystemNameToID[fs["name"]] = ""
 		fileSystemIDToSizeTotal[id] = ""
+	case http.MethodPatch:
+		vars := mux.Vars(r)
+		id := vars["id"]
+		fmt.Println("id:", id)
 
+		req := types.FSModify{}
+		decoder := json.NewDecoder(r.Body)
+		err := decoder.Decode(&req)
+		if err != nil {
+			log.Printf("error decoding json: %s\n", err.Error())
+		}
+		fmt.Printf("patchReq:%#v\n", req)
+		if array, ok := systemArrays[r.Host]; ok {
+			array.fileSystems[id]["size"] = strconv.Itoa(req.Size)
+			array.fileSystems[id]["description"] = req.Description
+			array.fileSystems[id]["isquotaenabled"] = strconv.FormatBool(req.IsQuotaEnabled)
+			array.fileSystems[id]["hardlimit"] = strconv.Itoa(req.DefaultHardLimit)
+			array.fileSystems[id]["softlimit"] = strconv.Itoa(req.DefaultSoftLimit)
+			array.fileSystems[id]["graceperiod"] = strconv.Itoa(req.GracePeriod)
+		}
+		w.WriteHeader(http.StatusNoContent)
+		log.Printf("end modify file systems")
 	}
 
 	// returnJSONFile("features", "get_file_system_response.json", w, nil)
@@ -1021,6 +1049,21 @@ var fileSystemIDToSizeTotal map[string]string
 // Replication group state to replace for.
 var replicationGroupState string
 
+// Map of Tree quota ID
+var treeQuotaID map[string]string
+
+// Map of Tree quota ID to Path
+var treeQuotaIDToPath map[string]string
+
+// Map of Tree quota ID to soft limit
+var treeQuotaIDToSoftLimit map[string]string
+
+// Map of Tree quota ID to grace period
+var treeQuotaIDToGracePeriod map[string]string
+
+// Map of Tree quota ID to hard limit
+var treeQuotaIDToHardLimit map[string]string
+
 // Possible rework, every systemID should have a instances similar to an array.
 type systemArray struct {
 	ID                           string
@@ -1030,6 +1073,7 @@ type systemArray struct {
 	nfsExports                   map[string]map[string]string
 	replicationConsistencyGroups map[string]map[string]string
 	replicationPairs             map[string]map[string]string
+	treeQuotas                   map[string]map[string]string
 }
 
 func (s *systemArray) Init() {
@@ -1038,6 +1082,7 @@ func (s *systemArray) Init() {
 	s.nfsExports = make(map[string]map[string]string)
 	s.replicationConsistencyGroups = make(map[string]map[string]string)
 	s.replicationPairs = make(map[string]map[string]string)
+	s.treeQuotas = make(map[string]map[string]string)
 }
 
 func (s *systemArray) Link(remoteSystem *systemArray) {
@@ -1978,6 +2023,123 @@ func handleReplicationPairInstances(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("error encoding json: %s\n", err)
 		}
+	}
+}
+
+func handleFileTreeQuotas(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPost:
+		req := types.TreeQuotaCreate{}
+		decoder := json.NewDecoder(r.Body)
+		err := decoder.Decode(&req)
+		if err != nil {
+			log.Printf("error decoding json: %s\n", err.Error())
+		}
+
+		// good response
+		resp := new(types.TreeQuotaCreateResponse)
+		resp.ID = hex.EncodeToString([]byte("dummy-name"))
+		treeQuotaID[resp.ID] = resp.ID
+		treeQuotaIDToPath[resp.ID] = req.Path
+		treeQuotaIDToSoftLimit[resp.ID] = strconv.Itoa(req.SoftLimit)
+		treeQuotaIDToGracePeriod[resp.ID] = strconv.Itoa(req.GracePeriod)
+		treeQuotaIDToHardLimit[resp.ID] = strconv.Itoa(req.HardLimit)
+
+		if array, ok := systemArrays[r.Host]; ok {
+			fmt.Printf("Host Endpoint %s\n", r.Host)
+			array.treeQuotas[resp.ID] = make(map[string]string)
+			array.treeQuotas[resp.ID]["id"] = resp.ID
+			array.treeQuotas[resp.ID]["path"] = req.Path
+			array.treeQuotas[resp.ID]["description"] = req.Description
+			array.treeQuotas[resp.ID]["softlimit"] = strconv.Itoa(req.SoftLimit)
+			array.treeQuotas[resp.ID]["graceperiod"] = strconv.Itoa(req.GracePeriod)
+			array.treeQuotas[resp.ID]["hardlimit"] = strconv.Itoa(req.HardLimit)
+		}
+		if debug {
+			log.Printf("request \"dummy-name\" id: %s\n", resp.ID)
+		}
+		encoder := json.NewEncoder(w)
+		err = encoder.Encode(resp)
+		if err != nil {
+			log.Printf("error encoding json: %s\n", err.Error())
+		}
+		log.Printf("end make tree quotas")
+	case http.MethodGet:
+		instances := make([]*types.TreeQuota, 0)
+		treeQuotas := make(map[string]map[string]string)
+
+		if array, ok := systemArrays[r.Host]; ok {
+			treeQuotas = array.treeQuotas
+
+			for _, tq := range treeQuotas {
+				replacementMap := make(map[string]string)
+				replacementMap["__ID__"] = tq["id"]
+				replacementMap["__PATH__"] = tq["path"]
+				replacementMap["__HARD_LIMIT_SIZE__"] = tq["hardlimit"]
+				replacementMap["__SOFT_LIMIT_SIZE__"] = tq["softlimit"]
+				replacementMap["__GRACE_PERIOD__"] = tq["graceperiod"]
+				data := returnJSONFile("features", "treequota.json.template", nil, replacementMap)
+				tq := new(types.TreeQuota)
+				err := json.Unmarshal(data, tq)
+				if err != nil {
+					log.Printf("error unmarshalling json: %s\n", string(data))
+				}
+				instances = append(instances, tq)
+			}
+		}
+
+		// Add none-created volumes (old)
+		for id, _ := range treeQuotaID {
+			if _, ok := treeQuotaID[id]; ok {
+				continue
+			}
+
+			replacementMap := make(map[string]string)
+			replacementMap["__ID__"] = id
+			replacementMap["__PATH__"] = treeQuotaIDToPath["path"]
+			replacementMap["__HARD_LIMIT_SIZE__"] = treeQuotaIDToHardLimit["hardlimit"]
+			replacementMap["__SOFT_LIMIT_SIZE__"] = treeQuotaIDToSoftLimit["softlimit"]
+			replacementMap["__GRACE_PERIOD__"] = treeQuotaIDToGracePeriod["graceperiod"]
+			data := returnJSONFile("features", "filesystem.json.template", nil, replacementMap)
+			tq := new(types.TreeQuota)
+			err := json.Unmarshal(data, tq)
+			if err != nil {
+				log.Printf("error unmarshalling json: %s\n", string(data))
+			}
+			instances = append(instances, tq)
+		}
+
+		encoder := json.NewEncoder(w)
+		err := encoder.Encode(instances)
+		if err != nil {
+			log.Printf("error encoding json: %s\n", err)
+		}
+		log.Printf("end get tree quotas")
+	}
+}
+
+func handleGetFileTreeQuotas(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPatch:
+		vars := mux.Vars(r)
+		id := vars["id"]
+		fmt.Println("id:", id)
+
+		req := types.TreeQuotaModify{}
+		decoder := json.NewDecoder(r.Body)
+		err := decoder.Decode(&req)
+		if err != nil {
+			log.Printf("error decoding json: %s\n", err.Error())
+		}
+		fmt.Printf("patchReq:%#v\n", req)
+		if array, ok := systemArrays[r.Host]; ok {
+			array.treeQuotas[id]["description"] = req.Description
+			array.treeQuotas[id]["softlimit"] = strconv.Itoa(req.SoftLimit)
+			array.treeQuotas[id]["graceperiod"] = strconv.Itoa(req.GracePeriod)
+			array.treeQuotas[id]["hardlimit"] = strconv.Itoa(req.HardLimit)
+		}
+		w.WriteHeader(http.StatusNoContent)
+		log.Printf("end modify tree quotas")
 	}
 }
 
