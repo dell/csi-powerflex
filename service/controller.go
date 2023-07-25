@@ -316,7 +316,7 @@ func (s *service) CreateVolume(
 			snapshotSource := contentSource.GetSnapshot()
 			if snapshotSource != nil {
 				Log.Printf("snapshot %s specified as volume content source", snapshotSource.SnapshotId)
-				return s.createVolumeFromSnapshot(req, snapshotSource, name, size, storagePoolID)
+				return s.createVolumeFromSnapshot(req, snapshotSource, name, size, storagePoolName)
 			}
 		}
 		// log all parameters used in CreateVolume call
