@@ -616,16 +616,16 @@ Feature: VxFlex OS CSI interface
     And I call CreateSnapshot NFS "snap1"
     And no error was received
      
-#   Scenario: Idempotent Snapshot a single fileSystem Volume
-#    Given a VxFlexOS service
-#    When I call Probe
-#    And I specify CreateVolumeMountRequest "nfs"
-#    And I call CreateVolume "volume1"
-#    Then a valid CreateVolumeResponse is returned
-#    And I call CreateSnapshot NFS "snap1"
-#    And no error was received
-#    And I call CreateSnapshot NFS "snap1"
-#    And no error was received
+   Scenario: Idempotent Snapshot a single fileSystem Volume
+    Given a VxFlexOS service
+    When I call Probe
+    And I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call CreateSnapshot NFS "snap1"
+    And no error was received
+    And I call CreateSnapshot NFS "snap1"
+    And no error was received
   
    Scenario: Snapshot a single fileSystem Volume large name
     Given a VxFlexOS service
@@ -1265,17 +1265,15 @@ Feature: VxFlex OS CSI interface
     When I call Node Probe
     Then the error contains "The given GUID is invalid"
 
-#  @wip
-#  Scenario: Controller expand volume for NFS
-#    Given a VxFlexOS service
-#    And I disable quota for filesystem
-#    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
-#    When I call CreateVolumeSize nfs "vol-inttest-nfs" "8"
-#    And a controller published volume
-#    When I call ControllerExpandVolume set to "10"
-#    Then no error was received
+  Scenario: Controller expand volume for NFS
+    Given a VxFlexOS service
+    And I disable quota for filesystem
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+    When I call CreateVolumeSize nfs "vol-inttest-nfs" "8"
+    And a controller published volume
+    When I call ControllerExpandVolume set to "10"
+    Then no error was received
 
-#  @wip
   Scenario: Controller expand volume for NFS with quota enabled
     Given a VxFlexOS service
     And I enable quota for filesystem
@@ -1320,7 +1318,6 @@ Feature: VxFlex OS CSI interface
     Then I call ControllerExpandVolume set to "16"
     And the error contains "volume ID is required"
 
-#  @wip
   Scenario: Controller expand volume for NFS with quota enabled, modify filesystem error
     Given a VxFlexOS service
     And I enable quota for filesystem
@@ -1332,7 +1329,6 @@ Feature: VxFlex OS CSI interface
     When I call ControllerExpandVolume set to "12"
     Then the error contains "Modify filesystem failed with error:"
 
-#  @wip
   Scenario: Controller expand volume for NFS with quota enabled, modify quota error
     Given a VxFlexOS service
     And I enable quota for filesystem
@@ -1344,7 +1340,6 @@ Feature: VxFlex OS CSI interface
     When I call ControllerExpandVolume set to "12"
     Then the error contains "Modifying tree quota for filesystem failed, error:"
 
-#  @wip
   Scenario: Controller expand volume for NFS with quota enabled, GetFileSystemsByIdError
     Given a VxFlexOS service
     And I enable quota for filesystem
@@ -1356,7 +1351,6 @@ Feature: VxFlex OS CSI interface
     When I call ControllerExpandVolume set to "12"
     Then the error contains "rpc error: code = NotFound desc = volume"
 
-#  @wip
   Scenario: Controller expand volume for NFS with quota enabled, GetQuotaByFSIDError
     Given a VxFlexOS service
     And I enable quota for filesystem
