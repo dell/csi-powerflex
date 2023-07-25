@@ -585,7 +585,7 @@ func (s *service) createQuota(fsID, path, softLimit, gracePeriod string, size in
 	fs, err := system.GetFileSystemByIDName(fsID, "")
 	if err != nil {
 		Log.Debugf("Find Volume response error: %v", err)
-		return nil, status.Errorf(codes.Unknown, "Find Volume response error: %v", err)
+		return "", status.Errorf(codes.Unknown, "Find Volume response error: %v", err)
 	}
 
 	var softLimitInt, gracePeriodInt int64
@@ -614,11 +614,13 @@ func (s *service) createQuota(fsID, path, softLimit, gracePeriod string, size in
 	err = system.ModifyFileSystem(fsModify, fs.ID)
 	if err != nil {
 		Log.Debugf("Modify filesystem failed with error: %v", err)
-		return nil, status.Errorf(codes.Unknown, "Modify filesystem failed with error: %v", err)
+		return "", status.Errorf(codes.Unknown, "Modify filesystem failed with error: %v", err)
 	}
+
 	fs, err = system.GetFileSystemByIDName(fsID, "")
 	if err != nil {
-		Log.Debugf("Find Volume response: %v Error: %v", fs, err)
+		Log.Debugf("Find Volume response error: %v", err)
+		return "", status.Errorf(codes.Unknown, "Find Volume response error: %v", err)
 	}
 
 	// need to set the quota based on the requested pv size
@@ -660,7 +662,8 @@ func (s *service) createQuota(fsID, path, softLimit, gracePeriod string, size in
 	}
 	quota, err := system.CreateTreeQuota(createQuotaParams)
 	if err != nil {
-		return "", fmt.Errorf("Creating quota failed with error: '%v'", err)
+		Log.Debugf("Creating quota failed with error: %v", err)
+		return "", status.Errorf(codes.Unknown, "Creating quota failed with error: %v", err)
 	}
 	return quota.ID, nil
 }
