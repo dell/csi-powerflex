@@ -2112,7 +2112,7 @@ func handleFileTreeQuotas(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Add none-created volumes (old)
-		for id, _ := range treeQuotaID {
+		for id := range treeQuotaID {
 			if _, ok := treeQuotaID[id]; ok {
 				continue
 			}
