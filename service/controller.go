@@ -380,7 +380,8 @@ func (s *service) CreateVolume(
 			// get filesystem (NFS volume), newly created
 			fs, err := system.GetFileSystemByIDName(fsResp.ID, "")
 			if err != nil {
-				Log.Debugf("Find Volume response: %v Error: %v", fs, err)
+				Log.Debugf("Find Volume response error: %v", err)
+				return nil, status.Errorf(codes.Unknown, "Find Volume response error: %v", err)
 			}
 			path, ok := params[KeyPath]
 			if !ok {
@@ -398,23 +399,22 @@ func (s *service) CreateVolume(
 			}
 
 			// create quota for the filesystem
-			if isQuotaEnabled {
-				quotaID, err := s.createQuota(fsResp.ID, path, softLimit, gracePeriod, int(size), isQuotaEnabled, systemID)
-				if err != nil {
-					// roll back, delete the newly created volume
-					if err = system.DeleteFileSystem(fs.Name); err != nil {
-						return nil, status.Errorf(codes.Internal,
-							"rollback (deleting volume '%s') failed with error : '%v'", fs.Name, err.Error())
-					}
-					return nil, fmt.Errorf("error creating quota ('%s', '%d' bytes), abort, also successfully rolled back by deleting the newly created volume", fs.Name, size)
+			quotaID, err := s.createQuota(fsResp.ID, path, softLimit, gracePeriod, int(size), isQuotaEnabled, systemID)
+			if err != nil {
+				// roll back, delete the newly created volume
+				if err = system.DeleteFileSystem(fs.Name); err != nil {
+					return nil, status.Errorf(codes.Internal,
+						"rollback (deleting volume '%s') failed with error : '%v'", fs.Name, err.Error())
 				}
-				Log.Infof("Tree quota set for: %d bytes on directory: '%s', quota ID: %s", size, path, quotaID)
+				return nil, fmt.Errorf("error creating quota ('%s', '%d' bytes), abort, also successfully rolled back by deleting the newly created volume", fs.Name, size)
 			}
+			Log.Infof("Tree quota set for: %d bytes on directory: '%s', quota ID: %s", size, path, quotaID)
 		}
 
 		newFs, err := system.GetFileSystemByIDName(fsResp.ID, "")
 		if err != nil {
-			Log.Debugf("Find Volume response: %v Error: %v", newFs, err)
+			Log.Debugf("Find Volume response error: %v", err)
+			return nil, status.Errorf(codes.Unknown, "Find Volume response error: %v", err)
 		}
 		if newFs != nil {
 			vi := s.getCSIVolumeFromFilesystem(newFs, systemID)
@@ -584,7 +584,8 @@ func (s *service) createQuota(fsID, path, softLimit, gracePeriod string, size in
 	// enabling quota on FS
 	fs, err := system.GetFileSystemByIDName(fsID, "")
 	if err != nil {
-		Log.Debugf("Find Volume response: %v Error: %v", fs, err)
+		Log.Debugf("Find Volume response error: %v", err)
+		return nil, status.Errorf(codes.Unknown, "Find Volume response error: %v", err)
 	}
 
 	var softLimitInt, gracePeriodInt int64
@@ -613,6 +614,7 @@ func (s *service) createQuota(fsID, path, softLimit, gracePeriod string, size in
 	err = system.ModifyFileSystem(fsModify, fs.ID)
 	if err != nil {
 		Log.Debugf("Modify filesystem failed with error: %v", err)
+		return nil, status.Errorf(codes.Unknown, "Modify filesystem failed with error: %v", err)
 	}
 	fs, err = system.GetFileSystemByIDName(fsID, "")
 	if err != nil {
@@ -2756,7 +2758,7 @@ func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.Controlle
 			return nil, status.Error(codes.Internal, err.Error())
 		}
 
-		// update tree quota hard limit if filesystem level quota is enabled
+		// update tree quota hard limit if size has changed
 		if fs.IsQuotaEnabled {
 			treeQuota, err := system.GetTreeQuotaByFSID(fsID)
 			if err != nil {
@@ -2764,7 +2766,7 @@ func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.Controlle
 				return nil, status.Error(codes.Internal, err.Error())
 			}
 
-			// modify tree quota
+			// Modify Tree Quota
 			treeQuotaID := treeQuota.ID
 			quotaModify := &siotypes.TreeQuotaModify{
 				HardLimit: requestedSize,
