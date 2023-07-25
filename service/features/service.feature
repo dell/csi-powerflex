@@ -1265,6 +1265,16 @@ Feature: VxFlex OS CSI interface
     When I call Node Probe
     Then the error contains "The given GUID is invalid"
 
+#  @wip
+#  Scenario: Controller expand volume for NFS
+#    Given a VxFlexOS service
+#    And I disable quota for filesystem
+#    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+#    When I call CreateVolumeSize nfs "vol-inttest-nfs" "8"
+#    And a controller published volume
+#    When I call ControllerExpandVolume set to "10"
+#    Then no error was received
+
   Scenario: Controller expand volume for NFS with quota enabled
     Given a VxFlexOS service
     And I enable quota for filesystem
@@ -1308,3 +1318,47 @@ Feature: VxFlex OS CSI interface
     And I induce error "NoVolumeIDError"
     Then I call ControllerExpandVolume set to "16"
     And the error contains "volume ID is required"
+
+  Scenario: Controller expand volume for NFS with quota enabled, modify filesystem error
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I set quota with path "/fs" softLimit "20" graceperiod "86400"
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+    When I call CreateVolumeSize nfs "vol-inttest-nfs" "8"
+    And I induce error "ModifyFSError"
+    And a controller published volume
+    When I call ControllerExpandVolume set to "12"
+    Then the error contains "Modify filesystem failed with error:"
+
+  Scenario: Controller expand volume for NFS with quota enabled, modify quota error
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I set quota with path "/fs" softLimit "20" graceperiod "86400"
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+    When I call CreateVolumeSize nfs "vol-inttest-nfs" "8"
+    And I induce error "ModifyQuotaError"
+    And a controller published volume
+    When I call ControllerExpandVolume set to "12"
+    Then the error contains "Modifying tree quota for filesystem failed, error:"
+
+  Scenario: Controller expand volume for NFS with quota enabled, GetFileSystemsByIdError
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I set quota with path "/fs" softLimit "20" graceperiod "86400"
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+    When I call CreateVolumeSize nfs "vol-inttest-nfs" "8"
+    And I induce error "GetFileSystemsByIdError"
+    And a controller published volume
+    When I call ControllerExpandVolume set to "12"
+    Then the error contains "rpc error: code = NotFound desc = volume"
+
+  Scenario: Controller expand volume for NFS with quota enabled, GetQuotaByFSIDError
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I set quota with path "/fs" softLimit "20" graceperiod "86400"
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+    When I call CreateVolumeSize nfs "vol-inttest-nfs" "8"
+    And I induce error "GetQuotaByFSIDError"
+    And a controller published volume
+    When I call ControllerExpandVolume set to "12"
+    Then the error contains "Fetching tree quota for filesystem failed, error:"

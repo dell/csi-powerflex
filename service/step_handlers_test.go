@@ -709,6 +709,7 @@ func handleFileSystems(w http.ResponseWriter, r *http.Request) {
 		fileSystemIDName = make(map[string]string)
 		fileSystemNameToID = make(map[string]string)
 		fileSystemIDToSizeTotal = make(map[string]string)
+		//fileSystemIDToQuotaEnabled = make(map[string]string)
 	}
 
 	if stepHandlersErrors.FileSystemInstancesError {
@@ -743,6 +744,7 @@ func handleFileSystems(w http.ResponseWriter, r *http.Request) {
 		fileSystemIDName[resp.ID] = req.Name
 		fileSystemNameToID[req.Name] = resp.ID
 		fileSystemIDToSizeTotal[resp.ID] = strconv.Itoa(req.SizeTotal)
+		//fileSystemIDToQuotaEnabled[resp.ID] = strconv.FormatBool(req.Parameters["isQuotaEnabled"])
 
 		if array, ok := systemArrays[r.Host]; ok {
 			fmt.Printf("Host Endpoint %s\n", r.Host)
@@ -772,11 +774,13 @@ func handleFileSystems(w http.ResponseWriter, r *http.Request) {
 			fileSystems = array.fileSystems
 
 			for _, fs := range fileSystems {
+				log.Printf("Get/////......:%#v", fs)
 				replacementMap := make(map[string]string)
 				replacementMap["__ID__"] = fs["id"]
 				replacementMap["__NAME__"] = fs["name"]
 				replacementMap["__SIZE_IN_Total__"] = fs["size_total"]
 				replacementMap["__PARENT_ID__"] = fs["parent_id"]
+				//replacementMap["__IS_QUOTA_ENABLED__"] = fs["is_quota_enabled"]
 				data := returnJSONFile("features", "filesystem.json.template", nil, replacementMap)
 				fs := new(types.FileSystem)
 				err := json.Unmarshal(data, fs)
@@ -798,7 +802,7 @@ func handleFileSystems(w http.ResponseWriter, r *http.Request) {
 			replacementMap["__ID__"] = id
 			replacementMap["__NAME__"] = name
 			replacementMap["__SIZE_IN_Total__"] = fileSystemIDToSizeTotal[id]
-			replacementMap["__PARENT_ID__"] = fileSystemIDParentID[id]
+			//replacementMap["__IS_QUOTA_ENABLED__"] = fileSystemIDToQuotaEnabled[id]
 			data := returnJSONFile("features", "filesystem.json.template", nil, replacementMap)
 			fs := new(types.FileSystem)
 			err := json.Unmarshal(data, fs)
@@ -847,6 +851,7 @@ func handleGetFileSystems(w http.ResponseWriter, r *http.Request) {
 			replacementMap["__ID__"] = fs["id"]
 			replacementMap["__NAME__"] = fs["name"]
 			replacementMap["__SIZE_IN_Total__"] = fs["size_total"]
+			//replacementMap["__IS_QUOTA_ENABLED__"] = fs["is_quota_enabled"]
 			replacementMap["__PARENT_ID__"] = fs["parent_id"]
 			if fs["parent_id"] != "" {
 				if inducedError.Error() == "GetSnashotByIdError" {
@@ -859,6 +864,7 @@ func handleGetFileSystems(w http.ResponseWriter, r *http.Request) {
 			replacementMap["__NAME__"] = fileSystemIDName[id]
 			replacementMap["__SIZE_IN_Total__"] = fileSystemIDToSizeTotal[id]
 			replacementMap["__PARENT_ID__"] = fileSystemIDParentID[id]
+			//replacementMap["__IS_QUOTA_ENABLED__"] = fileSystemIDToQuotaEnabled[id]
 			if fileSystemIDParentID[id] != "" {
 				if inducedError.Error() == "GetSnashotByIdError" {
 					writeError(w, "could not find snapshot id", http.StatusNotFound, codes.NotFound)
@@ -903,7 +909,12 @@ func handleGetFileSystems(w http.ResponseWriter, r *http.Request) {
 		fileSystemIDName[id] = ""
 		fileSystemNameToID[fs["name"]] = ""
 		fileSystemIDToSizeTotal[id] = ""
+		//fileSystemIDToQuotaEnabled[id] = ""
 	case http.MethodPatch:
+		if inducedError.Error() == "ModifyFSError" {
+			writeError(w, "Modify filesystem failed with error:", http.StatusRequestTimeout, codes.Internal)
+			return
+		}
 		vars := mux.Vars(r)
 		id := vars["id"]
 		fmt.Println("id:", id)
@@ -915,6 +926,7 @@ func handleGetFileSystems(w http.ResponseWriter, r *http.Request) {
 			log.Printf("error decoding json: %s\n", err.Error())
 		}
 		fmt.Printf("patchReq:%#v\n", req)
+		fmt.Printf("req.IsQuotaEnabled:%#v\n", req.IsQuotaEnabled)
 		if array, ok := systemArrays[r.Host]; ok {
 			array.fileSystems[id]["size"] = strconv.Itoa(req.Size)
 			array.fileSystems[id]["description"] = req.Description
@@ -1045,6 +1057,9 @@ var volumeIDToSizeInKB map[string]string
 
 // Map of FileSystem ID to size Total
 var fileSystemIDToSizeTotal map[string]string
+
+//// Map of FileSystem ID to quota enabled
+//var fileSystemIDToQuotaEnabled map[string]string
 
 // Replication group state to replace for.
 var replicationGroupState string
@@ -1854,305 +1869,4 @@ func handleReplicationConsistencyGroupInstances(w http.ResponseWriter, r *http.R
 		}
 
 		if inducedError.Error() == "StorageGroupAlreadyExists" || inducedError.Error() == "StorageGroupAlreadyExistsUnretriavable" {
-			writeError(w, "The Replication Consistency Group already exists", http.StatusRequestTimeout, codes.Internal)
-			return
-		}
-
-		encoder := json.NewEncoder(w)
-		err = encoder.Encode(resp)
-		if err != nil {
-			log.Printf("error encoding json: %s\n", err.Error())
-		}
-	case http.MethodGet:
-		if inducedError.Error() == "GetReplicationConsistencyGroupsError" {
-			writeError(w, "could not GET ReplicationConsistencyGroups", http.StatusRequestTimeout, codes.Internal)
-			return
-		}
-
-		instances := make([]*types.ReplicationConsistencyGroup, 0)
-		for _, group := range systemArrays[r.Host].replicationConsistencyGroups {
-			if inducedError.Error() == "StorageGroupAlreadyExistsUnretriavable" {
-				continue
-			}
-
-			replacementMap := make(map[string]string)
-			replacementMap["__ID__"] = group["id"]
-
-			if inducedError.Error() == "RemoteRCGBadNameError" {
-				replacementMap["__NAME__"] = "xxx"
-			} else {
-				replacementMap["__NAME__"] = group["name"]
-			}
-
-			replacementMap["__MODE__"] = replicationGroupConsistMode
-			replacementMap["__PROTECTION_DOMAIN__"] = group["protectionDomainId"]
-			replacementMap["__RM_PROTECTION_DOMAIN__"] = group["remoteProtectionDomainId"]
-			replacementMap["__REP_DIR__"] = group["replicationDirection"]
-
-			data := returnJSONFile("features", "replication_consistency_group.template", nil, replacementMap)
-
-			fmt.Printf("RCG data %s\n", string(data))
-			rcg := new(types.ReplicationConsistencyGroup)
-			err := json.Unmarshal(data, rcg)
-			if err != nil {
-				log.Printf("error unmarshalling json: %s\n", string(data))
-			}
-
-			instances = append(instances, rcg)
-		}
-
-		encoder := json.NewEncoder(w)
-		err := encoder.Encode(instances)
-		if err != nil {
-			log.Printf("error encoding json: %s\n", err)
-		}
-
-	}
-}
-
-func handleReplicationPairInstances(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodPost:
-		if inducedError.Error() == "ReplicationPairError" {
-			writeError(w, "POST ReplicationPair induced error", http.StatusRequestTimeout, codes.Internal)
-			return
-		}
-		req := types.QueryReplicationPair{}
-		decoder := json.NewDecoder(r.Body)
-		err := decoder.Decode(&req)
-		if err != nil {
-			log.Printf("error decoding json: %s\n", err.Error())
-		}
-		fmt.Printf("POST to ReplicationPair %s Request %+v\n", req.Name, req)
-		for _, ctx := range systemArrays[r.Host].replicationPairs {
-			if ctx["name"] == req.Name {
-				w.WriteHeader(http.StatusInternalServerError)
-				log.Printf("request for replication pair creation of duplicate name: %s\n", req.Name)
-
-				resp := new(types.Error)
-				resp.Message = "Replication Pair name already in use"
-				resp.HTTPStatusCode = http.StatusInternalServerError
-				resp.ErrorCode = 6
-				encoder := json.NewEncoder(w)
-				err = encoder.Encode(resp)
-				if err != nil {
-					log.Printf("error encoding json: %s\n", err.Error())
-				}
-				return
-			}
-		}
-
-		resp := new(types.ReplicationPair)
-		resp.ID = hex.EncodeToString([]byte(req.Name))
-		fmt.Printf("Generated replicationPair ID %s Name %s Struct %+v\n", resp.ID, req.Name, req)
-
-		var array *systemArray
-		array = systemArrays[r.Host]
-		array.replicationPairs[resp.ID] = make(map[string]string)
-		array.replicationPairs[resp.ID]["name"] = req.Name
-		array.replicationPairs[resp.ID]["id"] = resp.ID
-		array.replicationPairs[resp.ID]["localVolumeId"] = req.SourceVolumeID
-		array.replicationPairs[resp.ID]["remoteVolumeId"] = req.DestinationVolumeID
-		array.replicationPairs[resp.ID]["replicationConsistencyGroupId"] = req.ReplicationConsistencyGroupID
-
-		// set replicated on volumes.
-		array.volumes[req.SourceVolumeID]["volumeReplicationState"] = "Replicated"
-
-		array = array.replicationSystem
-		array.replicationPairs[resp.ID] = make(map[string]string)
-		array.replicationPairs[resp.ID]["name"] = "rp-" + req.Name
-		array.replicationPairs[resp.ID]["id"] = resp.ID
-		array.replicationPairs[resp.ID]["localVolumeId"] = req.DestinationVolumeID
-		array.replicationPairs[resp.ID]["remoteVolumeId"] = req.SourceVolumeID
-		array.replicationPairs[resp.ID]["replicationConsistencyGroupId"] = array.replicationConsistencyGroups[remoteRCGID]["id"]
-
-		array.volumes[req.DestinationVolumeID]["volumeReplicationState"] = "Replicated"
-
-		volumeIDToReplicationState[req.SourceVolumeID] = "Replicated"
-		volumeIDToReplicationState[req.DestinationVolumeID] = "Replicated"
-
-		if debug {
-			log.Printf("request name: %s id: %s sourceVolume %s\n", req.Name, resp.ID, req.SourceVolumeID)
-		}
-
-		if inducedError.Error() == "ReplicationPairAlreadyExists" || inducedError.Error() == "ReplicationPairAlreadyExistsUnretrievable" {
-			writeError(w, "A Replication Pair for the specified local volume already exists", http.StatusRequestTimeout, codes.Internal)
-			return
-		}
-
-		encoder := json.NewEncoder(w)
-		err = encoder.Encode(resp)
-		if err != nil {
-			log.Printf("error encoding json: %s\n", err.Error())
-		}
-	case http.MethodGet:
-		if inducedError.Error() == "GetReplicationPairError" {
-			writeError(w, "GET ReplicationPair induced error", http.StatusRequestTimeout, codes.Internal)
-			return
-		}
-
-		instances := make([]*types.ReplicationPair, 0)
-		for _, pair := range systemArrays[r.Host].replicationPairs {
-			if inducedError.Error() == "ReplicationPairAlreadyExistsUnretrievable" {
-				continue
-			}
-
-			replacementMap := make(map[string]string)
-			replacementMap["__ID__"] = pair["id"]
-			replacementMap["__NAME__"] = pair["name"]
-			replacementMap["__SOURCE_VOLUME__"] = pair["localVolumeId"]
-			replacementMap["__DESTINATION_VOLUME__"] = pair["remoteVolumeId"]
-			replacementMap["__RP_GROUP__"] = pair["replicationConsistencyGroupId"]
-
-			log.Printf("replicatPair replacementMap %v\n", replacementMap)
-			data := returnJSONFile("features", "replication_pair.template", nil, replacementMap)
-
-			log.Printf("replication-pair-data %s\n", string(data))
-			pair := new(types.ReplicationPair)
-			err := json.Unmarshal(data, pair)
-			if err != nil {
-				log.Printf("error unmarshalling json: %s\n", string(data))
-			}
-
-			log.Printf("replication-pair +%v", pair)
-			instances = append(instances, pair)
-		}
-
-		encoder := json.NewEncoder(w)
-		err := encoder.Encode(instances)
-		if err != nil {
-			log.Printf("error encoding json: %s\n", err)
-		}
-	}
-}
-
-func handleFileTreeQuotas(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodPost:
-		req := types.TreeQuotaCreate{}
-		decoder := json.NewDecoder(r.Body)
-		err := decoder.Decode(&req)
-		if err != nil {
-			log.Printf("error decoding json: %s\n", err.Error())
-		}
-
-		// good response
-		resp := new(types.TreeQuotaCreateResponse)
-		resp.ID = hex.EncodeToString([]byte("dummy-name"))
-		treeQuotaID[resp.ID] = resp.ID
-		treeQuotaIDToPath[resp.ID] = req.Path
-		treeQuotaIDToSoftLimit[resp.ID] = strconv.Itoa(req.SoftLimit)
-		treeQuotaIDToGracePeriod[resp.ID] = strconv.Itoa(req.GracePeriod)
-		treeQuotaIDToHardLimit[resp.ID] = strconv.Itoa(req.HardLimit)
-
-		if array, ok := systemArrays[r.Host]; ok {
-			fmt.Printf("Host Endpoint %s\n", r.Host)
-			array.treeQuotas[resp.ID] = make(map[string]string)
-			array.treeQuotas[resp.ID]["id"] = resp.ID
-			array.treeQuotas[resp.ID]["path"] = req.Path
-			array.treeQuotas[resp.ID]["description"] = req.Description
-			array.treeQuotas[resp.ID]["softlimit"] = strconv.Itoa(req.SoftLimit)
-			array.treeQuotas[resp.ID]["graceperiod"] = strconv.Itoa(req.GracePeriod)
-			array.treeQuotas[resp.ID]["hardlimit"] = strconv.Itoa(req.HardLimit)
-		}
-		if debug {
-			log.Printf("request \"dummy-name\" id: %s\n", resp.ID)
-		}
-		encoder := json.NewEncoder(w)
-		err = encoder.Encode(resp)
-		if err != nil {
-			log.Printf("error encoding json: %s\n", err.Error())
-		}
-		log.Printf("end make tree quotas")
-	case http.MethodGet:
-		instances := make([]*types.TreeQuota, 0)
-		treeQuotas := make(map[string]map[string]string)
-
-		if array, ok := systemArrays[r.Host]; ok {
-			treeQuotas = array.treeQuotas
-
-			for _, tq := range treeQuotas {
-				replacementMap := make(map[string]string)
-				replacementMap["__ID__"] = tq["id"]
-				replacementMap["__PATH__"] = tq["path"]
-				replacementMap["__HARD_LIMIT_SIZE__"] = tq["hardlimit"]
-				replacementMap["__SOFT_LIMIT_SIZE__"] = tq["softlimit"]
-				replacementMap["__GRACE_PERIOD__"] = tq["graceperiod"]
-				data := returnJSONFile("features", "treequota.json.template", nil, replacementMap)
-				tq := new(types.TreeQuota)
-				err := json.Unmarshal(data, tq)
-				if err != nil {
-					log.Printf("error unmarshalling json: %s\n", string(data))
-				}
-				instances = append(instances, tq)
-			}
-		}
-
-		// Add none-created volumes (old)
-		for id, _ := range treeQuotaID {
-			if _, ok := treeQuotaID[id]; ok {
-				continue
-			}
-
-			replacementMap := make(map[string]string)
-			replacementMap["__ID__"] = id
-			replacementMap["__PATH__"] = treeQuotaIDToPath["path"]
-			replacementMap["__HARD_LIMIT_SIZE__"] = treeQuotaIDToHardLimit["hardlimit"]
-			replacementMap["__SOFT_LIMIT_SIZE__"] = treeQuotaIDToSoftLimit["softlimit"]
-			replacementMap["__GRACE_PERIOD__"] = treeQuotaIDToGracePeriod["graceperiod"]
-			data := returnJSONFile("features", "filesystem.json.template", nil, replacementMap)
-			tq := new(types.TreeQuota)
-			err := json.Unmarshal(data, tq)
-			if err != nil {
-				log.Printf("error unmarshalling json: %s\n", string(data))
-			}
-			instances = append(instances, tq)
-		}
-
-		encoder := json.NewEncoder(w)
-		err := encoder.Encode(instances)
-		if err != nil {
-			log.Printf("error encoding json: %s\n", err)
-		}
-		log.Printf("end get tree quotas")
-	}
-}
-
-func handleGetFileTreeQuotas(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodPatch:
-		vars := mux.Vars(r)
-		id := vars["id"]
-		fmt.Println("id:", id)
-
-		req := types.TreeQuotaModify{}
-		decoder := json.NewDecoder(r.Body)
-		err := decoder.Decode(&req)
-		if err != nil {
-			log.Printf("error decoding json: %s\n", err.Error())
-		}
-		fmt.Printf("patchReq:%#v\n", req)
-		if array, ok := systemArrays[r.Host]; ok {
-			array.treeQuotas[id]["description"] = req.Description
-			array.treeQuotas[id]["softlimit"] = strconv.Itoa(req.SoftLimit)
-			array.treeQuotas[id]["graceperiod"] = strconv.Itoa(req.GracePeriod)
-			array.treeQuotas[id]["hardlimit"] = strconv.Itoa(req.HardLimit)
-		}
-		w.WriteHeader(http.StatusNoContent)
-		log.Printf("end modify tree quotas")
-	}
-}
-
-// Write an error code to the response writer
-func writeError(w http.ResponseWriter, message string, httpStatus int, errorCode codes.Code) {
-	w.WriteHeader(httpStatus)
-	resp := new(types.Error)
-	resp.Message = message
-	resp.HTTPStatusCode = http.StatusNotFound
-	resp.ErrorCode = int(errorCode)
-	encoder := json.NewEncoder(w)
-	err := encoder.Encode(resp)
-	if err != nil {
-		log.Printf("error encoding json: %s\n", err.Error())
-	}
-}
+			writeError(w, "The Replication Consi
