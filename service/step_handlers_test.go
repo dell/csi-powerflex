@@ -802,6 +802,7 @@ func handleFileSystems(w http.ResponseWriter, r *http.Request) {
 			replacementMap["__ID__"] = id
 			replacementMap["__NAME__"] = name
 			replacementMap["__SIZE_IN_Total__"] = fileSystemIDToSizeTotal[id]
+			replacementMap["__PARENT_ID__"] = fileSystemIDParentID[id]
 			//replacementMap["__IS_QUOTA_ENABLED__"] = fileSystemIDToQuotaEnabled[id]
 			data := returnJSONFile("features", "filesystem.json.template", nil, replacementMap)
 			fs := new(types.FileSystem)
@@ -887,7 +888,7 @@ func handleGetFileSystems(w http.ResponseWriter, r *http.Request) {
 		}
 	case http.MethodDelete:
 		if inducedError.Error() == "DeleteSnapshotError" {
-			writeError(w, "error while deleting the filesytem snapshot", http.StatusGatewayTimeout, codes.Internal)
+			writeError(w, "error while deleting the filesystem snapshot", http.StatusGatewayTimeout, codes.Internal)
 			return
 		}
 		vars := mux.Vars(r)
