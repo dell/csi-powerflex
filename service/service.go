@@ -153,7 +153,7 @@ type Opts struct {
 	NfsAcls                    string // enables setting permissions on NFS mount directory
 	ExternalAccess             string // allow additional entries for host to access NFS volumes
 	MaxVolumesPerNode          int64
-	IsQuotaEnabled             bool   // allow driver to enable quota limits for NFS volumes
+	IsQuotaEnabled             bool // allow driver to enable quota limits for NFS volumes
 }
 
 type service struct {
