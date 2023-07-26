@@ -607,6 +607,7 @@ func (s *service) createVolumeFromSnapshot(req *csi.CreateVolumeRequest,
 
 	if isNFS {
 		// Look up the snapshot
+		fmt.Println("snapshotSource.SnapshotId", snapshotSource.SnapshotId)
 		snapID := getFilesystemIDFromCsiVolumeID(snapshotSource.SnapshotId)
 		srcVol, err := s.getFilesystemByID(snapID, systemID)
 
@@ -638,7 +639,7 @@ func (s *service) createVolumeFromSnapshot(req *csi.CreateVolumeRequest,
 			return nil, status.Errorf(codes.Internal, "error during fs creation from snapshot: %s", snapshotSource.SnapshotId)
 		}
 
-		restoreFs, err := system.GetFileSystemByIDName(srcVol.ID, "")
+		restoreFs, err := system.GetFileSystemByIDName(srcVol.ParentID, "")
 
 		if err != nil {
 			if strings.Contains(err.Error(), sioGatewayFileSystemNotFound) {
