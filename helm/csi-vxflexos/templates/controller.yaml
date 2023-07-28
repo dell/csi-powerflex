@@ -111,6 +111,18 @@ rules:
     verbs: ["create", "get", "list", "watch"]
 {{- end}}
 {{- end}}
+# Permissions for CSIStorageCapacity
+{{- if eq (include "csi-vxflexos.isStorageCapacitySupported" .) "true" }}
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["csistoragecapacities"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get"]
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["get"]
+{{- end }}
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
