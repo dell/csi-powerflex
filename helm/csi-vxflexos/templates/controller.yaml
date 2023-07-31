@@ -270,9 +270,20 @@ spec:
             - "--v=5"
             - "--default-fstype={{ .Values.defaultFsType | default "ext4" }}"
             - "--extra-create-metadata"
+            - "--enable-capacity={{ (include "csi-vxflexos.isStorageCapacitySupported" .) | default false }}"
+            - "--capacity-ownerref-level=2"
+            - "--capacity-poll-interval={{ .Values.storageCapacity.pollInterval | default "5m" }}"
           env:
             - name: ADDRESS
               value: /var/run/csi/csi.sock
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name  
           volumeMounts:
             - name: socket-dir
               mountPath: /var/run/csi
