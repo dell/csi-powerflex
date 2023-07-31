@@ -2761,8 +2761,10 @@ func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.Controlle
 			return nil, status.Error(codes.Internal, err.Error())
 		}
 
-		// update tree quota hard limit if size has changed
-		if fs.IsQuotaEnabled {
+		// update tree quota hard limit and soft limit if pvc size has changed
+
+		isQuotaEnabled := s.opts.IsQuotaEnabled
+		if isQuotaEnabled && fs.IsQuotaEnabled {
 			treeQuota, err := system.GetTreeQuotaByFSID(fsID)
 			if err != nil {
 				Log.Errorf("Fetching tree quota for filesystem failed, error: %s", err.Error())
@@ -2770,15 +2772,20 @@ func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.Controlle
 			}
 
 			// Modify Tree Quota
+			updatedSoftLimit := treeQuota.SoftLimit * (requestedSize / treeQuota.HardLimit)
 			treeQuotaID := treeQuota.ID
+			Log.Infof("Modifying tree quota ID %s for filesystem ID: %s", treeQuotaID, fsID)
 			quotaModify := &siotypes.TreeQuotaModify{
 				HardLimit: requestedSize,
+				SoftLimit: updatedSoftLimit,
 			}
+
 			err = system.ModifyTreeQuota(quotaModify, treeQuotaID)
 			if err != nil {
 				Log.Errorf("Modifying tree quota for filesystem failed, error: %s", err.Error())
 				return nil, status.Error(codes.Internal, err.Error())
 			}
+			Log.Infof("Tree quota modified successfully.")
 		}
 
 		csiResp := &csi.ControllerExpandVolumeResponse{
