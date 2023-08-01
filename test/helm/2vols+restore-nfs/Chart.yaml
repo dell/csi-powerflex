@@ -1,9 +1,0 @@
-name: 2vols+restore-nfs
-version: 1.0.0
-appVersion: v1
-description: |
-  Tests VxFlexOS CSI deployments.
-keywords:
-- vxflexos-csi
-- storage
-engine: gotpl

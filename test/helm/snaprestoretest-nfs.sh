@@ -14,9 +14,9 @@
 NS=helmtest-vxflexos
 source ./common.bash
 
-echo "installing a 2 volume container"
-bash starttest.sh 2vols-nfs
-echo "done installing a 2 volume container"
+echo "installing a 1 volume container"
+bash starttest.sh 1vol-nfs
+echo "done installing a 1 volume container"
 echo "marking volume"
 kubectl exec -n ${NS} vxflextest-0 -- touch /data0/orig
 kubectl exec -n ${NS} vxflextest-0 -- ls -l /data0
@@ -27,7 +27,7 @@ kubectl create -f snap1.yaml
 sleep 10
 kubectl get volumesnapshot -n ${NS}
 echo "updating container to add a volume sourced from snapshot"
-helm upgrade -n helmtest-vxflexos 2vols-nfs 2vols+restore-nfs
+helm upgrade -n helmtest-vxflexos 1vol-nfs 1vols+restore-nfs
 echo "waiting for container to upgrade/stabalize"
 sleep 20
 waitOnRunning
@@ -42,8 +42,10 @@ kubectl exec -n ${NS} vxflextest-0 -- ls -l /data0
 echo "listing /data2"
 kubectl exec -n ${NS} vxflextest-0 -- ls -l /data2
 sleep 20
-echo "deleting container"
-bash stoptest.sh 2vols-nfs
-sleep 5
 echo "deleting snap"
 kubectl delete volumesnapshot pvol0-snap1 -n ${NS}
+sleep 10
+echo "deleting container"
+bash stoptest.sh 1vol-nfs
+sleep 5
+
