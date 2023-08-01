@@ -25,9 +25,9 @@ spec:
             image: docker.io/centos:latest
             command: [ "/bin/sleep", "3600" ]
             volumeMounts:
-              - mountPath: "/data2"
-                name: pvol2
+              - mountPath: "/data0"
+                name: pvol0
         volumes:
-          - name: pvol2
+          - name: pvol0
             persistentVolumeClaim:
               claimName: restorepvc
