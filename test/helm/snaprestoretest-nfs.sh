@@ -36,11 +36,9 @@ kubectl exec -n ${NS} vxflextest-0 -- df | grep data
 kubectl exec -n ${NS} vxflextest-0 -- mount | grep data
 echo "updating container finished"
 echo "marking volume"
-kubectl exec -n ${NS} vxflextest-0 -- touch /data2/new
+kubectl exec -n ${NS} vxflextest-0 -- touch /data0/new
 echo "listing /data0"
 kubectl exec -n ${NS} vxflextest-0 -- ls -l /data0
-echo "listing /data2"
-kubectl exec -n ${NS} vxflextest-0 -- ls -l /data2
 sleep 20
 echo "deleting snap"
 kubectl delete volumesnapshot pvol0-snap1 -n ${NS}
