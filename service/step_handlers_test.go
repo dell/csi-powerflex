@@ -37,6 +37,7 @@ var (
 	sdcMappingsID     string
 	setSdcNameSuccess bool
 	sdcIDToName       map[string]string
+	isQuotaEnabled 	  bool
 
 	stepHandlersErrors struct {
 		FindVolumeIDError             bool
@@ -780,7 +781,7 @@ func handleFileSystems(w http.ResponseWriter, r *http.Request) {
 				replacementMap["__NAME__"] = fs["name"]
 				replacementMap["__SIZE_IN_Total__"] = fs["size_total"]
 				replacementMap["__PARENT_ID__"] = fs["parent_id"]
-				//replacementMap["__IS_QUOTA_ENABLED__"] = fs["is_quota_enabled"]
+				replacementMap["__IS_QUOTA_ENABLED__"] = strconv.FormatBool(isQuotaEnabled)
 				data := returnJSONFile("features", "filesystem.json.template", nil, replacementMap)
 				fs := new(types.FileSystem)
 				err := json.Unmarshal(data, fs)
@@ -803,7 +804,7 @@ func handleFileSystems(w http.ResponseWriter, r *http.Request) {
 			replacementMap["__NAME__"] = name
 			replacementMap["__SIZE_IN_Total__"] = fileSystemIDToSizeTotal[id]
 			replacementMap["__PARENT_ID__"] = fileSystemIDParentID[id]
-			//replacementMap["__IS_QUOTA_ENABLED__"] = fileSystemIDToQuotaEnabled[id]
+			replacementMap["__IS_QUOTA_ENABLED__"] = strconv.FormatBool(isQuotaEnabled)
 			data := returnJSONFile("features", "filesystem.json.template", nil, replacementMap)
 			fs := new(types.FileSystem)
 			err := json.Unmarshal(data, fs)
@@ -852,7 +853,7 @@ func handleGetFileSystems(w http.ResponseWriter, r *http.Request) {
 			replacementMap["__ID__"] = fs["id"]
 			replacementMap["__NAME__"] = fs["name"]
 			replacementMap["__SIZE_IN_Total__"] = fs["size_total"]
-			//replacementMap["__IS_QUOTA_ENABLED__"] = fs["is_quota_enabled"]
+			replacementMap["__IS_QUOTA_ENABLED__"] = strconv.FormatBool(isQuotaEnabled)
 			replacementMap["__PARENT_ID__"] = fs["parent_id"]
 			if fs["parent_id"] != "" {
 				if inducedError.Error() == "GetSnashotByIdError" {
@@ -865,7 +866,7 @@ func handleGetFileSystems(w http.ResponseWriter, r *http.Request) {
 			replacementMap["__NAME__"] = fileSystemIDName[id]
 			replacementMap["__SIZE_IN_Total__"] = fileSystemIDToSizeTotal[id]
 			replacementMap["__PARENT_ID__"] = fileSystemIDParentID[id]
-			//replacementMap["__IS_QUOTA_ENABLED__"] = fileSystemIDToQuotaEnabled[id]
+			replacementMap["__IS_QUOTA_ENABLED__"] = strconv.FormatBool(isQuotaEnabled)
 			if fileSystemIDParentID[id] != "" {
 				if inducedError.Error() == "GetSnashotByIdError" {
 					writeError(w, "could not find snapshot id", http.StatusNotFound, codes.NotFound)

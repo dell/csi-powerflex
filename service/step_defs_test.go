@@ -4330,11 +4330,13 @@ func (f *feature) iCallExecuteAction(arg1 string) error {
 
 func (f *feature) iCallEnableFSQuota() error {
 	f.service.opts.IsQuotaEnabled = true
+	isQuotaEnabled = true
 	return nil
 }
 
 func (f *feature) iCallDisableFSQuota() error {
 	f.service.opts.IsQuotaEnabled = false
+	isQuotaEnabled = false
 	return nil
 }
 
