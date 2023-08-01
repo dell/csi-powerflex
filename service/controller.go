@@ -846,6 +846,17 @@ func (s *service) DeleteVolume(
 			}
 		}
 
+		listSnaps, err := system.GetFsSnapshotsByVolumeID(fsID)
+		if err != nil {
+			return nil, status.Errorf(codes.Unknown, "failure getting snapshot: %s", err.Error())
+		}
+
+		if len(listSnaps) > 0 {
+			return nil, status.Errorf(codes.FailedPrecondition,
+				"unable to delete FS volume -- snapshots based on this volume still exist: %v",
+				listSnaps)
+		}
+
 		fsName := toBeDeletedFS.Name
 
 		// Check if nfs export exists for the File system
