@@ -1267,30 +1267,10 @@ Feature: VxFlex OS CSI interface
 
   Scenario: Controller expand volume for NFS
     Given a VxFlexOS service
-    And I disable quota for filesystem
     And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
     When I call CreateVolumeSize nfs "vol-inttest-nfs" "8"
     And a controller published volume
     When I call ControllerExpandVolume set to "10"
-    Then no error was received
-
-  Scenario: Controller expand volume for NFS with quota enabled
-    Given a VxFlexOS service
-    And I enable quota for filesystem
-    And I set quota with path "/fs" softLimit "20" graceperiod "86400"
-    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
-    When I call CreateVolumeSize nfs "vol-inttest-nfs" "8"
-    And a controller published volume
-    When I call ControllerExpandVolume set to "12"
-    Then no error was received
-
-  Scenario: Controller expand volume for NFS with quota disabled
-    Given a VxFlexOS service
-    And I disable quota for filesystem
-    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
-    When I call CreateVolumeSize nfs "vol-inttest-nfs" "8"
-    And a controller published volume
-    When I call ControllerExpandVolume set to "12"
     Then no error was received
 
   Scenario: Controller shrink volume for NFS
@@ -1326,6 +1306,25 @@ Feature: VxFlex OS CSI interface
     And I induce error "NoVolumeIDError"
     Then I call ControllerExpandVolume set to "16"
     And the error contains "volume ID is required"
+
+  Scenario: Controller expand volume for NFS with quota enabled
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I set quota with path "/fs" softLimit "20" graceperiod "86400"
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+    When I call CreateVolumeSize nfs "vol-inttest-nfs" "8"
+    And a controller published volume
+    When I call ControllerExpandVolume set to "12"
+    Then no error was received
+
+  Scenario: Controller expand volume for NFS with quota disabled
+    Given a VxFlexOS service
+    And I disable quota for filesystem
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+    When I call CreateVolumeSize nfs "vol-inttest-nfs" "8"
+    And a controller published volume
+    When I call ControllerExpandVolume set to "12"
+    Then no error was received
 
   Scenario: Controller expand volume for NFS with quota enabled, modify filesystem error
     Given a VxFlexOS service
