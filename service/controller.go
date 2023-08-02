@@ -618,7 +618,7 @@ func (s *service) createVolumeFromSnapshot(req *csi.CreateVolumeRequest,
 		// Validate the size is the same.
 		if int64(srcVol.SizeTotal) != sizeInKbytes {
 			return nil, status.Errorf(codes.InvalidArgument,
-				"Snapshot %s has incompatible size %d kbytes with requested %d kbytes",
+				"Snapshot %s has incompatible size %d bytes with requested %d bytes",
 				snapshotSource.SnapshotId, srcVol.SizeTotal, sizeInKbytes)
 		}
 

@@ -870,6 +870,88 @@ Feature: VxFlex OS CSI interface
     Then a valid CreateVolumeResponse is returned
     And no error was received
 
+  Scenario: Create a volume from a snapshot NFS no error
+    Given a VxFlexOS service
+    And I call Probe
+    And I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call CreateSnapshot NFS "snap1"
+    And no error was received
+    When I call Probe
+    And I call Create Volume from SnapshotNFS
+    Then a valid CreateVolumeResponse is returned
+    And no error was received
+
+  Scenario: Idempotent create a volume from a snapshot no error
+    Given a VxFlexOS service
+    And I call Probe
+    And I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call CreateSnapshot NFS "snap1"
+    And no error was received
+    When I call Probe
+    And I call Create Volume from SnapshotNFS
+    Then a valid CreateVolumeResponse is returned
+    And no error was received
+     When I call Probe
+    And I call Create Volume from SnapshotNFS
+    Then a valid CreateVolumeResponse is returned
+    And no error was received
+    
+  Scenario: Create a volume from a snapshot NFS snapshot not found error
+    Given a VxFlexOS service
+    And I call Probe
+    And I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call CreateSnapshot NFS "snap1"
+    And no error was received
+    When I call Probe
+    And I induce error "GetFileSystemsByIdError"
+    And I call Create Volume from SnapshotNFS
+    Then the error contains "Snapshot not found"
+    
+  Scenario: Create a volume from a snapshot NFS incompatible size error
+    Given a VxFlexOS service
+    And I call Probe
+    And I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call CreateSnapshot NFS "snap1"
+    And no error was received
+    And the wrong capacity
+    When I call Probe
+    And I call Create Volume from SnapshotNFS
+    Then the error contains "incompatible size"
+  
+  Scenario: Create a volume from a snapshot NFS different storage pool error
+    Given a VxFlexOS service
+    And I call Probe
+    And I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call CreateSnapshot NFS "snap1"
+    And no error was received
+    And the wrong storage pool
+    When I call Probe
+    And I call Create Volume from SnapshotNFS
+    Then the error contains "different than the requested storage pool"
+   
+  Scenario: Create a volume from a snapshot NFS restoreVolumeError
+    Given a VxFlexOS service
+    And I call Probe
+    And I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call CreateSnapshot NFS "snap1"
+    And no error was received
+    When I call Probe
+    And I induce error "restoreVolumeError"
+    And I call Create Volume from SnapshotNFS
+    Then the error contains "error during fs creation from snapshot"
+
   Scenario: Create a volume from a snapshot with wrong capacity
     Given a VxFlexOS service
     And a valid snapshot
