@@ -37,7 +37,7 @@ var (
 	sdcMappingsID     string
 	setSdcNameSuccess bool
 	sdcIDToName       map[string]string
-	isQuotaEnabled 	  bool
+	isQuotaEnabled    bool
 
 	stepHandlersErrors struct {
 		FindVolumeIDError             bool
@@ -710,7 +710,6 @@ func handleFileSystems(w http.ResponseWriter, r *http.Request) {
 		fileSystemIDName = make(map[string]string)
 		fileSystemNameToID = make(map[string]string)
 		fileSystemIDToSizeTotal = make(map[string]string)
-		//fileSystemIDToQuotaEnabled = make(map[string]string)
 	}
 
 	if stepHandlersErrors.FileSystemInstancesError {
@@ -745,7 +744,6 @@ func handleFileSystems(w http.ResponseWriter, r *http.Request) {
 		fileSystemIDName[resp.ID] = req.Name
 		fileSystemNameToID[req.Name] = resp.ID
 		fileSystemIDToSizeTotal[resp.ID] = strconv.Itoa(req.SizeTotal)
-		//fileSystemIDToQuotaEnabled[resp.ID] = strconv.FormatBool(req.Parameters["isQuotaEnabled"])
 
 		if array, ok := systemArrays[r.Host]; ok {
 			fmt.Printf("Host Endpoint %s\n", r.Host)
@@ -775,7 +773,6 @@ func handleFileSystems(w http.ResponseWriter, r *http.Request) {
 			fileSystems = array.fileSystems
 
 			for _, fs := range fileSystems {
-				log.Printf("Get/////......:%#v", fs)
 				replacementMap := make(map[string]string)
 				replacementMap["__ID__"] = fs["id"]
 				replacementMap["__NAME__"] = fs["name"]
@@ -911,22 +908,26 @@ func handleGetFileSystems(w http.ResponseWriter, r *http.Request) {
 		fileSystemIDName[id] = ""
 		fileSystemNameToID[fs["name"]] = ""
 		fileSystemIDToSizeTotal[id] = ""
-		//fileSystemIDToQuotaEnabled[id] = ""
 	case http.MethodPatch:
-		if inducedError.Error() == "ModifyFSError" {
-			writeError(w, "Modify filesystem failed with error:", http.StatusRequestTimeout, codes.Internal)
-			return
-		}
-		vars := mux.Vars(r)
-		id := vars["id"]
-		fmt.Println("id:", id)
-
 		req := types.FSModify{}
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
 			log.Printf("error decoding json: %s\n", err.Error())
 		}
+		if inducedError.Error() == "ModifyFSError" {
+			writeError(w, "Modify filesystem failed with error:", http.StatusRequestTimeout, codes.Internal)
+			return
+		}
+		if inducedError.Error() == "FSQuotaError" {
+			req.IsQuotaEnabled = false
+			writeError(w, "error creating quota ", http.StatusRequestTimeout, codes.Internal)
+			return
+		}
+		vars := mux.Vars(r)
+		id := vars["id"]
+		fmt.Println("id:", id)
+
 		fmt.Printf("patchReq:%#v\n", req)
 		fmt.Printf("req.IsQuotaEnabled:%#v\n", req.IsQuotaEnabled)
 		if array, ok := systemArrays[r.Host]; ok {
@@ -1059,9 +1060,6 @@ var volumeIDToSizeInKB map[string]string
 
 // Map of FileSystem ID to size Total
 var fileSystemIDToSizeTotal map[string]string
-
-//// Map of FileSystem ID to quota enabled
-//var fileSystemIDToQuotaEnabled map[string]string
 
 // Replication group state to replace for.
 var replicationGroupState string
