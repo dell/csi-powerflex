@@ -1284,6 +1284,15 @@ Feature: VxFlex OS CSI interface
     When I call ControllerExpandVolume set to "12"
     Then no error was received
 
+  Scenario: Controller expand volume for NFS with quota disabled
+    Given a VxFlexOS service
+    And I disable quota for filesystem
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+    When I call CreateVolumeSize nfs "vol-inttest-nfs" "8"
+    And a controller published volume
+    When I call ControllerExpandVolume set to "12"
+    Then no error was received
+
   Scenario: Controller shrink volume for NFS
     Given a VxFlexOS service
     And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
