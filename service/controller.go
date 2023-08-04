@@ -997,7 +997,7 @@ func (s *service) DeleteVolume(
 
 		if len(listSnaps) > 0 {
 			return nil, status.Errorf(codes.FailedPrecondition,
-				"unable to delete FS volume -- snapshots based on this volume still exist: %v",
+				"unable to delete NFS volume -- snapshots based on this volume still exist: %v",
 				listSnaps)
 		}
 

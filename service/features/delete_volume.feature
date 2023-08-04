@@ -60,7 +60,7 @@ Feature: VxFlex OS CSI interface
     And I call CreateSnapshot NFS "snap1"
     And no error was received
     And I call DeleteVolume nfs with "single-writer"
-    Then the error contains "unable to delete FS volume -- snapshots based on this volume still exist"
+    Then the error contains "unable to delete NFS volume -- snapshots based on this volume still exist"
 
   Scenario: Test Idempotent Basic nfs delete FileSystem 
     Given a VxFlexOS service
