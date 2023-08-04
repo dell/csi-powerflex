@@ -3589,6 +3589,26 @@ func (f *feature) iCallCreateVolumeFromSnapshot() error {
 	return nil
 }
 
+func (f *feature) iCallCreateVolumeFromSnapshotNFS() error {
+	ctx := new(context.Context)
+	req := getTypicalNFSCreateVolumeRequest()
+	req.Name = "volumeFromSnap"
+	if f.wrongCapacity {
+		req.CapacityRange.RequiredBytes = 64 * 1024 * 1024 * 1024
+	}
+	if f.wrongStoragePool {
+		req.Parameters["storagepool"] = "other_storage_pool"
+	}
+	source := &csi.VolumeContentSource_SnapshotSource{SnapshotId: "14dbbf5617523654" + "/" + fileSystemNameToID["snap1"]}
+	req.VolumeContentSource = new(csi.VolumeContentSource)
+	req.VolumeContentSource.Type = &csi.VolumeContentSource_Snapshot{Snapshot: source}
+	f.createVolumeResponse, f.err = f.service.CreateVolume(*ctx, req)
+	if f.err != nil {
+		fmt.Printf("Error on CreateVolume from snap: %s\n", f.err.Error())
+	}
+	return nil
+}
+
 func (f *feature) theWrongCapacity() error {
 	f.wrongCapacity = true
 	return nil
@@ -4501,6 +4521,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call DeleteSnapshot NFS$`, f.iCallDeleteSnapshotNFS)
 	s.Step(`^a valid snapshot consistency group$`, f.aValidSnapshotConsistencyGroup)
 	s.Step(`^I call Create Volume from Snapshot$`, f.iCallCreateVolumeFromSnapshot)
+	s.Step(`^I call Create Volume from SnapshotNFS$`, f.iCallCreateVolumeFromSnapshotNFS)
 	s.Step(`^the wrong capacity$`, f.theWrongCapacity)
 	s.Step(`^the wrong storage pool$`, f.theWrongStoragePool)
 	s.Step(`^there are (\d+) valid snapshots of "([^"]*)" volume$`, f.thereAreValidSnapshotsOfVolume)

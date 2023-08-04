@@ -241,6 +241,7 @@ func getRouter() http.Handler {
 	scaleioRouter.HandleFunc("/rest/v1/nfs-exports", handleNFSExports)
 	scaleioRouter.HandleFunc("/rest/v1/file-systems/{id}", handleGetFileSystems)
 	scaleioRouter.HandleFunc("/rest/v1/nfs-exports/{id}", handleGetNFSExports)
+	scaleioRouter.HandleFunc("/rest/v1/file-systems/{id}/restore", handleRestoreSnapshotNFS)
 	scaleioRouter.HandleFunc("/rest/v1/file-interfaces/{id}", handleGetFileInterface)
 	scaleioRouter.HandleFunc("/rest/v1/file-systems/{id}/snapshot", handleNFSSnapshots)
 	scaleioRouter.HandleFunc("/api/types/Volume/instances", handleVolumeInstances)
@@ -816,6 +817,40 @@ func handleFileSystems(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("error encoding json: %s\n", err)
 		}
+	}
+}
+
+func handleRestoreSnapshotNFS(w http.ResponseWriter, r *http.Request) {
+
+	switch r.Method {
+
+	// Post is CreateVolume; here just return a volume id encoded from the name
+	case http.MethodPost:
+		if inducedError.Error() == "restoreVolumeError" {
+			writeError(w, "create volume induced error", http.StatusRequestTimeout, codes.Internal)
+			return
+		}
+
+		req := types.RestoreFsSnapParam{}
+		decoder := json.NewDecoder(r.Body)
+		err := decoder.Decode(&req)
+		if err != nil {
+			log.Printf("error decoding json: %s\n", err.Error())
+		}
+
+		// good response
+		resp := new(types.RestoreFsSnapResponse)
+		resp.ID = req.SnapshotID
+		if debug {
+			log.Printf("response id: %s\n", resp.ID)
+		}
+		encoder := json.NewEncoder(w)
+		err = encoder.Encode(resp)
+		if err != nil {
+			log.Printf("error encoding json: %s\n", err.Error())
+		}
+
+		log.Printf("end make restore fs from snaspshot")
 	}
 }
 

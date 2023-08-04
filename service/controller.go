@@ -324,6 +324,14 @@ func (s *service) CreateVolume(
 		// fetch volume size
 		size := cr.GetRequiredBytes()
 
+		contentSource := req.GetVolumeContentSource()
+		if contentSource != nil {
+			snapshotSource := contentSource.GetSnapshot()
+			if snapshotSource != nil {
+				Log.Printf("snapshot %s specified as volume content source", snapshotSource.SnapshotId)
+				return s.createVolumeFromSnapshot(req, snapshotSource, name, size, storagePoolName)
+			}
+		}
 		// log all parameters used in CreateVolume call
 		fields := map[string]interface{}{
 			"Name":                               volName,
@@ -721,6 +729,15 @@ func (s *service) createVolumeFromSnapshot(req *csi.CreateVolumeRequest,
 	snapshotSource *csi.VolumeContentSource_SnapshotSource,
 	name string, sizeInKbytes int64, storagePool string) (*csi.CreateVolumeResponse, error) {
 
+	isNFS := false
+	var fsType string
+	if len(req.VolumeCapabilities) != 0 {
+		fsType = req.VolumeCapabilities[0].GetMount().GetFsType()
+		if fsType == "nfs" {
+			isNFS = true
+		}
+	}
+
 	// get systemID from snapshot source CSI id
 	systemID := s.getSystemIDFromCsiVolumeID(snapshotSource.SnapshotId)
 	if systemID == "" {
@@ -730,6 +747,59 @@ func (s *service) createVolumeFromSnapshot(req *csi.CreateVolumeRequest,
 	if systemID == "" {
 		return nil, status.Error(codes.InvalidArgument,
 			"systemID is not found in snapshot source id and there is no default system")
+	}
+
+	if isNFS {
+		// Look up the snapshot
+		fmt.Println("snapshotSource.SnapshotId", snapshotSource.SnapshotId)
+		snapID := getFilesystemIDFromCsiVolumeID(snapshotSource.SnapshotId)
+		srcVol, err := s.getFilesystemByID(snapID, systemID)
+
+		if err != nil {
+			return nil, status.Errorf(codes.NotFound, "Snapshot not found: %s", snapshotSource.SnapshotId)
+		}
+
+		// Validate the size is the same.
+		if int64(srcVol.SizeTotal) != sizeInKbytes {
+			return nil, status.Errorf(codes.InvalidArgument,
+				"Snapshot %s has incompatible size %d bytes with requested %d bytes",
+				snapshotSource.SnapshotId, srcVol.SizeTotal, sizeInKbytes)
+		}
+
+		system := s.systems[systemID]
+
+		// Validate the storagePool is the same.
+		snapStoragePool := s.getStoragePoolNameFromID(systemID, srcVol.StoragePoolID)
+		if snapStoragePool != storagePool {
+			return nil, status.Errorf(codes.InvalidArgument,
+				"Snapshot storage pool %s is different than the requested storage pool %s", snapStoragePool, storagePool)
+		}
+
+		_, err = system.RestoreFileSystemFromSnapshot(&siotypes.RestoreFsSnapParam{
+			SnapshotID: snapID,
+		}, srcVol.ParentID)
+
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "error during fs creation from snapshot: %s", snapshotSource.SnapshotId)
+		}
+
+		restoreFs, err := system.GetFileSystemByIDName(srcVol.ParentID, "")
+
+		if err != nil {
+			if strings.Contains(err.Error(), sioGatewayFileSystemNotFound) {
+				return nil, status.Errorf(codes.NotFound, "filesystem not found: %s", srcVol.ID)
+			}
+		}
+
+		csiVolume := s.getCSIVolumeFromFilesystem(restoreFs, systemID)
+
+		csiVolume.ContentSource = req.GetVolumeContentSource()
+		copyInterestingParameters(req.GetParameters(), csiVolume.VolumeContext)
+
+		Log.Printf("Volume (from snap) %s (%s) storage pool %s",
+			csiVolume.VolumeContext["Name"], csiVolume.VolumeId, csiVolume.VolumeContext["StoragePoolName"])
+		return &csi.CreateVolumeResponse{Volume: csiVolume}, nil
+
 	}
 
 	// Look up the snapshot
@@ -918,6 +988,17 @@ func (s *service) DeleteVolume(
 				Log.WithFields(logrus.Fields{"id": fsID}).Debug("File System does not exist", fsID)
 				return &csi.DeleteVolumeResponse{}, nil
 			}
+		}
+
+		listSnaps, err := system.GetFsSnapshotsByVolumeID(fsID)
+		if err != nil {
+			return nil, status.Errorf(codes.Unknown, "failure getting snapshot: %s", err.Error())
+		}
+
+		if len(listSnaps) > 0 {
+			return nil, status.Errorf(codes.FailedPrecondition,
+				"unable to delete NFS volume -- snapshots based on this volume still exist: %v",
+				listSnaps)
 		}
 
 		fsName := toBeDeletedFS.Name
