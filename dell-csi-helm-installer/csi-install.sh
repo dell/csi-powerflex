@@ -18,7 +18,7 @@ DRIVERDIR="${SCRIPTDIR}/../"
 if [ ! -d "$DRIVERDIR/helm-charts" ]; then
 
   if  [ ! -d "$SCRIPTDIR/helm-charts" ]; then
-    git clone --quiet -c advice.detachedHead=false -b csi-vxflexos-2.7.0 https://github.com/dell/helm-charts
+    git clone --quiet -c advice.detachedHead=false -b csi-vxflexos-2.7.1 https://github.com/dell/helm-charts
   fi
   mv helm-charts $DRIVERDIR
 else 
@@ -33,7 +33,7 @@ PROG="${0}"
 NODE_VERIFY=1
 VERIFY=1
 MODE="install"
-DEFAULT_DRIVER_VERSION="v2.7.0"
+DEFAULT_DRIVER_VERSION="v2.7.1"
 WATCHLIST=""
 
 # export the name of the debug log, so child processes will see it
@@ -310,12 +310,7 @@ function verify_kubernetes() {
 VERIFYOPTS=""
 ASSUMEYES="false"
 
-# get the list of valid CSI Drivers, this will be the list of directories in drivers/ that contain helm charts
-get_drivers "${DRIVERDIR}"
-# if only one driver was found, set the DRIVER to that one
-if [ ${#VALIDDRIVERS[@]} -eq 1 ]; then
-  DRIVER="${VALIDDRIVERS[0]}"
-fi
+DRIVERDIR="${SCRIPTDIR}/../helm-charts/charts"
 
 while getopts ":h-:" optchar; do
   case "${optchar}" in
