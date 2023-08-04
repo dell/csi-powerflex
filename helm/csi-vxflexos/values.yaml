@@ -72,7 +72,7 @@ nfsAcls: "0777"
 #   false: do not set quota for volume
 # Optional: true
 # Default value: none
-enableQuota: "false"
+enableQuota: false
 
 # "enablesnapshotcgdelete"- a boolean that, when enabled, will delete all snapshots in a consistency group
 # everytime a snap in the group is deleted
