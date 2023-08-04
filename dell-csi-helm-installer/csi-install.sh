@@ -13,7 +13,21 @@
 # limitations under the License.
 
 SCRIPTDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-DRIVERDIR="${SCRIPTDIR}/../helm"
+DRIVERDIR="${SCRIPTDIR}/../"
+
+if [ ! -d "$DRIVERDIR/helm-charts" ]; then
+
+  if  [ ! -d "$SCRIPTDIR/helm-charts" ]; then
+    git clone --quiet -c advice.detachedHead=false -b csi-vxflexos-2.7.0 https://github.com/dell/helm-charts
+  fi
+  mv helm-charts $DRIVERDIR
+else 
+  if [  -d "$SCRIPTDIR/helm-charts" ]; then
+    rm -rf $SCRIPTDIR/helm-charts
+  fi
+fi
+DRIVERDIR="${SCRIPTDIR}/../helm-charts/charts"
+DRIVER="csi-vxflexos"
 VERIFYSCRIPT="${SCRIPTDIR}/verify.sh"
 PROG="${0}"
 NODE_VERIFY=1
