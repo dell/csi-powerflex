@@ -642,6 +642,9 @@ func getTypicalNFSCreateVolumeRequest() *csi.CreateVolumeRequest {
 	req := new(csi.CreateVolumeRequest)
 	params := make(map[string]string)
 	params["storagepool"] = "viki_pool_HDD_20181031"
+	params["path"] = "/fs"
+	params["softLimit"] = "0"
+	params["gracePeriod"] = "0"
 	req.Parameters = params
 	req.Name = "mount1"
 	capacityRange := new(csi.CapacityRange)
@@ -4325,6 +4328,56 @@ func (f *feature) iCallExecuteAction(arg1 string) error {
 	return nil
 }
 
+func (f *feature) iCallEnableFSQuota() error {
+	f.service.opts.IsQuotaEnabled = true
+	isQuotaEnabled = true
+	return nil
+}
+
+func (f *feature) iCallDisableFSQuota() error {
+	f.service.opts.IsQuotaEnabled = false
+	isQuotaEnabled = false
+	return nil
+}
+
+func (f *feature) iCallSetQuotaParams(path, softlimit, graceperiod string) error {
+	if f.createVolumeRequest == nil {
+		req := getTypicalNFSCreateVolumeRequest()
+		f.createVolumeRequest = req
+	}
+	f.createVolumeRequest.Parameters["path"] = path
+	f.createVolumeRequest.Parameters["softLimit"] = softlimit
+	f.createVolumeRequest.Parameters["gracePeriod"] = graceperiod
+	return nil
+}
+
+func (f *feature) iSpecifyNoPath() error {
+	if f.createVolumeRequest == nil {
+		req := getTypicalNFSCreateVolumeRequest()
+		f.createVolumeRequest = req
+	}
+	delete(f.createVolumeRequest.Parameters, "path")
+	return nil
+}
+
+func (f *feature) iSpecifyNoSoftLimit() error {
+	if f.createVolumeRequest == nil {
+		req := getTypicalNFSCreateVolumeRequest()
+		f.createVolumeRequest = req
+	}
+	delete(f.createVolumeRequest.Parameters, "softLimit")
+	return nil
+}
+
+func (f *feature) iSpecifyNoGracePeriod() error {
+	if f.createVolumeRequest == nil {
+		req := getTypicalNFSCreateVolumeRequest()
+		f.createVolumeRequest = req
+	}
+	delete(f.createVolumeRequest.Parameters, "gracePeriod")
+	return nil
+}
+
 func FeatureContext(s *godog.ScenarioContext) {
 	f := &feature{}
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
@@ -4523,6 +4576,12 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call DeleteVolume "([^"]*)"$`, f.iCallDeleteVolume)
 	s.Step(`^I call DeleteStorageProtectionGroup$`, f.iCallDeleteStorageProtectionGroup)
 	s.Step(`^I call ExecuteAction "([^"]*)"$`, f.iCallExecuteAction)
+	s.Step(`^I enable quota for filesystem$`, f.iCallEnableFSQuota)
+	s.Step(`^I disable quota for filesystem$`, f.iCallDisableFSQuota)
+	s.Step(`^I set quota with path "([^"]*)" softLimit "([^"]*)" graceperiod "([^"]*)"$`, f.iCallSetQuotaParams)
+	s.Step(`^I specify NoPath$`, f.iSpecifyNoPath)
+	s.Step(`^I specify NoSoftLimit`, f.iSpecifyNoSoftLimit)
+	s.Step(`^I specify NoGracePeriod`, f.iSpecifyNoGracePeriod)
 
 	s.After(func(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
 		if f.server != nil {
