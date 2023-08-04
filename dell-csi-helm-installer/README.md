@@ -44,8 +44,8 @@ For example, to create a values file for the PowerFlex driver the following step
 # cd to  the installation script directory
 cd dell-csi-helm-installer
 
-# copy the template file
-cp ../helm/csi-vxflexos/values.yaml ./my-vxflexos-settings.yaml
+# download the template file
+ wget -O myValues.yaml  https://github.com/dell/helm-charts/raw/csi-vxflexos-2.7.1/charts/csi-vxflexos/values.yaml
 
 # edit the newly created values file
 vi my-vxflexos-settings.yaml

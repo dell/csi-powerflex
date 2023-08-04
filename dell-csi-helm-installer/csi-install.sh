@@ -121,13 +121,7 @@ function validate_params() {
     usage
     exit 1
   fi
-  # make sure the driver name is valid
-  if [[ ! "${VALIDDRIVERS[@]}" =~ "${DRIVER}" ]]; then
-    decho "Driver: ${DRIVER} is invalid."
-    decho "Valid options are: ${VALIDDRIVERS[@]}"
-    usage
-    exit 1
-  fi
+ 
   # the namespace is required
   if [ -z "${NS}" ]; then
     decho "No namespace specified"
