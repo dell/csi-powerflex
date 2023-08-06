@@ -552,3 +552,62 @@ Feature: VxFlex OS CSI interface
     And I call UnpublishVolume
     And no error was received
     Then the number of SDC mappings is 0
+
+  Scenario: Create NFS volume, enable quota with all key parameters
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I set quota with path "/fs" softLimit "20" graceperiod "86400"
+    And I call CreateVolumeSize nfs "vol-inttest-nfs" "10"
+    Then a valid CreateVolumeResponse is returned
+
+  Scenario: Create NFS volume, enable quota without path key
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I specify NoPath
+    And I call CreateVolumeSize nfs "vol-inttest-nfs" "10"
+    Then the error contains "rpc error: code = InvalidArgument desc = `path` is a required parameter"
+
+  Scenario: Create NFS volume, enable quota without soft limit key
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I specify NoSoftLimit
+    And I call CreateVolumeSize nfs "vol-inttest-nfs" "10"
+    Then the error contains "rpc error: code = InvalidArgument desc = `softLimit` is a required parameter"
+
+  Scenario: Create NFS volume, enable quota without grace period key
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I specify NoGracePeriod
+    And I call CreateVolumeSize nfs "vol-inttest-nfs" "10"
+    Then the error contains "rpc error: code = InvalidArgument desc = `gracePeriod` is a required parameter"
+
+  Scenario: Create NFS volume, create quota error
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I set quota with path "/fs" softLimit "20" graceperiod "86400"
+    And I induce error "CreateQuotaError"
+    And I call CreateVolumeSize nfs "vol-inttest-nfs" "10"
+    Then the error contains "error creating quota ('vol-inttest-nfs', '10737418240' bytes), abort, also successfully rolled back by deleting the newly created volume"
+
+  Scenario: Create NFS volume, invalid soft limit, set to default
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I set quota with path "/fs" softLimit "abc" graceperiod "86400"
+    And I call CreateVolumeSize nfs "vol-inttest-nfs" "10"
+    Then a valid CreateVolumeResponse is returned
+
+  Scenario: Create NFS volume, invalid grace period, set to default
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I set quota with path "/fs" softLimit "20" graceperiod "xyz"
+    And I call CreateVolumeSize nfs "vol-inttest-nfs" "10"
+    Then a valid CreateVolumeResponse is returned
+
+  Scenario: Create NFS volume, enable quota, with FS quota disabled
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I set quota with path "/fs" softLimit "20" graceperiod "86400"
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+    And I induce error "FSQuotaError"
+    When I call CreateVolumeSize nfs "vol-inttest-nfs" "8"
+    Then the error contains "error creating quota "

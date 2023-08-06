@@ -1,0 +1,12 @@
+{
+  "id": "__ID__",
+  "file_system_id": "766f6c2d696e74746573742d6e6673",
+  "path": "__PATH__",
+  "description": "tree quota modified",
+  "is_user_quotas_enforced": false,
+  "state": "OK",
+  "hard_limit": __HARD_LIMIT_SIZE__,
+  "soft_limit": __SOFT_LIMIT_SIZE__,
+  "remaining_grace_period": __GRACE_PERIOD__,
+  "size_used": 0
+}
