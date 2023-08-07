@@ -410,11 +410,12 @@ func (s *service) CreateVolume(
 			quotaID, err := s.createQuota(fsResp.ID, path, softLimit, gracePeriod, int(size), isQuotaEnabled, systemID)
 			if err != nil {
 				// roll back, delete the newly created volume
-				if err = system.DeleteFileSystem(fs.Name); err != nil {
+				if delErr := system.DeleteFileSystem(fs.Name); delErr != nil {
 					return nil, status.Errorf(codes.Internal,
-						"rollback (deleting volume '%s') failed with error : '%v'", fs.Name, err.Error())
+						"rollback (deleting volume '%s') failed with error : '%v'", fs.Name, delErr.Error())
 				}
-				return nil, fmt.Errorf("error creating quota ('%s', '%d' bytes), abort, also successfully rolled back by deleting the newly created volume", fs.Name, size)
+				Log.Debugf("error creating quota ('%s', '%d' bytes), abort, also successfully rolled back by deleting the newly created volume", fs.Name, size)
+				return nil, err
 			}
 			Log.Infof("Tree quota set for: %d bytes on directory: '%s', quota ID: %s", size, path, quotaID)
 		}
@@ -597,9 +598,13 @@ func (s *service) createQuota(fsID, path, softLimit, gracePeriod string, size in
 	}
 
 	var softLimitInt, gracePeriodInt int64
-	gracePeriodInt, err = strconv.ParseInt(gracePeriod, 10, 64)
-	if err != nil {
-		Log.Debugf("Invalid gracePeriod value. Setting it to default.")
+	if gracePeriod != "" {
+		gracePeriodInt, err = strconv.ParseInt(gracePeriod, 10, 64)
+		if err != nil {
+			return "", status.Errorf(codes.Unknown, "Invalid gracePeriod value, error: %v", err)
+		}
+	} else {
+		Log.Debugf("GracePeriod value set to default.")
 		gracePeriodInt = 0
 	}
 
@@ -607,11 +612,12 @@ func (s *service) createQuota(fsID, path, softLimit, gracePeriod string, size in
 	if softLimit != "" {
 		softi, err := strconv.ParseInt(softLimit, 10, 64)
 		if err != nil {
-			Log.Debugf("Invalid softLimit value. Setting it to default.")
-			softLimitInt = 0
-		} else {
-			softLimitInt = (softi * int64(size)) / 100
+			return "", status.Errorf(codes.Unknown, "Invalid softLimit value, error: %v", err)
 		}
+		softLimitInt = (softi * int64(size)) / 100
+	} else {
+		Log.Debugf("SoftLimit value set to default.")
+		softLimitInt = 0
 	}
 
 	// modify FS to set quota
