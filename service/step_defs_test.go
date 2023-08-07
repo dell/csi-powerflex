@@ -642,6 +642,9 @@ func getTypicalNFSCreateVolumeRequest() *csi.CreateVolumeRequest {
 	req := new(csi.CreateVolumeRequest)
 	params := make(map[string]string)
 	params["storagepool"] = "viki_pool_HDD_20181031"
+	params["path"] = "/fs"
+	params["softLimit"] = "0"
+	params["gracePeriod"] = "0"
 	req.Parameters = params
 	req.Name = "mount1"
 	capacityRange := new(csi.CapacityRange)
@@ -3586,6 +3589,26 @@ func (f *feature) iCallCreateVolumeFromSnapshot() error {
 	return nil
 }
 
+func (f *feature) iCallCreateVolumeFromSnapshotNFS() error {
+	ctx := new(context.Context)
+	req := getTypicalNFSCreateVolumeRequest()
+	req.Name = "volumeFromSnap"
+	if f.wrongCapacity {
+		req.CapacityRange.RequiredBytes = 64 * 1024 * 1024 * 1024
+	}
+	if f.wrongStoragePool {
+		req.Parameters["storagepool"] = "other_storage_pool"
+	}
+	source := &csi.VolumeContentSource_SnapshotSource{SnapshotId: "14dbbf5617523654" + "/" + fileSystemNameToID["snap1"]}
+	req.VolumeContentSource = new(csi.VolumeContentSource)
+	req.VolumeContentSource.Type = &csi.VolumeContentSource_Snapshot{Snapshot: source}
+	f.createVolumeResponse, f.err = f.service.CreateVolume(*ctx, req)
+	if f.err != nil {
+		fmt.Printf("Error on CreateVolume from snap: %s\n", f.err.Error())
+	}
+	return nil
+}
+
 func (f *feature) theWrongCapacity() error {
 	f.wrongCapacity = true
 	return nil
@@ -4325,6 +4348,56 @@ func (f *feature) iCallExecuteAction(arg1 string) error {
 	return nil
 }
 
+func (f *feature) iCallEnableFSQuota() error {
+	f.service.opts.IsQuotaEnabled = true
+	isQuotaEnabled = true
+	return nil
+}
+
+func (f *feature) iCallDisableFSQuota() error {
+	f.service.opts.IsQuotaEnabled = false
+	isQuotaEnabled = false
+	return nil
+}
+
+func (f *feature) iCallSetQuotaParams(path, softlimit, graceperiod string) error {
+	if f.createVolumeRequest == nil {
+		req := getTypicalNFSCreateVolumeRequest()
+		f.createVolumeRequest = req
+	}
+	f.createVolumeRequest.Parameters["path"] = path
+	f.createVolumeRequest.Parameters["softLimit"] = softlimit
+	f.createVolumeRequest.Parameters["gracePeriod"] = graceperiod
+	return nil
+}
+
+func (f *feature) iSpecifyNoPath() error {
+	if f.createVolumeRequest == nil {
+		req := getTypicalNFSCreateVolumeRequest()
+		f.createVolumeRequest = req
+	}
+	delete(f.createVolumeRequest.Parameters, "path")
+	return nil
+}
+
+func (f *feature) iSpecifyNoSoftLimit() error {
+	if f.createVolumeRequest == nil {
+		req := getTypicalNFSCreateVolumeRequest()
+		f.createVolumeRequest = req
+	}
+	delete(f.createVolumeRequest.Parameters, "softLimit")
+	return nil
+}
+
+func (f *feature) iSpecifyNoGracePeriod() error {
+	if f.createVolumeRequest == nil {
+		req := getTypicalNFSCreateVolumeRequest()
+		f.createVolumeRequest = req
+	}
+	delete(f.createVolumeRequest.Parameters, "gracePeriod")
+	return nil
+}
+
 func FeatureContext(s *godog.ScenarioContext) {
 	f := &feature{}
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
@@ -4448,6 +4521,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call DeleteSnapshot NFS$`, f.iCallDeleteSnapshotNFS)
 	s.Step(`^a valid snapshot consistency group$`, f.aValidSnapshotConsistencyGroup)
 	s.Step(`^I call Create Volume from Snapshot$`, f.iCallCreateVolumeFromSnapshot)
+	s.Step(`^I call Create Volume from SnapshotNFS$`, f.iCallCreateVolumeFromSnapshotNFS)
 	s.Step(`^the wrong capacity$`, f.theWrongCapacity)
 	s.Step(`^the wrong storage pool$`, f.theWrongStoragePool)
 	s.Step(`^there are (\d+) valid snapshots of "([^"]*)" volume$`, f.thereAreValidSnapshotsOfVolume)
@@ -4523,6 +4597,12 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call DeleteVolume "([^"]*)"$`, f.iCallDeleteVolume)
 	s.Step(`^I call DeleteStorageProtectionGroup$`, f.iCallDeleteStorageProtectionGroup)
 	s.Step(`^I call ExecuteAction "([^"]*)"$`, f.iCallExecuteAction)
+	s.Step(`^I enable quota for filesystem$`, f.iCallEnableFSQuota)
+	s.Step(`^I disable quota for filesystem$`, f.iCallDisableFSQuota)
+	s.Step(`^I set quota with path "([^"]*)" softLimit "([^"]*)" graceperiod "([^"]*)"$`, f.iCallSetQuotaParams)
+	s.Step(`^I specify NoPath$`, f.iSpecifyNoPath)
+	s.Step(`^I specify NoSoftLimit`, f.iSpecifyNoSoftLimit)
+	s.Step(`^I specify NoGracePeriod`, f.iSpecifyNoGracePeriod)
 
 	s.After(func(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
 		if f.server != nil {

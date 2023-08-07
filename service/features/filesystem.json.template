@@ -19,7 +19,7 @@
     "is_smb_notify_on_write_enabled": false,
     "smb_notify_on_change_dir_depth": 512,
     "is_async_MTime_enabled": false,
-    "is_quota_enabled": true,
+    "is_quota_enabled": __IS_QUOTA_ENABLED__,
     "grace_period": 86400,
     "default_hard_limit": 6442450944,
     "default_soft_limit": 3221225472,
