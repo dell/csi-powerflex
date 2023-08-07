@@ -541,14 +541,92 @@ Feature: VxFlex OS CSI interface
       | errormsg    |
       | "error creating quota, path cannot be empty" |
 
-  Scenario: Create basic nfs volume with tree quota enabled with empty path value
+  Scenario: Create basic nfs volume with tree quota enabled with empty graceperiod value
     Given a VxFlexOS service
     And a basic nfs volume request with quota enabled volname "nfsvolume00" volsize "8" path "/nfs12" softlimit "80" graceperiod ""
     When I call CreateVolume
     Then the error message should contain <errormsg>
     Examples:
       | errormsg    |
-      | "error creating quota, graceperiod cannot be empty" |      
+      | "error creating quota" |      
+  
+  Scenario: Create basic nfs volume with tree quota enabled with empty softlimit value
+    Given a VxFlexOS service
+    And a basic nfs volume request with quota enabled volname "nfsvolume1" volsize "8" path "" softlimit "" graceperiod "86400"
+    When I call CreateVolume
+    Then the error message should contain <errormsg>
+    Examples:
+      | errormsg    |
+      | "error creating quota" |
+
+  Scenario: Create basic nfs volume with tree quota enabled with invalid grace peroid
+    Given a VxFlexOS service
+    And a basic nfs volume request with quota enabled volname "nfsvolume1" volsize "8" path "" softlimit "80" graceperiod "abc"
+    When I call CreateVolume
+    Then the error message should contain <errormsg>
+    Examples:
+      | errormsg    |
+      | "error creating quota" | 
+  
+  Scenario: Expand Nfs Volume with tree quota enabled
+    Given a VxFlexOS service
+    And a nfs capability with voltype "mount" access "single-writer" fstype "nfs"
+    And a basic nfs volume request with quota enabled volname "vol-quota" volsize "10" path "/nfs-quotakk" softlimit "80" graceperiod "86400"
+    When I call CreateVolume
+    And there are no errors
+    And when I call PublishVolume for nfs "SDC_GUID"
+    And there are no errors
+    And when I call NodePublishVolume for nfs "SDC_GUID"
+    And there are no errors
+    And when I call NfsExpandVolume to "15"
+    And there are no errors
+    And I call ListVolume
+    And a valid ListVolumeResponse is returned
+    And when I call NodeUnpublishVolume for nfs "SDC_GUID"
+    And there are no errors
+    And when I call UnpublishVolume for nfs "SDC_GUID"
+    And there are no errors
+    And when I call DeleteVolume
+    Then there are no errors
+
+  
+  Scenario: Expand Nfs Volume with tree quota enabled given invalid volume size for exapnd volume
+    Given a VxFlexOS service
+    And a nfs capability with voltype "mount" access "single-writer" fstype "nfs"
+    And a basic nfs volume request with quota enabled volname "vol-quota123" volsize "10" path "/nfs-quotakk" softlimit "80" graceperiod "86400"
+    When I call CreateVolume
+    And there are no errors
+    And when I call PublishVolume for nfs "SDC_GUID"
+    And there are no errors
+    And when I call NodePublishVolume for nfs "SDC_GUID"
+    And there are no errors
+    And when I call NfsExpandVolume to "15000"
+    Then the error message should contain <errormsg>
+    Examples:
+    | errormsg    |
+    | "422 Unprocessable Entity" |   
+    
+
+  Scenario: Expand Nfs Volume with tree quota disabled
+    Given a VxFlexOS service
+    And a nfs capability with voltype "mount" access "single-writer" fstype "nfs"
+    And a basic nfs volume request with quota enabled volname "vol-quota" volsize "10" path "/nfs-quota" softlimit "80" graceperiod "86400"
+    When I call CreateVolume
+    And there are no errors
+    And when I call PublishVolume for nfs "SDC_GUID"
+    And there are no errors
+    And when I call NodePublishVolume for nfs "SDC_GUID"
+    And there are no errors
+    And when I call NfsExpandVolume to "15"
+    And there are no errors
+    And I call ListVolume
+    And a valid ListVolumeResponse is returned
+    And when I call NodeUnpublishVolume for nfs "SDC_GUID"
+    And there are no errors
+    And when I call UnpublishVolume for nfs "SDC_GUID"
+    And there are no errors
+    And when I call DeleteVolume
+    Then there are no errors    
 
   Scenario: Create and delete 100000G NFS volume
     Given a VxFlexOS service
