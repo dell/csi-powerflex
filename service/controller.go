@@ -2040,12 +2040,22 @@ func (s *service) getSystemCapacity(ctx context.Context, systemID, protectionDom
 		}
 		spc := goscaleio.NewStoragePoolEx(adminClient, sp)
 		statsFunc = spc.GetStatistics
+
+		if !s.opts.Thick {
+			if sp.CapacityUsageState == "Critical" {
+				return 0, nil
+			}
+		}
 	}
 
 	stats, err := statsFunc()
 	if err != nil {
 		return 0, status.Errorf(codes.Internal,
 			"unable to get system stats for system: %s, err: %s", systemID, err.Error())
+	}
+
+	if !s.opts.Thick {
+		return int64(stats.VolumeAllocationLimitInKb * bytesInKiB), nil
 	}
 	return int64(stats.CapacityAvailableForVolumeAllocationInKb * bytesInKiB), nil
 }
