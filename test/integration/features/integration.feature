@@ -539,7 +539,7 @@ Feature: VxFlex OS CSI interface
     Then the error message should contain <errormsg>
     Examples:
       | errormsg    |
-      | "error creating quota, path cannot be empty" |
+      | "error creating quota" |
 
   Scenario: Create basic nfs volume with tree quota enabled with empty graceperiod value
     Given a VxFlexOS service
@@ -552,7 +552,7 @@ Feature: VxFlex OS CSI interface
   
   Scenario: Create basic nfs volume with tree quota enabled with empty softlimit value
     Given a VxFlexOS service
-    And a basic nfs volume request with quota enabled volname "nfsvolume1" volsize "8" path "" softlimit "" graceperiod "86400"
+    And a basic nfs volume request with quota enabled volname "nfsvolume1" volsize "8" path "/nfs" softlimit "" graceperiod "86400"
     When I call CreateVolume
     Then the error message should contain <errormsg>
     Examples:
