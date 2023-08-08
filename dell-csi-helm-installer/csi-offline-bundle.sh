@@ -142,7 +142,12 @@ copy_files() {
   status "Copying necessary files"
   for f in ${REQUIRED_FILES[@]}; do
     echo " ${f}"
-    cp -R "${f}" "${DISTDIR}"
+    if [[ ${f} == *$DRIVER ]]; then
+      mkdir -p ${DISTDIR}/helm-charts/charts
+      cp -R "${f}" "${DISTDIR}/helm-charts/charts"
+    else
+      cp -R "${f}" "${DISTDIR}"
+    fi
     if [ $? -ne 0 ]; then
       echo "Unable to copy ${f} to the distribution directory"
       exit 1
