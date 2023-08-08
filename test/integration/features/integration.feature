@@ -695,6 +695,36 @@ Feature: VxFlex OS CSI interface
     And when I call DeleteVolume
     Then there are no errors
 
+  Scenario: NFS Create volume, create snapshot, delete volume
+    Given a VxFlexOS service
+    And a basic nfs volume request "nfsvolume1" "8"
+    When I call CreateVolume
+    And I call CreateSnapshotForFS
+    And there are no errors
+    And I call ListFileSystemSnapshot
+    And there are no errors
+    And I call DeleteSnapshotForFS
+    And there are no errors
+    And when I call DeleteVolume
+    Then there are no errors
+
+  Scenario: NFS Create volume, idempotent create snapshot, delete volume
+    Given a VxFlexOS service
+    And a basic nfs volume request "nfsvolume1" "8"
+    When I call CreateVolume
+    And I call CreateSnapshotForFS
+    And there are no errors
+    And I call CreateSnapshotForFS
+    And there are no errors
+    And I call ListFileSystemSnapshot
+    And there are no errors
+    And I call DeleteSnapshotForFS
+    And there are no errors
+    And I call DeleteSnapshotForFS
+    And there are no errors
+    And when I call DeleteVolume
+    Then there are no errors
+
   Scenario Outline: Publish and Unpublish Ephemeral Volume
     Given a VxFlexOS service
     And a capability with voltype "mount" access <access> fstype <fstype>
