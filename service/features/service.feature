@@ -824,7 +824,7 @@ Feature: VxFlex OS CSI interface
     When I call Probe
     And I induce error "DeleteSnapshotError" 
     And I call DeleteSnapshot NFS
-    Then the error contains "error while deleting the filesytem snapshot"
+    Then the error contains "error while deleting the filesystem snapshot"
 
   Scenario: Delete snapshot consistency group
     Given a VxFlexOS service
@@ -869,6 +869,88 @@ Feature: VxFlex OS CSI interface
     And I call Create Volume from Snapshot
     Then a valid CreateVolumeResponse is returned
     And no error was received
+
+  Scenario: Create a volume from a snapshot NFS no error
+    Given a VxFlexOS service
+    And I call Probe
+    And I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call CreateSnapshot NFS "snap1"
+    And no error was received
+    When I call Probe
+    And I call Create Volume from SnapshotNFS
+    Then a valid CreateVolumeResponse is returned
+    And no error was received
+
+  Scenario: Idempotent create a volume from a snapshot no error
+    Given a VxFlexOS service
+    And I call Probe
+    And I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call CreateSnapshot NFS "snap1"
+    And no error was received
+    When I call Probe
+    And I call Create Volume from SnapshotNFS
+    Then a valid CreateVolumeResponse is returned
+    And no error was received
+     When I call Probe
+    And I call Create Volume from SnapshotNFS
+    Then a valid CreateVolumeResponse is returned
+    And no error was received
+    
+  Scenario: Create a volume from a snapshot NFS snapshot not found error
+    Given a VxFlexOS service
+    And I call Probe
+    And I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call CreateSnapshot NFS "snap1"
+    And no error was received
+    When I call Probe
+    And I induce error "GetFileSystemsByIdError"
+    And I call Create Volume from SnapshotNFS
+    Then the error contains "Snapshot not found"
+    
+  Scenario: Create a volume from a snapshot NFS incompatible size error
+    Given a VxFlexOS service
+    And I call Probe
+    And I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call CreateSnapshot NFS "snap1"
+    And no error was received
+    And the wrong capacity
+    When I call Probe
+    And I call Create Volume from SnapshotNFS
+    Then the error contains "incompatible size"
+  
+  Scenario: Create a volume from a snapshot NFS different storage pool error
+    Given a VxFlexOS service
+    And I call Probe
+    And I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call CreateSnapshot NFS "snap1"
+    And no error was received
+    And the wrong storage pool
+    When I call Probe
+    And I call Create Volume from SnapshotNFS
+    Then the error contains "different than the requested storage pool"
+   
+  Scenario: Create a volume from a snapshot NFS restoreVolumeError
+    Given a VxFlexOS service
+    And I call Probe
+    And I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call CreateSnapshot NFS "snap1"
+    And no error was received
+    When I call Probe
+    And I induce error "restoreVolumeError"
+    And I call Create Volume from SnapshotNFS
+    Then the error contains "error during fs creation from snapshot"
 
   Scenario: Create a volume from a snapshot with wrong capacity
     Given a VxFlexOS service
@@ -1306,3 +1388,66 @@ Feature: VxFlex OS CSI interface
     And I induce error "NoVolumeIDError"
     Then I call ControllerExpandVolume set to "16"
     And the error contains "volume ID is required"
+
+  Scenario: Controller expand volume for NFS with quota enabled
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I set quota with path "/fs" softLimit "20" graceperiod "86400"
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+    When I call CreateVolumeSize nfs "vol-inttest-nfs" "8"
+    And a controller published volume
+    When I call ControllerExpandVolume set to "12"
+    Then no error was received
+
+  Scenario: Controller expand volume for NFS with quota disabled
+    Given a VxFlexOS service
+    And I disable quota for filesystem
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+    When I call CreateVolumeSize nfs "vol-inttest-nfs" "8"
+    And a controller published volume
+    When I call ControllerExpandVolume set to "12"
+    Then no error was received
+
+  Scenario: Controller expand volume for NFS with quota enabled, modify filesystem error
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I set quota with path "/fs" softLimit "20" graceperiod "86400"
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+    When I call CreateVolumeSize nfs "vol-inttest-nfs" "8"
+    And I induce error "ModifyFSError"
+    And a controller published volume
+    When I call ControllerExpandVolume set to "12"
+    Then the error contains "Modify filesystem failed with error:"
+
+  Scenario: Controller expand volume for NFS with quota enabled, modify quota error
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I set quota with path "/fs" softLimit "20" graceperiod "86400"
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+    When I call CreateVolumeSize nfs "vol-inttest-nfs" "8"
+    And I induce error "ModifyQuotaError"
+    And a controller published volume
+    When I call ControllerExpandVolume set to "12"
+    Then the error contains "Modifying tree quota for filesystem failed, error:"
+
+  Scenario: Controller expand volume for NFS with quota enabled, GetFileSystemsByIdError
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I set quota with path "/fs" softLimit "20" graceperiod "86400"
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+    When I call CreateVolumeSize nfs "vol-inttest-nfs" "8"
+    And I induce error "GetFileSystemsByIdError"
+    And a controller published volume
+    When I call ControllerExpandVolume set to "12"
+    Then the error contains "rpc error: code = NotFound desc = volume"
+
+  Scenario: Controller expand volume for NFS with quota enabled, GetQuotaByFSIDError
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I set quota with path "/fs" softLimit "20" graceperiod "86400"
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+    When I call CreateVolumeSize nfs "vol-inttest-nfs" "8"
+    And I induce error "GetQuotaByFSIDError"
+    And a controller published volume
+    When I call ControllerExpandVolume set to "12"
+    Then the error contains "Fetching tree quota for filesystem failed, error:"

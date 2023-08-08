@@ -150,9 +150,10 @@ type Opts struct {
 	IsApproveSDCEnabled        bool
 	replicationContextPrefix   string
 	replicationPrefix          string
-	NfsAcls                    string
-	ExternalAccess             string
+	NfsAcls                    string // enables setting permissions on NFS mount directory
+	ExternalAccess             string // allow additional entries for host to access NFS volumes
 	MaxVolumesPerNode          int64
+	IsQuotaEnabled             bool // allow driver to enable quota limits for NFS volumes
 }
 
 type service struct {
@@ -347,6 +348,7 @@ func (s *service) BeforeServe(
 			"nfsAcls":                s.opts.NfsAcls,
 			"externalAccess":         s.opts.ExternalAccess,
 			"MaxVolumesPerNode":      s.opts.MaxVolumesPerNode,
+			"IsQuotaEnabled":         s.opts.IsQuotaEnabled,
 		}
 
 		Log.WithFields(fields).Infof("configured %s", Name)
@@ -409,6 +411,11 @@ func (s *service) BeforeServe(
 	if approveSDC, ok := csictx.LookupEnv(ctx, EnvIsApproveSDCEnabled); ok {
 		if approveSDC == "true" {
 			opts.IsApproveSDCEnabled = true
+		}
+	}
+	if quotaEnabled, ok := csictx.LookupEnv(ctx, EnvQuotaEnabled); ok {
+		if quotaEnabled == "true" {
+			opts.IsQuotaEnabled = true
 		}
 	}
 
@@ -1181,7 +1188,6 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 	otherHostsWithAccess += len(readOnlyRootHosts)
 	if !foundIncompatible {
 		for _, host := range readOnlyRootHosts {
-			readHostList = append(readHostList, host)
 			if host == hostURL {
 				if am.Mode == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
 					foundIdempotent = true
@@ -1195,7 +1201,6 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 
 	if !foundIncompatible && !foundIdempotent {
 		for _, host := range readWriteRootHosts {
-			readWriteHostList = append(readWriteHostList, hostURL)
 			if host == hostURL {
 				if am.Mode == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
 					foundIncompatible = true
