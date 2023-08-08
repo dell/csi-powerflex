@@ -523,50 +523,61 @@ Feature: VxFlex OS CSI interface
     And when I call DeleteVolume
     Then there are no errors
 
-  Scenario: Create and delete basic nfs volume with tree quota enabled
+  Scenario: Create basic nfs volume with tree quota enabled with empty path value, error
     Given a VxFlexOS service
-    And a basic nfs volume request with quota enabled volname "nfsvolume1" volsize "8" path "/nfs-quota" softlimit "80" graceperiod "86400"
+    And a basic nfs volume request with quota enabled volname "nfsvolume1" volsize "8" path "" softlimit "20" graceperiod "86400"
+    When I call CreateVolume
+    Then the error message should contain "path not set for volume"
+
+  
+  Scenario: Create basic nfs volume with tree quota enabled with empty softlimit value, error
+    Given a VxFlexOS service
+    And a basic nfs volume request with quota enabled volname "nfsvolume1" volsize "8" path "/fs" softlimit "" graceperiod "86400"
+    When I call CreateVolume
+    Then the error message should contain "softLimit not set for volume"
+
+  
+  Scenario: Create basic nfs volume with tree quota enabled with empty graceperiod value
+    Given a VxFlexOS service
+    And a basic nfs volume request with quota enabled volname "nfsvolume1" volsize "8" path "/fs" softlimit "20" graceperiod ""
     When I call CreateVolume
     When I call ListVolume
     Then a valid ListVolumeResponse is returned
     And when I call DeleteVolume
-    Then there are no errors    
+    Then there are no errors
 
-  Scenario: Create basic nfs volume with tree quota enabled with empty path value
+  Scenario: Create basic nfs volume with tree quota enabled with invalid softlimit, error
     Given a VxFlexOS service
-    And a basic nfs volume request with quota enabled volname "nfsvolume1" volsize "8" path "" softlimit "80" graceperiod "86400"
+    And a basic nfs volume request with quota enabled volname "nfsvolume1" volsize "8" path "/fs" softlimit "abc" graceperiod "86400"
     When I call CreateVolume
-    Then the error message should contain <errormsg>
-    Examples:
-      | errormsg    |
-      | "error creating quota" |
+    Then the error message should contain "requested softLimit: abc is not numeric for volume"
 
-  Scenario: Create basic nfs volume with tree quota enabled with empty graceperiod value
+  Scenario: Create basic nfs volume with tree quota enabled with invalid graceperiod, error
     Given a VxFlexOS service
-    And a basic nfs volume request with quota enabled volname "nfsvolume00" volsize "8" path "/nfs12" softlimit "80" graceperiod ""
+    And a basic nfs volume request with quota enabled volname "nfsvolume1" volsize "8" path "/fs" softlimit "20" graceperiod "abc"
     When I call CreateVolume
-    Then the error message should contain <errormsg>
-    Examples:
-      | errormsg    |
-      | "error creating quota" |      
-  
-  Scenario: Create basic nfs volume with tree quota enabled with empty softlimit value
-    Given a VxFlexOS service
-    And a basic nfs volume request with quota enabled volname "nfsvolume1" volsize "8" path "/nfs" softlimit "" graceperiod "86400"
-    When I call CreateVolume
-    Then the error message should contain <errormsg>
-    Examples:
-      | errormsg    |
-      | "error creating quota" |
+    Then the error message should contain "requested gracePeriod: abc is not numeric for volume"
 
-  Scenario: Create basic nfs volume with tree quota enabled with invalid grace peroid
+  Scenario: Create basic nfs volume with tree quota enabled with unlimited softlimit, error
     Given a VxFlexOS service
-    And a basic nfs volume request with quota enabled volname "nfsvolume1" volsize "8" path "" softlimit "80" graceperiod "abc"
+    And a basic nfs volume request with quota enabled volname "nfsvolume1" volsize "8" path "/fs" softlimit "0" graceperiod "86400"
     When I call CreateVolume
-    Then the error message should contain <errormsg>
-    Examples:
-      | errormsg    |
-      | "error creating quota" | 
+    Then the error message should contain "requested softLimit: 0 perc, i.e. default value which is greater than hardlimit, i.e. volume size"
+
+  Scenario: Create basic nfs volume with tree quota enabled with unlimited graceperiod
+    Given a VxFlexOS service
+    And a basic nfs volume request with quota enabled volname "nfsvolume1" volsize "8" path "/fs" softlimit "20" graceperiod "-1"
+    When I call CreateVolume
+    When I call ListVolume
+    Then a valid ListVolumeResponse is returned
+    And when I call DeleteVolume
+    Then there are no errors
+
+  Scenario: Create basic nfs volume with tree quota enabled with softlimit greater than size, error
+    Given a VxFlexOS service
+    And a basic nfs volume request with quota enabled volname "nfsvolume1" volsize "8" path "/fs" softlimit "200" graceperiod "86400"
+    When I call CreateVolume
+    Then the error message should contain "requested softLimit: 200 perc is greater than volume size"
   
   Scenario: Expand Nfs Volume with tree quota enabled
     Given a VxFlexOS service
