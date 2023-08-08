@@ -601,7 +601,7 @@ Feature: VxFlex OS CSI interface
   Scenario: Create NFS volume, empty path, error
     Given a VxFlexOS service
     And I enable quota for filesystem
-    And I set quota with path "/fs" softLimit "" graceperiod "86400"
+    And I set quota with path "" softLimit "20" graceperiod "86400"
     And I call CreateVolumeSize nfs "vol-inttest-nfs" "10"
     Then the error contains "path not set for volume"
 
