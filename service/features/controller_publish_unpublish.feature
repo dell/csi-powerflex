@@ -638,7 +638,7 @@ Feature: VxFlex OS CSI interface
     And I enable quota for filesystem
     And I set quota with path "/fs" softLimit "0" graceperiod "86400"
     And I call CreateVolumeSize nfs "vol-inttest-nfs" "10"
-    Then the error message should contain "requested softLimit: 0 perc, i.e. default value which is greater than hardlimit, i.e. volume size"
+    Then the error contains "requested softLimit: 0 perc, i.e. default value which is greater than hardlimit, i.e. volume size"
 
   Scenario: Create NFS volume, unlimited graceperiod
     Given a VxFlexOS service
@@ -652,4 +652,4 @@ Feature: VxFlex OS CSI interface
     And I enable quota for filesystem
     And I set quota with path "/fs" softLimit "200" graceperiod "86400"
     And I call CreateVolumeSize nfs "vol-inttest-nfs" "10"
-    Then the error message should contain "requested softLimit: 200 perc is greater than volume size"
+    Then the error contains "requested softLimit: 200 perc is greater than volume size"
