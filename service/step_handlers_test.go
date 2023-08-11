@@ -17,9 +17,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -993,7 +993,7 @@ func handlePeerMdmInstances(w http.ResponseWriter, r *http.Request) {
 }
 
 func returnJSONFile(directory, filename string, w http.ResponseWriter, replacements map[string]string) (jsonBytes []byte) {
-	jsonBytes, err := ioutil.ReadFile(filepath.Join(directory, filename))
+	jsonBytes, err := os.ReadFile(filepath.Join(directory, filename))
 	if err != nil {
 		log.Printf("Couldn't read %s/%s\n", directory, filename)
 		if w != nil {

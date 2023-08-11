@@ -16,11 +16,12 @@ package e2e
 import (
 	"context"
 	"fmt"
-	yaml "gopkg.in/yaml.v3"
-	"io/ioutil"
+	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	yaml "gopkg.in/yaml.v3"
 
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
@@ -322,7 +323,7 @@ func doOneCyclePVCTest(ctx context.Context, policy string, accessMode v1.Persist
 
 func readYaml(values string) (map[string]string, error) {
 
-	yfile, err := ioutil.ReadFile(values)
+	yfile, err := os.ReadFile(values)
 
 	if err != nil {
 		return nil, err
