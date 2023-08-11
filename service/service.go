@@ -465,6 +465,7 @@ func (s *service) BeforeServe(
 	}
 
 	opts.Thick = pb(EnvThick)
+	opts.Thick = true
 	opts.AutoProbe = true
 
 	s.opts = opts
