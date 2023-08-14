@@ -62,6 +62,7 @@
   "rfcacheIosOutstanding": 0,
   "protectedVacInKb": 50331648,
   "capacityAvailableForVolumeAllocationInKb": 117440512,
+  "volumeAllocationLimitInKb": 117440512,
   "numOfMappedToAllVolumes": 0,
   "activeMovingRebalanceJobs": 0,
   "activeMovingInFwdRebuildJobs": 0,
