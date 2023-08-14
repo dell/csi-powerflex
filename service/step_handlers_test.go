@@ -954,11 +954,6 @@ func handleGetFileSystems(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "Modify filesystem failed with error:", http.StatusRequestTimeout, codes.Internal)
 			return
 		}
-		if inducedError.Error() == "FSQuotaError" {
-			req.IsQuotaEnabled = false
-			writeError(w, "error creating quota ", http.StatusRequestTimeout, codes.Internal)
-			return
-		}
 		vars := mux.Vars(r)
 		id := vars["id"]
 		fmt.Println("id:", id)
