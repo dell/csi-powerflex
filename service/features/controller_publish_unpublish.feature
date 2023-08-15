@@ -552,3 +552,104 @@ Feature: VxFlex OS CSI interface
     And I call UnpublishVolume
     And no error was received
     Then the number of SDC mappings is 0
+
+  Scenario: Create NFS volume, enable quota with all key parameters
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I set quota with path "/fs" softLimit "20" graceperiod "86400"
+    And I call CreateVolumeSize nfs "vol-inttest-nfs" "10"
+    Then a valid CreateVolumeResponse is returned
+
+  Scenario: Create NFS volume, enable quota without path key
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I specify NoPath
+    And I call CreateVolumeSize nfs "vol-inttest-nfs" "10"
+    Then the error contains "`path` is a required parameter"
+
+  Scenario: Create NFS volume, enable quota without soft limit key
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I specify NoSoftLimit
+    And I call CreateVolumeSize nfs "vol-inttest-nfs" "10"
+    Then the error contains "`softLimit` is a required parameter"
+
+  Scenario: Create NFS volume, enable quota without grace period key
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I specify NoGracePeriod
+    And I call CreateVolumeSize nfs "vol-inttest-nfs" "10"
+    Then the error contains "`gracePeriod` is a required parameter"
+
+  Scenario: Create NFS volume, create quota error
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I set quota with path "/fs" softLimit "20" graceperiod "86400"
+    And I induce error "CreateQuotaError"
+    And I call CreateVolumeSize nfs "vol-inttest-nfs" "10"
+    Then the error contains "Creating quota failed"
+
+  Scenario: Create NFS volume, enable quota, with FS quota disabled
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I set quota with path "/fs" softLimit "20" graceperiod "86400"
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+    And I induce error "ModifyFSError"
+    When I call CreateVolumeSize nfs "vol-inttest-nfs" "8"
+    Then the error contains "Modify filesystem failed"
+
+  Scenario: Create NFS volume, empty path, error
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I set quota with path "" softLimit "20" graceperiod "86400"
+    And I call CreateVolumeSize nfs "vol-inttest-nfs" "10"
+    Then the error contains "path not set for volume"
+
+  Scenario: Create NFS volume, empty soft limit, error
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I set quota with path "/fs" softLimit "" graceperiod "86400"
+    And I call CreateVolumeSize nfs "vol-inttest-nfs" "10"
+    Then the error contains "softLimit not set for volume"
+
+  Scenario: Create NFS volume, empty graceperiod, set to default
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I set quota with path "/fs" softLimit "80" graceperiod ""
+    And I call CreateVolumeSize nfs "vol-inttest-nfs" "10"
+    Then a valid CreateVolumeResponse is returned
+
+  Scenario: Create NFS volume, invalid soft limit, error
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I set quota with path "/fs" softLimit "abc" graceperiod "86400"
+    And I call CreateVolumeSize nfs "vol-inttest-nfs" "10"
+    Then the error contains "requested softLimit: abc is not numeric for volume"
+
+  Scenario: Create NFS volume, invalid grace period, error
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I set quota with path "/fs" softLimit "20" graceperiod "xyz"
+    And I call CreateVolumeSize nfs "vol-inttest-nfs" "10"
+    Then the error contains "requested gracePeriod: xyz is not numeric for volume"
+
+  Scenario: Create NFS volume, unlimited softlimit, error
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I set quota with path "/fs" softLimit "0" graceperiod "86400"
+    And I call CreateVolumeSize nfs "vol-inttest-nfs" "10"
+    Then the error contains "requested softLimit: 0 perc, i.e. default value which is greater than hardlimit, i.e. volume size"
+
+  Scenario: Create NFS volume, unlimited graceperiod
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I set quota with path "/fs" softLimit "20" graceperiod "-1"
+    And I call CreateVolumeSize nfs "vol-inttest-nfs" "10"
+    Then a valid CreateVolumeResponse is returned
+
+  Scenario: Create NFS volume, softlimit percentage greater than size, error
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I set quota with path "/fs" softLimit "200" graceperiod "86400"
+    And I call CreateVolumeSize nfs "vol-inttest-nfs" "10"
+    Then the error contains "requested softLimit: 200 perc is greater than volume size"

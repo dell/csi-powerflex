@@ -51,6 +51,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -77,6 +78,9 @@ const (
 
 var mx = sync.Mutex{}
 var px = sync.Mutex{}
+
+// LookupEnv - Fetches the environment var value
+var LookupEnv = lookupEnv
 
 // ArrayConfigFile is file name with array connection data
 var ArrayConfigFile string
@@ -146,8 +150,10 @@ type Opts struct {
 	IsApproveSDCEnabled        bool
 	replicationContextPrefix   string
 	replicationPrefix          string
-	NfsAcls                    string
-	ExternalAccess             string
+	NfsAcls                    string // enables setting permissions on NFS mount directory
+	ExternalAccess             string // allow additional entries for host to access NFS volumes
+	MaxVolumesPerNode          int64
+	IsQuotaEnabled             bool // allow driver to enable quota limits for NFS volumes
 }
 
 type service struct {
@@ -341,6 +347,8 @@ func (s *service) BeforeServe(
 			"IsApproveSDCEnabled":    s.opts.IsApproveSDCEnabled,
 			"nfsAcls":                s.opts.NfsAcls,
 			"externalAccess":         s.opts.ExternalAccess,
+			"MaxVolumesPerNode":      s.opts.MaxVolumesPerNode,
+			"IsQuotaEnabled":         s.opts.IsQuotaEnabled,
 		}
 
 		Log.WithFields(fields).Infof("configured %s", Name)
@@ -405,6 +413,11 @@ func (s *service) BeforeServe(
 			opts.IsApproveSDCEnabled = true
 		}
 	}
+	if quotaEnabled, ok := csictx.LookupEnv(ctx, EnvQuotaEnabled); ok {
+		if quotaEnabled == "true" {
+			opts.IsQuotaEnabled = true
+		}
+	}
 
 	if s.privDir == "" {
 		s.privDir = defaultPrivDir
@@ -416,6 +429,12 @@ func (s *service) BeforeServe(
 
 	if replicationPrefix, ok := csictx.LookupEnv(ctx, EnvReplicationPrefix); ok {
 		opts.replicationPrefix = replicationPrefix
+	}
+	if MaxVolumesPerNode, err := ParseInt64FromContext(ctx, EnvMaxVolumesPerNode); err != nil {
+		Log.Warnf("error while parsing env variable '%s', %s, defaulting to 0", EnvMaxVolumesPerNode, err)
+		opts.MaxVolumesPerNode = 0
+	} else {
+		opts.MaxVolumesPerNode = MaxVolumesPerNode
 	}
 
 	if nfsAcls, ok := csictx.LookupEnv(ctx, EnvNfsAcls); ok {
@@ -716,6 +735,26 @@ func (s *service) getCSISnapshot(vol *siotypes.Volume, systemID string) *csi.Sna
 	csiTimestamp, err := ptypes.TimestampProto(time.Unix(int64(vol.CreationTime), 0))
 	if err != nil {
 		Log.Printf("Could not convert time %v to ptypes.Timestamp %v\n", vol.CreationTime, csiTimestamp)
+	}
+	if csiTimestamp != nil {
+		snapshot.CreationTime = csiTimestamp
+	}
+	return snapshot
+}
+
+func (s *service) getCSISnapshotFromFileSystem(fs *siotypes.FileSystem, systemID string) *csi.Snapshot {
+	slash := "/"
+	snapshot := &csi.Snapshot{
+		SizeBytes:      int64(fs.SizeTotal),
+		SnapshotId:     systemID + slash + fs.ID,
+		SourceVolumeId: fs.ParentID,
+		ReadyToUse:     true,
+	}
+	creationTime, _ := strconv.Atoi(fs.CreationTimestamp)
+	// Convert array timestamp to CSI timestamp and add
+	csiTimestamp, err := ptypes.TimestampProto(time.Unix(int64(creationTime), 0))
+	if err != nil {
+		Log.Printf("Could not convert time %v to ptypes.Timestamp %v\n", creationTime, csiTimestamp)
 	}
 	if csiTimestamp != nil {
 		snapshot.CreationTime = csiTimestamp
@@ -1149,7 +1188,6 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 	otherHostsWithAccess += len(readOnlyRootHosts)
 	if !foundIncompatible {
 		for _, host := range readOnlyRootHosts {
-			readHostList = append(readHostList, host)
 			if host == hostURL {
 				if am.Mode == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
 					foundIdempotent = true
@@ -1163,7 +1201,6 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 
 	if !foundIncompatible && !foundIdempotent {
 		for _, host := range readWriteRootHosts {
-			readWriteHostList = append(readWriteHostList, hostURL)
 			if host == hostURL {
 				if am.Mode == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
 					foundIncompatible = true
@@ -1508,4 +1545,47 @@ func (s *service) GetNfsTopology(systemID string) []*csi.Topology {
 	nfsTopology := new(csi.Topology)
 	nfsTopology.Segments = map[string]string{Name + "/" + systemID + "-nfs": "true"}
 	return []*csi.Topology{nfsTopology}
+}
+func (s *service) GetNodeLabels(ctx context.Context) (map[string]string, error) {
+	if K8sClientset == nil {
+		err := k8sutils.CreateKubeClientSet(KubeConfig)
+		if err != nil {
+			return nil, status.Error(codes.Internal, GetMessage("init client failed with error: %v", err))
+		}
+		K8sClientset = k8sutils.Clientset
+	}
+	hostName, ok := os.LookupEnv("HOSTNAME")
+	if !ok {
+		return nil, status.Errorf(codes.FailedPrecondition, "%s not set", "HOSTNAME")
+	}
+	hostName = strings.ToLower(hostName)
+	// access the API to fetch node object
+	node, err := K8sClientset.CoreV1().Nodes().Get(context.TODO(), hostName, v1.GetOptions{})
+	if err != nil {
+		return nil, status.Error(codes.Internal, GetMessage("Unable to fetch the node labels. Error: %v", err))
+	}
+	Log.Debugf("Node labels: %v\n", node.Labels)
+	return node.Labels, nil
+}
+
+// GetMessage - Get message
+func GetMessage(format string, args ...interface{}) string {
+	str := fmt.Sprintf(format, args...)
+	return str
+}
+
+// ParseInt64FromContext parses an environment variable into an int64 value.
+func ParseInt64FromContext(ctx context.Context, key string) (int64, error) {
+	if val, ok := LookupEnv(ctx, key); ok {
+		i, err := strconv.ParseInt(val, 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("invalid int64 value '%v' specified for '%s'", val, key)
+		}
+		return i, nil
+	}
+	return 0, nil
+}
+
+func lookupEnv(ctx context.Context, key string) (string, bool) {
+	return csictx.LookupEnv(ctx, key)
 }

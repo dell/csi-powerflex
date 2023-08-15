@@ -143,6 +143,8 @@ type feature struct {
 	deleteStorageProtectionGroupResponse  *replication.DeleteStorageProtectionGroupResponse
 	fileSystemID                          string
 	systemID                              string
+	context                               context.Context
+	nodeLabels                            map[string]string
 }
 
 func (f *feature) checkGoRoutines(tag string) {
@@ -397,7 +399,6 @@ func (f *feature) CreateCSINode() (*storage.CSINode, error) {
 			},
 		},
 	}
-
 	return K8sClientset.StorageV1().CSINodes().Create(context.TODO(), fakeCSINode, metav1.CreateOptions{})
 }
 
@@ -641,6 +642,9 @@ func getTypicalNFSCreateVolumeRequest() *csi.CreateVolumeRequest {
 	req := new(csi.CreateVolumeRequest)
 	params := make(map[string]string)
 	params["storagepool"] = "viki_pool_HDD_20181031"
+	params["path"] = "/fs"
+	params["softLimit"] = "0"
+	params["gracePeriod"] = "0"
 	req.Parameters = params
 	req.Name = "mount1"
 	capacityRange := new(csi.CapacityRange)
@@ -1100,6 +1104,10 @@ func (f *feature) iInduceError(errtype string) error {
 		stepHandlersErrors.NoEndpointError = true
 	case "WrongVolIDError":
 		stepHandlersErrors.WrongVolIDError = true
+	case "WrongFileSystemIDError":
+		stepHandlersErrors.WrongFileSystemIDError = true
+	case "NoFileSystemIDError":
+		stepHandlersErrors.NoFileSystemIDError = true
 	case "WrongSystemError":
 		stepHandlersErrors.WrongSystemError = true
 	case "NFSExportsInstancesError":
@@ -1804,7 +1812,95 @@ func (f *feature) iCallNodeGetInfo() error {
 	ctx := new(context.Context)
 	req := new(csi.NodeGetInfoRequest)
 	f.service.opts.SdcGUID = "9E56672F-2F4B-4A42-BFF4-88B6846FBFDA"
+	GetNodeLabels = mockGetNodeLabels
 	f.nodeGetInfoResponse, f.err = f.service.NodeGetInfo(*ctx, req)
+	return nil
+}
+
+func (f *feature) iCallNodeGetInfoWithValidVolumeLimitNodeLabels() error {
+	ctx := new(context.Context)
+	req := new(csi.NodeGetInfoRequest)
+	f.service.opts.SdcGUID = "9E56672F-2F4B-4A42-BFF4-88B6846FBFDA"
+	GetNodeLabels = mockGetNodeLabelsWithVolumeLimits
+	f.nodeGetInfoResponse, f.err = f.service.NodeGetInfo(*ctx, req)
+	fmt.Printf("MaxVolumesPerNode: %v", f.nodeGetInfoResponse.MaxVolumesPerNode)
+	return nil
+}
+
+func (f *feature) iCallNodeGetInfoWithInvalidVolumeLimitNodeLabels() error {
+	ctx := new(context.Context)
+	req := new(csi.NodeGetInfoRequest)
+	f.service.opts.SdcGUID = "9E56672F-2F4B-4A42-BFF4-88B6846FBFDA"
+	GetNodeLabels = mockGetNodeLabelsWithInvalidVolumeLimits
+	f.nodeGetInfoResponse, f.err = f.service.NodeGetInfo(*ctx, req)
+	return nil
+}
+
+func mockGetNodeLabels(ctx context.Context, s *service) (map[string]string, error) {
+	labels := map[string]string{"csi-vxflexos.dellemc.com/05d539c3cdc5280f-nfs": "true", "csi-vxflexos.dellemc.com/0e7a082862fedf0f": "csi-vxflexos.dellemc.com"}
+	return labels, nil
+}
+
+func mockGetNodeLabelsWithVolumeLimits(ctx context.Context, s *service) (map[string]string, error) {
+	labels := map[string]string{"max-vxflexos-volumes-per-node": "2"}
+	return labels, nil
+}
+
+func mockGetNodeLabelsWithInvalidVolumeLimits(ctx context.Context, s *service) (map[string]string, error) {
+	labels := map[string]string{"max-vxflexos-volumes-per-node": "invalid-vol-limit"}
+	return labels, nil
+}
+
+func (f *feature) setFakeNode() (*v1.Node, error) {
+	os.Setenv("HOSTNAME", "node1")
+	fakeNode := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "node1",
+			Labels: map[string]string{"label1": "value1", "label2": "value2"},
+		},
+	}
+	return K8sClientset.CoreV1().Nodes().Create(context.TODO(), fakeNode, metav1.CreateOptions{})
+}
+
+func (f *feature) iCallGetNodeLabels() error {
+	f.setFakeNode()
+	labels, err := f.service.GetNodeLabels(f.context)
+	fmt.Printf("Node labels: %v", labels)
+	if err != nil {
+		return err
+	}
+	f.nodeLabels = labels
+	return nil
+}
+func (f *feature) aValidLabelIsReturned() error {
+	if f.nodeLabels == nil {
+		return errors.New("Unable to fetch the node labels")
+	}
+	fmt.Printf("Node labels: %v", f.nodeLabels)
+	return nil
+}
+
+func (f *feature) iSetInvalidEnvMaxVolumesPerNode() error {
+	LookupEnv = mockLookupEnv
+	os.Setenv("X_CSI_MAX_VOLUMES_PER_NODE", "invalid_value")
+	_, f.err = ParseInt64FromContext(f.context, EnvMaxVolumesPerNode)
+	return nil
+}
+
+func mockLookupEnv(ctx context.Context, key string) (string, bool) {
+	return "invalid_value", true
+}
+
+func (f *feature) iCallGetNodeLabelsWithInvalidNode() error {
+	os.Setenv("HOSTNAME", "node2")
+	_, f.err = f.service.GetNodeLabels(f.context)
+	return nil
+}
+
+func (f *feature) iCallGetNodeLabelsWithUnsetKubernetesClient() error {
+	K8sClientset = nil
+	ctx := new(context.Context)
+	f.nodeLabels, f.err = f.service.GetNodeLabels(*ctx)
 	return nil
 }
 
@@ -1830,6 +1926,21 @@ func (f *feature) aValidNodeGetInfoResponseIsReturned() error {
 		return errors.New("expected NodeGetInfoResponse MaxVolumesPerNode to be 0")
 	}
 	fmt.Printf("NodeID %s\n", f.nodeGetInfoResponse.NodeId)
+	return nil
+}
+
+func (f *feature) theVolumeLimitIsSet() error {
+	if f.err != nil {
+		return f.err
+	}
+	fmt.Printf("node: %s", f.nodeGetInfoResponse)
+	if f.nodeGetInfoResponse.NodeId == "" {
+		return errors.New("expected NodeGetInfoResponse to contain NodeID but it was null")
+	}
+	if f.nodeGetInfoResponse.MaxVolumesPerNode != 2 {
+		return errors.New("expected NodeGetInfoResponse MaxVolumesPerNode to be 2")
+	}
+	fmt.Printf("MaxVolumesPerNode: %d\n", f.nodeGetInfoResponse.MaxVolumesPerNode)
 	return nil
 }
 
@@ -3362,6 +3473,30 @@ func (f *feature) iCallCreateSnapshot(snapName string) error {
 	return nil
 }
 
+func (f *feature) iCallCreateSnapshotNFS(snapName string) error {
+	ctx := new(context.Context)
+
+	req := &csi.CreateSnapshotRequest{
+		SourceVolumeId: "14dbbf5617523654" + "/" + fileSystemNameToID["volume1"],
+		Name:           snapName,
+	}
+
+	if stepHandlersErrors.WrongFileSystemIDError {
+		req.SourceVolumeId = "14dbbf5617523654" + "/" + fileSystemNameToID["A Different Volume"]
+	}
+
+	if stepHandlersErrors.NoFileSystemIDError {
+		req.SourceVolumeId = "14dbbf5617523654" + "/" + fileSystemNameToID["volume2"]
+	}
+
+	fmt.Println("snapName is: ", snapName)
+	fmt.Println("ctx: ", *ctx)
+	fmt.Println("req: ", req)
+
+	f.createSnapshotResponse, f.err = f.service.CreateSnapshot(*ctx, req)
+	return nil
+}
+
 func (f *feature) aValidCreateSnapshotResponseIsReturned() error {
 	if f.err != nil {
 		return f.err
@@ -3390,6 +3525,20 @@ func (f *feature) iCallDeleteSnapshot() error {
 	} else if f.noVolumeID {
 		req.SnapshotId = ""
 	}
+	_, f.err = f.service.DeleteSnapshot(*ctx, req)
+	return nil
+}
+
+func (f *feature) iCallDeleteSnapshotNFS() error {
+	ctx := new(context.Context)
+	var req *csi.DeleteSnapshotRequest = new(csi.DeleteSnapshotRequest)
+	if fileSystemNameToID["snap1"] == "" {
+		req = &csi.DeleteSnapshotRequest{SnapshotId: "14dbbf5617523654" + "/" + "1111111", Secrets: make(map[string]string)}
+	} else {
+		req = &csi.DeleteSnapshotRequest{SnapshotId: "14dbbf5617523654" + "/" + fileSystemNameToID["snap1"], Secrets: make(map[string]string)}
+	}
+
+	req.Secrets["x"] = "y"
 	_, f.err = f.service.DeleteSnapshot(*ctx, req)
 	return nil
 }
@@ -3431,6 +3580,26 @@ func (f *feature) iCallCreateVolumeFromSnapshot() error {
 		req.Parameters["storagepool"] = "bad storage pool"
 	}
 	source := &csi.VolumeContentSource_SnapshotSource{SnapshotId: goodSnapID}
+	req.VolumeContentSource = new(csi.VolumeContentSource)
+	req.VolumeContentSource.Type = &csi.VolumeContentSource_Snapshot{Snapshot: source}
+	f.createVolumeResponse, f.err = f.service.CreateVolume(*ctx, req)
+	if f.err != nil {
+		fmt.Printf("Error on CreateVolume from snap: %s\n", f.err.Error())
+	}
+	return nil
+}
+
+func (f *feature) iCallCreateVolumeFromSnapshotNFS() error {
+	ctx := new(context.Context)
+	req := getTypicalNFSCreateVolumeRequest()
+	req.Name = "volumeFromSnap"
+	if f.wrongCapacity {
+		req.CapacityRange.RequiredBytes = 64 * 1024 * 1024 * 1024
+	}
+	if f.wrongStoragePool {
+		req.Parameters["storagepool"] = "other_storage_pool"
+	}
+	source := &csi.VolumeContentSource_SnapshotSource{SnapshotId: "14dbbf5617523654" + "/" + fileSystemNameToID["snap1"]}
 	req.VolumeContentSource = new(csi.VolumeContentSource)
 	req.VolumeContentSource.Type = &csi.VolumeContentSource_Snapshot{Snapshot: source}
 	f.createVolumeResponse, f.err = f.service.CreateVolume(*ctx, req)
@@ -3815,6 +3984,11 @@ func (f *feature) anInvalidConfig(config string) error {
 	return nil
 }
 
+func (f *feature) anInvalidMaxVolumesPerNode() error {
+	f.service.opts.MaxVolumesPerNode = -1
+	return nil
+}
+
 func (f *feature) iCallGetArrayConfig() error {
 	ctx := new(context.Context)
 	_, err := getArrayConfig(*ctx)
@@ -4174,6 +4348,56 @@ func (f *feature) iCallExecuteAction(arg1 string) error {
 	return nil
 }
 
+func (f *feature) iCallEnableFSQuota() error {
+	f.service.opts.IsQuotaEnabled = true
+	isQuotaEnabled = true
+	return nil
+}
+
+func (f *feature) iCallDisableFSQuota() error {
+	f.service.opts.IsQuotaEnabled = false
+	isQuotaEnabled = false
+	return nil
+}
+
+func (f *feature) iCallSetQuotaParams(path, softlimit, graceperiod string) error {
+	if f.createVolumeRequest == nil {
+		req := getTypicalNFSCreateVolumeRequest()
+		f.createVolumeRequest = req
+	}
+	f.createVolumeRequest.Parameters["path"] = path
+	f.createVolumeRequest.Parameters["softLimit"] = softlimit
+	f.createVolumeRequest.Parameters["gracePeriod"] = graceperiod
+	return nil
+}
+
+func (f *feature) iSpecifyNoPath() error {
+	if f.createVolumeRequest == nil {
+		req := getTypicalNFSCreateVolumeRequest()
+		f.createVolumeRequest = req
+	}
+	delete(f.createVolumeRequest.Parameters, "path")
+	return nil
+}
+
+func (f *feature) iSpecifyNoSoftLimit() error {
+	if f.createVolumeRequest == nil {
+		req := getTypicalNFSCreateVolumeRequest()
+		f.createVolumeRequest = req
+	}
+	delete(f.createVolumeRequest.Parameters, "softLimit")
+	return nil
+}
+
+func (f *feature) iSpecifyNoGracePeriod() error {
+	if f.createVolumeRequest == nil {
+		req := getTypicalNFSCreateVolumeRequest()
+		f.createVolumeRequest = req
+	}
+	delete(f.createVolumeRequest.Parameters, "gracePeriod")
+	return nil
+}
+
 func FeatureContext(s *godog.ScenarioContext) {
 	f := &feature{}
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
@@ -4237,6 +4461,15 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call NodeGetInfo$`, f.iCallNodeGetInfo)
 	s.Step(`^I call Node Probe$`, f.iCallNodeProbe)
 	s.Step(`^a valid NodeGetInfoResponse is returned$`, f.aValidNodeGetInfoResponseIsReturned)
+	s.Step(`^the Volume limit is set$`, f.theVolumeLimitIsSet)
+	s.Step(`^an invalid MaxVolumesPerNode$`, f.anInvalidMaxVolumesPerNode)
+	s.Step(`^I call GetNodeLabels$`, f.iCallGetNodeLabels)
+	s.Step(`^a valid label is returned$`, f.aValidLabelIsReturned)
+	s.Step(`^I set invalid EnvMaxVolumesPerNode$`, f.iSetInvalidEnvMaxVolumesPerNode)
+	s.Step(`^I call GetNodeLabels with invalid node$`, f.iCallGetNodeLabelsWithInvalidNode)
+	s.Step(`^I call NodeGetInfo with valid volume limit node labels$`, f.iCallNodeGetInfoWithValidVolumeLimitNodeLabels)
+	s.Step(`^I call NodeGetInfo with invalid volume limit node labels$`, f.iCallNodeGetInfoWithInvalidVolumeLimitNodeLabels)
+	s.Step(`^I call GetNodeLabels with unset KubernetesClient$`, f.iCallGetNodeLabelsWithUnsetKubernetesClient)
 	s.Step(`^I call DeleteVolume with "([^"]*)"$`, f.iCallDeleteVolumeWith)
 	s.Step(`^I call DeleteVolume with Bad "([^"]*)"$`, f.iCallDeleteVolumeWithBad)
 	s.Step(`^I call DeleteVolume nfs with "([^"]*)"$`, f.iCallDeleteVolumeNFSWith)
@@ -4281,11 +4514,14 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call NodeGetCapabilities "([^"]*)"$`, f.iCallNodeGetCapabilities)
 	s.Step(`^a valid NodeGetCapabilitiesResponse is returned$`, f.aValidNodeGetCapabilitiesResponseIsReturned)
 	s.Step(`^I call CreateSnapshot "([^"]*)"$`, f.iCallCreateSnapshot)
+	s.Step(`^I call CreateSnapshot NFS "([^"]*)"$`, f.iCallCreateSnapshotNFS)
 	s.Step(`^a valid CreateSnapshotResponse is returned$`, f.aValidCreateSnapshotResponseIsReturned)
 	s.Step(`^a valid snapshot$`, f.aValidSnapshot)
 	s.Step(`^I call DeleteSnapshot$`, f.iCallDeleteSnapshot)
+	s.Step(`^I call DeleteSnapshot NFS$`, f.iCallDeleteSnapshotNFS)
 	s.Step(`^a valid snapshot consistency group$`, f.aValidSnapshotConsistencyGroup)
 	s.Step(`^I call Create Volume from Snapshot$`, f.iCallCreateVolumeFromSnapshot)
+	s.Step(`^I call Create Volume from SnapshotNFS$`, f.iCallCreateVolumeFromSnapshotNFS)
 	s.Step(`^the wrong capacity$`, f.theWrongCapacity)
 	s.Step(`^the wrong storage pool$`, f.theWrongStoragePool)
 	s.Step(`^there are (\d+) valid snapshots of "([^"]*)" volume$`, f.thereAreValidSnapshotsOfVolume)
@@ -4361,6 +4597,12 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call DeleteVolume "([^"]*)"$`, f.iCallDeleteVolume)
 	s.Step(`^I call DeleteStorageProtectionGroup$`, f.iCallDeleteStorageProtectionGroup)
 	s.Step(`^I call ExecuteAction "([^"]*)"$`, f.iCallExecuteAction)
+	s.Step(`^I enable quota for filesystem$`, f.iCallEnableFSQuota)
+	s.Step(`^I disable quota for filesystem$`, f.iCallDisableFSQuota)
+	s.Step(`^I set quota with path "([^"]*)" softLimit "([^"]*)" graceperiod "([^"]*)"$`, f.iCallSetQuotaParams)
+	s.Step(`^I specify NoPath$`, f.iSpecifyNoPath)
+	s.Step(`^I specify NoSoftLimit`, f.iSpecifyNoSoftLimit)
+	s.Step(`^I specify NoGracePeriod`, f.iSpecifyNoGracePeriod)
 
 	s.After(func(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
 		if f.server != nil {

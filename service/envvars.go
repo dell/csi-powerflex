@@ -63,4 +63,10 @@ const (
 
 	// EnvExternalAccess is used to specify additional entries for host to access NFS volumes.
 	EnvExternalAccess = "X_CSI_POWERFLEX_EXTERNAL_ACCESS"
+
+	// EnvMaxVolumesPerNode specifies maximum number of volumes that controller can publish to the node.
+	EnvMaxVolumesPerNode = "X_CSI_MAX_VOLUMES_PER_NODE"
+
+	// EnvQuotaEnabled enables setting of quota for NFS volumes.
+	EnvQuotaEnabled = "X_CSI_QUOTA_ENABLED"
 )

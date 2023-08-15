@@ -73,9 +73,22 @@ const (
 
 	// NFSExportLocalPath is the local path for NFSExport
 	NFSExportLocalPath = "/"
+
 	// NFSExportNamePrefix is the prefix used for nfs exports created using
 	// csi-powerflex driver
 	NFSExportNamePrefix = "csishare-"
+
+	// KeyPath is the key used to get path of the associated filesystem
+	// from the volume create parameters map
+	KeyPath = "path"
+
+	// KeySoftLimit is the key used to get the soft limit of the filesystem
+	// from the volume create parameters map
+	KeySoftLimit = "softLimit"
+
+	// KeyGracePeriod is the key used to get the grace period from the
+	// volume create parameters map
+	KeyGracePeriod = "gracePeriod"
 
 	// DefaultVolumeSizeKiB is default volume sgolang/protobuf/blob/master/ptypesize
 	// to create on a scaleIO cluster when no size is given, expressed in KiB
@@ -311,6 +324,14 @@ func (s *service) CreateVolume(
 		// fetch volume size
 		size := cr.GetRequiredBytes()
 
+		contentSource := req.GetVolumeContentSource()
+		if contentSource != nil {
+			snapshotSource := contentSource.GetSnapshot()
+			if snapshotSource != nil {
+				Log.Printf("snapshot %s specified as volume content source", snapshotSource.SnapshotId)
+				return s.createVolumeFromSnapshot(req, snapshotSource, name, size, storagePoolName)
+			}
+		}
 		// log all parameters used in CreateVolume call
 		fields := map[string]interface{}{
 			"Name":                               volName,
@@ -361,9 +382,49 @@ func (s *service) CreateVolume(
 			return nil, status.Errorf(codes.Unknown, "Create Volume %s failed with error: %v", volName, err)
 		}
 
+		// set quota limits, if specified in NFS storage class
+		isQuotaEnabled := s.opts.IsQuotaEnabled
+		if isQuotaEnabled {
+			// get filesystem (NFS volume), newly created
+			fs, err := system.GetFileSystemByIDName(fsResp.ID, "")
+			if err != nil {
+				Log.Debugf("Find Volume response error: %v", err)
+				return nil, status.Errorf(codes.Unknown, "Find Volume response error: %v", err)
+			}
+			path, ok := params[KeyPath]
+			if !ok {
+				return nil, status.Errorf(codes.InvalidArgument, "`%s` is a required parameter", KeyPath)
+			}
+
+			softLimit, ok := params[KeySoftLimit]
+			if !ok {
+				return nil, status.Errorf(codes.InvalidArgument, "`%s` is a required parameter", KeySoftLimit)
+			}
+
+			gracePeriod, ok := params[KeyGracePeriod]
+			if !ok {
+				return nil, status.Errorf(codes.InvalidArgument, "`%s` is a required parameter", KeyGracePeriod)
+			}
+
+			// create quota for the filesystem
+			quotaID, err := s.createQuota(fsResp.ID, path, softLimit, gracePeriod, int(size), isQuotaEnabled, systemID)
+			if err != nil {
+				// roll back, delete the newly created volume
+				if delErr := system.DeleteFileSystem(fs.Name); delErr != nil {
+					return nil, status.Errorf(codes.Internal,
+						"rollback (deleting volume '%s') failed with error : '%v'", fs.Name, delErr.Error())
+				}
+				Log.Debugf("Error creating quota for volume: %s of size: %d bytes, error: %v", fs.Name, size, err.Error())
+				Log.Debugf("Successfully rolled back by deleting the newly created volume: %s", fs.Name)
+				return nil, err
+			}
+			Log.Infof("Tree quota set for: %d bytes on directory: '%s', quota ID: %s", size, path, quotaID)
+		}
+
 		newFs, err := system.GetFileSystemByIDName(fsResp.ID, "")
 		if err != nil {
-			Log.Debugf("Find Volume response: %v Error: %v", newFs, err)
+			Log.Debugf("Find Volume response error: %v", err)
+			return nil, status.Errorf(codes.Unknown, "Find Volume response error: %v", err)
 		}
 		if newFs != nil {
 			vi := s.getCSIVolumeFromFilesystem(newFs, systemID)
@@ -524,6 +585,118 @@ func (s *service) CreateVolume(
 	return nil, status.Errorf(codes.NotFound, "Volume/Filesystem not found after create. %v", err)
 }
 
+func (s *service) createQuota(fsID, path, softLimit, gracePeriod string, size int, isQuotaEnabled bool, systemID string) (string, error) {
+	system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
+	if err != nil {
+		return "", err
+	}
+
+	// enabling quota on FS
+	fs, err := system.GetFileSystemByIDName(fsID, "")
+	if err != nil {
+		Log.Debugf("Find Volume response error: %v", err)
+		return "", status.Errorf(codes.Unknown, "Find Volume response error: %v", err)
+	}
+
+	// validate quota parameters
+	softLimitPerc, gracePeriodInt, err := validateQuotaParameters(path, softLimit, gracePeriod, fsID)
+	if err != nil {
+		return "", err
+	}
+
+	// converting soft limit from percentage to value
+	softLimitInt := (softLimitPerc * int64(size)) / 100
+
+	// modify FS to set quota
+	fsModify := &siotypes.FSModify{
+		IsQuotaEnabled: isQuotaEnabled,
+	}
+
+	err = system.ModifyFileSystem(fsModify, fs.ID)
+	if err != nil {
+		Log.Debugf("Modify filesystem failed with error: %v", err)
+		return "", status.Errorf(codes.Unknown, "Modify filesystem failed with error: %v", err)
+	}
+
+	fs, err = system.GetFileSystemByIDName(fsID, "")
+	if err != nil {
+		Log.Debugf("Find Volume response error: %v", err)
+		return "", status.Errorf(codes.Unknown, "Find Volume response error: %v", err)
+	}
+
+	// need to set the quota based on the requested pv size
+	// if a size isn't requested, skip creating the quota
+	if size <= 0 {
+		Log.Debugf("Quotas is enabled, but storage size is not requested, skip creating quotas for volume '%s'", fsID)
+		return "", nil
+	}
+
+	// Check if softLimit less hardLimit (volume size)
+	if int(softLimitInt) >= size {
+		return "", status.Errorf(codes.InvalidArgument, "requested softLimit: %s perc is greater than volume size: %d for volume %s:", softLimit, size, fsID)
+	}
+
+	// Check if softLimit is unlimited, i.e. 0 bytes
+	if softLimitInt == 0 {
+		return "", status.Errorf(codes.InvalidArgument, "requested softLimit: %s perc, i.e. default value which is greater than hardlimit, i.e. volume size: %d for volume %s:", softLimit, size, fsID)
+	}
+
+	Log.Debugf("Begin to set quota for FS '%s', size '%d', quota enabled: '%t'", fsID, size, isQuotaEnabled)
+	// log all parameters used in CreateTreeQuota call
+	fields := map[string]interface{}{
+		"FileSystemID": fsID,
+		"Path":         path,
+		"HardLimit":    size,
+		"SoftLimit":    softLimitInt,
+		"GracePeriod":  gracePeriodInt,
+	}
+	Log.WithFields(fields).Info("Executing CreateTreeQuota with following fields")
+
+	createQuotaParams := &siotypes.TreeQuotaCreate{
+		FileSystemID: fsID,
+		Path:         path,
+		HardLimit:    size,
+		SoftLimit:    int(softLimitInt),
+		GracePeriod:  int(gracePeriodInt),
+	}
+	quota, err := system.CreateTreeQuota(createQuotaParams)
+	if err != nil {
+		Log.Debugf("Creating quota failed with error: %v", err)
+		return "", status.Errorf(codes.Unknown, "Creating quota failed with error: %v", err)
+	}
+	return quota.ID, nil
+}
+
+// validate the requested quota parameters.
+func validateQuotaParameters(path, softLimit, gracePeriod, fsID string) (int64, int64, error) {
+	if path == "" {
+		return 0, 0, status.Errorf(codes.InvalidArgument, "path not set for volume: %s,", fsID)
+	}
+
+	var err error
+	var softLimitPerc int64
+	if softLimit != "" {
+		softLimitPerc, err = strconv.ParseInt(softLimit, 10, 64)
+		if err != nil {
+			return 0, 0, status.Errorf(codes.InvalidArgument, "requested softLimit: %s is not numeric for volume %s, error: %s", softLimit, fsID, err)
+		}
+	} else {
+		return 0, 0, status.Errorf(codes.InvalidArgument, "softLimit not set for volume: %s,", fsID)
+	}
+
+	var gracePeriodInt int64
+	if gracePeriod != "" {
+		gracePeriodInt, err = strconv.ParseInt(gracePeriod, 10, 64)
+		if err != nil {
+			return 0, 0, status.Errorf(codes.InvalidArgument, "requested gracePeriod: %s is not numeric for volume %s, error: %s", gracePeriod, fsID, err)
+		}
+	} else {
+		Log.Debugf("GracePeriod value set to default.")
+		gracePeriodInt = 0
+	}
+	return softLimitPerc, gracePeriodInt, nil
+}
+
 // Copies the interesting parameters to the output map.
 func copyInterestingParameters(parameters, out map[string]string) {
 	for _, str := range interestingParameters {
@@ -577,6 +750,15 @@ func (s *service) createVolumeFromSnapshot(req *csi.CreateVolumeRequest,
 	snapshotSource *csi.VolumeContentSource_SnapshotSource,
 	name string, sizeInKbytes int64, storagePool string) (*csi.CreateVolumeResponse, error) {
 
+	isNFS := false
+	var fsType string
+	if len(req.VolumeCapabilities) != 0 {
+		fsType = req.VolumeCapabilities[0].GetMount().GetFsType()
+		if fsType == "nfs" {
+			isNFS = true
+		}
+	}
+
 	// get systemID from snapshot source CSI id
 	systemID := s.getSystemIDFromCsiVolumeID(snapshotSource.SnapshotId)
 	if systemID == "" {
@@ -586,6 +768,59 @@ func (s *service) createVolumeFromSnapshot(req *csi.CreateVolumeRequest,
 	if systemID == "" {
 		return nil, status.Error(codes.InvalidArgument,
 			"systemID is not found in snapshot source id and there is no default system")
+	}
+
+	if isNFS {
+		// Look up the snapshot
+		fmt.Println("snapshotSource.SnapshotId", snapshotSource.SnapshotId)
+		snapID := getFilesystemIDFromCsiVolumeID(snapshotSource.SnapshotId)
+		srcVol, err := s.getFilesystemByID(snapID, systemID)
+
+		if err != nil {
+			return nil, status.Errorf(codes.NotFound, "Snapshot not found: %s", snapshotSource.SnapshotId)
+		}
+
+		// Validate the size is the same.
+		if int64(srcVol.SizeTotal) != sizeInKbytes {
+			return nil, status.Errorf(codes.InvalidArgument,
+				"Snapshot %s has incompatible size %d bytes with requested %d bytes",
+				snapshotSource.SnapshotId, srcVol.SizeTotal, sizeInKbytes)
+		}
+
+		system := s.systems[systemID]
+
+		// Validate the storagePool is the same.
+		snapStoragePool := s.getStoragePoolNameFromID(systemID, srcVol.StoragePoolID)
+		if snapStoragePool != storagePool {
+			return nil, status.Errorf(codes.InvalidArgument,
+				"Snapshot storage pool %s is different than the requested storage pool %s", snapStoragePool, storagePool)
+		}
+
+		_, err = system.RestoreFileSystemFromSnapshot(&siotypes.RestoreFsSnapParam{
+			SnapshotID: snapID,
+		}, srcVol.ParentID)
+
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "error during fs creation from snapshot: %s", snapshotSource.SnapshotId)
+		}
+
+		restoreFs, err := system.GetFileSystemByIDName(srcVol.ParentID, "")
+
+		if err != nil {
+			if strings.Contains(err.Error(), sioGatewayFileSystemNotFound) {
+				return nil, status.Errorf(codes.NotFound, "filesystem not found: %s", srcVol.ID)
+			}
+		}
+
+		csiVolume := s.getCSIVolumeFromFilesystem(restoreFs, systemID)
+
+		csiVolume.ContentSource = req.GetVolumeContentSource()
+		copyInterestingParameters(req.GetParameters(), csiVolume.VolumeContext)
+
+		Log.Printf("Volume (from snap) %s (%s) storage pool %s",
+			csiVolume.VolumeContext["Name"], csiVolume.VolumeId, csiVolume.VolumeContext["StoragePoolName"])
+		return &csi.CreateVolumeResponse{Volume: csiVolume}, nil
+
 	}
 
 	// Look up the snapshot
@@ -774,6 +1009,17 @@ func (s *service) DeleteVolume(
 				Log.WithFields(logrus.Fields{"id": fsID}).Debug("File System does not exist", fsID)
 				return &csi.DeleteVolumeResponse{}, nil
 			}
+		}
+
+		listSnaps, err := system.GetFsSnapshotsByVolumeID(fsID)
+		if err != nil {
+			return nil, status.Errorf(codes.Unknown, "failure getting snapshot: %s", err.Error())
+		}
+
+		if len(listSnaps) > 0 {
+			return nil, status.Errorf(codes.FailedPrecondition,
+				"unable to delete NFS volume -- snapshots based on this volume still exist: %v",
+				listSnaps)
 		}
 
 		fsName := toBeDeletedFS.Name
@@ -1815,12 +2061,22 @@ func (s *service) getSystemCapacity(ctx context.Context, systemID, protectionDom
 		}
 		spc := goscaleio.NewStoragePoolEx(adminClient, sp)
 		statsFunc = spc.GetStatistics
+
+		if !s.opts.Thick {
+			if sp.CapacityUsageState == "Critical" {
+				return 0, nil
+			}
+		}
 	}
 
 	stats, err := statsFunc()
 	if err != nil {
 		return 0, status.Errorf(codes.Internal,
 			"unable to get system stats for system: %s, err: %s", systemID, err.Error())
+	}
+
+	if !s.opts.Thick {
+		return int64(stats.VolumeAllocationLimitInKb * bytesInKiB), nil
 	}
 	return int64(stats.CapacityAvailableForVolumeAllocationInKb * bytesInKiB), nil
 }
@@ -2152,7 +2408,8 @@ func (s *service) CreateSnapshot(
 
 	}
 
-	volID := getVolumeIDFromCsiVolumeID(csiVolID)
+	isNFS := strings.Contains(csiVolID, "/")
+
 	systemID := s.getSystemIDFromCsiVolumeID(csiVolID)
 
 	if systemID == "" {
@@ -2183,6 +2440,71 @@ func (s *service) CreateSnapshot(
 	if req.Name == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "snapshot name cannot be Nil")
 	}
+
+	if isNFS {
+		fileSystemID := getFilesystemIDFromCsiVolumeID(csiVolID)
+		_, err := s.getFilesystemByID(fileSystemID, systemID)
+
+		if err != nil {
+			if strings.EqualFold(err.Error(), sioGatewayFileSystemNotFound) {
+				return nil, status.Errorf(codes.NotFound, "volume %s was not found", fileSystemID)
+			}
+		}
+
+		system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
+		if err != nil {
+			return nil, err
+		}
+
+		existingSnap, err := system.GetFileSystemByIDName("", req.Name)
+
+		if err == nil {
+			if existingSnap.ParentID != fileSystemID {
+				return nil, status.Errorf(codes.AlreadyExists,
+					"snapshot with name '%s' exists, but SourceVolumeId %s doesn't match", req.Name, fileSystemID)
+			}
+			snapResponse := s.getCSISnapshotFromFileSystem(existingSnap, systemID)
+
+			return &csi.CreateSnapshotResponse{Snapshot: snapResponse}, nil
+		}
+
+		resp, err := system.CreateFileSystemSnapshot(&siotypes.CreateFileSystemSnapshotParam{
+			Name: req.Name,
+		}, fileSystemID)
+
+		if err != nil {
+			return nil, status.Errorf(codes.Internal,
+				"error creating snapshot with name %s for filesystemId %s", req.Name, fileSystemID)
+		}
+
+		newSnap, err := system.GetFileSystemByIDName(resp.ID, "")
+
+		if err != nil {
+			if strings.EqualFold(err.Error(), sioGatewayFileSystemNotFound) {
+				return nil, status.Errorf(codes.NotFound, "snapshot with id %s was not found", resp.ID)
+			}
+		}
+
+		creationTime, _ := strconv.Atoi(newSnap.CreationTimestamp)
+
+		creationTimeUnix := time.Unix(int64(creationTime), 0)
+		creationTimeStamp, _ := ptypes.TimestampProto(creationTimeUnix)
+		slash := "/"
+		csiSnapshotID := systemID + slash + newSnap.ID
+		snapshot := &csi.Snapshot{SizeBytes: int64(newSnap.SizeTotal),
+			SnapshotId:     csiSnapshotID,
+			SourceVolumeId: csiVolID, ReadyToUse: true,
+			CreationTime: creationTimeStamp}
+		csiSnapResponse := &csi.CreateSnapshotResponse{Snapshot: snapshot}
+		s.clearCache()
+
+		Log.Printf("createSnapshot: SnapshotId %s SourceVolumeId %s CreationTime %s",
+			snapshot.SnapshotId, snapshot.SourceVolumeId, ptypes.TimestampString(snapshot.CreationTime))
+		return csiSnapResponse, nil
+
+	}
+
+	volID := getVolumeIDFromCsiVolumeID(csiVolID)
 
 	// Check for idempotent request, i.e. the snapshot has been already created, by looking up the name.
 	existingVols, err := s.adminClients[systemID].GetVolume("", "", "", req.Name, false)
@@ -2315,6 +2637,8 @@ func (s *service) DeleteSnapshot(
 		return nil, status.Errorf(codes.InvalidArgument, "snapshot ID to be deleted is required")
 	}
 
+	isNFS := strings.Contains(csiSnapID, "/")
+
 	systemID := s.getSystemIDFromCsiVolumeID(csiSnapID)
 	if systemID == "" {
 		// use default system
@@ -2329,6 +2653,36 @@ func (s *service) DeleteSnapshot(
 	// Requires probe
 	if err := s.requireProbe(ctx, systemID); err != nil {
 		return nil, err
+	}
+
+	if isNFS {
+		snapID := getFilesystemIDFromCsiVolumeID(csiSnapID)
+		system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
+		if err != nil {
+			return nil, fmt.Errorf("can't find system by id %s", systemID)
+		}
+		snap, err := s.getFilesystemByID(snapID, systemID)
+		if err == nil {
+			err = system.DeleteFileSystem(snap.Name)
+
+			if err == nil {
+				return &csi.DeleteSnapshotResponse{}, nil
+			}
+			if err != nil {
+				if strings.Contains(err.Error(), sioGatewayFileSystemNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
+					Log.Printf("Snapshot %s already deleted on system %s \n", snapID, systemID)
+					return &csi.DeleteSnapshotResponse{}, nil
+				}
+				return nil, err
+			}
+		}
+		if err != nil {
+			if strings.Contains(err.Error(), sioGatewayFileSystemNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
+				Log.Printf("Snapshot %s already deleted on system %s \n", snapID, systemID)
+				return &csi.DeleteSnapshotResponse{}, nil
+			}
+			return nil, err
+		}
 	}
 
 	snapID := getVolumeIDFromCsiVolumeID(csiSnapID)
@@ -2517,6 +2871,33 @@ func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.Controlle
 		if err := system.ModifyFileSystem(&siotypes.FSModify{Size: requestedSize}, fsID); err != nil {
 			Log.Errorf("NFS volume expansion failed with error: %s", err.Error())
 			return nil, status.Error(codes.Internal, err.Error())
+		}
+
+		// update tree quota hard limit and soft limit if pvc size has changed
+
+		isQuotaEnabled := s.opts.IsQuotaEnabled
+		if isQuotaEnabled && fs.IsQuotaEnabled {
+			treeQuota, err := system.GetTreeQuotaByFSID(fsID)
+			if err != nil {
+				Log.Errorf("Fetching tree quota for filesystem failed, error: %s", err.Error())
+				return nil, status.Error(codes.Internal, err.Error())
+			}
+
+			// Modify Tree Quota
+			updatedSoftLimit := treeQuota.SoftLimit * (requestedSize / treeQuota.HardLimit)
+			treeQuotaID := treeQuota.ID
+			Log.Infof("Modifying tree quota ID %s for filesystem ID: %s", treeQuotaID, fsID)
+			quotaModify := &siotypes.TreeQuotaModify{
+				HardLimit: requestedSize,
+				SoftLimit: updatedSoftLimit,
+			}
+
+			err = system.ModifyTreeQuota(quotaModify, treeQuotaID)
+			if err != nil {
+				Log.Errorf("Modifying tree quota for filesystem failed, error: %s", err.Error())
+				return nil, status.Error(codes.Internal, err.Error())
+			}
+			Log.Infof("Tree quota modified successfully.")
 		}
 
 		csiResp := &csi.ControllerExpandVolumeResponse{

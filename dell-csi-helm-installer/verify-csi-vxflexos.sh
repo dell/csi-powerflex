@@ -15,7 +15,7 @@
 # verify-csi-vxflexos method
 function verify-csi-vxflexos() {
   verify_k8s_versions "1.21" "1.27"
-  verify_openshift_versions "4.11" "4.12"
+  verify_openshift_versions "4.12" "4.13"
   verify_namespace "${NS}"
   verify_helm_values_version "${DRIVER_VERSION}"
   verify_required_secrets "${RELEASE}-config"

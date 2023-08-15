@@ -418,6 +418,42 @@ Feature: VxFlex OS CSI interface
     When I call NodeGetInfo
     Then a valid NodeGetInfoResponse is returned
 
+  Scenario: Call NodeGetInfo with invalid MaxVolumesPerNode
+    Given a VxFlexOS service
+    And an invalid MaxVolumesPerNode
+    When I call NodeGetInfo
+    Then the error contains "maxVxflexosVolumesPerNode MUST NOT be set to negative value"
+
+  Scenario: Call GetNodeLabels with valid labels
+    Given a VxFlexOS service
+    When I call GetNodeLabels
+    Then a valid label is returned 
+
+  Scenario: Call GetNodeLabels with invalid node
+    Given a VxFlexOS service
+    When I call GetNodeLabels with invalid node
+    Then the error contains "Unable to fetch the node labels"
+
+  Scenario: Call NodeGetInfo with invalid volume limit node labels
+    Given a VxFlexOS service
+    When I call NodeGetInfo with invalid volume limit node labels
+    Then the error contains "invalid value"
+
+  Scenario: Call NodeGetInfo with valid volume limit node labels
+    Given a VxFlexOS service
+    When I call NodeGetInfo with valid volume limit node labels
+    Then the Volume limit is set
+
+  Scenario: Call ParseInt64FromContext to validate EnvMaxVolumesPerNode
+    Given a VxFlexOS service
+    When I set invalid EnvMaxVolumesPerNode
+    Then the error contains "invalid int64 value"
+
+  Scenario: Call GetNodeLabels with invalid KubernetesClient
+    Given a VxFlexOS service
+    When I call GetNodeLabels with unset KubernetesClient
+    Then the error contains "init client failed with error"
+
   Scenario: Call GetCapacity without specifying Storage Pool Name (this returns overall capacity)
     Given a VxFlexOS service
     When I call Probe
@@ -570,6 +606,49 @@ Feature: VxFlex OS CSI interface
     And I induce error "WrongVolIDError"
     And I call CreateSnapshot "snap1"
     Then the error contains "Failed to create snapshot"
+  
+  Scenario: Snapshot a single fileSystem Volume
+    Given a VxFlexOS service
+    When I call Probe
+    And I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call CreateSnapshot NFS "snap1"
+    And no error was received
+     
+   Scenario: Idempotent Snapshot a single fileSystem Volume
+    Given a VxFlexOS service
+    When I call Probe
+    And I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call CreateSnapshot NFS "snap1"
+    And no error was received
+    And I call CreateSnapshot NFS "snap1"
+    And no error was received
+  
+   Scenario: Snapshot a single fileSystem Volume large name
+    Given a VxFlexOS service
+    When I call Probe
+    And I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call CreateSnapshot NFS "snap-3m7xvJ-5dT4sPqfzY1Mv9KaZXc2Wb9A-"
+    And no error was received
+  
+  Scenario: Request to create NFS Snapshot with same name and different SourceVolumeID 
+    Given a VxFlexOS service
+    When I call Probe
+    And I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call CreateSnapshot NFS "snap1"
+    And no error was received
+    And I call CreateVolume "A Different Volume"
+    And a valid CreateVolumeResponse is returned
+    And I induce error "WrongFileSystemIDError"
+    And I call CreateSnapshot NFS "snap1"
+    Then the error contains " code = AlreadyExists desc = snapshot with name 'snap1' exists"
 
   Scenario: Snapshot a single block volume but receive error
     Given a VxFlexOS service
@@ -586,6 +665,40 @@ Feature: VxFlex OS CSI interface
     When I call Probe
     And I call CreateSnapshot "snap1"
     Then the error contains "volume not found"
+   
+  
+  Scenario: Call snapshot create with GetFileSystemsByIdError
+    Given a VxFlexOS service
+    When I call Probe
+    And I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I induce error "GetFileSystemsByIdError"
+    And I call CreateSnapshot NFS "snap1"
+    Then the error contains "rpc error: code = NotFound desc = volume 766f6c756d6531 was not found"
+  
+    
+  Scenario: Call snapshot create but recieve create snapshot error
+    Given a VxFlexOS service
+    When I call Probe
+    And I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I induce error "CreateSnapshotsError"
+    And I call CreateSnapshot NFS "snap1"
+    Then the error contains "error creating snapshot with name"
+    
+
+   Scenario: Call snapshot create but recieve snapshot with id not found error
+    Given a VxFlexOS service
+    When I call Probe
+    And I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I induce error "GetSnashotByIdError"
+    And I call CreateSnapshot NFS "snap1"
+    Then the error contains " snapshot with id 736e617031 was not found"
+    
 
   Scenario: Call snapshot create with no volume
     Given a VxFlexOS service
@@ -619,6 +732,18 @@ Feature: VxFlex OS CSI interface
     When I call Probe
     And I call DeleteSnapshot
     Then no error was received
+  
+  Scenario: Delete a NFS snapshot no error
+    Given a VxFlexOS service
+    When I call Probe
+    And I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call CreateSnapshot NFS "snap1"
+    And no error was received 
+     When I call Probe
+    And I call DeleteSnapshot NFS
+    Then no error was received
 
   Scenario: Idempotent delete a snapshot
     Given a VxFlexOS service
@@ -627,6 +752,20 @@ Feature: VxFlex OS CSI interface
     And I call DeleteSnapshot
     Then no error was received
     And I call DeleteSnapshot
+    Then no error was received
+    
+    Scenario: Idempotent delete a NFS snapshot no error
+    Given a VxFlexOS service
+    When I call Probe
+    And I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call CreateSnapshot NFS "snap1"
+    And no error was received 
+     When I call Probe
+    And I call DeleteSnapshot NFS
+    Then no error was received
+    And I call DeleteSnapshot NFS
     Then no error was received
 
   Scenario: Delete a snapshot with bad Vol ID
@@ -673,6 +812,19 @@ Feature: VxFlex OS CSI interface
     When I call Probe
     And I call DeleteSnapshot
     Then the error contains "error removing snapshot"
+  
+   Scenario: Delete a NFS snapshot delete snapshot error
+    Given a VxFlexOS service
+    When I call Probe
+    And I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call CreateSnapshot NFS "snap1"
+    And no error was received 
+    When I call Probe
+    And I induce error "DeleteSnapshotError" 
+    And I call DeleteSnapshot NFS
+    Then the error contains "error while deleting the filesystem snapshot"
 
   Scenario: Delete snapshot consistency group
     Given a VxFlexOS service
@@ -717,6 +869,88 @@ Feature: VxFlex OS CSI interface
     And I call Create Volume from Snapshot
     Then a valid CreateVolumeResponse is returned
     And no error was received
+
+  Scenario: Create a volume from a snapshot NFS no error
+    Given a VxFlexOS service
+    And I call Probe
+    And I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call CreateSnapshot NFS "snap1"
+    And no error was received
+    When I call Probe
+    And I call Create Volume from SnapshotNFS
+    Then a valid CreateVolumeResponse is returned
+    And no error was received
+
+  Scenario: Idempotent create a volume from a snapshot no error
+    Given a VxFlexOS service
+    And I call Probe
+    And I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call CreateSnapshot NFS "snap1"
+    And no error was received
+    When I call Probe
+    And I call Create Volume from SnapshotNFS
+    Then a valid CreateVolumeResponse is returned
+    And no error was received
+     When I call Probe
+    And I call Create Volume from SnapshotNFS
+    Then a valid CreateVolumeResponse is returned
+    And no error was received
+    
+  Scenario: Create a volume from a snapshot NFS snapshot not found error
+    Given a VxFlexOS service
+    And I call Probe
+    And I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call CreateSnapshot NFS "snap1"
+    And no error was received
+    When I call Probe
+    And I induce error "GetFileSystemsByIdError"
+    And I call Create Volume from SnapshotNFS
+    Then the error contains "Snapshot not found"
+    
+  Scenario: Create a volume from a snapshot NFS incompatible size error
+    Given a VxFlexOS service
+    And I call Probe
+    And I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call CreateSnapshot NFS "snap1"
+    And no error was received
+    And the wrong capacity
+    When I call Probe
+    And I call Create Volume from SnapshotNFS
+    Then the error contains "incompatible size"
+  
+  Scenario: Create a volume from a snapshot NFS different storage pool error
+    Given a VxFlexOS service
+    And I call Probe
+    And I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call CreateSnapshot NFS "snap1"
+    And no error was received
+    And the wrong storage pool
+    When I call Probe
+    And I call Create Volume from SnapshotNFS
+    Then the error contains "different than the requested storage pool"
+   
+  Scenario: Create a volume from a snapshot NFS restoreVolumeError
+    Given a VxFlexOS service
+    And I call Probe
+    And I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I call CreateSnapshot NFS "snap1"
+    And no error was received
+    When I call Probe
+    And I induce error "restoreVolumeError"
+    And I call Create Volume from SnapshotNFS
+    Then the error contains "error during fs creation from snapshot"
 
   Scenario: Create a volume from a snapshot with wrong capacity
     Given a VxFlexOS service
@@ -1154,3 +1388,66 @@ Feature: VxFlex OS CSI interface
     And I induce error "NoVolumeIDError"
     Then I call ControllerExpandVolume set to "16"
     And the error contains "volume ID is required"
+
+  Scenario: Controller expand volume for NFS with quota enabled
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I set quota with path "/fs" softLimit "20" graceperiod "86400"
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+    When I call CreateVolumeSize nfs "vol-inttest-nfs" "8"
+    And a controller published volume
+    When I call ControllerExpandVolume set to "12"
+    Then no error was received
+
+  Scenario: Controller expand volume for NFS with quota disabled
+    Given a VxFlexOS service
+    And I disable quota for filesystem
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+    When I call CreateVolumeSize nfs "vol-inttest-nfs" "8"
+    And a controller published volume
+    When I call ControllerExpandVolume set to "12"
+    Then no error was received
+
+  Scenario: Controller expand volume for NFS with quota enabled, modify filesystem error
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I set quota with path "/fs" softLimit "20" graceperiod "86400"
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+    When I call CreateVolumeSize nfs "vol-inttest-nfs" "8"
+    And I induce error "ModifyFSError"
+    And a controller published volume
+    When I call ControllerExpandVolume set to "12"
+    Then the error contains "Modify filesystem failed with error:"
+
+  Scenario: Controller expand volume for NFS with quota enabled, modify quota error
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I set quota with path "/fs" softLimit "20" graceperiod "86400"
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+    When I call CreateVolumeSize nfs "vol-inttest-nfs" "8"
+    And I induce error "ModifyQuotaError"
+    And a controller published volume
+    When I call ControllerExpandVolume set to "12"
+    Then the error contains "Modifying tree quota for filesystem failed, error:"
+
+  Scenario: Controller expand volume for NFS with quota enabled, GetFileSystemsByIdError
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I set quota with path "/fs" softLimit "20" graceperiod "86400"
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+    When I call CreateVolumeSize nfs "vol-inttest-nfs" "8"
+    And I induce error "GetFileSystemsByIdError"
+    And a controller published volume
+    When I call ControllerExpandVolume set to "12"
+    Then the error contains "rpc error: code = NotFound desc = volume"
+
+  Scenario: Controller expand volume for NFS with quota enabled, GetQuotaByFSIDError
+    Given a VxFlexOS service
+    And I enable quota for filesystem
+    And I set quota with path "/fs" softLimit "20" graceperiod "86400"
+    And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"
+    When I call CreateVolumeSize nfs "vol-inttest-nfs" "8"
+    And I induce error "GetQuotaByFSIDError"
+    And a controller published volume
+    When I call ControllerExpandVolume set to "12"
+    Then the error contains "Fetching tree quota for filesystem failed, error:"
