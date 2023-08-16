@@ -19,7 +19,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"regexp"
@@ -71,7 +70,7 @@ func main() {
 	} else {
 		/* #nosec G304 */
 		if fileExists(format) {
-			buf, err := ioutil.ReadFile(format)
+			buf, err := os.ReadFile(format)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "error: read tpl failed: %v\n", err)
 				os.Exit(1)

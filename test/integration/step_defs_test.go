@@ -19,7 +19,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"math"
 	"net/http"
@@ -138,7 +138,7 @@ func (f *feature) getArrayConfig() (map[string]*ArrayConnectionData, error) {
 		return nil, fmt.Errorf(fmt.Sprintf("File %s does not exist", configFile))
 	}
 
-	config, err := ioutil.ReadFile(filepath.Clean(configFile))
+	config, err := os.ReadFile(filepath.Clean(configFile))
 	if err != nil {
 		return nil, fmt.Errorf(fmt.Sprintf("File %s errors: %v", configFile, err))
 	}
@@ -1474,7 +1474,7 @@ func (f *feature) iReadWriteToVolume(folder string) error {
 	path := fmt.Sprintf("%s/%s", folder, "file")
 	fp, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0755)
 	if err != nil {
-		files, err1 := ioutil.ReadDir(path)
+		files, err1 := os.ReadDir(path)
 		if err1 != nil {
 			fmt.Printf("Write block read dir  %s", err1.Error())
 		}
@@ -1929,12 +1929,12 @@ func (f *feature) restCallToSetName(auth string, url string, name string) (strin
 		return "", err
 	}
 	if name == "" {
-		responseData, _ := ioutil.ReadAll(resp.Body)
+		responseData, _ := io.ReadAll(resp.Body)
 		token := regexp.MustCompile(`^"(.*)"$`).ReplaceAllString(string(responseData), `$1`)
 		fmt.Printf("name change token %s\n", token)
 		return token, nil
 	}
-	responseData, _ := ioutil.ReadAll(resp.Body)
+	responseData, _ := io.ReadAll(resp.Body)
 	fmt.Printf("name change response %s\n", responseData)
 	defer resp.Body.Close()
 	return "", nil
