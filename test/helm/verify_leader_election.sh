@@ -49,7 +49,7 @@ function print_help(){
 # been called. These values change frequently throughout the tests.
 function get_holder() {
 	echo
-	k_version=$(kubectl version |  sed -n '1 p' | grep Minor:\"[0-9][0-9]\" | grep -o \"[0-9][0-9]\" | grep -o [0-9][0-9])
+	k_version=$(kubectl version | grep 'Server Version' |  sed -E 's/.*v[0-9]+\.([0-9]+)\.[0-9]+.*/\1/')
 	holder=$(kubectl get lease -n $NAMESPACE | awk '{print $2}' | sed -n '2 p')
 	restarts=$(kubectl get pods -n $NAMESPACE -o wide | grep $holder | awk '{print $4}')
 	if [ $k_version -ge 22 ] && [ $restarts -gt 0 ]; then
