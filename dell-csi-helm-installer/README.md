@@ -45,10 +45,10 @@ For example, to create a values file for the PowerFlex driver the following step
 cd dell-csi-helm-installer
 
 # download the template file
- wget -O myvalues.yaml  https://github.com/dell/helm-charts/raw/csi-vxflexos-2.7.1/charts/csi-vxflexos/values.yaml
+ wget -O my-vxflexos-settings.yaml  https://github.com/dell/helm-charts/raw/csi-vxflexos-2.7.1/charts/csi-vxflexos/values.yaml
 
 # edit the newly created values file
-vi myvalues.yaml
+vi my-vxflexos-settings.yaml
 ```
 
 These values files can then be archived for later reference or for usage when upgrading the driver.
@@ -58,7 +58,7 @@ These values files can then be archived for later reference or for usage when up
 
 Installing a driver is performed via the `csi-install.sh` script. This script requires a few arguments: the target namespace and the user created values file. By default, this will verify the Kubernetes environment and present a list of warnings and/or errors. Errors must be addressed before installing, warning should be examined for their applicability. For example, in order to install the PowerFlex driver into a namespace called "vxflexos", the following command should be run:
 ```
-./csi-install.sh --namespace vxflexos --values myvalues.yaml
+./csi-install.sh --namespace vxflexos --values ./my-vxflexos-settings.yaml
 ```
 
 For usage information:
@@ -85,7 +85,7 @@ Options:
 Upgrading a driver is very similar to installation. The `csi-install.sh` script is run, with the same required arguments, along with a `--upgrade` argument. For example, to upgrade the previously installed PowerFlex driver, the following command can be supplied:
 
 ```
-./csi-install.sh --namespace vxflexos --values myvalues.yaml --upgrade
+./csi-install.sh --namespace vxflexos --values ./my-vxflexos-settings.yaml --upgrade
 ```
 
 For usage information:
@@ -134,7 +134,7 @@ Options:
 The `verify.sh` script is run, automatically, as part of the installation and upgrade procedures and can also be run by itself. This provides a handy means to validate a Kubernetes system without meaning to actually perform the installation. To verify an environment, run `verify.sh` with the namespace name and values file options.
 
 ```
-./verify.sh --namespace vxflexos --values ./myvalues.yaml
+./verify.sh --namespace vxflexos --values ./my-vxflexos-settings.yaml
 ```
 
 For usage information:
