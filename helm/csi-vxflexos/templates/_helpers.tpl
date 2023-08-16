@@ -3,7 +3,7 @@ Return the appropriate sidecar images based on k8s version
 */}}
 {{- define "csi-vxflexos.attacherImage" -}}
   {{- if eq .Capabilities.KubeVersion.Major "1" }}
-    {{- if and (ge (trimSuffix "+" .Capabilities.KubeVersion.Minor) "21") (le (trimSuffix "+" .Capabilities.KubeVersion.Minor) "27") -}}
+    {{- if and (ge (trimSuffix "+" .Capabilities.KubeVersion.Minor) "21") (le (trimSuffix "+" .Capabilities.KubeVersion.Minor) "28") -}}
       {{- print "registry.k8s.io/sig-storage/csi-attacher:v4.3.0" -}}
     {{- end -}}
   {{- end -}}
@@ -11,7 +11,7 @@ Return the appropriate sidecar images based on k8s version
 
 {{- define "csi-vxflexos.provisionerImage" -}}
   {{- if eq .Capabilities.KubeVersion.Major "1" }}
-    {{- if and (ge (trimSuffix "+" .Capabilities.KubeVersion.Minor) "21") (le (trimSuffix "+" .Capabilities.KubeVersion.Minor) "27") -}}
+    {{- if and (ge (trimSuffix "+" .Capabilities.KubeVersion.Minor) "21") (le (trimSuffix "+" .Capabilities.KubeVersion.Minor) "28") -}}
       {{- print "registry.k8s.io/sig-storage/csi-provisioner:v3.5.0" -}}
     {{- end -}}
   {{- end -}}
