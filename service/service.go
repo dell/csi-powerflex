@@ -17,7 +17,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
@@ -801,7 +800,7 @@ func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error
 		return nil, fmt.Errorf(fmt.Sprintf("File %s does not exist", ArrayConfigFile))
 	}
 
-	config, err := ioutil.ReadFile(filepath.Clean(ArrayConfigFile))
+	config, err := os.ReadFile(filepath.Clean(ArrayConfigFile))
 	if err != nil {
 		return nil, fmt.Errorf(fmt.Sprintf("File %s errors: %v", ArrayConfigFile, err))
 	}

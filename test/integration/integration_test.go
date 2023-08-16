@@ -17,7 +17,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"strings"
@@ -45,7 +44,7 @@ var grpcClient *grpc.ClientConn
 func init() {
 	/* load array config and give proper errors if not ok*/
 	if _, err := os.Stat(configFile); err == nil {
-		if _, err := ioutil.ReadFile(configFile); err != nil {
+		if _, err := os.ReadFile(configFile); err != nil {
 			err = fmt.Errorf("DEBUG integration pre requisites missing %s with multi array configuration file ", configFile)
 			panic(err)
 		}
