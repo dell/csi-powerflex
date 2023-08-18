@@ -202,7 +202,6 @@ copy_helm_dir() {
   fi
 
   mkdir -p "${HELMBACKUPDIR}"
-  #cp -R "${HELMDIR}"/* "${HELMBACKUPDIR}"
   cp -R "${HELMDIR}/../.."/* "${HELMBACKUPDIR}"
 }
 
@@ -233,11 +232,18 @@ DRIVER="csi-vxflexos"
 # some directories
 SCRIPTDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 REPODIR="$( dirname "${SCRIPTDIR}" )"
-#HELMDIR="${REPODIR}/helm"
+HELMCHARTAG="csi-vxflexos-2.8.0"
+
+if git ls-remote --quiet --tag  https://github.com/dell/helm-charts | grep -q "tags/${HELMCHARTAG}"; then
+  REPOREF="${HELMCHARTAG}"
+else
+  REPOREF="release-v1.8.0"
+fi  
+
 if [ ! -d "$REPODIR/helm-charts" ]; then
 
   if  [ ! -d "$SCRIPTDIR/helm-charts" ]; then
-    git clone --quiet -c advice.detachedHead=false -b csi-unity-2.7.0 https://github.com/dell/helm-charts
+    git clone --quiet -c advice.detachedHead=false -b "$REPOREF" https://github.com/dell/helm-charts
   fi
   mv helm-charts $REPODIR
 else 
@@ -246,7 +252,7 @@ else
   fi
 fi
 
-HELMDIR="${REPODIR}/helm-charts/charts/$DRIVER
+HELMDIR="${REPODIR}/helm-charts/charts/$DRIVER"
 HELMBACKUPDIR="${REPODIR}/helm-original"
 
 # mode we are using for install, "helm" or "operator"
