@@ -16,7 +16,6 @@ package service
 import (
 	"context"
 	"errors"
-	"io/ioutil"
 	"os"
 	"regexp"
 	"strconv"
@@ -224,7 +223,7 @@ func (s *service) ephemeralNodeUnpublish(
 
 	//while a file is being read from, it's a file determined by volID and is written by the driver
 	/* #nosec G304 */
-	dat, err := ioutil.ReadFile(lockFile)
+	dat, err := os.ReadFile(lockFile)
 	if err != nil && os.IsNotExist(err) {
 		return status.Error(codes.Internal, "Inline ephemeral. Was unable to read lockfile")
 	}
