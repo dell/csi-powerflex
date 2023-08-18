@@ -13,28 +13,7 @@
 # limitations under the License.
 
 SCRIPTDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-DRIVERDIR="${SCRIPTDIR}/../"
-HELMCHARTAG="csi-vxflexos-2.8.0"
 
-if git ls-remote --quiet --tag  https://github.com/dell/helm-charts | grep -q "tags/${HELMCHARTAG}"; then
-  REPOREF="${HELMCHARTAG}"
-else
-  REPOREF="release-v1.8.0"
-fi  
-
-
-if [ ! -d "$DRIVERDIR/helm-charts" ]; then
-
-  if  [ ! -d "$SCRIPTDIR/helm-charts" ]; then
-    git clone --quiet -c advice.detachedHead=false -b "$REPOREF" https://github.com/dell/helm-charts
-  fi
-  mv helm-charts $DRIVERDIR
-else 
-  if [  -d "$SCRIPTDIR/helm-charts" ]; then
-    rm -rf $SCRIPTDIR/helm-charts
-  fi
-fi
-DRIVERDIR="${SCRIPTDIR}/../helm-charts/charts"
 DRIVER="csi-vxflexos"
 VERIFYSCRIPT="${SCRIPTDIR}/verify.sh"
 PROG="${0}"
@@ -42,6 +21,7 @@ NODE_VERIFY=1
 VERIFY=1
 MODE="install"
 DEFAULT_DRIVER_VERSION="v2.8.0"
+DEFAULT_DRIVER_BRANCH="csi-vxflexos-2.8.0"
 WATCHLIST=""
 
 # export the name of the debug log, so child processes will see it
@@ -74,6 +54,7 @@ function usage() {
   decho "  --skip-verify                            Skip the kubernetes configuration verification to use the CSI driver, default will run verification"
   decho "  --skip-verify-node                       Skip worker node verification checks"
   decho "  -h                                       Help"
+  decho "  --branch[=]<branch>                      specify the branch to clone"
   decho
 
   exit 0
@@ -345,6 +326,10 @@ while getopts ":h-:" optchar; do
       NS=${OPTARG#*=}
       if [[ -z ${NS} ]]; then NS=${DEFAULT_NS}; fi
       ;;
+    branch)
+      DRIVER_BRANCH="${!OPTIND}"
+      OPTIND=$((OPTIND + 1))
+      ;;    
       # RELEASE
     release)
       RELEASE="${!OPTIND}"
@@ -387,6 +372,21 @@ while getopts ":h-:" optchar; do
   esac
 done
 
+DRIVERDIR="${SCRIPTDIR}/../"
+
+if [ ! -d "$DRIVERDIR/helm-charts" ]; then
+
+  if  [ ! -d "$SCRIPTDIR/helm-charts" ]; then
+    git clone --quiet -c advice.detachedHead=false -b "$DRIVER_BRANCH" https://github.com/dell/helm-charts
+  fi
+  mv helm-charts $DRIVERDIR
+else 
+  if [  -d "$SCRIPTDIR/helm-charts" ]; then
+    rm -rf $SCRIPTDIR/helm-charts
+  fi
+fi
+DRIVERDIR="${SCRIPTDIR}/../helm-charts/charts"
+
 # by default the NAME of the helm release of the driver is the same as the driver name
 RELEASE=$(get_release_name "${DRIVER}")
 # by default, NODEUSER is root
@@ -410,8 +410,8 @@ helm --help >&/dev/null || {
 OPENSHIFT=$(isOpenShift)
 
 # Get the kubernetes major and minor version numbers.
-kMajorVersion=$(run_command kubectl version | grep 'Server Version' | sed -e 's/^.*Major:"//' -e 's/[^0-9].*//g')
-kMinorVersion=$(run_command kubectl version | grep 'Server Version' | sed -e 's/^.*Minor:"//' -e 's/[^0-9].*//g')
+kMajorVersion=$(run_command kubectl version | grep 'Server Version' | sed -E 's/.*v([0-9]+)\.[0-9]+\.[0-9]+.*/\1/')
+kMinorVersion=$(run_command kubectl version | grep 'Server Version' |  sed -E 's/.*v[0-9]+\.([0-9]+)\.[0-9]+.*/\1/')
 
 # validate the parameters passed in
 validate_params "${MODE}"
