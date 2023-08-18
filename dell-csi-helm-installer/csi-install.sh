@@ -14,11 +14,19 @@
 
 SCRIPTDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 DRIVERDIR="${SCRIPTDIR}/../"
+HELMCHARTAG="csi-vxflexos-2.8.0"
+
+if git ls-remote --quiet --tag  https://github.com/dell/helm-charts | grep -q "tags/${HELMCHARTAG}"; then
+  REPOREF="${HELMCHARTAG}"
+else
+  REPOREF="release-v1.8.0"
+fi  
+
 
 if [ ! -d "$DRIVERDIR/helm-charts" ]; then
 
   if  [ ! -d "$SCRIPTDIR/helm-charts" ]; then
-    git clone --quiet -c advice.detachedHead=false -b csi-vxflexos-2.7.1 https://github.com/dell/helm-charts
+    git clone --quiet -c advice.detachedHead=false -b "$REPOREF" https://github.com/dell/helm-charts
   fi
   mv helm-charts $DRIVERDIR
 else 
@@ -33,7 +41,7 @@ PROG="${0}"
 NODE_VERIFY=1
 VERIFY=1
 MODE="install"
-DEFAULT_DRIVER_VERSION="v2.7.1"
+DEFAULT_DRIVER_VERSION="v2.8.0"
 WATCHLIST=""
 
 # export the name of the debug log, so child processes will see it
@@ -402,8 +410,8 @@ helm --help >&/dev/null || {
 OPENSHIFT=$(isOpenShift)
 
 # Get the kubernetes major and minor version numbers.
-kMajorVersion=$(run_command kubectl version | grep 'Server Version' | sed -E 's/.*v([0-9]+)\.[0-9]+\.[0-9]+.*/\1/')
-kMinorVersion=$(run_command kubectl version | grep 'Server Version' |  sed -E 's/.*v[0-9]+\.([0-9]+)\.[0-9]+.*/\1/')
+kMajorVersion=$(run_command kubectl version | grep 'Server Version' | sed -e 's/^.*Major:"//' -e 's/[^0-9].*//g')
+kMinorVersion=$(run_command kubectl version | grep 'Server Version' | sed -e 's/^.*Minor:"//' -e 's/[^0-9].*//g')
 
 # validate the parameters passed in
 validate_params "${MODE}"
