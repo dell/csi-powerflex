@@ -502,7 +502,7 @@ func (s *service) checkNFS(ctx context.Context, systemID string) (bool, error) {
 		}
 		array := arrayConData[systemID]
 		if array.NasName == nil || *(array.NasName) == "" {
-			return false, nil
+			return false, fmt.Errorf("nasName value not found in secret, it is mandatory parameter for NFS volume operations.")
 		}
 		return true, nil
 	}
@@ -944,7 +944,7 @@ func (s *service) getNFSExport(fs *siotypes.FileSystem, client *goscaleio.Client
 		}
 	}
 
-	return nil, status.Errorf(codes.NotFound, "NFS Export for the file system: %s not found", fs.Name)
+	return nil, status.Errorf(codes.NotFound, "NFS Export for the NFS volume: %s not found", fs.Name)
 
 }
 

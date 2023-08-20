@@ -282,10 +282,15 @@ func (s *service) CreateVolume(
 
 	if isNFS {
 		// fetch NAS server ID
-		nasName, ok := params[KeyNasName]
-		if !ok {
-			return nil, status.Errorf(codes.InvalidArgument, "`%s` is a required parameter", KeyNasName)
+		var nasName string
+		if params[KeyNasName] != "" {
+			nasName = params[KeyNasName] // Storage class takes precedence
+		} else {
+			Log.Debug("nasName not present in storage class, value taken from secret")
+			nasName = *(arr.NasName) // Secrets next
 		}
+		Log.Printf("nasName from SC: %s", nasName)
+		Log.Printf("nasName from secret: %s", *(s.opts.arrays[sysID].NasName))
 		nasServerID, err := s.getNASServerIDFromName(systemID, nasName)
 		if err != nil {
 			return nil, err
@@ -319,6 +324,10 @@ func (s *service) CreateVolume(
 			nfsAcls = params[KeyNfsACL] // Storage class takes precedence
 		} else if arr.NfsAcls != "" {
 			nfsAcls = arr.NfsAcls // Secrets next
+		} else if s.opts.NfsAcls != "" {
+			nfsAcls = s.opts.NfsAcls // Values next
+		} else {
+			nfsAcls = "0777"	// Default value
 		}
 
 		// fetch volume size
@@ -582,7 +591,7 @@ func (s *service) CreateVolume(
 		return csiResp, err
 	}
 	//return csiResp, err
-	return nil, status.Errorf(codes.NotFound, "Volume/Filesystem not found after create. %v", err)
+	return nil, status.Errorf(codes.NotFound, "Volume not found after create. %v", err)
 }
 
 func (s *service) createQuota(fsID, path, softLimit, gracePeriod string, size int, isQuotaEnabled bool, systemID string) (string, error) {
@@ -614,14 +623,14 @@ func (s *service) createQuota(fsID, path, softLimit, gracePeriod string, size in
 
 	err = system.ModifyFileSystem(fsModify, fs.ID)
 	if err != nil {
-		Log.Debugf("Modify filesystem failed with error: %v", err)
-		return "", status.Errorf(codes.Unknown, "Modify filesystem failed with error: %v", err)
+		Log.Debugf("Modify NFS volume failed with error: %v", err)
+		return "", status.Errorf(codes.Unknown, "Modify NFS volume failed with error: %v", err)
 	}
 
 	fs, err = system.GetFileSystemByIDName(fsID, "")
 	if err != nil {
-		Log.Debugf("Find Volume response error: %v", err)
-		return "", status.Errorf(codes.Unknown, "Find Volume response error: %v", err)
+		Log.Debugf("Find NFS volume response error: %v", err)
+		return "", status.Errorf(codes.Unknown, "Find NFS volume response error: %v", err)
 	}
 
 	// need to set the quota based on the requested pv size
@@ -808,7 +817,7 @@ func (s *service) createVolumeFromSnapshot(req *csi.CreateVolumeRequest,
 
 		if err != nil {
 			if strings.Contains(err.Error(), sioGatewayFileSystemNotFound) {
-				return nil, status.Errorf(codes.NotFound, "filesystem not found: %s", srcVol.ID)
+				return nil, status.Errorf(codes.NotFound, "NFS volume not found: %s", srcVol.ID)
 			}
 		}
 
@@ -1006,7 +1015,7 @@ func (s *service) DeleteVolume(
 		toBeDeletedFS, err := system.GetFileSystemByIDName(fsID, "")
 		if err != nil {
 			if strings.Contains(err.Error(), sioGatewayFileSystemNotFound) {
-				Log.WithFields(logrus.Fields{"id": fsID}).Debug("File System does not exist", fsID)
+				Log.WithFields(logrus.Fields{"id": fsID}).Debug("NFS volume does not exist", fsID)
 				return &csi.DeleteVolumeResponse{}, nil
 			}
 		}
@@ -1033,25 +1042,20 @@ func (s *service) DeleteVolume(
 				return nil, status.Errorf(codes.Internal,
 					"error getting the NFS Export for the fs: %s", err.Error())
 			}
-
 		} else {
 			if nfsExport != nil {
-				return nil, status.Errorf(codes.FailedPrecondition, "Filesystem %s can not be deleted as it has associated NFS Export.", fsID)
+				return nil, status.Errorf(codes.FailedPrecondition, "NFS volume %s can not be deleted as it has associated NFS Export.", fsID)
 			}
 		}
-
-		Log.WithFields(logrus.Fields{"name": fsName, "id": fsID}).Info("Deleting FileSystem")
+		Log.WithFields(logrus.Fields{"name": fsName, "id": fsID}).Info("Deleting NFS volume")
 		err = system.DeleteFileSystem(fsName)
-
 		if err != nil {
 			if strings.Contains(err.Error(), sioGatewayFileSystemNotFound) {
 				return &csi.DeleteVolumeResponse{}, nil
 			}
 			return nil, status.Errorf(codes.Internal,
-				"error removing filesystem: %s", err.Error())
-
+				"error deleting NFS volume: %s", err.Error())
 		}
-
 		return &csi.DeleteVolumeResponse{}, nil
 	}
 
@@ -2447,7 +2451,7 @@ func (s *service) CreateSnapshot(
 
 		if err != nil {
 			if strings.EqualFold(err.Error(), sioGatewayFileSystemNotFound) {
-				return nil, status.Errorf(codes.NotFound, "volume %s was not found", fileSystemID)
+				return nil, status.Errorf(codes.NotFound, "NFS volume %s not found", fileSystemID)
 			}
 		}
 
@@ -2474,14 +2478,14 @@ func (s *service) CreateSnapshot(
 
 		if err != nil {
 			return nil, status.Errorf(codes.Internal,
-				"error creating snapshot with name %s for filesystemId %s", req.Name, fileSystemID)
+				"error creating snapshot with name %s for Volume ID %s", req.Name, fileSystemID)
 		}
 
 		newSnap, err := system.GetFileSystemByIDName(resp.ID, "")
 
 		if err != nil {
 			if strings.EqualFold(err.Error(), sioGatewayFileSystemNotFound) {
-				return nil, status.Errorf(codes.NotFound, "snapshot with id %s was not found", resp.ID)
+				return nil, status.Errorf(codes.NotFound, "snapshot with ID %s was not found", resp.ID)
 			}
 		}
 
@@ -2879,14 +2883,14 @@ func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.Controlle
 		if isQuotaEnabled && fs.IsQuotaEnabled {
 			treeQuota, err := system.GetTreeQuotaByFSID(fsID)
 			if err != nil {
-				Log.Errorf("Fetching tree quota for filesystem failed, error: %s", err.Error())
+				Log.Errorf("Fetching tree quota for NFS volume failed, error: %s", err.Error())
 				return nil, status.Error(codes.Internal, err.Error())
 			}
 
 			// Modify Tree Quota
 			updatedSoftLimit := treeQuota.SoftLimit * (requestedSize / treeQuota.HardLimit)
 			treeQuotaID := treeQuota.ID
-			Log.Infof("Modifying tree quota ID %s for filesystem ID: %s", treeQuotaID, fsID)
+			Log.Infof("Modifying tree quota ID %s for NFS volume ID: %s", treeQuotaID, fsID)
 			quotaModify := &siotypes.TreeQuotaModify{
 				HardLimit: requestedSize,
 				SoftLimit: updatedSoftLimit,
@@ -2894,7 +2898,7 @@ func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.Controlle
 
 			err = system.ModifyTreeQuota(quotaModify, treeQuotaID)
 			if err != nil {
-				Log.Errorf("Modifying tree quota for filesystem failed, error: %s", err.Error())
+				Log.Errorf("Modifying tree quota for NFS volume failed, error: %s", err.Error())
 				return nil, status.Error(codes.Internal, err.Error())
 			}
 			Log.Infof("Tree quota modified successfully.")
