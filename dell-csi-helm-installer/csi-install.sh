@@ -13,13 +13,15 @@
 # limitations under the License.
 
 SCRIPTDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-DRIVERDIR="${SCRIPTDIR}/../helm"
+
+DRIVER="csi-vxflexos"
 VERIFYSCRIPT="${SCRIPTDIR}/verify.sh"
 PROG="${0}"
 NODE_VERIFY=1
 VERIFY=1
 MODE="install"
-DEFAULT_DRIVER_VERSION="v2.7.0"
+DEFAULT_DRIVER_VERSION="v2.8.0"
+DEFAULT_HELM_BRANCH="csi-vxflexos-2.8.0"
 WATCHLIST=""
 
 # export the name of the debug log, so child processes will see it
@@ -52,6 +54,7 @@ function usage() {
   decho "  --skip-verify                            Skip the kubernetes configuration verification to use the CSI driver, default will run verification"
   decho "  --skip-verify-node                       Skip worker node verification checks"
   decho "  -h                                       Help"
+  decho "  --branch[=]<branch>                      pass the helm chart branch"
   decho
 
   exit 0
@@ -107,13 +110,7 @@ function validate_params() {
     usage
     exit 1
   fi
-  # make sure the driver name is valid
-  if [[ ! "${VALIDDRIVERS[@]}" =~ "${DRIVER}" ]]; then
-    decho "Driver: ${DRIVER} is invalid."
-    decho "Valid options are: ${VALIDDRIVERS[@]}"
-    usage
-    exit 1
-  fi
+ 
   # the namespace is required
   if [ -z "${NS}" ]; then
     decho "No namespace specified"
@@ -296,12 +293,7 @@ function verify_kubernetes() {
 VERIFYOPTS=""
 ASSUMEYES="false"
 
-# get the list of valid CSI Drivers, this will be the list of directories in drivers/ that contain helm charts
-get_drivers "${DRIVERDIR}"
-# if only one driver was found, set the DRIVER to that one
-if [ ${#VALIDDRIVERS[@]} -eq 1 ]; then
-  DRIVER="${VALIDDRIVERS[0]}"
-fi
+DRIVERDIR="${SCRIPTDIR}/../helm-charts/charts"
 
 while getopts ":h-:" optchar; do
   case "${optchar}" in
@@ -334,6 +326,10 @@ while getopts ":h-:" optchar; do
       NS=${OPTARG#*=}
       if [[ -z ${NS} ]]; then NS=${DEFAULT_NS}; fi
       ;;
+    branch)
+      HELM_BRANCH="${!OPTIND}"
+      OPTIND=$((OPTIND + 1))
+      ;;    
       # RELEASE
     release)
       RELEASE="${!OPTIND}"
@@ -375,6 +371,25 @@ while getopts ":h-:" optchar; do
     ;;
   esac
 done
+
+DRIVERDIR="${SCRIPTDIR}/../"
+
+if [[ -z ${HELM_BRANCH} ]]; then 
+        HELM_BRANCH=${DEFAULT_HELM_BRANCH}
+fi 
+
+if [ ! -d "$DRIVERDIR/helm-charts" ]; then
+
+  if  [ ! -d "$SCRIPTDIR/helm-charts" ]; then
+    git clone --quiet -c advice.detachedHead=false -b "$HELM_BRANCH" https://github.com/dell/helm-charts
+  fi
+  mv helm-charts $DRIVERDIR
+else 
+  if [  -d "$SCRIPTDIR/helm-charts" ]; then
+    rm -rf $SCRIPTDIR/helm-charts
+  fi
+fi
+DRIVERDIR="${SCRIPTDIR}/../helm-charts/charts"
 
 # by default the NAME of the helm release of the driver is the same as the driver name
 RELEASE=$(get_release_name "${DRIVER}")
