@@ -54,7 +54,7 @@ function usage() {
   decho "  --skip-verify                            Skip the kubernetes configuration verification to use the CSI driver, default will run verification"
   decho "  --skip-verify-node                       Skip worker node verification checks"
   decho "  -h                                       Help"
-  decho "  --branch[=]<branch>                      specify the branch to clone"
+  decho "  --branch[=]<branch>                      pass the helm chart branch"
   decho
 
   exit 0
