@@ -27,7 +27,7 @@ const (
 	// that the controller service should automatically probe itself if it
 	// receives incoming requests before having been probed, in direct
 	// violation of the CSI spec
-	EnvAutoProbe = "X_CSI_VXFLEXOS_AUTOPROBE"
+	EnvAutoProbe = "X_CSI_VXFLEXOS_AUTOPROBE" // #nosec G101
 
 	// EnvAllowRWOMultiPodAccess is the name of the environment variable that specifies
 	// within a single node multiple pods should be able to access the same Filesystem volume with access mode ReadWriteOnce.
@@ -42,7 +42,7 @@ const (
 
 	// EnvIsSDCRenameEnabled is the name of the environment variable that specifies if the renaming for SDC is to be
 	// carried out or not. This is only used by the Node Service.
-	EnvIsSDCRenameEnabled = "X_CSI_RENAME_SDC_ENABLED"
+	EnvIsSDCRenameEnabled = "X_CSI_RENAME_SDC_ENABLED" // #nosec G101
 
 	// EnvSDCPrefix is the name of the environment variable used to set the prefix for SDC name. This is only used by
 	// the Node Service.
@@ -56,7 +56,7 @@ const (
 	EnvReplicationContextPrefix = "X_CSI_REPLICATION_CONTEXT_PREFIX"
 
 	// EnvReplicationPrefix is used as a prefix to find out if replication is enabled.
-	EnvReplicationPrefix = "X_CSI_REPLICATION_PREFIX"
+	EnvReplicationPrefix = "X_CSI_REPLICATION_PREFIX" // #nosec G101
 
 	// EnvNfsAcls enables setting permissions on NFS mount directory.
 	EnvNfsAcls = "X_CSI_NFS_ACLS"
