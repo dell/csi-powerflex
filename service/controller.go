@@ -289,8 +289,6 @@ func (s *service) CreateVolume(
 			Log.Debug("nasName not present in storage class, value taken from secret")
 			nasName = *(arr.NasName) // Secrets next
 		}
-		Log.Printf("nasName from SC: %s", nasName)
-		Log.Printf("nasName from secret: %s", *(s.opts.arrays[sysID].NasName))
 		nasServerID, err := s.getNASServerIDFromName(systemID, nasName)
 		if err != nil {
 			return nil, err
@@ -327,7 +325,7 @@ func (s *service) CreateVolume(
 		} else if s.opts.NfsAcls != "" {
 			nfsAcls = s.opts.NfsAcls // Values next
 		} else {
-			nfsAcls = "0777"	// Default value
+			nfsAcls = "0777" // Default value
 		}
 
 		// fetch volume size
