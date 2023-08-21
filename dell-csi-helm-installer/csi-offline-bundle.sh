@@ -22,6 +22,7 @@ usage() {
    echo "Make a package for offline installation of a CSI driver"
    echo
    echo "Arguments:"
+   echo "-v             Pass the helm chart version "
    echo "-c             Create an offline bundle"
    echo "-p             Prepare this bundle for installation"
    echo "-r <registry>  Required if preparing offline bundle with '-p'"
@@ -142,7 +143,13 @@ copy_files() {
   status "Copying necessary files"
   for f in ${REQUIRED_FILES[@]}; do
     echo " ${f}"
-    cp -R "${f}" "${DISTDIR}"
+    if [[ ${f} == *$DRIVER ]]; then
+      mkdir -p ${DISTDIR}/helm-charts/charts
+      cp -R "${f}" "${DISTDIR}/helm-charts/charts"
+    else
+      cp -R "${f}" "${DISTDIR}"
+    fi
+
     if [ $? -ne 0 ]; then
       echo "Unable to copy ${f} to the distribution directory"
       exit 1
@@ -197,7 +204,7 @@ copy_helm_dir() {
   fi
 
   mkdir -p "${HELMBACKUPDIR}"
-  cp -R "${HELMDIR}"/* "${HELMBACKUPDIR}"
+  cp -R "${HELMDIR}/../.."/* "${HELMBACKUPDIR}"
 }
 
 # set_mode
@@ -222,11 +229,62 @@ set_mode() {
 CREATE="false"
 PREPARE="false"
 REGISTRY=""
+DRIVER="csi-vxflexos"
 
 # some directories
 SCRIPTDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 REPODIR="$( dirname "${SCRIPTDIR}" )"
-HELMDIR="${REPODIR}/helm"
+
+DRIVERVERSION="csi-vxflexos-2.8.0"
+
+while getopts "cprv:h" opt; do
+  case $opt in
+    c)
+      CREATE="true"
+      ;;
+    p)
+      PREPARE="true"
+      ;;
+    r)
+      REGISTRY="${!OPTIND}"
+      OPTIND=$((OPTIND + 1))
+      ;;
+    v)
+      HELMCHARTVERSION="${OPTARG}"
+      ;;
+    h)
+      usage
+      exit 0
+      ;;
+    \?)
+      echo "Invalid option: -$OPTARG" >&2
+      exit 1
+      ;;
+    :)
+      echo "Option -$OPTARG requires an argument." >&2
+      exit 1
+      ;;
+  esac
+done
+
+if [ -n "$HELMCHARTVERSION" ]; then
+  DRIVERVERSION=$HELMCHARTVERSION
+fi
+
+if [ ! -d "$REPODIR/helm-charts" ]; then
+
+  if  [ ! -d "$SCRIPTDIR/helm-charts" ]; then
+    git clone --quiet -c advice.detachedHead=false -b $DRIVERVERSION https://github.com/dell/helm-charts
+  fi
+  mv helm-charts $REPODIR
+else 
+  if [  -d "$SCRIPTDIR/helm-charts" ]; then
+    rm -rf $SCRIPTDIR/helm-charts
+  fi
+fi
+
+HELMDIR="${REPODIR}/helm-charts/charts/$DRIVER"
+
 HELMBACKUPDIR="${REPODIR}/helm-original"
 
 # mode we are using for install, "helm" or "operator"
@@ -289,32 +347,6 @@ else
     "${REPODIR}/LICENSE"
   )
 fi
-
-while getopts "cpr:h" opt; do
-  case $opt in
-    c)
-      CREATE="true"
-      ;;
-    p)
-      PREPARE="true"
-      ;;
-    r)
-      REGISTRY="${OPTARG}"
-      ;;
-    h)
-      usage
-      exit 0
-      ;;
-    \?)
-      echo "Invalid option: -$OPTARG" >&2
-      exit 1
-      ;;
-    :)
-      echo "Option -$OPTARG requires an argument." >&2
-      exit 1
-      ;;
-  esac
-done
 
 # make sure exatly one option for create/prepare was specified
 if [ "${CREATE}" == "${PREPARE}" ]; then

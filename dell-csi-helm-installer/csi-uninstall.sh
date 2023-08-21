@@ -13,9 +13,10 @@
 # limitations under the License.
 
 SCRIPTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-DRIVERDIR="${SCRIPTDIR}/../helm"
+DRIVERDIR="${SCRIPTDIR}/../helm-charts/charts"
 PROG="${0}"
 
+DRIVER="csi-vxflexos"
 # export the name of the debug log, so child processes will see it
 export DEBUGLOG="${SCRIPTDIR}/uninstall-debug.log"
 
@@ -55,12 +56,7 @@ function validate_params() {
         decho "No driver specified"
         exit 1
     fi
-    # make sure the driver name is valid
-    if [[ ! "${VALIDDRIVERS[@]}" =~ "${DRIVER}" ]]; then
-        decho "Driver: ${DRIVER} is invalid."
-        decho "Valid options are: ${VALIDDRIVERS[@]}"
-        exit 1
-    fi
+
     # the namespace is required
     if [ -z "${NAMESPACE}" ]; then
         decho "No namespace specified"
@@ -78,14 +74,6 @@ function check_for_driver() {
         exit 1
     fi
 }
-
-# get the list of valid CSI Drivers, this will be the list of directories in drivers/ that contain helm charts
-get_drivers "${DRIVERDIR}"
-
-# if only one driver was found, set the DRIVER to that one
-if [ ${#VALIDDRIVERS[@]} -eq 1 ]; then
-  DRIVER="${VALIDDRIVERS[0]}"
-fi
 
 while getopts ":h-:" optchar; do
   case "${optchar}" in
@@ -140,4 +128,3 @@ fi
 
 decho "Removal of the CSI Driver is in progress."
 decho "It may take a few minutes for all pods to terminate."
-
