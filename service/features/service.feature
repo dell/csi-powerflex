@@ -675,7 +675,7 @@ Feature: VxFlex OS CSI interface
     Then a valid CreateVolumeResponse is returned
     And I induce error "GetFileSystemsByIdError"
     And I call CreateSnapshot NFS "snap1"
-    Then the error contains "rpc error: code = NotFound desc = volume 766f6c756d6531 was not found"
+    Then the error contains "rpc error: code = NotFound desc = NFS volume 766f6c756d6531 not found"
   
     
   Scenario: Call snapshot create but recieve create snapshot error
@@ -697,7 +697,7 @@ Feature: VxFlex OS CSI interface
     Then a valid CreateVolumeResponse is returned
     And I induce error "GetSnashotByIdError"
     And I call CreateSnapshot NFS "snap1"
-    Then the error contains " snapshot with id 736e617031 was not found"
+    Then the error contains " snapshot with ID 736e617031 was not found"
     
 
   Scenario: Call snapshot create with no volume
