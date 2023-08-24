@@ -61,14 +61,6 @@ parameters:
   # Default value: None
   nasName: "nas-server"
 
-  # allowRoot: enables or disables root squashing (valid only for NFS)
-  # Allowed values:
-  #   true: will allow root users to use their privileges
-  #   false: will prevent root users on NFS clients from exercising root privileges on the NFS server
-  # Optional: true
-  # Default value: false
-  allowRoot: "false"
-
   # nfsAcls: enables setting permissions on NFS mount directory
   # This value overrides the NFS ACL (nfsAcls) attribute of corresponding array config in secret, if present
   # Permissions can be specified in two formats:
