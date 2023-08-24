@@ -502,7 +502,7 @@ func (s *service) checkNFS(ctx context.Context, systemID string) (bool, error) {
 		}
 		array := arrayConData[systemID]
 		if array.NasName == nil || *(array.NasName) == "" {
-			return false, fmt.Errorf("nasName value not found in secret, it is mandatory parameter for NFS volume operations")
+			return false, fmt.Errorf("nasName value not found in secret, it is mandatory parameter for NFS volume operations, if not provide the default value 'none'")
 		}
 		return true, nil
 	}
