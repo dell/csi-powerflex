@@ -53,7 +53,8 @@ parameters:
   # Uncomment the line below if you want to use iopsLimit
   # iopsLimit: <IOPS_LIMIT> # Insert iops limit
 
-  # nasName: NAS server's name. If not specified, value from secret.yaml will be used
+  # nasName: NAS server's name. If not specified, value from secret.yaml will be used.
+  # If specified in both, secret and storage class, then precedence is given to storage class value.
   # Allowed values: string
   # Optional: true
   # Default value: None
@@ -76,7 +77,7 @@ parameters:
   # Allowed values:
   #   1) Unix mode: valid octal mode number
   #      Examples: "0777", "777", "0755"
-  #   2) NFSv4 acls: valid NFSv4 acls, seperated by comma
+  #   2) NFSv4 acls: valid NFSv4 acls, separated by comma
   #      Examples: "A::OWNER@:RWX,A::GROUP@:RWX", "A::OWNER@:rxtncy"
   # Optional: true
   # Default value: "0777"
@@ -93,7 +94,7 @@ parameters:
   # Specified as a percentage
   # Allowed values: int
   # Optional: true
-  # Default value: 0, unlimited quota
+  # Default value: limit not set
   # softLimit: "80"
 
   # gracePeriod: Grace period of tree quota, must be mentioned along with softLimit, in seconds.

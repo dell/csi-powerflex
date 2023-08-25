@@ -17,7 +17,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
@@ -503,7 +502,7 @@ func (s *service) checkNFS(ctx context.Context, systemID string) (bool, error) {
 		}
 		array := arrayConData[systemID]
 		if array.NasName == nil || *(array.NasName) == "" {
-			return false, nil
+			return false, fmt.Errorf("nasName value not found in secret, it is mandatory parameter for NFS volume operations")
 		}
 		return true, nil
 	}
@@ -801,7 +800,7 @@ func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error
 		return nil, fmt.Errorf(fmt.Sprintf("File %s does not exist", ArrayConfigFile))
 	}
 
-	config, err := ioutil.ReadFile(filepath.Clean(ArrayConfigFile))
+	config, err := os.ReadFile(filepath.Clean(ArrayConfigFile))
 	if err != nil {
 		return nil, fmt.Errorf(fmt.Sprintf("File %s errors: %v", ArrayConfigFile, err))
 	}
@@ -945,7 +944,7 @@ func (s *service) getNFSExport(fs *siotypes.FileSystem, client *goscaleio.Client
 		}
 	}
 
-	return nil, status.Errorf(codes.NotFound, "NFS Export for the file system: %s not found", fs.Name)
+	return nil, status.Errorf(codes.NotFound, "NFS Export for the NFS volume: %s not found", fs.Name)
 
 }
 

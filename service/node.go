@@ -23,8 +23,6 @@ import (
 	"strings"
 	"time"
 
-	"io/ioutil"
-
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/dell/gofsutil"
 	"github.com/dell/goscaleio"
@@ -267,7 +265,7 @@ func (s *service) NodeUnpublishVolume(
 		ephemeralVolume = true
 		//while a file is being read from, it's a file determined by volID and is written by the driver
 		/* #nosec G304 */
-		idFromFile, err := ioutil.ReadFile(lockFile)
+		idFromFile, err := os.ReadFile(lockFile)
 		if err != nil && os.IsNotExist(err) {
 			Log.Errorf("NodeUnpublish with ephemeral volume. Was unable to read lockfile: %v", err)
 			return nil, status.Error(codes.Internal, "NodeUnpublish with ephemeral volume. Was unable to read lockfile")
