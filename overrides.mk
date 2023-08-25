@@ -3,9 +3,9 @@
 #
 
 # DEFAULT values
-# ubi8/ubi-micro:8.8-1
-DEFAULT_BASEIMAGE="registry.access.redhat.com/ubi8/ubi-micro:8.8-1"
-DEFAULT_GOVERSION="1.20"
+# ubi8/ubi-micro:latest
+DEFAULT_BASEIMAGE="registry.access.redhat.com/ubi9/ubi-micro:latest"
+DEFAULT_GOVERSION="1.21"
 DEFAULT_REGISTRY="sample_registry"
 DEFAULT_IMAGENAME="csi-vxflexos"
 DEFAULT_BUILDSTAGE="final"
