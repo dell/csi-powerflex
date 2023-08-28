@@ -53,21 +53,14 @@ parameters:
   # Uncomment the line below if you want to use iopsLimit
   # iopsLimit: <IOPS_LIMIT> # Insert iops limit
 
-  # nasName: NAS server's name. If not specified, value from secret.yaml will be used.
+  # nasName: NAS server's name for NFS volume operations.
+  # If not specified, value from secret.yaml will be used.
   # If specified in both, secret and storage class, then precedence is given to storage class value.
   # Allowed values: string
   # Optional: true
   # Default value: None
   nasName: "nas-server"
- 
-  # allowRoot: enables or disables root squashing (valid only for NFS)
-  # Allowed values:
-  #   true: will allow root users to use their privileges
-  #   false: will prevent root users on NFS clients from exercising root privileges on the NFS server
-  # Optional: true
-  # Default value: false
-  allowRoot: "false"
-  
+
   # nfsAcls: enables setting permissions on NFS mount directory
   # This value overrides the NFS ACL (nfsAcls) attribute of corresponding array config in secret, if present
   # Permissions can be specified in two formats:
