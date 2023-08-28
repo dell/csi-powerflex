@@ -53,7 +53,7 @@ parameters:
   # Uncomment the line below if you want to use iopsLimit
   # iopsLimit: <IOPS_LIMIT> # Insert iops limit
 
-  # nasName: NAS server's name for NFS voume operations.
+  # nasName: NAS server's name for NFS volume operations.
   # If not specified, value from secret.yaml will be used.
   # If specified in both, secret and storage class, then precedence is given to storage class value.
   # Allowed values: string
