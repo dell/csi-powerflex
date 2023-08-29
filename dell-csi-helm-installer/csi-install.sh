@@ -326,10 +326,10 @@ while getopts ":h-:" optchar; do
       NS=${OPTARG#*=}
       if [[ -z ${NS} ]]; then NS=${DEFAULT_NS}; fi
       ;;
-    helm-charts-version)	
-      HELMCHARTVERSION="${!OPTIND}"	
-      OPTIND=$((OPTIND + 1))	
-      ;;  
+    helm-charts-version)
+      HELMCHARTVERSION="${!OPTIND}"
+      OPTIND=$((OPTIND + 1))
+      ;;    
       # RELEASE
     release)
       RELEASE="${!OPTIND}"
@@ -374,9 +374,9 @@ done
 
 DRIVERDIR="${SCRIPTDIR}/../"
 
-if [[ -z $HELMCHARTVERSION ]]; then 
-    DRIVERVERSION=$HELMCHARTVERSION
-fi 
+if [ -n "$HELMCHARTVERSION" ]; then
+  DRIVERVERSION=$HELMCHARTVERSION
+fi
 
 if [ ! -d "$DRIVERDIR/helm-charts" ]; then
 
