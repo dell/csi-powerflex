@@ -3,7 +3,7 @@
 #
 
 # DEFAULT values
-# ubi8/ubi-micro:latest
+# ubi9/ubi-micro:latest
 DEFAULT_BASEIMAGE="registry.access.redhat.com/ubi9/ubi-micro:latest"
 DEFAULT_GOVERSION="1.21"
 DEFAULT_REGISTRY="sample_registry"
