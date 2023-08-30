@@ -21,7 +21,7 @@ NODE_VERIFY=1
 VERIFY=1
 MODE="install"
 DEFAULT_DRIVER_VERSION="v2.8.0"
-DEFAULT_HELM_BRANCH="csi-vxflexos-2.8.0"
+DRIVERVERSION="csi-vxflexos-2.8.0"
 WATCHLIST=""
 
 # export the name of the debug log, so child processes will see it
@@ -54,7 +54,7 @@ function usage() {
   decho "  --skip-verify                            Skip the kubernetes configuration verification to use the CSI driver, default will run verification"
   decho "  --skip-verify-node                       Skip worker node verification checks"
   decho "  -h                                       Help"
-  decho "  --branch[=]<branch>                      pass the helm chart branch"
+  decho "  --helm-charts-version                    Pass the helm chart version "
   decho
 
   exit 0
@@ -326,8 +326,8 @@ while getopts ":h-:" optchar; do
       NS=${OPTARG#*=}
       if [[ -z ${NS} ]]; then NS=${DEFAULT_NS}; fi
       ;;
-    branch)
-      HELM_BRANCH="${!OPTIND}"
+    helm-charts-version)
+      HELMCHARTVERSION="${!OPTIND}"
       OPTIND=$((OPTIND + 1))
       ;;    
       # RELEASE
@@ -374,14 +374,14 @@ done
 
 DRIVERDIR="${SCRIPTDIR}/../"
 
-if [[ -z ${HELM_BRANCH} ]]; then 
-        HELM_BRANCH=${DEFAULT_HELM_BRANCH}
-fi 
+if [ -n "$HELMCHARTVERSION" ]; then
+  DRIVERVERSION=$HELMCHARTVERSION
+fi
 
 if [ ! -d "$DRIVERDIR/helm-charts" ]; then
 
   if  [ ! -d "$SCRIPTDIR/helm-charts" ]; then
-    git clone --quiet -c advice.detachedHead=false -b "$HELM_BRANCH" https://github.com/dell/helm-charts
+    git clone --quiet -c advice.detachedHead=false -b $DRIVERVERSION https://github.com/dell/helm-charts
   fi
   mv helm-charts $DRIVERDIR
 else 
