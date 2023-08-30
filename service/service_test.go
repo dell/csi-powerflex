@@ -24,7 +24,6 @@ import (
 )
 
 func TestMain(m *testing.M) {
-
 	go http.ListenAndServe("localhost:6060", nil)
 	fmt.Printf("starting godog...\n")
 

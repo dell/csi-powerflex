@@ -53,4 +53,7 @@ integration-test:
 check:
 	@scripts/check.sh ./provider/ ./service/
 	
+gofumpt-check:
+	( find . -name "*.go" -exec gofumpt -w {} \; )
+	
 

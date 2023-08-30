@@ -37,11 +37,13 @@ const (
 	sioReplicationGroupNotFound     = "The Replication Consistency Group was not found"
 )
 
-var getRemoteSnapDelay = (1 * time.Second)
-var snapshotMaxRetries = 10
+var (
+	getRemoteSnapDelay = (1 * time.Second)
+	snapshotMaxRetries = 10
+)
 
 func (s *service) GetReplicationCapabilities(ctx context.Context, req *replication.GetReplicationCapabilityRequest) (*replication.GetReplicationCapabilityResponse, error) {
-	var rep = new(replication.GetReplicationCapabilityResponse)
+	rep := new(replication.GetReplicationCapabilityResponse)
 	rep.Capabilities = []*replication.ReplicationCapability{
 		{
 			Type: &replication.ReplicationCapability_Rpc{

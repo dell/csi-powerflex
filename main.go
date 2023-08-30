@@ -18,18 +18,18 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"os"
+	"strings"
+
 	"github.com/dell/csi-vxflexos/v2/k8sutils"
 	"github.com/dell/csi-vxflexos/v2/provider"
 	"github.com/dell/csi-vxflexos/v2/service"
 	"github.com/dell/gocsi"
 	"github.com/sirupsen/logrus"
-	"os"
-	"strings"
 )
 
 // main is ignored when this package is built as a go plug-in
 func main() {
-
 	logger := logrus.New()
 	service.Log = logger
 	// Always set X_CSI_DEBUG to false irrespective of what user has specified

@@ -68,15 +68,17 @@ const (
 	// SystemTopologySystemValue is the supported topology key
 	SystemTopologySystemValue string = "csi-vxflexos.dellemc.com"
 
-	//DefaultLogLevel for csi logs
+	// DefaultLogLevel for csi logs
 	DefaultLogLevel = logrus.DebugLevel
 
-	//ParamCSILogLevel csi driver log level
+	// ParamCSILogLevel csi driver log level
 	ParamCSILogLevel = "CSI_LOG_LEVEL"
 )
 
-var mx = sync.Mutex{}
-var px = sync.Mutex{}
+var (
+	mx = sync.Mutex{}
+	px = sync.Mutex{}
+)
 
 // LookupEnv - Fetches the environment var value
 var LookupEnv = lookupEnv
@@ -169,15 +171,14 @@ type service struct {
 	privDir             string
 	storagePoolIDToName map[string]string
 	statisticsCounter   int
-	//maps the first 24 bits of a volume ID to the volume's systemID
+	// maps the first 24 bits of a volume ID to the volume's systemID
 	volumePrefixToSystems   map[string][]string
 	connectedSystemNameToID map[string]string
 }
 
 // Process dynamic changes to configMap or Secret.
 func (s *service) ProcessMapSecretChange() error {
-
-	//Update dynamic config params
+	// Update dynamic config params
 	vc := viper.New()
 	vc.AutomaticEnv()
 	Log.WithField("file", DriverConfigParamsFile).Info("driver configuration file ")
@@ -282,7 +283,6 @@ func (s *service) logCsiNodeTopologyKeys() error {
 		}
 	}
 	return nil
-
 }
 
 // New returns a handle to service
@@ -295,7 +295,6 @@ func New() Service {
 }
 
 func (s *service) updateDriverConfigParams(logger *logrus.Logger, v *viper.Viper) error {
-
 	logFormat := v.GetString("CSI_LOG_FORMAT")
 	logFormat = strings.ToLower(logFormat)
 	logger.WithField("format", logFormat).Info("Read CSI_LOG_FORMAT from log configuration file")
@@ -331,7 +330,8 @@ func (s *service) updateDriverConfigParams(logger *logrus.Logger, v *viper.Viper
 }
 
 func (s *service) BeforeServe(
-	ctx context.Context, sp *gocsi.StoragePlugin, lis net.Listener) error {
+	ctx context.Context, sp *gocsi.StoragePlugin, lis net.Listener,
+) error {
 	defer func() {
 		fields := map[string]interface{}{
 			"sdcGUID":                s.opts.SdcGUID,
@@ -477,7 +477,6 @@ func (s *service) BeforeServe(
 }
 
 func (s *service) checkNFS(ctx context.Context, systemID string) (bool, error) {
-
 	err := s.systemProbeAll(ctx)
 	if err != nil {
 		return false, err
@@ -511,7 +510,6 @@ func (s *service) checkNFS(ctx context.Context, systemID string) (bool, error) {
 
 // Probe all systems managed by driver
 func (s *service) doProbe(ctx context.Context) error {
-
 	// Putting in mutex to allow tests to pass with race flag
 	px.Lock()
 	defer px.Unlock()
@@ -570,7 +568,6 @@ func (s *service) getVolProvisionType(params map[string]string) string {
 
 // getVolByID returns the PowerFlex volume from the given Powerflex volume ID
 func (s *service) getVolByID(id string, systemID string) (*siotypes.Volume, error) {
-
 	adminClient := s.adminClients[systemID]
 	if adminClient == nil {
 		return nil, fmt.Errorf("can't find adminClient by id %s", systemID)
@@ -586,7 +583,6 @@ func (s *service) getVolByID(id string, systemID string) (*siotypes.Volume, erro
 
 // getFilesystemByID returns the PowerFlex filesystem from the given Powerflex filesystem ID
 func (s *service) getFilesystemByID(id string, systemID string) (*siotypes.FileSystem, error) {
-
 	adminClient := s.adminClients[systemID]
 	if adminClient == nil {
 		return nil, fmt.Errorf("can't find adminClient by id %s", systemID)
@@ -640,7 +636,6 @@ func (s *service) getSDCIP(sdcGUID string, systemID string) (string, error) {
 
 // getStoragePoolID returns pool ID from the given name, system ID, and protectionDomain name
 func (s *service) getStoragePoolID(name, systemID, pdID string) (string, error) {
-
 	// Need to lookup ID from the gateway, with respect to PD if provided
 	pool, err := s.adminClients[systemID].FindStoragePool("", name, "", pdID)
 	if err != nil {
@@ -652,7 +647,6 @@ func (s *service) getStoragePoolID(name, systemID, pdID string) (string, error) 
 
 // getCSIVolume converts the given siotypes.Volume to a CSI volume
 func (s *service) getCSIVolume(vol *siotypes.Volume, systemID string) *csi.Volume {
-
 	// Get storage pool name; add to cache of ID to Name if not present
 	storagePoolName := s.getStoragePoolNameFromID(systemID, vol.StoragePoolID)
 	installationID, err := s.getArrayInstallationID(systemID)
@@ -681,7 +675,6 @@ func (s *service) getCSIVolume(vol *siotypes.Volume, systemID string) *csi.Volum
 
 // getCSIVolumeFromFilesystem converts the given siotypes.FileSystem to a CSI volume
 func (s *service) getCSIVolumeFromFilesystem(fs *siotypes.FileSystem, systemID string) *csi.Volume {
-
 	// Get storage pool name; add to cache of ID to Name if not present
 	storagePoolName := s.getStoragePoolNameFromID(systemID, fs.StoragePoolID)
 	installationID, err := s.getArrayInstallationID(systemID)
@@ -931,9 +924,7 @@ func getFilesystemIDFromCsiVolumeID(csiVolID string) string {
 // getNFSExport method returns the NFSExport for a given filesystem
 // and returns a not found error if the NFSExport does not exist for filesystem.
 func (s *service) getNFSExport(fs *siotypes.FileSystem, client *goscaleio.Client) (*siotypes.NFSExport, error) {
-
 	nfsExportList, err := client.GetNFSExport()
-
 	if err != nil {
 		return nil, err
 	}
@@ -945,25 +936,21 @@ func (s *service) getNFSExport(fs *siotypes.FileSystem, client *goscaleio.Client
 	}
 
 	return nil, status.Errorf(codes.NotFound, "NFS Export for the NFS volume: %s not found", fs.Name)
-
 }
 
 // getFileInterface method returns the FileInterface for the given filesytem.
 func (s *service) getFileInterface(systemID string, fs *siotypes.FileSystem, client *goscaleio.Client) (*siotypes.FileInterface, error) {
 	system, err := client.FindSystem(systemID, "", "")
-
 	if err != nil {
 		return nil, err
 	}
 
 	nas, err := system.GetNASByIDName(fs.NasServerID, "")
-
 	if err != nil {
 		return nil, err
 	}
 
 	fileInterface, err := system.GetFileInterface(nas.CurrentPreferredIPv4InterfaceID)
-
 	if err != nil {
 		return nil, err
 	}
@@ -1015,7 +1002,6 @@ func Contains(slice []string, element string) bool {
 }
 
 func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnpublishVolumeRequest, client *goscaleio.Client, fs *siotypes.FileSystem, volumeContextID, nodeIP, nodeID string) error {
-
 	var nfsExportName string
 	nfsExportName = NFSExportNamePrefix + fs.Name
 
@@ -1024,7 +1010,6 @@ func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnp
 	deleteExport := true
 	// Check if nfs export exists for the File system
 	nfsExportList, err := client.GetNFSExport()
-
 	if err != nil {
 		return err
 	}
@@ -1033,7 +1018,7 @@ func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnp
 		if nfsExport.FileSystemID == fs.ID {
 			nfsExportExists = true
 			if nfsExport.Name != nfsExportName {
-				//This means that share was created manually on array, hence don't delete via driver
+				// This means that share was created manually on array, hence don't delete via driver
 				deleteExport = false
 				nfsExportName = nfsExport.Name
 			}
@@ -1049,7 +1034,6 @@ func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnp
 
 	// remove host access from NFS Export
 	nfsExportResp, err := client.GetNFSExportByIDName(nfsExportID, "")
-
 	if err != nil {
 		return status.Errorf(codes.NotFound, "Could not find NFS Export: %s", err)
 	}
@@ -1090,7 +1074,6 @@ func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnp
 
 	if err != nil {
 		return status.Errorf(codes.NotFound, "Allocating host %s access to NFS Export failed. Error: %v", nodeID, err)
-
 	}
 	Log.Debugf("Host: %s access is removed from NFS Share: %s", nodeID, nfsExportID)
 
@@ -1107,7 +1090,6 @@ func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnp
 	Log.Debugf("ControllerUnpublishVolume successful for volid: [%s]", volumeContextID)
 
 	return nil
-
 }
 
 // exportFilesystem - Method to export filesystem with idempotency
@@ -1121,7 +1103,6 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 
 	// Check if nfs export exists for the File system
 	nfsExportList, err := client.GetNFSExport()
-
 	if err != nil {
 		return nil, err
 	}
@@ -1142,7 +1123,6 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 			FileSystemID: fs.ID,
 			Path:         NFSExportLocalPath + fs.Name,
 		})
-
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "create NFS Export failed. Error:%v", err)
 		}
@@ -1151,7 +1131,6 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 	}
 
 	nfsExportResp, err := client.GetNFSExportByIDName(nfsExportID, "")
-
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "Could not find NFS Export: %s", err)
 	}
@@ -1219,12 +1198,12 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 		return nil, status.Errorf(codes.NotFound, "Other hosts have access on NFS Share: %s", nfsExportID)
 	}
 
-	//Idempotent case
+	// Idempotent case
 	if foundIdempotent {
 		Log.Info("Host has access to the given host and exists in the required state.")
 		return &csi.ControllerPublishVolumeResponse{PublishContext: pContext}, nil
 	}
-	//Allocate host access to NFS Share with appropriate access mode
+	// Allocate host access to NFS Share with appropriate access mode
 	if am.Mode == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
 		readHostList = append(readHostList, hostURL)
 		err := client.ModifyNFSExport(&siotypes.NFSExportModify{AddReadOnlyRootHosts: readHostList}, nfsExportID)
@@ -1249,9 +1228,8 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 // this is needed for checkSystemVolumes, a function that verifies that any legacy vol ID
 // is found on the default system, only
 func (s *service) UpdateVolumePrefixToSystemsMap(systemID string) error {
-	//get one vol from system
+	// get one vol from system
 	vols, _, err := s.listVolumes(systemID, 0, 1, true, false, "", "")
-
 	if err != nil {
 
 		Log.WithError(err).Errorf("failed to list vols for array %s : %s ", systemID, err.Error())
@@ -1260,7 +1238,7 @@ func (s *service) UpdateVolumePrefixToSystemsMap(systemID string) error {
 	}
 
 	if len(vols) == 0 {
-		//if system has no volumes, then there can't be a legacy vol on it
+		// if system has no volumes, then there can't be a legacy vol on it
 		Log.Printf("systemID: %s  has no volumes, not adding to volumePrefixToSystems map. \n", systemID)
 		return nil
 
@@ -1275,28 +1253,26 @@ func (s *service) UpdateVolumePrefixToSystemsMap(systemID string) error {
 
 	if _, ok := s.volumePrefixToSystems[key]; ok {
 
-		//if key found:
-		//make sure systemID isn't already added for the specific key
+		// if key found:
+		// make sure systemID isn't already added for the specific key
 		if contains(s.volumePrefixToSystems[key], systemID) {
 			Log.Printf("volumePrefixToSystems: systemID: %s  already added for key %s. Not adding for key again. \n", systemID, key)
 			return nil
 		}
-		//systemID has not been added to key before, add it
+		// systemID has not been added to key before, add it
 		Log.Printf("volumePrefixToSystems: Adding systemID %s to key %s \n", systemID, key)
 		s.volumePrefixToSystems[key] = append(s.volumePrefixToSystems[key], systemID)
 
 	} else {
-		//if key not found:
+		// if key not found:
 		Log.Printf("volumePrefixToSystems: adding new key, value pair: key %s, systemID: %s \n", key, systemID)
 		s.volumePrefixToSystems[key] = []string{systemID}
 	}
 
 	return nil
-
 }
 
 func (s *service) checkVolumesMap(volumeID string) error {
-
 	systemID := s.getSystemIDFromCsiVolumeID(volumeID)
 
 	// ID is legacy, so we  ensure it's only found on default system
@@ -1314,7 +1290,6 @@ func (s *service) checkVolumesMap(volumeID string) error {
 		key := s.calcKeyForMap(volumeID)
 
 		if _, ok := s.volumePrefixToSystems[key]; ok {
-
 			// key found, make sure vol isn't on non-default system
 			// For each systemID in s.volumePrefixToSystems[key], read all volumes from the system
 			for _, systemID := range s.volumePrefixToSystems[key] {
@@ -1331,7 +1306,6 @@ func (s *service) checkVolumesMap(volumeID string) error {
 					}
 				}
 			}
-
 		}
 
 		// volume was not found on a non default system.
@@ -1342,7 +1316,6 @@ func (s *service) checkVolumesMap(volumeID string) error {
 	// volume was not legacy
 	Log.Printf("Volume ID: %s contains system ID: %s. checkVolumesMap passed", volumeID, systemID)
 	return nil
-
 }
 
 // needs to get first 24 bits of VOlID, this is equivalent to first 3 bytes
@@ -1350,7 +1323,6 @@ func (s *service) calcKeyForMap(volumeID string) string {
 	bytes := []byte(volumeID)
 	key := string(bytes[0:3])
 	return key
-
 }
 
 func (s *service) getProtectionDomainIDFromName(systemID, protectionDomainName string) (string, error) {
@@ -1545,6 +1517,7 @@ func (s *service) GetNfsTopology(systemID string) []*csi.Topology {
 	nfsTopology.Segments = map[string]string{Name + "/" + systemID + "-nfs": "true"}
 	return []*csi.Topology{nfsTopology}
 }
+
 func (s *service) GetNodeLabels(ctx context.Context) (map[string]string, error) {
 	if K8sClientset == nil {
 		err := k8sutils.CreateKubeClientSet(KubeConfig)
