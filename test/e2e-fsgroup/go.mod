@@ -1,6 +1,6 @@
 module github.com/dell/csi-powerflex/tests/e2e-fsgroup
 
-go 1.20
+go 1.21
 
 require (
 	github.com/onsi/ginkgo v1.16.5
