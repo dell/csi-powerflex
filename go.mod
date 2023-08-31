@@ -14,14 +14,14 @@ require (
 	github.com/dell/dell-csi-extensions/replication v1.4.1-0.20230821201344-ea25f89d957e
 	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.2.4-0.20230821201344-ea25f89d957e
 	github.com/dell/gocsi v1.7.0
-	github.com/dell/gofsutil v1.12.0
-	github.com/dell/goscaleio v1.11.1-0.20230816075825-380ffbcbcd75
+	github.com/dell/gofsutil v1.12.1-0.20230828060700-f7f26c1aa088
+	github.com/dell/goscaleio v1.11.1-0.20230825053720-a6f9805a643d
 	github.com/fsnotify/fsnotify v1.5.1
 	github.com/golang/protobuf v1.5.3
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/mux v1.8.0
 	github.com/kubernetes-csi/csi-lib-utils v0.9.1
-	github.com/sirupsen/logrus v1.8.1
+	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/viper v1.10.1
 	github.com/stretchr/testify v1.7.0
 	golang.org/x/net v0.14.0
