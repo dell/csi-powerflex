@@ -3,7 +3,7 @@ module github.com/dell/csi-vxflexos/v2
 // In order to run unit tests on Windows, you need a stubbed Windows implementation
 // of the gofsutil package. Use the following replace statements if necessary.
 
-go 1.20
+go 1.21
 
 require (
 	github.com/akutz/memconn v0.1.0
@@ -14,14 +14,14 @@ require (
 	github.com/dell/dell-csi-extensions/replication v1.3.1-0.20230517135918-9920e636bff1
 	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.2.3-0.20230517135918-9920e636bff1
 	github.com/dell/gocsi v1.7.0
-	github.com/dell/gofsutil v1.12.0
-	github.com/dell/goscaleio v1.11.1-0.20230816075825-380ffbcbcd75
+	github.com/dell/gofsutil v1.12.1-0.20230828060700-f7f26c1aa088
+	github.com/dell/goscaleio v1.11.1-0.20230825053720-a6f9805a643d
 	github.com/fsnotify/fsnotify v1.5.1
 	github.com/golang/protobuf v1.5.3
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/mux v1.8.0
 	github.com/kubernetes-csi/csi-lib-utils v0.9.1
-	github.com/sirupsen/logrus v1.8.1
+	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/viper v1.10.1
 	github.com/stretchr/testify v1.7.0
 	golang.org/x/net v0.10.0
