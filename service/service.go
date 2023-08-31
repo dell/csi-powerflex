@@ -150,7 +150,6 @@ type Opts struct {
 	replicationContextPrefix   string
 	replicationPrefix          string
 	NfsAcls                    string // enables setting permissions on NFS mount directory
-	ExternalAccess             string // allow additional entries for host to access NFS volumes
 	MaxVolumesPerNode          int64
 	IsQuotaEnabled             bool // allow driver to enable quota limits for NFS volumes
 }
@@ -345,7 +344,6 @@ func (s *service) BeforeServe(
 			"sdcPrefix":              s.opts.SdcPrefix,
 			"IsApproveSDCEnabled":    s.opts.IsApproveSDCEnabled,
 			"nfsAcls":                s.opts.NfsAcls,
-			"externalAccess":         s.opts.ExternalAccess,
 			"MaxVolumesPerNode":      s.opts.MaxVolumesPerNode,
 			"IsQuotaEnabled":         s.opts.IsQuotaEnabled,
 		}
@@ -438,9 +436,6 @@ func (s *service) BeforeServe(
 
 	if nfsAcls, ok := csictx.LookupEnv(ctx, EnvNfsAcls); ok {
 		opts.NfsAcls = nfsAcls
-	}
-	if externalAccess, ok := csictx.LookupEnv(ctx, EnvExternalAccess); ok {
-		opts.ExternalAccess = externalAccess
 	}
 
 	// log csiNode topology keys
