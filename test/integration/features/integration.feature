@@ -522,6 +522,92 @@ Feature: VxFlex OS CSI interface
     And when I call DeleteVolume
     And when I call DeleteVolume
     Then there are no errors
+  
+  Scenario: Create and delete 100000G NFS volume
+    Given a VxFlexOS service
+    And max retries 1
+    And a basic nfs volume request "nfsvolume2" "100000"
+    When I call CreateVolume
+    And when I call DeleteVolume
+    Then the error message should contain "Unprocessable Entity"
+
+  Scenario: Create a NFS volume with wrong NasName
+    Given a VxFlexOS service
+    And a basic nfs volume request with wrong nasname "nfsvolume3" "8"
+    When I call CreateVolume
+    Then the error message should contain <errormsg>
+    Examples:
+      | errormsg    |
+      | "couldn't find given NAS server by name" |
+
+  Scenario Outline: Create publish, node-publish, node-unpublish, unpublish, and delete nfs volume
+    Given a VxFlexOS service
+    And a nfs capability with voltype <voltype> access <access> fstype <fstype>
+    And a nfs volume request "nfsinttestvol" "8"
+    When I call CreateVolume
+    And there are no errors
+    And when I call PublishVolume for nfs "SDC_GUID"
+    And when I call NodePublishVolume for nfs "SDC_GUID"
+    And there are no errors
+    And when I call NodeUnpublishVolume for nfs "SDC_GUID"
+    And when I call UnpublishVolume for nfs "SDC_GUID"
+    And there are no errors
+    And when I call DeleteVolume
+    Then there are no errors
+    Examples:
+      | voltype | access          | fstype | errormsg |
+      | "mount" | "single-writer" | "nfs"  | "none"   | 
+
+  Scenario: Expand Nfs Volume
+    Given a VxFlexOS service
+    And a nfs capability with voltype "mount" access "single-writer" fstype "nfs"
+    And a nfs volume request "nfsinttestvol2" "16"
+    When I call CreateVolume
+    And there are no errors
+    And when I call PublishVolume for nfs "SDC_GUID"
+    And there are no errors
+    And when I call NodePublishVolume for nfs "SDC_GUID"
+    And there are no errors
+    And when I call NfsExpandVolume to "20"
+    And there are no errors
+    And I call ListVolume
+    And a valid ListVolumeResponse is returned
+    And when I call NodeUnpublishVolume for nfs "SDC_GUID"
+    And there are no errors
+    And when I call UnpublishVolume for nfs "SDC_GUID"
+    And there are no errors
+    And when I call DeleteVolume
+    Then there are no errors
+
+  Scenario: NFS Create volume, create snapshot, delete volume
+    Given a VxFlexOS service
+    And a basic nfs volume request "nfsvolume1" "8"
+    When I call CreateVolume
+    And I call CreateSnapshotForFS
+    And there are no errors
+    And I call ListFileSystemSnapshot
+    And there are no errors
+    And I call DeleteSnapshotForFS
+    And there are no errors
+    And when I call DeleteVolume
+    Then there are no errors
+
+  Scenario: NFS Create volume, idempotent create snapshot, delete volume
+    Given a VxFlexOS service
+    And a basic nfs volume request "nfsvolume1" "8"
+    When I call CreateVolume
+    And I call CreateSnapshotForFS
+    And there are no errors
+    And I call CreateSnapshotForFS
+    And there are no errors
+    And I call ListFileSystemSnapshot
+    And there are no errors
+    And I call DeleteSnapshotForFS
+    And there are no errors
+    And I call DeleteSnapshotForFS
+    And there are no errors
+    And when I call DeleteVolume
+    Then there are no errors
 
   Scenario: Create basic nfs volume with tree quota enabled with empty path value, error
     Given a VxFlexOS service
@@ -638,92 +724,6 @@ Feature: VxFlex OS CSI interface
     And there are no errors
     And when I call DeleteVolume
     Then there are no errors    
-
-  Scenario: Create and delete 100000G NFS volume
-    Given a VxFlexOS service
-    And max retries 1
-    And a basic nfs volume request "nfsvolume2" "100000"
-    When I call CreateVolume
-    And when I call DeleteVolume
-    Then the error message should contain "Unprocessable Entity"
-
-  Scenario: Create a NFS volume with wrong NasName
-    Given a VxFlexOS service
-    And a basic nfs volume request with wrong nasname "nfsvolume3" "8"
-    When I call CreateVolume
-    Then the error message should contain <errormsg>
-    Examples:
-      | errormsg    |
-      | "couldn't find given NAS server by name" |
-
-  Scenario Outline: Create publish, node-publish, node-unpublish, unpublish, and delete nfs volume
-    Given a VxFlexOS service
-    And a nfs capability with voltype <voltype> access <access> fstype <fstype>
-    And a nfs volume request "nfsinttestvol" "8"
-    When I call CreateVolume
-    And there are no errors
-    And when I call PublishVolume for nfs "SDC_GUID"
-    And when I call NodePublishVolume for nfs "SDC_GUID"
-    And there are no errors
-    And when I call NodeUnpublishVolume for nfs "SDC_GUID"
-    And when I call UnpublishVolume for nfs "SDC_GUID"
-    And there are no errors
-    And when I call DeleteVolume
-    Then there are no errors
-    Examples:
-      | voltype | access          | fstype | errormsg |
-      | "mount" | "single-writer" | "nfs"  | "none"   | 
-
-  Scenario: Expand Nfs Volume
-    Given a VxFlexOS service
-    And a nfs capability with voltype "mount" access "single-writer" fstype "nfs"
-    And a nfs volume request "nfsinttestvol2" "16"
-    When I call CreateVolume
-    And there are no errors
-    And when I call PublishVolume for nfs "SDC_GUID"
-    And there are no errors
-    And when I call NodePublishVolume for nfs "SDC_GUID"
-    And there are no errors
-    And when I call NfsExpandVolume to "20"
-    And there are no errors
-    And I call ListVolume
-    And a valid ListVolumeResponse is returned
-    And when I call NodeUnpublishVolume for nfs "SDC_GUID"
-    And there are no errors
-    And when I call UnpublishVolume for nfs "SDC_GUID"
-    And there are no errors
-    And when I call DeleteVolume
-    Then there are no errors
-
-  Scenario: NFS Create volume, create snapshot, delete volume
-    Given a VxFlexOS service
-    And a basic nfs volume request "nfsvolume1" "8"
-    When I call CreateVolume
-    And I call CreateSnapshotForFS
-    And there are no errors
-    And I call ListFileSystemSnapshot
-    And there are no errors
-    And I call DeleteSnapshotForFS
-    And there are no errors
-    And when I call DeleteVolume
-    Then there are no errors
-
-  Scenario: NFS Create volume, idempotent create snapshot, delete volume
-    Given a VxFlexOS service
-    And a basic nfs volume request "nfsvolume1" "8"
-    When I call CreateVolume
-    And I call CreateSnapshotForFS
-    And there are no errors
-    And I call CreateSnapshotForFS
-    And there are no errors
-    And I call ListFileSystemSnapshot
-    And there are no errors
-    And I call DeleteSnapshotForFS
-    And there are no errors
-    And I call DeleteSnapshotForFS
-    And there are no errors
-    And when I call DeleteVolume
-    Then there are no errors
 
   Scenario Outline: Publish and Unpublish Ephemeral Volume
     Given a VxFlexOS service

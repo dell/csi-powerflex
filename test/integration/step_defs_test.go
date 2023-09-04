@@ -302,6 +302,13 @@ func (f *feature) aBasicNfsVolumeRequest(name string, size int64) error {
 			}
 			params["storagepool"] = NfsPool
 			params["thickprovisioning"] = "false"
+			if os.Getenv("X_CSI_QUOTA_ENABLED") == "true" {
+				fmt.Printf("errrror")
+				params["isQuotaEnabled"] = "true"
+				params["softLimit"] = "20"
+				params["path"] = "/nfs-quota1"
+				params["gracePeriod"] = "86400"
+			}
 			if len(f.anotherSystemID) > 0 {
 				params["systemID"] = f.anotherSystemID
 			}
@@ -2100,6 +2107,13 @@ func (f *feature) aNfsVolumeRequest(name string, size int64) error {
 			}
 			params["storagepool"] = NfsPool
 			params["thickprovisioning"] = "false"
+			if os.Getenv("X_CSI_QUOTA_ENABLED") == "true" {
+				fmt.Printf("errrrorkkkkk")
+				params["isQuotaEnabled"] = "true"
+				params["softLimit"] = "20"
+				params["path"] = "/nfs-quota1"
+				params["gracePeriod"] = "86400"
+			}
 			if len(f.anotherSystemID) > 0 {
 				params["systemID"] = f.anotherSystemID
 			}
