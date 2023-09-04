@@ -116,6 +116,8 @@ github.com/dell/gofsutil v1.12.1-0.20230828060700-f7f26c1aa088 h1:vGEyMv0umlTsq0
 github.com/dell/gofsutil v1.12.1-0.20230828060700-f7f26c1aa088/go.mod h1:UPRuS1blrPnfT2K3nWRrLHIosZsBznDglovA6DRMmUI=
 github.com/dell/goscaleio v1.11.1-0.20230825053720-a6f9805a643d h1:AH2jKrsmLyXZ9uV91DyFUi0cRNQh2zuOR/Md+BK3luU=
 github.com/dell/goscaleio v1.11.1-0.20230825053720-a6f9805a643d/go.mod h1:5Kz74hHKsXG3CO3l1i8p1a4BtJT72xBR0bf1f6VqyZw=
+github.com/dell/goscaleio v1.12.0 h1:9KbctTsxqgVG+9Lj9NDwb4wvjzO7YMZ7uDzps4LlX2E=
+github.com/dell/goscaleio v1.12.0/go.mod h1:dt4Xy5Pnx8MEBza+ODOKiwNFBipcnzEXWgTnFy0+jTw=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible/go.mod h1:E3ru+11k8xSBh+hMPgOLZmtrrCbhqsmaPHjLKYnJCaQ=
 github.com/dgryski/go-sip13 v0.0.0-20181026042036-e10d5fee7954/go.mod h1:vAd38F8PWV+bWy6jNmig1y/TA+kYO4g3RSRF0IAv0no=
 github.com/docker/spdystream v0.0.0-20160310174837-449fdfce4d96/go.mod h1:Qh8CwZgvJUkLughtfhJv5dyTYa91l1fOUCrgjqmcifM=
