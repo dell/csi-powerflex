@@ -58,9 +58,6 @@ const (
 	// EnvReplicationPrefix is used as a prefix to find out if replication is enabled.
 	EnvReplicationPrefix = "X_CSI_REPLICATION_PREFIX" // #nosec G101
 
-	// EnvNfsAcls enables setting permissions on NFS mount directory.
-	EnvNfsAcls = "X_CSI_NFS_ACLS"
-
 	// EnvMaxVolumesPerNode specifies maximum number of volumes that controller can publish to the node.
 	EnvMaxVolumesPerNode = "X_CSI_MAX_VOLUMES_PER_NODE"
 

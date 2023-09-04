@@ -63,10 +63,6 @@ const (
 	// volume create parameters map
 	KeyNasName = "nasName"
 
-	// KeyNfsACL is the key used to get the NFS ACL from the
-	// volume create parameters map
-	KeyNfsACL = "nfsAcls"
-
 	// KeyFsType is the key used to get the filesystem type from the
 	// volume create parameters map
 	KeyFsType = "fsType"
@@ -274,7 +270,6 @@ func (s *service) CreateVolume(
 		req.Name = name
 	}
 
-	nfsAcls := s.opts.NfsAcls
 	var arr *ArrayConnectionData
 	sysID := s.opts.defaultSystemID
 	arr = s.opts.arrays[sysID]
@@ -315,17 +310,6 @@ func (s *service) CreateVolume(
 		storagePoolID, err := s.getStoragePoolID(storagePoolName, systemID, pdID)
 		if err != nil {
 			return nil, err
-		}
-
-		// fetch NFS ACL
-		if params[KeyNfsACL] != "" {
-			nfsAcls = params[KeyNfsACL] // Storage class takes precedence
-		} else if arr.NfsAcls != "" {
-			nfsAcls = arr.NfsAcls // Secrets next
-		} else if s.opts.NfsAcls != "" {
-			nfsAcls = s.opts.NfsAcls // Values next
-		} else {
-			nfsAcls = "0777" // Default value
 		}
 
 		// fetch volume size
@@ -369,7 +353,6 @@ func (s *service) CreateVolume(
 			if existingFS.SizeTotal == int(size) {
 				vi := s.getCSIVolumeFromFilesystem(existingFS, systemID)
 				vi.VolumeContext[KeyNasName] = nasName
-				vi.VolumeContext[KeyNfsACL] = nfsAcls
 				vi.VolumeContext[KeyFsType] = fsType
 				nfsTopology := s.GetNfsTopology(systemID)
 				vi.AccessibleTopology = nfsTopology
@@ -436,7 +419,6 @@ func (s *service) CreateVolume(
 		if newFs != nil {
 			vi := s.getCSIVolumeFromFilesystem(newFs, systemID)
 			vi.VolumeContext[KeyNasName] = nasName
-			vi.VolumeContext[KeyNfsACL] = nfsAcls
 			vi.VolumeContext[KeyFsType] = fsType
 			nfsTopology := s.GetNfsTopology(systemID)
 			vi.AccessibleTopology = nfsTopology
@@ -1160,7 +1142,6 @@ func (s *service) ControllerPublishVolume(
 	// create publish context
 	publishContext := make(map[string]string)
 	publishContext[KeyNasName] = volumeContext[KeyNasName]
-	publishContext[KeyNfsACL] = volumeContext[KeyNfsACL]
 
 	csiVolID := req.GetVolumeId()
 	publishContext["volumeContextId"] = csiVolID
