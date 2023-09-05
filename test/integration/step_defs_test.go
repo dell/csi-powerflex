@@ -64,7 +64,6 @@ type ArrayConnectionData struct {
 	IsDefault      bool    `json:"isDefault,omitempty"`
 	AllSystemNames string  `json:"allSystemNames"`
 	NasName        *string `json:"nasname"`
-	NfsAcls        string  `json:"nfsAcls"`
 }
 
 type feature struct {
@@ -183,9 +182,6 @@ func (f *feature) getArrayConfig() (map[string]*ArrayConnectionData, error) {
 			if c.NasName == nil || *(c.NasName) == "" {
 				c.NasName = &str
 			}
-			if c.NfsAcls == "" {
-				c.NfsAcls = str
-			}
 
 			fields := map[string]interface{}{
 				"endpoint":       c.Endpoint,
@@ -196,7 +192,6 @@ func (f *feature) getArrayConfig() (map[string]*ArrayConnectionData, error) {
 				"systemID":       c.SystemID,
 				"allSystemNames": c.AllSystemNames,
 				"nasName":        *c.NasName,
-				"nfsAcls":        c.NfsAcls,
 			}
 
 			fmt.Printf("array found  %s %#v\n", c.SystemID, fields)
@@ -296,10 +291,6 @@ func (f *feature) aBasicNfsVolumeRequest(name string, size int64) error {
 		}
 
 		if val {
-			if a.NasName != nil {
-				params["nasName"] = *a.NasName
-				params["nfsAcls"] = a.NfsAcls
-			}
 			params["storagepool"] = NfsPool
 			params["thickprovisioning"] = "false"
 			if os.Getenv("X_CSI_QUOTA_ENABLED") == "true" {
@@ -367,7 +358,6 @@ func (f *feature) aNfsVolumeRequestWithQuota(volname string, volsize int64, path
 		if val {
 			if a.NasName != nil {
 				params["nasName"] = *a.NasName
-				params["nfsAcls"] = a.NfsAcls
 			}
 			params["storagepool"] = NfsPool
 			params["thickprovisioning"] = "false"
@@ -1976,7 +1966,6 @@ func (f *feature) aBasicNfsVolumeRequestWithWrongNasName(name string, size int64
 		if val {
 			if a.NasName != nil {
 				params["nasName"] = wrongNasName
-				params["nfsAcls"] = a.NfsAcls
 			}
 
 			params["storagepool"] = NfsPool
@@ -2103,7 +2092,6 @@ func (f *feature) aNfsVolumeRequest(name string, size int64) error {
 			params := make(map[string]string)
 			if a.NasName != nil {
 				params["nasName"] = *a.NasName
-				params["nfsAcls"] = a.NfsAcls
 			}
 			params["storagepool"] = NfsPool
 			params["thickprovisioning"] = "false"
@@ -2169,7 +2157,6 @@ func (f *feature) controllerPublishVolumeForNfs(id string, nodeIDEnvVar string) 
 		for _, a := range f.arrays {
 			req.VolumeContext = make(map[string]string)
 			req.VolumeContext["nasName"] = *a.NasName
-			req.VolumeContext["nfsAcls"] = a.NfsAcls
 			req.VolumeContext["fsType"] = "nfs"
 			ctx := context.Background()
 			client := csi.NewControllerClient(grpcClient)

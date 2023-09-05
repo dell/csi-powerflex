@@ -108,7 +108,6 @@ type ArrayConnectionData struct {
 	IsDefault                 bool    `json:"isDefault,omitempty"`
 	AllSystemNames            string  `json:"allSystemNames"`
 	NasName                   *string `json:"nasName"`
-	NfsAcls                   string  `json:"nfsAcls"`
 }
 
 // Manifest is the SP's manifest.
@@ -149,7 +148,6 @@ type Opts struct {
 	IsApproveSDCEnabled        bool
 	replicationContextPrefix   string
 	replicationPrefix          string
-	NfsAcls                    string // enables setting permissions on NFS mount directory
 	MaxVolumesPerNode          int64
 	IsQuotaEnabled             bool // allow driver to enable quota limits for NFS volumes
 }
@@ -343,7 +341,6 @@ func (s *service) BeforeServe(
 			"IsSdcRenameEnabled":     s.opts.IsSdcRenameEnabled,
 			"sdcPrefix":              s.opts.SdcPrefix,
 			"IsApproveSDCEnabled":    s.opts.IsApproveSDCEnabled,
-			"nfsAcls":                s.opts.NfsAcls,
 			"MaxVolumesPerNode":      s.opts.MaxVolumesPerNode,
 			"IsQuotaEnabled":         s.opts.IsQuotaEnabled,
 		}
@@ -432,10 +429,6 @@ func (s *service) BeforeServe(
 		opts.MaxVolumesPerNode = 0
 	} else {
 		opts.MaxVolumesPerNode = MaxVolumesPerNode
-	}
-
-	if nfsAcls, ok := csictx.LookupEnv(ctx, EnvNfsAcls); ok {
-		opts.NfsAcls = nfsAcls
 	}
 
 	// log csiNode topology keys
@@ -842,9 +835,6 @@ func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error
 			if c.NasName == nil || *(c.NasName) == "" {
 				c.NasName = &str
 			}
-			if c.NfsAcls == "" {
-				c.NfsAcls = str
-			}
 
 			skipCertificateValidation := c.SkipCertificateValidation || c.Insecure
 
@@ -857,7 +847,6 @@ func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error
 				"systemID":                  c.SystemID,
 				"allSystemNames":            c.AllSystemNames,
 				"nasName":                   c.NasName,
-				"nfsAcls":                   c.NfsAcls,
 			}
 
 			Log.WithFields(fields).Infof("configured %s", c.SystemID)

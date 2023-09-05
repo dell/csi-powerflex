@@ -3017,7 +3017,6 @@ func (f *feature) iCallBeforeServe() error {
 	stringSlice = append(stringSlice, "X_CSI_HEALTH_MONITOR_ENABLED=true")
 	stringSlice = append(stringSlice, "X_CSI_RENAME_SDC_ENABLED=true")
 	stringSlice = append(stringSlice, "X_CSI_RENAME_SDC_PREFIX=test")
-	stringSlice = append(stringSlice, "X_CSI_NFS_ACLS=777")
 	stringSlice = append(stringSlice, "X_CSI_APPROVE_SDC_ENABLED=true")
 	stringSlice = append(stringSlice, "X_CSI_REPLICATION_CONTEXT_PREFIX=test")
 	stringSlice = append(stringSlice, "X_CSI_REPLICATION_PREFIX=test")

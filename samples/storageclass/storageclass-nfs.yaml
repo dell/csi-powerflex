@@ -61,21 +61,6 @@ parameters:
   # Default value: None
   nasName: "nas-server"
 
-  # nfsAcls: enables setting permissions on NFS mount directory
-  # This value overrides the NFS ACL (nfsAcls) attribute of corresponding array config in secret, if present
-  # Permissions can be specified in two formats:
-  #   1) Unix mode (NFSv3)
-  #   2) NFSv4 ACLs (NFSv4)
-  #      NFSv4 ACLs are supported on NFSv4 share only.
-  # Allowed values:
-  #   1) Unix mode: valid octal mode number
-  #      Examples: "0777", "777", "0755"
-  #   2) NFSv4 acls: valid NFSv4 acls, separated by comma
-  #      Examples: "A::OWNER@:RWX,A::GROUP@:RWX", "A::OWNER@:rxtncy"
-  # Optional: true
-  # Default value: "0777"
-  # nfsAcls: "0777"
-
   # path: relative path to the root of the associated filesystem.
   # Allowed values: string
   # Optional: true
