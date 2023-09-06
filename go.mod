@@ -12,7 +12,7 @@ require (
 	github.com/dell/dell-csi-extensions/common v1.2.0
 	github.com/dell/dell-csi-extensions/podmon v1.2.0
 	github.com/dell/dell-csi-extensions/replication v1.5.0
-	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.2.1
+	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.3.0
 	github.com/dell/gocsi v1.8.0
 	github.com/dell/gofsutil v1.13.0
 	github.com/dell/goscaleio v1.12.0
