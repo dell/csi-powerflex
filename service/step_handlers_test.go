@@ -109,9 +109,11 @@ var (
 
 // This file contains HTTP handlers for mocking to the ScaleIO API.
 // This allows unit testing with a Scale IO but still provides some coverage in the goscaleio library.
-var scaleioRouter http.Handler
-var testControllerHasNoConnection bool
-var count int
+var (
+	scaleioRouter                 http.Handler
+	testControllerHasNoConnection bool
+	count                         int
+)
 
 var inducedError error
 
@@ -326,7 +328,6 @@ func handleSystemInstances(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleNFSSnapshots(w http.ResponseWriter, r *http.Request) {
-
 	switch r.Method {
 	case http.MethodPost:
 
@@ -368,14 +369,11 @@ func handleNFSSnapshots(w http.ResponseWriter, r *http.Request) {
 		}
 
 		log.Printf("end make fileSystemSnapshots")
-
 	}
-
 }
 
 // handleSystemInstances implements GET /api/types/System/instances
 func handleNasInstances(w http.ResponseWriter, r *http.Request) {
-
 	if stepHandlersErrors.NasServerNotFoundError {
 		writeError(w, "nas server not found", http.StatusNotFound, codes.NotFound)
 		return
@@ -385,7 +383,6 @@ func handleNasInstances(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleGetNasInstances(w http.ResponseWriter, r *http.Request) {
-
 	if stepHandlersErrors.NasServerNotFoundError {
 		writeError(w, "nas server not found", http.StatusNotFound, codes.NotFound)
 		return
@@ -395,7 +392,6 @@ func handleGetNasInstances(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleGetFileInterface(w http.ResponseWriter, r *http.Request) {
-
 	if stepHandlersErrors.FileInterfaceNotFoundError {
 		writeError(w, "file interace not found", http.StatusNotFound, codes.NotFound)
 		return
@@ -543,7 +539,6 @@ func handleNFSExports(w http.ResponseWriter, r *http.Request) {
 			log.Printf("error encoding json: %s\n", err)
 		}
 	}
-
 }
 
 func handleGetNFSExports(w http.ResponseWriter, r *http.Request) {
@@ -671,7 +666,6 @@ func handleGetNFSExports(w http.ResponseWriter, r *http.Request) {
 		req := types.NFSExportModify{}
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
-
 		if err != nil {
 			log.Printf("error decoding json: %s\n", err.Error())
 		}
@@ -696,17 +690,14 @@ func handleGetNFSExports(w http.ResponseWriter, r *http.Request) {
 				array.nfsExports[id]["read_root_hosts"] = ""
 				array.nfsExports[id]["write_root_hosts"] = ""
 			}
-
 		}
 
 		w.WriteHeader(http.StatusNoContent)
 
 	}
-
 }
 
 func handleFileSystems(w http.ResponseWriter, r *http.Request) {
-
 	if fileSystemIDName == nil {
 		fileSystemIDName = make(map[string]string)
 		fileSystemNameToID = make(map[string]string)
@@ -748,7 +739,7 @@ func handleFileSystems(w http.ResponseWriter, r *http.Request) {
 
 		if array, ok := systemArrays[r.Host]; ok {
 			fmt.Printf("Host Endpoint %s\n", r.Host)
-			//array.fileSystems = make(map[string]map[string]string)
+			// array.fileSystems = make(map[string]map[string]string)
 			array.fileSystems[resp.ID] = make(map[string]string)
 			array.fileSystems[resp.ID]["name"] = req.Name
 			array.fileSystems[resp.ID]["id"] = resp.ID
@@ -821,9 +812,7 @@ func handleFileSystems(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleRestoreSnapshotNFS(w http.ResponseWriter, r *http.Request) {
-
 	switch r.Method {
-
 	// Post is CreateVolume; here just return a volume id encoded from the name
 	case http.MethodPost:
 		if inducedError.Error() == "restoreVolumeError" {
@@ -1068,10 +1057,12 @@ var nfsExportIDtoFsID map[string]string
 // Map of NFSExport ID to path
 var nfsExportIDPath map[string]string
 
-var nfsExportIDReadWriteRootHosts map[string][]string
-var nfsExportIDReadOnlyRootHosts map[string][]string
-var nfsExportIDReadOnlyHosts map[string][]string
-var nfsExportIDReadWriteHosts map[string][]string
+var (
+	nfsExportIDReadWriteRootHosts map[string][]string
+	nfsExportIDReadOnlyRootHosts  map[string][]string
+	nfsExportIDReadOnlyHosts      map[string][]string
+	nfsExportIDReadWriteHosts     map[string][]string
+)
 
 // Map of volume ID to ancestor ID
 var volumeIDToAncestorID map[string]string
@@ -1473,7 +1464,7 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 		intValue, _ := strconv.Atoi(req.SizeInGB)
 		volumeIDToSizeInKB[id] = strconv.Itoa(intValue / 1024)
 	case "setVolumeName":
-		//volumeIDToName[id] = snapParam.Name
+		// volumeIDToName[id] = snapParam.Name
 		req := types.SetVolumeNameParam{}
 		decoder := json.NewDecoder(r.Body)
 		_ = decoder.Decode(&req)
@@ -1554,7 +1545,6 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-
 }
 
 func getSdcMappings(volumeID string) string {
@@ -1854,8 +1844,10 @@ func handleReplicationConsistencyGroupInstances(w http.ResponseWriter, r *http.R
 			if ctx["name"] == req.Name {
 				w.WriteHeader(http.StatusInternalServerError)
 				log.Printf("request for rcg creation of duplicate name: %s\n", req.Name)
-				resp := types.Error{Message: "The Replication Consistency Group already exists",
-					HTTPStatusCode: http.StatusInternalServerError, ErrorCode: 6}
+				resp := types.Error{
+					Message:        "The Replication Consistency Group already exists",
+					HTTPStatusCode: http.StatusInternalServerError, ErrorCode: 6,
+				}
 				encoder := json.NewEncoder(w)
 				err = encoder.Encode(resp)
 				if err != nil {

@@ -14,10 +14,9 @@
 package service
 
 import (
-	"testing"
-
 	"errors"
 	"fmt"
+	"testing"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	siotypes "github.com/dell/goscaleio/types/v1"
@@ -152,7 +151,8 @@ func TestVolumeCaps(t *testing.T) {
 						Mount: &csi.VolumeCapability_MountVolume{},
 					},
 					AccessMode: &csi.VolumeCapability_AccessMode{
-						Mode: csi.VolumeCapability_AccessMode_UNKNOWN},
+						Mode: csi.VolumeCapability_AccessMode_UNKNOWN,
+					},
 				},
 			},
 			vol: &siotypes.Volume{
@@ -168,7 +168,8 @@ func TestVolumeCaps(t *testing.T) {
 						Block: &csi.VolumeCapability_BlockVolume{},
 					},
 					AccessMode: &csi.VolumeCapability_AccessMode{
-						Mode: csi.VolumeCapability_AccessMode_UNKNOWN},
+						Mode: csi.VolumeCapability_AccessMode_UNKNOWN,
+					},
 				},
 			},
 			vol: &siotypes.Volume{
@@ -185,7 +186,8 @@ func TestVolumeCaps(t *testing.T) {
 						Mount: &csi.VolumeCapability_MountVolume{},
 					},
 					AccessMode: &csi.VolumeCapability_AccessMode{
-						Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER},
+						Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+					},
 				},
 			},
 			vol: &siotypes.Volume{
@@ -200,7 +202,8 @@ func TestVolumeCaps(t *testing.T) {
 						Block: &csi.VolumeCapability_BlockVolume{},
 					},
 					AccessMode: &csi.VolumeCapability_AccessMode{
-						Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER},
+						Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+					},
 				},
 			},
 			vol: &siotypes.Volume{
@@ -215,7 +218,8 @@ func TestVolumeCaps(t *testing.T) {
 						Mount: &csi.VolumeCapability_MountVolume{},
 					},
 					AccessMode: &csi.VolumeCapability_AccessMode{
-						Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY},
+						Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY,
+					},
 				},
 			},
 			vol: &siotypes.Volume{
@@ -230,7 +234,8 @@ func TestVolumeCaps(t *testing.T) {
 						Block: &csi.VolumeCapability_BlockVolume{},
 					},
 					AccessMode: &csi.VolumeCapability_AccessMode{
-						Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY},
+						Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY,
+					},
 				},
 			},
 			vol: &siotypes.Volume{
@@ -247,7 +252,8 @@ func TestVolumeCaps(t *testing.T) {
 						Mount: &csi.VolumeCapability_MountVolume{},
 					},
 					AccessMode: &csi.VolumeCapability_AccessMode{
-						Mode: csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY},
+						Mode: csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY,
+					},
 				},
 			},
 			vol: &siotypes.Volume{
@@ -262,7 +268,8 @@ func TestVolumeCaps(t *testing.T) {
 						Block: &csi.VolumeCapability_BlockVolume{},
 					},
 					AccessMode: &csi.VolumeCapability_AccessMode{
-						Mode: csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY},
+						Mode: csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY,
+					},
 				},
 			},
 			vol: &siotypes.Volume{
@@ -277,7 +284,8 @@ func TestVolumeCaps(t *testing.T) {
 						Mount: &csi.VolumeCapability_MountVolume{},
 					},
 					AccessMode: &csi.VolumeCapability_AccessMode{
-						Mode: csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY},
+						Mode: csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY,
+					},
 				},
 			},
 			vol: &siotypes.Volume{
@@ -293,7 +301,8 @@ func TestVolumeCaps(t *testing.T) {
 						Block: &csi.VolumeCapability_BlockVolume{},
 					},
 					AccessMode: &csi.VolumeCapability_AccessMode{
-						Mode: csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY},
+						Mode: csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY,
+					},
 				},
 			},
 			vol: &siotypes.Volume{
@@ -311,7 +320,8 @@ func TestVolumeCaps(t *testing.T) {
 						Mount: &csi.VolumeCapability_MountVolume{},
 					},
 					AccessMode: &csi.VolumeCapability_AccessMode{
-						Mode: csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER},
+						Mode: csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER,
+					},
 				},
 			},
 			vol: &siotypes.Volume{
@@ -326,7 +336,8 @@ func TestVolumeCaps(t *testing.T) {
 						Mount: &csi.VolumeCapability_MountVolume{},
 					},
 					AccessMode: &csi.VolumeCapability_AccessMode{
-						Mode: csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER},
+						Mode: csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER,
+					},
 				},
 			},
 			vol: &siotypes.Volume{
@@ -343,7 +354,8 @@ func TestVolumeCaps(t *testing.T) {
 						Block: &csi.VolumeCapability_BlockVolume{},
 					},
 					AccessMode: &csi.VolumeCapability_AccessMode{
-						Mode: csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER},
+						Mode: csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER,
+					},
 				},
 			},
 			vol: &siotypes.Volume{
@@ -359,7 +371,8 @@ func TestVolumeCaps(t *testing.T) {
 						Block: &csi.VolumeCapability_BlockVolume{},
 					},
 					AccessMode: &csi.VolumeCapability_AccessMode{
-						Mode: csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER},
+						Mode: csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER,
+					},
 				},
 			},
 			vol: &siotypes.Volume{

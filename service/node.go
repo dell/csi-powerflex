@@ -51,8 +51,8 @@ const (
 func (s *service) NodeStageVolume(
 	ctx context.Context,
 	req *csi.NodeStageVolumeRequest) (
-	*csi.NodeStageVolumeResponse, error) {
-
+	*csi.NodeStageVolumeResponse, error,
+) {
 	return nil, status.Error(codes.Unimplemented, "")
 }
 
@@ -62,8 +62,8 @@ func (s *service) NodeStageVolume(
 func (s *service) NodeUnstageVolume(
 	ctx context.Context,
 	req *csi.NodeUnstageVolumeRequest) (
-	*csi.NodeUnstageVolumeResponse, error) {
-
+	*csi.NodeUnstageVolumeResponse, error,
+) {
 	var reqID string
 	headers, ok := metadata.FromIncomingContext(ctx)
 	if ok {
@@ -114,8 +114,8 @@ func (s *service) NodeUnstageVolume(
 func (s *service) NodePublishVolume(
 	ctx context.Context,
 	req *csi.NodePublishVolumeRequest) (
-	*csi.NodePublishVolumeResponse, error) {
-
+	*csi.NodePublishVolumeResponse, error,
+) {
 	var reqID string
 	headers, ok := metadata.FromIncomingContext(ctx)
 	if ok {
@@ -175,12 +175,11 @@ func (s *service) NodePublishVolume(
 		return nil, err
 	}
 
-	//ensure no ambiguity if legacy vol
+	// ensure no ambiguity if legacy vol
 	err := s.checkVolumesMap(csiVolID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal,
 			"checkVolumesMap for id: %s failed : %s", csiVolID, err.Error())
-
 	}
 	// handle NFS nodePublish separately
 	if isNFS {
@@ -197,7 +196,6 @@ func (s *service) NodePublishVolume(
 		client := s.adminClients[systemID]
 
 		NFSExport, err := s.getNFSExport(fs, client)
-
 		if err != nil {
 			return nil, err
 		}
@@ -228,14 +226,13 @@ func (s *service) NodePublishVolume(
 	}
 
 	return &csi.NodePublishVolumeResponse{}, nil
-
 }
 
 func (s *service) NodeUnpublishVolume(
 	ctx context.Context,
 	req *csi.NodeUnpublishVolumeRequest) (
-	*csi.NodeUnpublishVolumeResponse, error) {
-
+	*csi.NodeUnpublishVolumeResponse, error,
+) {
 	var reqID string
 	headers, ok := metadata.FromIncomingContext(ctx)
 	if ok {
@@ -259,7 +256,7 @@ func (s *service) NodeUnpublishVolume(
 
 	isNFS := strings.Contains(csiVolID, "/")
 	var ephemeralVolume bool
-	//For ephemeral volumes, kubernetes gives us an internal ID, so we need to use the lockfile to find the Powerflex ID this is mapped to.
+	// For ephemeral volumes, kubernetes gives us an internal ID, so we need to use the lockfile to find the Powerflex ID this is mapped to.
 	lockFile := ephemeralStagingMountPath + csiVolID + "/id"
 	if s.fileExist(lockFile) {
 		ephemeralVolume = true
@@ -270,7 +267,7 @@ func (s *service) NodeUnpublishVolume(
 			Log.Errorf("NodeUnpublish with ephemeral volume. Was unable to read lockfile: %v", err)
 			return nil, status.Error(codes.Internal, "NodeUnpublish with ephemeral volume. Was unable to read lockfile")
 		}
-		//Convert volume id from []byte to string format
+		// Convert volume id from []byte to string format
 		csiVolID = string(idFromFile)
 		Log.Infof("Read volume ID: %s from lockfile: %s ", csiVolID, lockFile)
 
@@ -297,7 +294,6 @@ func (s *service) NodeUnpublishVolume(
 				return nil, status.Error(codes.NotFound,
 					"filesystem not found")
 			}
-
 		}
 
 		// Probe the system to make sure it is managed by driver
@@ -305,12 +301,11 @@ func (s *service) NodeUnpublishVolume(
 			return nil, err
 		}
 
-		//ensure no ambiguity if legacy vol
+		// ensure no ambiguity if legacy vol
 		err = s.checkVolumesMap(csiVolID)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal,
 				"checkVolumesMap for id: %s failed : %s", csiVolID, err.Error())
-
 		}
 
 		if err := unpublishNFS(ctx, req, fs.Name); err != nil {
@@ -340,12 +335,11 @@ func (s *service) NodeUnpublishVolume(
 		return nil, err
 	}
 
-	//ensure no ambiguity if legacy vol
+	// ensure no ambiguity if legacy vol
 	err := s.checkVolumesMap(csiVolID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal,
 			"checkVolumesMap for id: %s failed : %s", csiVolID, err.Error())
-
 	}
 
 	sdcMappedVol, err := s.getSDCMappedVol(volID, systemID, unpublishGetMappedVolMaxRetry)
@@ -459,7 +453,6 @@ func (s *service) getSystemName(ctx context.Context, systems []string) bool {
 // nodeProbe fetchs the SDC GUID by drv_cfg and the systemIDs/names by getSystemName method.
 // It also makes sure private directory(privDir) is created
 func (s *service) nodeProbe(ctx context.Context) error {
-
 	// make sure the kernel module is loaded
 	if !kmodLoaded(s.opts) {
 		return status.Error(codes.FailedPrecondition,
@@ -470,7 +463,6 @@ func (s *service) nodeProbe(ctx context.Context) error {
 	if s.opts.SdcGUID == "" {
 		// try to query the SDC GUID
 		guid, err := goscaleio.DrvCfgQueryGUID()
-
 		if err != nil {
 			return status.Error(codes.FailedPrecondition,
 				"unable to get SDC GUID via config or automatically")
@@ -523,7 +515,6 @@ func (s *service) nodeProbe(ctx context.Context) error {
 }
 
 func (s *service) approveSDC(opts Opts) error {
-
 	for _, systemID := range connectedSystemID {
 		system := s.systems[systemID]
 
@@ -531,13 +522,13 @@ func (s *service) approveSDC(opts Opts) error {
 			continue
 		}
 
-		//fetch SDC details
+		// fetch SDC details
 		sdc, err := s.systems[systemID].FindSdc("SdcGUID", opts.SdcGUID)
 		if err != nil {
 			return status.Errorf(codes.FailedPrecondition, "%s", err)
 		}
 
-		//fetch the restrictedSdcMode
+		// fetch the restrictedSdcMode
 		if system.System.RestrictedSdcMode == "Guid" {
 			if !sdc.Sdc.SdcApproved {
 				resp, err := system.ApproveSdcByGUID(sdc.Sdc.SdcGUID)
@@ -671,10 +662,10 @@ func getSystemsKnownToSDC(opts Opts) ([]string, error) {
 func (s *service) NodeGetCapabilities(
 	ctx context.Context,
 	req *csi.NodeGetCapabilitiesRequest) (
-	*csi.NodeGetCapabilitiesResponse, error) {
-
-	//these capabilities deal with volume health monitoring, and are only advertised by driver when user sets
-	//node.healthMonitor.enabled is set to true in values file
+	*csi.NodeGetCapabilitiesResponse, error,
+) {
+	// these capabilities deal with volume health monitoring, and are only advertised by driver when user sets
+	// node.healthMonitor.enabled is set to true in values file
 	healthMonitorCapabalities := []*csi.NodeServiceCapability{
 		{
 			Type: &csi.NodeServiceCapability_Rpc{
@@ -715,7 +706,6 @@ func (s *service) NodeGetCapabilities(
 	return &csi.NodeGetCapabilitiesResponse{
 		Capabilities: nodeCapabalities,
 	}, nil
-
 }
 
 // NodeGetInfo returns Node information
@@ -725,8 +715,8 @@ func (s *service) NodeGetCapabilities(
 func (s *service) NodeGetInfo(
 	ctx context.Context,
 	req *csi.NodeGetInfoRequest) (
-	*csi.NodeGetInfoResponse, error) {
-
+	*csi.NodeGetInfoResponse, error,
+) {
 	// Fetch SDC GUID
 	if s.opts.SdcGUID == "" {
 		if err := s.nodeProbe(ctx); err != nil {
@@ -798,14 +788,13 @@ func (s *service) NodeGetInfo(
 // To determine if volume is healthy, this method checks: volume known to array, volume known to SDC, volume path readable, and volume path mounted
 // Note: kubelet only calls this method when feature gate: CSIVolumeHealth=true
 func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
-
 	csiVolID := req.GetVolumeId()
 	volPath := req.GetVolumePath()
 	mounted := false
 	healthy := true
 	message := ""
 
-	//validate params first, make sure neither field is empty
+	// validate params first, make sure neither field is empty
 	if len(volPath) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "no volume Path provided")
 	}
@@ -814,7 +803,7 @@ func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolume
 		return nil, status.Error(codes.InvalidArgument, "no volume ID  provided")
 	}
 
-	//check if volume exists
+	// check if volume exists
 
 	volID := getVolumeIDFromCsiVolumeID(csiVolID)
 	systemID := s.getSystemIDFromCsiVolumeID(csiVolID)
@@ -831,16 +820,15 @@ func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolume
 
 	_, err := s.getSDCMappedVol(volID, systemID, 30)
 	if err != nil {
-		//volume not known to SDC, next check if it exists at all
+		// volume not known to SDC, next check if it exists at all
 		_, _, err := s.listVolumes(systemID, 0, 0, false, false, volID, "")
 		if err != nil && strings.Contains(err.Error(), sioGatewayVolumeNotFound) {
 			message = fmt.Sprintf("Volume is not found by node driver at %s", time.Now().Format("2006-01-02 15:04:05"))
-
 		} else if err != nil {
-			//error was returned, but had nothing to do with the volume not being on the array (may be env related)
+			// error was returned, but had nothing to do with the volume not being on the array (may be env related)
 			return nil, err
 		}
-		//volume was found, but was not known to SDC. This is abnormal.
+		// volume was found, but was not known to SDC. This is abnormal.
 		healthy = false
 		if message == "" {
 			message = fmt.Sprintf("volume: %s was not mapped to host: %v", volID, err)
@@ -848,7 +836,7 @@ func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolume
 
 	}
 
-	//check if volume path is accessible
+	// check if volume path is accessible
 	if healthy {
 		_, err = os.ReadDir(volPath)
 		if err != nil && healthy {
@@ -859,7 +847,7 @@ func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolume
 
 	if healthy {
 
-		//check if path is mounted on node
+		// check if path is mounted on node
 		mounts, err := getPathMounts(volPath)
 		if len(mounts) > 0 {
 			for _, m := range mounts {
@@ -882,10 +870,11 @@ func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolume
 		if err != nil {
 			return &csi.NodeGetVolumeStatsResponse{
 				Usage: []*csi.VolumeUsage{
-					{Available: 0,
-						Total: 0,
-						Used:  0,
-						Unit:  csi.VolumeUsage_UNKNOWN,
+					{
+						Available: 0,
+						Total:     0,
+						Used:      0,
+						Unit:      csi.VolumeUsage_UNKNOWN,
 					},
 				},
 				VolumeCondition: &csi.VolumeCondition{
@@ -893,7 +882,6 @@ func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolume
 					Message:  fmt.Sprintf("failed to get metrics for volume with error: %v", err),
 				},
 			}, nil
-
 		}
 		return &csi.NodeGetVolumeStatsResponse{
 			Usage: []*csi.VolumeUsage{
@@ -932,11 +920,9 @@ func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolume
 			Message:  message,
 		},
 	}, nil
-
 }
 
 func (s *service) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
-
 	var reqID string
 	var err error
 	headers, ok := metadata.FromIncomingContext(ctx)
@@ -976,12 +962,11 @@ func (s *service) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolum
 		return nil, status.Error(codes.InvalidArgument,
 			"volume ID is required")
 	}
-	//ensure no ambiguity if legacy vol
+	// ensure no ambiguity if legacy vol
 	err = s.checkVolumesMap(csiVolID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal,
 			"checkVolumesMap for id: %s failed : %s", csiVolID, err.Error())
-
 	}
 
 	volumeID := getVolumeIDFromCsiVolumeID(csiVolID)

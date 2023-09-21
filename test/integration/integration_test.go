@@ -85,7 +85,7 @@ func TestMain(m *testing.M) {
 	//  /tmp/datafile   -- for block bind mounts
 	fmt.Printf("Checking %s\n", datadir)
 	var fileMode os.FileMode
-	fileMode = 0777
+	fileMode = 0o777
 	err := os.Mkdir(datadir, fileMode)
 	if err != nil && !os.IsExist(err) {
 		fmt.Printf("%s: %s\n", datadir, err)

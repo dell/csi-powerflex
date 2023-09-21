@@ -372,10 +372,9 @@ MDM-ID 14dbbf5617523654 SDC ID d0f33bd700000004 INSTALLATION ID 1c078b073d75512c
 
 // CreateCSINode uses fakeclient to make csinode with topology key
 func (f *feature) CreateCSINode() (*storage.CSINode, error) {
-
 	K8sClientset = fake.NewSimpleClientset()
 
-	//csiKubeClient := nim.volumeHost.GetKubeClient()
+	// csiKubeClient := nim.volumeHost.GetKubeClient()
 	nodeKind := v1.SchemeGroupVersion.WithKind("Node")
 
 	fakeCSINode := &storage.CSINode{
@@ -403,7 +402,7 @@ func (f *feature) CreateCSINode() (*storage.CSINode, error) {
 }
 
 func (f *feature) aValidDynamicArrayChange() error {
-	var count = 0
+	count := 0
 	for _, array := range f.service.opts.arrays {
 		log.Printf("array after config change array details %#v", array.SystemID)
 		count++
@@ -441,7 +440,6 @@ func (f *feature) iCallDynamicLogChange(file string) error {
 	log.Printf("wait for config change %s", backup)
 	time.Sleep(10 * time.Second)
 	return nil
-
 }
 
 func (f *feature) aValidDynamicLogChange(file, expectedLevel string) error {
@@ -455,7 +453,6 @@ func (f *feature) aValidDynamicLogChange(file, expectedLevel string) error {
 	_ = os.Rename(DriverConfigParamsFile, "features/driver-config/"+file)
 	_ = os.Rename(backup, DriverConfigParamsFile)
 	return nil
-
 }
 
 // GetPluginInfo
@@ -473,7 +470,6 @@ func (f *feature) iCallcheckVolumesMap(id string) error {
 	f.err = f.service.checkVolumesMap(id)
 
 	return nil
-
 }
 
 func (f *feature) iCallgetProtectionDomainIDFromName(systemID, protectionDomainName string) error {
@@ -726,7 +722,6 @@ func (f *feature) iCallCreateVolume(name string) error {
 }
 
 func (f *feature) iCallValidateVolumeHostConnectivity() error {
-
 	ctx := new(context.Context)
 
 	sdcID := f.service.opts.SdcGUID
@@ -1250,7 +1245,7 @@ func (f *feature) iInduceError(errtype string) error {
 	case "NodePublishNoAccessType":
 		f.nodePublishVolumeRequest.VolumeCapability.AccessType = nil
 	case "NodePublishPrivateTargetAlreadyCreated":
-		err := os.MkdirAll("features/"+sdcVolume1, 0777)
+		err := os.MkdirAll("features/"+sdcVolume1, 0o777)
 		if err != nil {
 			fmt.Printf("Couldn't make: %s\n", datadir+"/"+sdcVolume1)
 		}
@@ -1260,7 +1255,7 @@ func (f *feature) iInduceError(errtype string) error {
 		if err != nil {
 			fmt.Printf("Couldn't create block dev: %s\n", nodePublishAltBlockDevPath)
 		}
-		err = os.MkdirAll("features/"+sdcVolume1, 0777)
+		err = os.MkdirAll("features/"+sdcVolume1, 0o777)
 		if err != nil {
 			fmt.Printf("Couldn't make: %s\n", datadir+"/"+sdcVolume1)
 		}
@@ -1278,7 +1273,7 @@ func (f *feature) iInduceError(errtype string) error {
 		f.nodePublishVolumeRequest.TargetPath = datafile
 	case "NodePublishPathAltDataDir":
 		if f.nodePublishVolumeRequest.TargetPath == datadir {
-			err := os.MkdirAll(altdatadir, 0777)
+			err := os.MkdirAll(altdatadir, 0o777)
 			if err != nil {
 				fmt.Printf("Couldn't make altdatadir: %s\n", altdatadir)
 			}
@@ -1663,7 +1658,7 @@ func (f *feature) aValidPublishVolumeResponseIsReturned() error {
 }
 
 func (f *feature) aValidVolume() error {
-	//this prevents the step handler from returning the volume '111' as found in the non default array
+	// this prevents the step handler from returning the volume '111' as found in the non default array
 	volIDtoUse := "1234"
 	if stepHandlersErrors.LegacyVolumeConflictError {
 		volIDtoUse = goodVolumeID
@@ -1872,6 +1867,7 @@ func (f *feature) iCallGetNodeLabels() error {
 	f.nodeLabels = labels
 	return nil
 }
+
 func (f *feature) aValidLabelIsReturned() error {
 	if f.nodeLabels == nil {
 		return errors.New("Unable to fetch the node labels")
@@ -2038,7 +2034,6 @@ func (f *feature) aValidGetCapacityResponseIsReturned() error {
 }
 
 func (f *feature) iCallControllerGetCapabilities(isHealthMonitorEnabled string) error {
-
 	if isHealthMonitorEnabled == "true" {
 		f.service.opts.IsHealthMonitorEnabled = true
 	}
@@ -2179,7 +2174,6 @@ func (f *feature) aValidControllerGetCapabilitiesResponseIsReturned() error {
 	}
 
 	return errors.New("expected ControllerGetCapabilitiesResponse but didn't get one")
-
 }
 
 func (f *feature) iCallCloneVolume() error {
@@ -2370,7 +2364,7 @@ func (f *feature) aControllerPublishedEphemeralVolume() error {
 	// Make the directories; on Windows these show up in C:/dev/...
 	_, err := os.Stat(nodePublishSymlinkDir)
 	if err != nil {
-		err = os.MkdirAll(nodePublishSymlinkDir, 0777)
+		err = os.MkdirAll(nodePublishSymlinkDir, 0o777)
 		if err != nil {
 			fmt.Printf("by-id: " + err.Error())
 		}
@@ -2410,7 +2404,7 @@ func (f *feature) aControllerPublishedEphemeralVolume() error {
 	// Make the target directory if required
 	_, err = os.Stat(datadir)
 	if err != nil {
-		err = os.MkdirAll(datadir, 0777)
+		err = os.MkdirAll(datadir, 0o777)
 		if err != nil {
 			fmt.Printf("Couldn't make datadir: %s\n", datadir)
 		}
@@ -2441,7 +2435,7 @@ func (f *feature) aControllerPublishedVolume() error {
 	// Make the directories; on Windows these show up in C:/dev/...
 	_, err := os.Stat(nodePublishSymlinkDir)
 	if err != nil {
-		err = os.MkdirAll(nodePublishSymlinkDir, 0777)
+		err = os.MkdirAll(nodePublishSymlinkDir, 0o777)
 		if err != nil {
 			fmt.Printf("by-id: " + err.Error())
 		}
@@ -2480,7 +2474,7 @@ func (f *feature) aControllerPublishedVolume() error {
 	// Make the target directory if required
 	_, err = os.Stat(datadir)
 	if err != nil {
-		err = os.MkdirAll(datadir, 0777)
+		err = os.MkdirAll(datadir, 0o777)
 		if err != nil {
 			fmt.Printf("Couldn't make datadir: %s\n", datadir)
 		}
@@ -2581,7 +2575,7 @@ func (f *feature) getNodeEphemeralVolumePublishRequest(name, size, sp, systemNam
 	f.service.opts.defaultSystemID = ""
 	req.VolumeContext = map[string]string{"csi.storage.k8s.io/ephemeral": "true", "volumeName": name, "size": size, "storagepool": sp, "systemID": systemName}
 
-	//remove ephemeral mounting path before starting test
+	// remove ephemeral mounting path before starting test
 	os.RemoveAll("/var/lib/kubelet/plugins/kubernetes.io/csi/pv/ephemeral/")
 
 	block := f.capability.GetBlock()
@@ -2632,9 +2626,9 @@ func (f *feature) getNodePublishVolumeRequestNFS() error {
 }
 
 func (f *feature) iGiveRequestVolumeContext() error {
-
 	volContext := map[string]string{
-		"id2USE": f.nodePublishVolumeRequest.VolumeId}
+		"id2USE": f.nodePublishVolumeRequest.VolumeId,
+	}
 
 	f.nodePublishVolumeRequest.VolumeContext = volContext
 	return nil
@@ -2765,13 +2759,11 @@ func (f *feature) iCallGetPathMounts() error {
 	// getMounts induced err
 	if err != nil {
 		f.err = errors.New("error in GetPathMounts")
-
 	}
 	return nil
 }
 
 func (f *feature) iCallHandlePrivFSMount() error {
-
 	accessMode := new(csi.VolumeCapability_AccessMode)
 	accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY
 	gofsutil.GOFSMock.InduceMountError = true
@@ -2833,7 +2825,6 @@ func (f *feature) iCallRemoveWithRetry() error {
 }
 
 func (f *feature) iCallBlockValidateVolCapabilities() error {
-
 	block := new(csi.VolumeCapability_BlockVolume)
 	capability := new(csi.VolumeCapability)
 	accessType := new(csi.VolumeCapability_Block)
@@ -2843,7 +2834,7 @@ func (f *feature) iCallBlockValidateVolCapabilities() error {
 	accessMode.Mode = csi.VolumeCapability_AccessMode_UNKNOWN
 	capability.AccessMode = accessMode
 
-	//isBlock, mntVol, accMode, multiAccessFlag, err := validateVolumeCapability(volCap, ro)
+	// isBlock, mntVol, accMode, multiAccessFlag, err := validateVolumeCapability(volCap, ro)
 
 	_, _, _, _, err := validateVolumeCapability(capability, false)
 	if err != nil {
@@ -2853,11 +2844,9 @@ func (f *feature) iCallBlockValidateVolCapabilities() error {
 		}
 	}
 	return nil
-
 }
 
 func (f *feature) iCallMountValidateVolCapabilities() error {
-
 	capability := new(csi.VolumeCapability)
 	mountVolume := new(csi.VolumeCapability_MountVolume)
 	mountVolume.FsType = "xfs"
@@ -2877,7 +2866,6 @@ func (f *feature) iCallMountValidateVolCapabilities() error {
 		}
 	}
 	return nil
-
 }
 
 func (f *feature) iCallCleanupPrivateTargetForErrors() error {
@@ -3132,7 +3120,7 @@ func (f *feature) iCallNodeGetVolumeStats() error {
 
 func (f *feature) aCorrectNodeGetVolumeStatsResponse() error {
 	if stepHandlersErrors.NoVolIDError || stepHandlersErrors.NoMountPathError || stepHandlersErrors.BadVolIDError || stepHandlersErrors.NoSysNameError {
-		//errors and no responses should be returned in these instances
+		// errors and no responses should be returned in these instances
 		if f.nodeGetVolumeStatsResponse == nil {
 			fmt.Printf("Response check passed\n")
 			return nil
@@ -3142,7 +3130,7 @@ func (f *feature) aCorrectNodeGetVolumeStatsResponse() error {
 		return status.Errorf(codes.Internal, "Check NodeGetVolumeStatsResponse failed")
 	}
 
-	//assume no errors induced, so response should be okay, these values will change below if errors were induced
+	// assume no errors induced, so response should be okay, these values will change below if errors were induced
 	abnormal := false
 	message := ""
 	usage := true
@@ -3174,7 +3162,7 @@ func (f *feature) aCorrectNodeGetVolumeStatsResponse() error {
 		usage = false
 	}
 
-	//check message and abnormal state returned in NodeGetVolumeStatsResponse.VolumeCondition
+	// check message and abnormal state returned in NodeGetVolumeStatsResponse.VolumeCondition
 	if f.nodeGetVolumeStatsResponse.VolumeCondition.Abnormal == abnormal && strings.Contains(f.nodeGetVolumeStatsResponse.VolumeCondition.Message, message) {
 		fmt.Printf("NodeGetVolumeStats Response VolumeCondition check passed\n")
 	} else {
@@ -3182,7 +3170,7 @@ func (f *feature) aCorrectNodeGetVolumeStatsResponse() error {
 		return status.Errorf(codes.Internal, "Check NodeGetVolumeStatsResponse failed")
 	}
 
-	//check Usage returned in NodeGetVolumeStatsResponse
+	// check Usage returned in NodeGetVolumeStatsResponse
 	if usage {
 		if f.nodeGetVolumeStatsResponse.Usage != nil {
 			fmt.Printf("NodeGetVolumeStats Response Usage check passed\n")
@@ -3219,7 +3207,7 @@ func (f *feature) iCallNodeUnstageVolumeWith(error string) error {
 	if error == "EphemeralVolume" {
 		// Create an ephemeral volume id
 		ephemeralStagingMountPath = "test/"
-		err := os.MkdirAll("test"+"/"+goodVolumeID+"/id", 0777)
+		err := os.MkdirAll("test"+"/"+goodVolumeID+"/id", 0o777)
 		if err != nil {
 			return err
 		}
@@ -3303,12 +3291,11 @@ func (f *feature) iCallCreateVolumeGroupSnapshot() error {
 	}
 
 	if stepHandlersErrors.LegacyVolumeConflictError {
-		//need a legacy vol so check map executes
+		// need a legacy vol so check map executes
 		f.volumeIDList = []string{"1234"}
-
 	}
 	if stepHandlersErrors.CreateVGSLegacyVol {
-		//make sure legacy vol works
+		// make sure legacy vol works
 		tokens := strings.Split(f.volumeIDList[0], "-")
 		f.volumeIDList[0] = tokens[1]
 	}
@@ -3334,7 +3321,7 @@ func (f *feature) iCallCreateVolumeGroupSnapshot() error {
 }
 
 func (f *feature) iRemoveAVolumeFromVolumeGroupSnapshotRequest() error {
-	//cut last volume off of list
+	// cut last volume off of list
 	f.volumeIDList = f.volumeIDList[0 : len(f.volumeIDList)-1]
 	return nil
 }
@@ -3343,7 +3330,7 @@ func (f *feature) iCallCheckCreationTime() error {
 	if f.VolumeGroupSnapshot == nil || f.err != nil {
 		return nil
 	}
-	//add a bad snap so creation time will not match
+	// add a bad snap so creation time will not match
 	if stepHandlersErrors.CreateVGSBadTimeError {
 
 		snap := volGroupSnap.Snapshot{
@@ -3366,7 +3353,6 @@ func (f *feature) iCallCheckCreationTime() error {
 }
 
 func (f *feature) iCallControllerGetVolume() error {
-
 	header := metadata.New(map[string]string{"csi.requestid": "1"})
 	ctx := metadata.NewIncomingContext(context.Background(), header)
 	req := &csi.ControllerGetVolumeRequest{
@@ -3393,11 +3379,10 @@ func (f *feature) aValidControllerGetVolumeResponseIsReturned() error {
 	fmt.Printf("volume condition is '%s'\n", f.ControllerGetVolumeResponse.Status)
 
 	return nil
-
 }
 
 func (f *feature) aValidCreateVolumeSnapshotGroupResponse() error {
-	//only check resp. if CreateVolumeGroupSnapshot returns okay
+	// only check resp. if CreateVolumeGroupSnapshot returns okay
 	if f.VolumeGroupSnapshot == nil || f.err != nil {
 		return nil
 	}
@@ -3742,7 +3727,6 @@ func (f *feature) theTotalSnapshotsListedIs(arg1 string) error {
 }
 
 func (f *feature) iInvalidateTheProbeCache() error {
-
 	if stepHandlersErrors.NoEndpointError {
 		f.service.opts.arrays[arrayID].Endpoint = ""
 		f.service.opts.arrays[arrayID2].Endpoint = ""
@@ -3768,14 +3752,12 @@ func (f *feature) iInvalidateTheProbeCache() error {
 }
 
 func (f *feature) iCallupdateVolumesMap(systemID string) error {
-
 	f.service.volumePrefixToSystems["123"] = []string{"123456789"}
 	f.err = f.service.UpdateVolumePrefixToSystemsMap(systemID)
 	return nil
 }
 
 func (f *feature) iCallEvalsymlink(path string) error {
-
 	d := evalSymlinks(path)
 	if d == path {
 		f.err = errors.New("Could not evaluate symlinks for path")
@@ -3930,7 +3912,6 @@ func (f *feature) iCallGetSystemNameError() error {
 	ctx := new(context.Context)
 	f.err = f.service.systemProbe(*ctx, badarray)
 	return nil
-
 }
 
 func (f *feature) iCallGetSystemName() error {
@@ -3938,7 +3919,6 @@ func (f *feature) iCallGetSystemName() error {
 	systems = append(systems, arrayID)
 	f.service.getSystemName(context.TODO(), systems)
 	return nil
-
 }
 
 func (f *feature) iCallNodeGetAllSystems() error {
