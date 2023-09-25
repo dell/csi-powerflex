@@ -1896,7 +1896,8 @@ func (f *feature) restCallToSetName(auth string, url string, name string) (strin
 	req.SetBasicAuth(tokens[0], tokens[1])
 	req.Header.Set("Content-Type", "application/json")
 
-	tr := &http.Transport{ // #nosec G402
+	// #nosec G402
+	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 	hc := &http.Client{Timeout: 2 * time.Second, Transport: tr}
