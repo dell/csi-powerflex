@@ -2090,7 +2090,7 @@ func (f *feature) iCallListVolumesAgainWith(maxEntriesString, startingToken stri
 }
 
 func (f *feature) iCallListVolumesWith(maxEntriesString, startingToken string) error {
-	maxEntries, err := strconv.Atoi(maxEntriesString)
+	maxEntries, err := strconv.ParseInt(maxEntriesString, 10, 32)
 	if err != nil {
 		return err
 	}
@@ -3624,7 +3624,7 @@ func (f *feature) thereAreValidSnapshotsOfVolume(nsnapshots int, volume string) 
 }
 
 func (f *feature) iCallListSnapshotsWithMaxentriesAndStartingtoken(maxEntriesString, startingTokenString string) error {
-	maxEntries, err := strconv.Atoi(maxEntriesString)
+	maxEntries, err := strconv.ParseInt(maxEntriesString, 10, 32)
 	if err != nil {
 		return nil
 	}

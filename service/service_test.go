@@ -16,15 +16,20 @@ package service
 import (
 	"fmt"
 	"net/http"
-	_ "net/http/pprof"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/cucumber/godog"
 )
 
 func TestMain(m *testing.M) {
-	go http.ListenAndServe("localhost:6060", nil)
+	server := &http.Server{
+		Addr:              "localhost:6060",
+		ReadHeaderTimeout: 60 * time.Second,
+	}
+
+	go server.ListenAndServe()
 	fmt.Printf("starting godog...\n")
 
 	opts := godog.Options{
