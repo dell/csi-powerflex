@@ -7,13 +7,13 @@ go 1.21
 
 require (
 	github.com/akutz/memconn v0.1.0
-	github.com/container-storage-interface/spec v1.5.0
+	github.com/container-storage-interface/spec v1.6.0
 	github.com/cucumber/godog v0.12.1
 	github.com/dell/dell-csi-extensions/common v1.2.0
 	github.com/dell/dell-csi-extensions/podmon v1.2.0
 	github.com/dell/dell-csi-extensions/replication v1.5.0
 	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.3.0
-	github.com/dell/gocsi v1.8.0
+	github.com/dell/gocsi v1.8.1-0.20230915044639-4bab90258ed0
 	github.com/dell/gofsutil v1.13.1
 	github.com/dell/goscaleio v1.12.0
 	github.com/fsnotify/fsnotify v1.5.1
