@@ -27,12 +27,10 @@ import (
 )
 
 func init() {
-
 	var yamlError error
 
 	testParameters, yamlError = readYaml("e2e-values.yaml")
 	if yamlError != nil {
-
 		framework.Failf("Unable to read yaml e2e-values.yaml: %s", yamlError.Error())
 	}
 
@@ -61,7 +59,7 @@ func TestE2E(t *testing.T) {
 	// dont dump huge logs of node / pods on error
 	framework.TestContext.DumpLogsOnFailure = false
 
-	//framework.TestContext.DeleteNamespace = false
+	// framework.TestContext.DeleteNamespace = false
 
 	// runs all ginkgo tests in go files
 	RunSpecsWithDefaultAndCustomReporters(t, "CSI Driver End-to-End Tests", []Reporter{junitReporter})

@@ -81,7 +81,6 @@ var (
 
 var _ = ginkgo.Describe("[Serial] [csi-fsg]"+
 	"[csi-fsg] Volume Filesystem Group Test", func() {
-
 	//  Building a namespace api object, basename volume-fsgroup
 	f := framework.NewDefaultFramework("volume-fsgroup")
 
@@ -119,7 +118,6 @@ var _ = ginkgo.Describe("[Serial] [csi-fsg]"+
 		updateCsiDriver(client, testParameters["e2eCSIDriverName"], "fsPolicy=ReadWriteOnceWithFSType")
 		doOneCyclePVCTest(ctx, "ReadWriteOnceWithFSType", "")
 		doOneCyclePVCTest(ctx, "ReadWriteOnceWithFSType", v1.ReadOnlyMany)
-
 	})
 
 	ginkgo.It("[csi-fsg] Verify Pod FSGroup with  fsPolicy=None", func() {
@@ -128,7 +126,6 @@ var _ = ginkgo.Describe("[Serial] [csi-fsg]"+
 		updateCsiDriver(client, testParameters["e2eCSIDriverName"], "fsPolicy=None")
 		doOneCyclePVCTest(ctx, "None", v1.ReadOnlyMany)
 		doOneCyclePVCTest(ctx, "None", "")
-
 	})
 	// Test for ROX volume and  CSIDriver Fs Group Policy: File
 	ginkgo.It("[csi-fsg] Verify Pod FSGroup with fsPolicy=File", func() {
@@ -137,7 +134,6 @@ var _ = ginkgo.Describe("[Serial] [csi-fsg]"+
 		updateCsiDriver(client, testParameters["e2eCSIDriverName"], "fsPolicy=File")
 		doOneCyclePVCTest(ctx, "File", v1.ReadOnlyMany)
 		doOneCyclePVCTest(ctx, "File", "")
-
 	})
 
 	// Test for Pod creation works when SecurityContext has  CSIDriver without Fs Group Policy:
@@ -146,9 +142,7 @@ var _ = ginkgo.Describe("[Serial] [csi-fsg]"+
 		defer cancel()
 		updateCsiDriver(client, testParameters["e2eCSIDriverName"], "fsPolicy=")
 		doOneCyclePVCTest(ctx, "", "")
-
 	})
-
 })
 
 func doOneCyclePVCTest(ctx context.Context, policy string, accessMode v1.PersistentVolumeAccessMode) {
@@ -191,7 +185,6 @@ func doOneCyclePVCTest(ctx context.Context, policy string, accessMode v1.Persist
 
 	pod, err := createPodForFSGroup(client, namespace, nil, []*v1.PersistentVolumeClaim{pvclaim},
 		true, testParameters["execCommand"], fsGroupInt64, runAsUserInt64)
-
 	// in case of error help debug by showing events
 	if err != nil {
 		getEvents(client, pvclaim.Namespace, pvclaim.Name, "PersistentVolumeClaim")
@@ -227,8 +220,10 @@ func doOneCyclePVCTest(ctx context.Context, policy string, accessMode v1.Persist
 
 	ginkgo.By("Verify the volume is accessible and filegroup type is as expected")
 
-	cmd := []string{"exec", pod.Name, "--namespace=" + namespace, "--", "/bin/sh", "-c",
-		"ls -l /mnt/volume1"}
+	cmd := []string{
+		"exec", pod.Name, "--namespace=" + namespace, "--", "/bin/sh", "-c",
+		"ls -l /mnt/volume1",
+	}
 
 	output := framework.RunKubectlOrDie(namespace, cmd...)
 
@@ -259,7 +254,7 @@ func doOneCyclePVCTest(ctx context.Context, policy string, accessMode v1.Persist
 	err = fpod.DeletePodWithWait(client, pod)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
-	//if we need a ROX volume to mount, we need to take the RWO one, alter it, then publish it to another pod
+	// if we need a ROX volume to mount, we need to take the RWO one, alter it, then publish it to another pod
 	if accessMode == v1.ReadOnlyMany {
 
 		ginkgo.By("Changing PV to be ROX")
@@ -290,14 +285,16 @@ func doOneCyclePVCTest(ctx context.Context, policy string, accessMode v1.Persist
 
 		}
 
-		cmd = []string{"exec", pod.Name, "--namespace=" + namespace, "--", "/bin/sh", "-c",
-			"ls -l /mnt/volume1"}
+		cmd = []string{
+			"exec", pod.Name, "--namespace=" + namespace, "--", "/bin/sh", "-c",
+			"ls -l /mnt/volume1",
+		}
 
 		output = framework.RunKubectlOrDie(namespace, cmd...)
 
 		fmt.Printf("output: %s\n", output)
 
-		//check output again, ROX means means file should not be modified
+		// check output again, ROX means means file should not be modified
 		switch policy {
 		case "ReadWriteOnceWithFSType":
 			gomega.Expect(strings.Contains(output, strconv.Itoa(int(fsGroup)))).NotTo(gomega.BeFalse())
@@ -318,13 +315,10 @@ func doOneCyclePVCTest(ctx context.Context, policy string, accessMode v1.Persist
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 	}
-
 }
 
 func readYaml(values string) (map[string]string, error) {
-
 	yfile, err := os.ReadFile(values)
-
 	if err != nil {
 		return nil, err
 	}
@@ -338,5 +332,4 @@ func readYaml(values string) (map[string]string, error) {
 	}
 
 	return data, nil
-
 }

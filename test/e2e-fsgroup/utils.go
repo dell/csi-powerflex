@@ -189,7 +189,6 @@ func CreateStatefulSet(ns string, ss *apps.StatefulSet, c clientset.Interface) {
 
 // create pod from yaml manifest
 func createPod(namespace string, pod *v1.Pod, client clientset.Interface) (*v1.Pod, error) {
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -260,7 +259,7 @@ func bootstrap(withoutDc ...bool) {
 	// ctx
 	_, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	//connect(ctx, &e2eVSphere)
+	// connect(ctx, &e2eVSphere)
 	if framework.TestContext.RepoRoot != "" {
 		testfiles.AddFileSource(testfiles.RootFileSource{Root: framework.TestContext.RepoRoot})
 	}
@@ -276,7 +275,8 @@ func getNamespaceToRunTests(f *framework.Framework) string {
 // getPersistentVolumeClaimSpecWithStorageClass return the PersistentVolumeClaim
 // spec with specified storage class.
 func getPersistentVolumeClaimSpecWithStorageClass(namespace string, ds string, storageclass *storagev1.StorageClass,
-	pvclaimlabels map[string]string, accessMode v1.PersistentVolumeAccessMode) *v1.PersistentVolumeClaim {
+	pvclaimlabels map[string]string, accessMode v1.PersistentVolumeAccessMode,
+) *v1.PersistentVolumeClaim {
 	disksize := testParameters["diskSize"]
 	if ds != "" {
 		disksize = ds
@@ -314,8 +314,8 @@ func getPersistentVolumeClaimSpecWithStorageClass(namespace string, ds string, s
 // class parameters.
 func getStorageClassSpec(scName string, testParameters map[string]string,
 	allowedTopologies []v1.TopologySelectorLabelRequirement, scReclaimPolicy v1.PersistentVolumeReclaimPolicy,
-	bindingMode storagev1.VolumeBindingMode, allowVolumeExpansion bool) *storagev1.StorageClass {
-
+	bindingMode storagev1.VolumeBindingMode, allowVolumeExpansion bool,
+) *storagev1.StorageClass {
 	vals := make([]string, 0)
 	vals = append(vals, testParameters["e2eCSIDriverName"])
 
@@ -331,7 +331,7 @@ func getStorageClassSpec(scName string, testParameters map[string]string,
 		bindingMode = storagev1.VolumeBindingWaitForFirstConsumer
 	}
 
-	var sc = &storagev1.StorageClass{
+	sc := &storagev1.StorageClass{
 		TypeMeta: metav1.TypeMeta{
 			Kind: "StorageClass",
 		},
@@ -374,7 +374,8 @@ func createPVCAndStorageClass(client clientset.Interface, pvcnamespace string,
 	pvclaimlabels map[string]string, testParameters map[string]string, ds string,
 	allowedTopologies []v1.TopologySelectorLabelRequirement, bindingMode storagev1.VolumeBindingMode,
 	allowVolumeExpansion bool, accessMode v1.PersistentVolumeAccessMode,
-	names ...string) (*storagev1.StorageClass, *v1.PersistentVolumeClaim, error) {
+	names ...string,
+) (*storagev1.StorageClass, *v1.PersistentVolumeClaim, error) {
 	scName := ""
 	if len(names) > 0 {
 		scName = names[0]
@@ -394,7 +395,8 @@ func createPVCAndStorageClass(client clientset.Interface, pvcnamespace string,
 func createStorageClass(client clientset.Interface, testParameters map[string]string,
 	allowedTopologies []v1.TopologySelectorLabelRequirement,
 	scReclaimPolicy v1.PersistentVolumeReclaimPolicy, bindingMode storagev1.VolumeBindingMode,
-	allowVolumeExpansion bool, scName string) (*storagev1.StorageClass, error) {
+	allowVolumeExpansion bool, scName string,
+) (*storagev1.StorageClass, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var storageclass *storagev1.StorageClass
@@ -425,7 +427,8 @@ func createStorageClass(client clientset.Interface, testParameters map[string]st
 // createPVC helps creates pvc with given namespace and labels using given
 // storage class.
 func createPVC(client clientset.Interface, pvcnamespace string, pvclaimlabels map[string]string, ds string,
-	storageclass *storagev1.StorageClass, accessMode v1.PersistentVolumeAccessMode) (*v1.PersistentVolumeClaim, error) {
+	storageclass *storagev1.StorageClass, accessMode v1.PersistentVolumeAccessMode,
+) (*v1.PersistentVolumeClaim, error) {
 	pvcspec := getPersistentVolumeClaimSpecWithStorageClass(pvcnamespace, ds, storageclass, pvclaimlabels, accessMode)
 	ginkgo.By(fmt.Sprintf("Creating PVC using the Storage Class %s with disk size %s and labels: %+v accessMode: %+v",
 		storageclass.Name, ds, pvclaimlabels, accessMode))
@@ -438,7 +441,8 @@ func createPVC(client clientset.Interface, pvcnamespace string, pvclaimlabels ma
 // createPodForFSGroup helps create pod with fsGroup.
 func createPodForFSGroup(client clientset.Interface, namespace string,
 	nodeSelector map[string]string, pvclaims []*v1.PersistentVolumeClaim,
-	isPrivileged bool, command string, fsGroup *int64, runAsUser *int64) (*v1.Pod, error) {
+	isPrivileged bool, command string, fsGroup *int64, runAsUser *int64,
+) (*v1.Pod, error) {
 	if len(command) == 0 {
 		command = "trap exit TERM; while true; do sleep 1; done"
 	}

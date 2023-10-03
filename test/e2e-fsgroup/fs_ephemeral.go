@@ -42,7 +42,6 @@ Steps
 
 var _ = ginkgo.Describe("[Serial] [csi-fsg]"+
 	"[csi-fsg] Volume Filesystem Group Test", func() {
-
 	//  Building a namespace api object, basename volume-fsgroup
 	f := framework.NewDefaultFramework("volume-fsgroup")
 
@@ -56,7 +55,7 @@ var _ = ginkgo.Describe("[Serial] [csi-fsg]"+
 
 		namespace = getNamespaceToRunTests(f)
 
-		//scParameters = make(map[string]string)
+		// scParameters = make(map[string]string)
 
 		// setup other exteral environment for example array server
 		bootstrap()
@@ -81,7 +80,6 @@ var _ = ginkgo.Describe("[Serial] [csi-fsg]"+
 		defer cancel()
 		updateCsiDriver(client, testParameters["e2eCSIDriverName"], "fsPolicy=File")
 		doOneCycleEphemeralTest(ctx, "ReadWriteOnceWithFSType", "")
-
 	})
 })
 
@@ -97,7 +95,6 @@ func doOneCycleEphemeralTest(ctx context.Context, policy string, accessMode v1.P
 	p := getPodFromManifest("ephemeral.yaml")
 
 	pod, err := createPod(namespace, p, client)
-
 	// in case of error help debug by showing events
 	if err != nil {
 		getEvents(client, namespace, p.Name, "Pod")
@@ -111,8 +108,10 @@ func doOneCycleEphemeralTest(ctx context.Context, policy string, accessMode v1.P
 	ddcmd1 := "dd bs=1024 count=1048576 </dev/urandom > /data0/file;ls -l /data0/file"
 	ddcmd2 := "dd bs=1024 count=1048576 </dev/urandom > /data1/file;ls -l /data1/file"
 
-	cmd := []string{"exec", pod.Name, "--namespace=" + namespace, "--", "/bin/sh", "-c",
-		ddcmd1 + ";" + ddcmd2}
+	cmd := []string{
+		"exec", pod.Name, "--namespace=" + namespace, "--", "/bin/sh", "-c",
+		ddcmd1 + ";" + ddcmd2,
+	}
 
 	output := framework.RunKubectlOrDie(namespace, cmd...)
 
@@ -139,5 +138,4 @@ func doOneCycleEphemeralTest(ctx context.Context, policy string, accessMode v1.P
 	ginkgo.By(fmt.Sprintf("Deleting the pod %s in namespace %s", pod.Name, namespace))
 	err = fpod.DeletePodWithWait(client, pod)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
-
 }
