@@ -66,7 +66,7 @@ func main() {
 	} else {
 		driverName := strings.Replace(service.Name, ".", "-", -1)
 		lockName := fmt.Sprintf("driver-%s", driverName)
-		err := k8sutils.CreateKubeClientSet(*kubeconfig)
+		err := k8sutils.CreateKubeClientSet()
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "failed to create clientset for leader election: %v", err)
 			os.Exit(1)

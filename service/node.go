@@ -475,7 +475,7 @@ func (s *service) nodeProbe(ctx context.Context) error {
 	// fetch the systemIDs
 	var err error
 	if len(connectedSystemID) == 0 {
-		connectedSystemID, err = getSystemsKnownToSDC(s.opts)
+		connectedSystemID, err = getSystemsKnownToSDC()
 		if err != nil {
 			return status.Errorf(codes.FailedPrecondition, "%s", err)
 		}
@@ -634,7 +634,7 @@ func kmodLoaded(opts Opts) bool {
 	return false
 }
 
-func getSystemsKnownToSDC(opts Opts) ([]string, error) {
+func getSystemsKnownToSDC() ([]string, error) {
 	systems := make([]string, 0)
 
 	discoveredSystems, err := goscaleio.DrvCfgQuerySystems()

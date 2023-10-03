@@ -1831,16 +1831,19 @@ func (f *feature) iCallNodeGetInfoWithInvalidVolumeLimitNodeLabels() error {
 	return nil
 }
 
+//nolint:revive
 func mockGetNodeLabels(ctx context.Context, s *service) (map[string]string, error) {
 	labels := map[string]string{"csi-vxflexos.dellemc.com/05d539c3cdc5280f-nfs": "true", "csi-vxflexos.dellemc.com/0e7a082862fedf0f": "csi-vxflexos.dellemc.com"}
 	return labels, nil
 }
 
+//nolint:revive
 func mockGetNodeLabelsWithVolumeLimits(ctx context.Context, s *service) (map[string]string, error) {
 	labels := map[string]string{"max-vxflexos-volumes-per-node": "2"}
 	return labels, nil
 }
 
+//nolint:revive
 func mockGetNodeLabelsWithInvalidVolumeLimits(ctx context.Context, s *service) (map[string]string, error) {
 	labels := map[string]string{"max-vxflexos-volumes-per-node": "invalid-vol-limit"}
 	return labels, nil
@@ -1883,6 +1886,7 @@ func (f *feature) iSetInvalidEnvMaxVolumesPerNode() error {
 	return nil
 }
 
+//nolint:revive
 func mockLookupEnv(ctx context.Context, key string) (string, bool) {
 	return "invalid_value", true
 }
@@ -2202,6 +2206,7 @@ func (f *feature) iCallCloneVolume() error {
 	return nil
 }
 
+//nolint:revive
 func (f *feature) iCallValidateVolumeCapabilitiesWithVoltypeAccessFstype(voltype, access, fstype string) error {
 	ctx := new(context.Context)
 	req := new(csi.ValidateVolumeCapabilitiesRequest)
@@ -2673,6 +2678,7 @@ func (f *feature) iCallMountUnpublishVolume() error {
 	return nil
 }
 
+//nolint:revive
 func (f *feature) iCallNodePublishVolume(arg1 string) error {
 	header := metadata.New(map[string]string{"csi.requestid": "1"})
 	ctx := metadata.NewIncomingContext(context.Background(), header)
@@ -2696,6 +2702,7 @@ func (f *feature) iCallNodePublishVolume(arg1 string) error {
 	return nil
 }
 
+//nolint:revive
 func (f *feature) iCallNodePublishVolumeNFS(arg1 string) error {
 	header := metadata.New(map[string]string{"csi.requestid": "1"})
 	ctx := metadata.NewIncomingContext(context.Background(), header)
@@ -2970,6 +2977,7 @@ func (f *feature) iCallEphemeralNodeUnpublish() error {
 	return nil
 }
 
+//nolint:revive
 func (f *feature) iCallNodeUnpublishVolume(arg1 string) error {
 	header := metadata.New(map[string]string{"csi.requestid": "1"})
 	ctx := metadata.NewIncomingContext(context.Background(), header)
@@ -3676,6 +3684,7 @@ func (f *feature) iCallListSnapshotsForSnapshot(arg1 string) error {
 	return nil
 }
 
+//nolint:revive
 func (f *feature) theSnapshotIDIs(arg1 string) error {
 	if len(f.listedVolumeIDs) != 1 {
 		return errors.New("Expected only 1 volume to be listed")
@@ -4028,6 +4037,7 @@ func (f *feature) iCallGetReplicationCapabilities() error {
 	return nil
 }
 
+//nolint:revive
 func (f *feature) aReplicationCapabilitiesStructureIsReturned(arg1 string) error {
 	if f.err != nil {
 		return f.err

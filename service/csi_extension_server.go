@@ -149,7 +149,7 @@ func (s *service) CreateVolumeGroupSnapshot(ctx context.Context, req *volumeGrou
 	snapParam := &siotypes.SnapshotVolumesParam{SnapshotDefs: snapshotDefs}
 
 	// check if req is Idempotent, return group found if yes
-	existingGroup, err := s.checkIdempotency(ctx, snapParam, systemID, req.Parameters[ExistingGroupID])
+	existingGroup, err := s.checkIdempotency(ctx, snapParam, systemID)
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +170,7 @@ func (s *service) CreateVolumeGroupSnapshot(ctx context.Context, req *volumeGrou
 	}
 	Log.Infof("snapResponse is: %s", snapResponse)
 	// populate response
-	groupSnapshots, err := s.buildCreateVGSResponse(ctx, snapResponse, snapshotDefs, systemID)
+	groupSnapshots, err := s.buildCreateVGSResponse(ctx, snapResponse, systemID)
 	if err != nil {
 		Log.Errorf("Error from CreateVolumeGroupSnapshot: %v ", err)
 		return nil, err
@@ -284,7 +284,7 @@ func (s *service) buildSnapshotDefs(req *volumeGroupSnapshot.CreateVolumeGroupSn
 // 1. For each snapshot we intend to make, there is a snapshot with the same name and ancestor ID on array
 // 2. Each snapshot that we find to satisfy criteria 1 all belong to the same consistency group
 // 3. The consistency group that satisfies criteria 2 contain no other snapshots
-func (s *service) checkIdempotency(ctx context.Context, snapshotsToMake *siotypes.SnapshotVolumesParam, systemID string, snapGrpID string) (*volumeGroupSnapshot.CreateVolumeGroupSnapshotResponse, error) {
+func (s *service) checkIdempotency(ctx context.Context, snapshotsToMake *siotypes.SnapshotVolumesParam, systemID string) (*volumeGroupSnapshot.CreateVolumeGroupSnapshotResponse, error) {
 	Log.Infof("CheckIdempotency called")
 
 	// We use maps to keep track of info, to ensure criterias 1-3 are met
@@ -395,7 +395,7 @@ func (s *service) checkIdempotency(ctx context.Context, snapshotsToMake *siotype
 }
 
 // build the response for CreateVGS to return
-func (s *service) buildCreateVGSResponse(ctx context.Context, snapResponse *siotypes.SnapshotVolumesResp, snapshotDefs []*siotypes.SnapshotDef, systemID string) ([]*volumeGroupSnapshot.Snapshot, error) {
+func (s *service) buildCreateVGSResponse(ctx context.Context, snapResponse *siotypes.SnapshotVolumesResp, systemID string) ([]*volumeGroupSnapshot.Snapshot, error) {
 	var groupSnapshots []*volumeGroupSnapshot.Snapshot
 	for index, id := range snapResponse.VolumeIDList {
 		idToQuery := systemID + "-" + id

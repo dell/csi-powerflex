@@ -386,7 +386,7 @@ func TestVolumeCaps(t *testing.T) {
 		tt := tt
 		t.Run("", func(st *testing.T) {
 			st.Parallel()
-			s, _ := valVolumeCaps(tt.caps, tt.vol)
+			s, _ := valVolumeCaps(tt.caps)
 
 			assert.Equal(st, tt.supported, s)
 		})

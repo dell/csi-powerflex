@@ -341,7 +341,7 @@ func (s *service) CreateStorageProtectionGroup(ctx context.Context, req *replica
 			rcgPrefix = "rcg"
 		}
 
-		consistencyGroupName, err = s.createUniqueConsistencyGroupName(systemID, remoteSystemID, rpo,
+		consistencyGroupName, err = s.createUniqueConsistencyGroupName(systemID, rpo,
 			localProtectionDomain, remoteProtectionDomain, remoteClusterID, clusterUID, rcgPrefix)
 		if err != nil {
 			return nil, err
@@ -651,7 +651,7 @@ func (s *service) getReplicationConsistencyGroupByID(systemID string, groupID st
 	return group, nil
 }
 
-func (s *service) createUniqueConsistencyGroupName(systemID, remoteSystemID, rpo, localPd, remotePd, remoteClusterID, clusterUID, rcgPrefix string) (string, error) {
+func (s *service) createUniqueConsistencyGroupName(systemID, rpo, localPd, remotePd, remoteClusterID, clusterUID, rcgPrefix string) (string, error) {
 	consistencyGroupName := rcgPrefix + "-"
 	clusterUID = strings.Replace(clusterUID, "-", "", -1)
 	remoteClusterID = strings.Replace(remoteClusterID, "-", "", -1)
@@ -686,10 +686,9 @@ func (s *service) createUniqueConsistencyGroupName(systemID, remoteSystemID, rpo
 				consistencyGroupName = rcg.Name
 				found = true
 				break
-			} else {
-				if rcg.Name[len(rcg.Name)-1:] == strconv.Itoa(version) {
-					version++
-				}
+			}
+			if rcg.Name[len(rcg.Name)-1:] == strconv.Itoa(version) {
+				version++
 			}
 		}
 	}

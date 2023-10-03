@@ -228,7 +228,7 @@ func (s *service) ProcessMapSecretChange() error {
 
 func (s *service) logCsiNodeTopologyKeys() error {
 	if K8sClientset == nil {
-		err := k8sutils.CreateKubeClientSet(KubeConfig)
+		err := k8sutils.CreateKubeClientSet()
 		if err != nil {
 			Log.WithError(err).Error("unable to create k8s clientset for query")
 			return err
@@ -327,6 +327,7 @@ func (s *service) updateDriverConfigParams(logger *logrus.Logger, v *viper.Viper
 }
 
 func (s *service) BeforeServe(
+	//nolint:revive
 	ctx context.Context, sp *gocsi.StoragePlugin, lis net.Listener,
 ) error {
 	defer func() {
@@ -853,9 +854,9 @@ func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error
 			}
 
 			// copy in the arrayConnectionData to arrays
-			copy := ArrayConnectionData{}
-			copy = c
-			arrays[c.SystemID] = &copy
+			copyOfCred := ArrayConnectionData{}
+			copyOfCred = c
+			arrays[c.SystemID] = &copyOfCred
 		}
 	} else {
 		return nil, fmt.Errorf("arrays details are not provided in vxflexos-creds secret")
@@ -1504,7 +1505,7 @@ func (s *service) GetNfsTopology(systemID string) []*csi.Topology {
 
 func (s *service) GetNodeLabels(ctx context.Context) (map[string]string, error) {
 	if K8sClientset == nil {
-		err := k8sutils.CreateKubeClientSet(KubeConfig)
+		err := k8sutils.CreateKubeClientSet()
 		if err != nil {
 			return nil, status.Error(codes.Internal, GetMessage("init client failed with error: %v", err))
 		}

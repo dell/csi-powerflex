@@ -55,7 +55,7 @@ func init() {
 		for err == nil && !isPrefix {
 			line, isPrefix, err = r.ReadLine()
 			if strings.Contains(string(line), "127.0.0.1") {
-				err := fmt.Errorf("Integration test pre-requisite powerflex array endpoint %s is not ok, setup ../../config.json \n", string(line))
+				err := fmt.Errorf("Integration test pre-requisite powerflex array endpoint %s is not ok, setup ../../config.json", string(line))
 				panic(err)
 			}
 			if strings.Contains(string(line), "mdm") {

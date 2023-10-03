@@ -32,7 +32,7 @@ type leaderElection interface {
 }
 
 // CreateKubeClientSet - Returns kubeclient set
-func CreateKubeClientSet(kubeconfig string) error {
+func CreateKubeClientSet() error {
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		return err

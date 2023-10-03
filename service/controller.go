@@ -1608,7 +1608,7 @@ func (s *service) ValidateVolumeCapabilities(
 	}
 
 	volID := getVolumeIDFromCsiVolumeID(csiVolID)
-	vol, err := s.getVolByID(volID, systemID)
+	_, err = s.getVolByID(volID, systemID)
 	if err != nil {
 		if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
 			return nil, status.Error(codes.NotFound,
@@ -1620,7 +1620,7 @@ func (s *service) ValidateVolumeCapabilities(
 	}
 
 	vcs := req.GetVolumeCapabilities()
-	supported, reason := valVolumeCaps(vcs, vol)
+	supported, reason := valVolumeCaps(vcs)
 
 	resp := &csi.ValidateVolumeCapabilitiesResponse{}
 	if supported {
@@ -1665,7 +1665,6 @@ func checkValidAccessTypes(vcs []*csi.VolumeCapability) bool {
 
 func valVolumeCaps(
 	vcs []*csi.VolumeCapability,
-	vol *siotypes.Volume,
 ) (bool, string) {
 	var (
 		supported = true
