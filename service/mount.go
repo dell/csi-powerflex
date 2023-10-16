@@ -591,9 +591,9 @@ func mkdir(path string) (bool, error) {
 			}
 			Log.WithField("path", path).Debug("created directory")
 			return true, nil
-		} else {
-			fmt.Printf("Found error %v while checking stat of file %s ", err, path)
 		}
+		Log.WithField("file", path).WithError(
+			err).Error("Unable to check stat of file")
 	}
 	if !st.IsDir() {
 		return false, fmt.Errorf("existing path is not a directory")
