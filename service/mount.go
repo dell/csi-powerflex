@@ -583,7 +583,8 @@ func mkdir(path string) (bool, error) {
 	st, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			if err := os.Mkdir(path, 0755); err != nil { // #nosec G301
+			err := os.Mkdir(path, 0755) // #nosec G301
+			if err != nil {
 				Log.WithField("dir", path).WithError(
 					err).Error("Unable to create dir")
 				return false, err
