@@ -61,13 +61,18 @@ func (s *service) ephemeralNodePublish(
 	req *csi.NodePublishVolumeRequest) (
 	*csi.NodePublishVolumeResponse, error) {
 
-	if _, err := os.Stat(ephemeralStagingMountPath); os.IsNotExist(err) {
-		Log.Debug("path does not exist, will attempt to create it")
-		err = os.MkdirAll(ephemeralStagingMountPath, 0750)
-		if err != nil {
-			Log.Errorf("ephemeralNodePublish: %s", err.Error())
-			return nil, status.Error(codes.Internal, "Unable to create directory for mounting ephemeral volumes")
+	_, err := os.Stat(ephemeralStagingMountPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			Log.Debug("path does not exist, will attempt to create it")
+			err = os.MkdirAll(ephemeralStagingMountPath, 0750)
+			if err != nil {
+				Log.Errorf("ephemeralNodePublish: %s", err.Error())
+				return nil, status.Error(codes.Internal, "Unable to create directory for mounting ephemeral volumes")
+			}
 		}
+		Log.WithField("file", ephemeralStagingMountPath).WithError(
+			err).Error("Unable to check stat of file")
 	}
 
 	volID := req.GetVolumeId()

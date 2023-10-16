@@ -784,8 +784,12 @@ func (s *service) logStatistics() {
 func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error) {
 	arrays := make(map[string]*ArrayConnectionData)
 
-	if _, err := os.Stat(ArrayConfigFile); os.IsNotExist(err) {
-		return nil, fmt.Errorf(fmt.Sprintf("File %s does not exist", ArrayConfigFile))
+	_, err := os.Stat(ArrayConfigFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf(fmt.Sprintf("File %s does not exist", ArrayConfigFile))
+		}
+		fmt.Printf("Found error %v while checking stat of file %s ", err, ArrayConfigFile)
 	}
 
 	config, err := os.ReadFile(filepath.Clean(ArrayConfigFile))
