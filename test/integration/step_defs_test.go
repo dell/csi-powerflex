@@ -133,8 +133,11 @@ func (f *feature) getGoscaleioClient() (client *goscaleio.Client, err error) {
 func (f *feature) getArrayConfig() (map[string]*ArrayConnectionData, error) {
 	arrays := make(map[string]*ArrayConnectionData)
 
-	if _, err := os.Stat(configFile); os.IsNotExist(err) {
-		return nil, fmt.Errorf(fmt.Sprintf("File %s does not exist", configFile))
+	_, err := os.Stat(configFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf(fmt.Sprintf("File %s does not exist", configFile))
+		}
 	}
 
 	config, err := os.ReadFile(filepath.Clean(configFile))
