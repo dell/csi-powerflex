@@ -68,9 +68,10 @@ func (s *service) ephemeralNodePublish(
 			Log.Debug("path does not exist, will attempt to create it")
 			err = os.MkdirAll(ephemeralStagingMountPath, 0750)
 			if err != nil {
-				Log.Errorf("ephemeralNodePublish: %s", err.Error())
+				Log.WithField("dir", ephemeralStagingMountPath).WithError(err).Error("Unable to create dir")
 				return nil, status.Error(codes.Internal, "Unable to create directory for mounting ephemeral volumes")
 			}
+			Log.Debug("dir created: ", ephemeralStagingMountPath)
 		}
 	}
 

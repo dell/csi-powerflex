@@ -551,7 +551,7 @@ func contains(list []string, item string) bool {
 func mkfile(path string) (bool, error) {
 	st, err := os.Stat(path)
 	if err != nil {
-		Log.Infof("Unable to check stat of file: %s with error: %v", path, err.Error())
+		Log.Warnf("Unable to check stat of file: %s with error: %v", path, err.Error())
 		if os.IsNotExist(err) {
 			/* #nosec G302 G304 */
 			file, err := os.OpenFile(path, os.O_CREATE, 0755)
