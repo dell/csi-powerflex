@@ -138,7 +138,6 @@ func (f *feature) getArrayConfig() (map[string]*ArrayConnectionData, error) {
 		if os.IsNotExist(err) {
 			return nil, fmt.Errorf(fmt.Sprintf("File %s does not exist", configFile))
 		}
-		fmt.Printf("Found error %v while checking stat of file %s ", err, configFile)
 	}
 
 	config, err := os.ReadFile(filepath.Clean(configFile))

@@ -551,6 +551,7 @@ func contains(list []string, item string) bool {
 func mkfile(path string) (bool, error) {
 	st, err := os.Stat(path)
 	if err != nil {
+		Log.Infof("Unable to check stat of file: %s with error: %v", path, err.Error())
 		if os.IsNotExist(err) {
 			/* #nosec G302 G304 */
 			file, err := os.OpenFile(path, os.O_CREATE, 0755)
@@ -568,7 +569,6 @@ func mkfile(path string) (bool, error) {
 			Log.WithField("path", path).Debug("created file")
 			return true, nil
 		}
-		Log.Errorf("Unable to check stat of file: %s with error: %v", path, err.Error())
 	}
 	if st.IsDir() {
 		return false, fmt.Errorf("existing path is a directory")
@@ -581,6 +581,7 @@ func mkfile(path string) (bool, error) {
 func mkdir(path string) (bool, error) {
 	st, err := os.Stat(path)
 	if err != nil {
+		Log.Warnf("Unable to check stat of file: %s with error: %v", path, err.Error())
 		if os.IsNotExist(err) {
 			err := os.Mkdir(path, 0755) // #nosec G301
 			if err != nil {
@@ -591,7 +592,6 @@ func mkdir(path string) (bool, error) {
 			Log.WithField("path", path).Debug("created directory")
 			return true, nil
 		}
-		Log.Errorf("Unable to check stat of file: %s with error: %v", path, err.Error())
 	}
 	if !st.IsDir() {
 		return false, fmt.Errorf("existing path is not a directory")

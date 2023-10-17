@@ -63,6 +63,7 @@ func (s *service) ephemeralNodePublish(
 
 	_, err := os.Stat(ephemeralStagingMountPath)
 	if err != nil {
+		Log.Warnf("Unable to check stat of file: %s with error: %v", ephemeralStagingMountPath, err.Error())
 		if os.IsNotExist(err) {
 			Log.Debug("path does not exist, will attempt to create it")
 			err = os.MkdirAll(ephemeralStagingMountPath, 0750)
@@ -71,7 +72,6 @@ func (s *service) ephemeralNodePublish(
 				return nil, status.Error(codes.Internal, "Unable to create directory for mounting ephemeral volumes")
 			}
 		}
-		Log.Errorf("Unable to check stat of file: %s with error: %v", ephemeralStagingMountPath, err.Error())
 	}
 
 	volID := req.GetVolumeId()

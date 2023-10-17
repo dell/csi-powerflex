@@ -786,10 +786,10 @@ func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error
 
 	_, err := os.Stat(ArrayConfigFile)
 	if err != nil {
+		Log.Errorf("Found error %v while checking stat of file %s ", err, ArrayConfigFile)
 		if os.IsNotExist(err) {
 			return nil, fmt.Errorf(fmt.Sprintf("File %s does not exist", ArrayConfigFile))
 		}
-		fmt.Printf("Found error %v while checking stat of file %s ", err, ArrayConfigFile)
 	}
 
 	config, err := os.ReadFile(filepath.Clean(ArrayConfigFile))
