@@ -71,8 +71,7 @@ func (s *service) ephemeralNodePublish(
 				return nil, status.Error(codes.Internal, "Unable to create directory for mounting ephemeral volumes")
 			}
 		}
-		Log.WithField("file", ephemeralStagingMountPath).WithError(
-			err).Error("Unable to check stat of file")
+		Log.Errorf("Unable to check stat of file: %s with error: %v", ephemeralStagingMountPath, err.Error())
 	}
 
 	volID := req.GetVolumeId()
