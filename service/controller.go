@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -959,6 +960,8 @@ func (s *service) DeleteVolume(
 		return nil, status.Error(codes.InvalidArgument,
 			"volume ID is required")
 	}
+	// why only nfs vol can have /, why not in legacy
+	// is this a right way to decide, req is for nfs or not.
 
 	isNFS := strings.Contains(csiVolID, "/")
 	//ensure no ambiguity if legacy vol
@@ -981,7 +984,7 @@ func (s *service) DeleteVolume(
 			return nil, status.Error(codes.InvalidArgument,
 				"systemID is not found in the request and there is no default system")
 		}
-
+		// probe mechanism checks
 		if err := s.requireProbe(ctx, systemID); err != nil {
 			return nil, err
 		}
@@ -1015,6 +1018,7 @@ func (s *service) DeleteVolume(
 
 		// Check if nfs export exists for the File system
 		client := s.adminClients[systemID]
+		// deleting external access if no host entry is there in nfs export
 
 		nfsExport, err := s.getNFSExport(toBeDeletedFS, client)
 		if err != nil {
@@ -1202,12 +1206,11 @@ func (s *service) ControllerPublishVolume(
 				err.Error())
 		}
 
-		sdcIP, err := s.getSDCIP(nodeID, systemID)
-		if err != nil {
-			return nil, status.Errorf(codes.NotFound, err.Error())
-		}
+		// here ip should get extracted from nodeid
+		// like below:
 
-		publishContext["host"] = sdcIP
+		publishContext["host"] = s.opts.NodeIP
+		// below line should be removed
 
 		fsc := req.GetVolumeCapability()
 		if fsc == nil {
@@ -1225,7 +1228,7 @@ func (s *service) ControllerPublishVolume(
 				errUnknownAccessMode)
 		}
 		//Export for NFS
-		resp, err := s.exportFilesystem(ctx, req, adminClient, fs, sdcIP, nodeID, publishContext, am)
+		resp, err := s.exportFilesystem(ctx, req, adminClient, fs, s.opts.NodeIP, nodeID, publishContext, am)
 		return resp, err
 	}
 	volID := getVolumeIDFromCsiVolumeID(csiVolID)
@@ -1360,6 +1363,12 @@ func (s *service) ControllerPublishVolume(
 	return &csi.ControllerPublishVolumeResponse{}, nil
 }
 
+// GetIPListFromString
+func GetIPListFromString(input string) []string {
+	re := regexp.MustCompile(`(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}`)
+	return re.FindAllString(input, -1)
+}
+
 // validate the requested QoS parameters.
 func validateQoSParameters(bandwidthLimit string, iopsLimit string, volumeName string) error {
 	if len(bandwidthLimit) > 0 {
@@ -1482,7 +1491,7 @@ func (s *service) ControllerUnpublishVolume(
 		return nil, status.Error(codes.InvalidArgument,
 			"systemID is not found in the request and there is no default system")
 	}
-
+	// probe should be through api and endpoint
 	if err := s.requireProbe(ctx, systemID); err != nil {
 		return nil, err
 	}
@@ -1523,14 +1532,15 @@ func (s *service) ControllerUnpublishVolume(
 				"failure checking volume status before controller publish: %s",
 				err.Error())
 		}
-
-		sdcIP, err := s.getSDCIP(nodeID, systemID)
+		// this ip should be extracted from nodeID
+		/* sdcIP, err := s.getSDCIP(nodeID, systemID)
 		if err != nil {
 			return nil, status.Errorf(codes.NotFound, err.Error())
-		}
+		} */
 
 		//unexport for NFS
-		err = s.unexportFilesystem(ctx, req, adminClient, fs, req.GetVolumeId(), sdcIP, nodeID)
+		// pass ip of node not one fetched from sdcip
+		err = s.unexportFilesystem(ctx, req, adminClient, fs, req.GetVolumeId(), s.opts.NodeIP, nodeID)
 		if err != nil {
 			return nil, err
 		}

@@ -17,6 +17,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"strconv"
@@ -301,6 +302,7 @@ func (s *service) NodeUnpublishVolume(
 		}
 
 		// Probe the system to make sure it is managed by driver
+		// probing is through sdc? seems to be through API
 		if err := s.requireProbe(ctx, systemID); err != nil {
 			return nil, err
 		}
@@ -718,6 +720,19 @@ func (s *service) NodeGetCapabilities(
 
 }
 
+// Get preferred outbound ip of this machine
+func getOutboundIP(endpoint string) (net.IP, error) {
+	conn, err := net.Dial("udp", fmt.Sprintf("%s:80", endpoint))
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close() // #nosec G307
+
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+
+	return localAddr.IP, nil
+}
+
 // NodeGetInfo returns Node information
 // NodeId is the identifier of the node and will match the SDC GUID
 // MaxVolumesPerNode (optional) is left as 0 which means unlimited
@@ -727,64 +742,89 @@ func (s *service) NodeGetInfo(
 	req *csi.NodeGetInfoRequest) (
 	*csi.NodeGetInfoResponse, error) {
 
-	// Fetch SDC GUID
-	if s.opts.SdcGUID == "" {
-		if err := s.nodeProbe(ctx); err != nil {
-			return nil, err
-		}
-	}
-
-	// Fetch Node ID
-	if len(connectedSystemID) == 0 {
-		if err := s.nodeProbe(ctx); err != nil {
-			return nil, err
-		}
-	}
-
 	// Create the topology keys
 	// csi-vxflexos.dellemc.com/<systemID>: <provisionerName>
 	topology := map[string]string{}
-	for _, sysID := range connectedSystemID {
-		isNFS, err := s.checkNFS(ctx, sysID)
+
+	for _, systemID := range s.opts.arrays {
+
+		//  can we blindly add the nfs labels like powerstore on all nodes
+		isNFS, err := s.checkNFS(ctx, systemID.SystemID)
 		if err != nil {
 			return nil, err
 		}
 		if isNFS {
-			topology[Name+"/"+sysID+"-nfs"] = "true"
+			topology[Name+"/"+systemID.SystemID+"-nfs"] = "true"
 		}
-		topology[Name+"/"+sysID] = SystemTopologySystemValue
+		if s.opts.NodeIP == "" {
+			ip, err := getOutboundIP(systemID.IP)
+			if err != nil {
+				fmt.Println("unable to find node ip")
+				return nil, err
+			}
+			s.opts.NodeIP = ip.String()
+		}
+	}
+
+	// decide which protocol is supposed to be present on this worker node
+	// based on the protocol's priority we will probe and add the respective labels
+
+	filePath := "/opt/emc/scaleio/sdc/bin/drv_cfg"
+
+	// Check if the file or directory exists
+	if _, err := os.Stat(filePath); err == nil {
+		// Fetch SDC GUID
+		if s.opts.SdcGUID == "" {
+			if err := s.nodeProbe(ctx); err != nil {
+				return nil, err
+			}
+			// Fetch Node ID
+			// connectedSystemID = system known to scd
+			if len(connectedSystemID) == 0 {
+				// i don't think that we need to probe again here, since probing is already done before
+				if err := s.nodeProbe(ctx); err != nil {
+					return nil, err
+				}
+			}
+			for _, sysID := range connectedSystemID {
+				// this should be removed from here since it can-not be always present on all worker nodes
+				topology[Name+"/"+sysID] = SystemTopologySystemValue
+			}
+
+		}
 	}
 
 	var maxVxflexosVolumesPerNode int64
-	if len(connectedSystemID) != 0 {
-		// Check for node label 'max-vxflexos-volumes-per-node'. If present set 'MaxVolumesPerNode' to this value.
-		// If node label is not present, set 'MaxVolumesPerNode' to default value i.e., 0
+	//if len(connectedSystemID) != 0 {
+	// Check for node label 'max-vxflexos-volumes-per-node'. If present set 'MaxVolumesPerNode' to this value.
+	// If node label is not present, set 'MaxVolumesPerNode' to default value i.e., 0
 
-		labels, err := GetNodeLabels(ctx, s)
-		if err != nil {
-			return nil, err
-		}
-
-		if val, ok := labels[maxVxflexosVolumesPerNodeLabel]; ok {
-			maxVxflexosVolumesPerNode, err = strconv.ParseInt(val, 10, 64)
-
-			if err != nil {
-				return nil, status.Error(codes.InvalidArgument, GetMessage("invalid value '%s' specified for 'max-vxflexos-volumes-per-node' node label", val))
-			}
-		} else {
-			// As per the csi spec the plugin MUST NOT set negative values to
-			// 'MaxVolumesPerNode' in the NodeGetInfoResponse response
-			if s.opts.MaxVolumesPerNode < 0 {
-				return nil, status.Error(codes.InvalidArgument, GetMessage("maxVxflexosVolumesPerNode MUST NOT be set to negative value"))
-			}
-			maxVxflexosVolumesPerNode = s.opts.MaxVolumesPerNode
-		}
+	labels, err := GetNodeLabels(ctx, s)
+	if err != nil {
+		return nil, err
 	}
+
+	if val, ok := labels[maxVxflexosVolumesPerNodeLabel]; ok {
+		maxVxflexosVolumesPerNode, err = strconv.ParseInt(val, 10, 64)
+
+		if err != nil {
+			return nil, status.Error(codes.InvalidArgument, GetMessage("invalid value '%s' specified for 'max-vxflexos-volumes-per-node' node label", val))
+		}
+	} else {
+		// As per the csi spec the plugin MUST NOT set negative values to
+		// 'MaxVolumesPerNode' in the NodeGetInfoResponse response
+		if s.opts.MaxVolumesPerNode < 0 {
+			return nil, status.Error(codes.InvalidArgument, GetMessage("maxVxflexosVolumesPerNode MUST NOT be set to negative value"))
+		}
+		maxVxflexosVolumesPerNode = s.opts.MaxVolumesPerNode
+	}
+	//}
 
 	Log.Debugf("MaxVolumesPerNode: %v\n", maxVxflexosVolumesPerNode)
 
 	return &csi.NodeGetInfoResponse{
-		NodeId: s.opts.SdcGUID,
+		// how to get rid of this sdcguid
+		NodeId: s.opts.SdcGUID + "/" + s.opts.NodeIP,
 		AccessibleTopology: &csi.Topology{
 			Segments: topology,
 		},

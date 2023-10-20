@@ -20,6 +20,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
@@ -108,6 +109,7 @@ type ArrayConnectionData struct {
 	IsDefault                 bool    `json:"isDefault,omitempty"`
 	AllSystemNames            string  `json:"allSystemNames"`
 	NasName                   *string `json:"nasName"`
+	IP                        string
 }
 
 // Manifest is the SP's manifest.
@@ -133,6 +135,8 @@ type Opts struct {
 	// map from system name to ArrayConnectionData
 	arrays                     map[string]*ArrayConnectionData
 	defaultSystemID            string // ID of default system
+	NodeIDFilePath             string
+	NodeIP                     string
 	SdcGUID                    string
 	Thick                      bool
 	AutoProbe                  bool
@@ -361,7 +365,17 @@ func (s *service) BeforeServe(
 		Log.Warnf("unable to get arrays from config: %s", err.Error())
 		return err
 	}
+	if s.opts.NodeIP == "" {
+		for _, systemID := range opts.arrays {
 
+			ip, err := getOutboundIP(systemID.IP)
+			if err != nil {
+				fmt.Println("unable to find node ip")
+				return err
+			}
+			s.opts.NodeIP = ip.String()
+		}
+	}
 	if err = s.ProcessMapSecretChange(); err != nil {
 		Log.Warnf("unable to configure dynamic configMap secret change detection : %s", err.Error())
 		return err
@@ -503,7 +517,7 @@ func (s *service) doProbe(ctx context.Context) error {
 	// Putting in mutex to allow tests to pass with race flag
 	px.Lock()
 	defer px.Unlock()
-
+	// needs some attention here if sdc is not present
 	if !strings.EqualFold(s.mode, "node") {
 		if err := s.systemProbeAll(ctx); err != nil {
 			return err
@@ -517,6 +531,7 @@ func (s *service) doProbe(ctx context.Context) error {
 			return err
 		}
 
+		// needs some attention here if sdc is not present
 		if err := s.nodeProbe(ctx); err != nil {
 			return err
 		}
@@ -866,6 +881,23 @@ func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error
 			// copy in the arrayConnectionData to arrays
 			copy := ArrayConnectionData{}
 			copy = c
+			var ip string
+			ips := GetIPListFromString(c.Endpoint)
+			if ips == nil {
+				//cLog.WithFields(fields)("didn't found an IP from the provided endPoint, it could be a FQDN. Please make sure to enter a valid FQDN in https://abc.com/api/rest format")
+				sub := strings.Split(c.Endpoint, "/")
+				if len(sub) > 2 {
+					ip = sub[2]
+					if regexp.MustCompile(`^[0-9.]*$`).MatchString(sub[2]) {
+						//return nil, nil, nil, fmt.Errorf("can't get ips from endpoint: %s", array.Endpoint)
+					}
+				} else {
+					//return nil, nil, nil, fmt.Errorf("can't get ips from endpoint: %s", array.Endpoint)
+				}
+			} else {
+				ip = ips[0]
+			}
+			copy.IP = ip
 			arrays[c.SystemID] = &copy
 		}
 	} else {
@@ -1002,6 +1034,8 @@ func Contains(slice []string, element string) bool {
 	return false
 }
 
+// from where we get this nodeIP?
+// it should not be retrived through SDC.
 func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnpublishVolumeRequest, client *goscaleio.Client, fs *siotypes.FileSystem, volumeContextID, nodeIP, nodeID string) error {
 
 	var nfsExportName string
@@ -1081,10 +1115,13 @@ func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnp
 
 	}
 	Log.Debugf("Host: %s access is removed from NFS Share: %s", nodeID, nfsExportID)
+	// should we really delete export blindly, what if any other node's pod is consuming it.
+	// if we are pretty sure that we have to delete it if it was not created manually then what is the need to modify export
+	// may be we will not be able to delete if any host entry is there. Atleast same is with PST.
 
 	if deleteExport {
 		err = client.DeleteNFSExport(nfsExportID)
-
+		// so for above case if any more host is there in nfs export, why to return error?
 		if err != nil {
 			return status.Errorf(codes.NotFound, "delete NFS Export failed. Error:%v", err)
 		}
@@ -1100,7 +1137,9 @@ func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnp
 
 // exportFilesystem - Method to export filesystem with idempotency
 func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPublishVolumeRequest, client *goscaleio.Client, fs *siotypes.FileSystem, nodeIP, nodeID string, pContext map[string]string, am *csi.VolumeCapability_AccessMode) (*csi.ControllerPublishVolumeResponse, error) {
+	// same question here for nodeIP, from where we are getting this IP, it should not come to us via SDC
 	hostURL := nodeIP + "/" + "255.255.255.255"
+	// need to add external host access ip range here for the first time if it is not added?
 	var nfsExportName string
 	nfsExportName = NFSExportNamePrefix + fs.Name
 

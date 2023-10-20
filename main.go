@@ -18,13 +18,14 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"os"
+	"strings"
+
 	"github.com/dell/csi-vxflexos/v2/k8sutils"
 	"github.com/dell/csi-vxflexos/v2/provider"
 	"github.com/dell/csi-vxflexos/v2/service"
 	"github.com/dell/gocsi"
 	"github.com/sirupsen/logrus"
-	"os"
-	"strings"
 )
 
 // main is ignored when this package is built as a go plug-in
@@ -95,6 +96,10 @@ const usage = `    X_CSI_VXFLEXOS_SDCGUID
 
         The default value is false.
 
+	X_CSI_POWERSTORE_NODE_ID_PATH
+		Specifies the name of the text file contents of which will
+		be appended to the node ID
+	
     X_CSI_VXFLEXOS_ENABLELISTVOLUMESNAPSHOTS
         When listing volumes, if this option is is enabled, then volumes and snapshots will be returned.
         Otherwise only volumes are returned.

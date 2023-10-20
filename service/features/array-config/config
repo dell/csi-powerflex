@@ -5,17 +5,25 @@
       "password": "Password123",
       "insecure": true,
       "isDefault": true,
-      "systemID": "14dbbf5617523654",
+      "systemID": "14dbbf5617523654"
       "nasName": "dummy-name"
    },
    {
       "endpoint": "http://127.0.0.2",
       "username": "admin",
       "password": "Password123",
-      "skipCertificateValidation": true,
+      "insecure": true,
       "isDefault": false,
-      "systemID": "15dbbf5617523655",
-      "AllSystemNames" : "15dbbf5617523655-previous-name",
+      "systemID": "15dbbf5617523655"
+      "nasName": "dummy-name"
+   },
+   {
+      "username": "admin",
+      "password": "Password123",
+      "systemID": "1235e15806d1ec0f",
+      "endpoint": "https://1.2.3.4",
+      "insecure": true,
+      "isDefault": false
       "nasName": "dummy-name"
    }
 ]
