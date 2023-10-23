@@ -2118,7 +2118,7 @@ func (s *service) GetCapacity(
 				break
 			}
 		}
-
+		Log.Println("kkkkkkkkkkkkkkkkkkkkk capacity", systemID)
 		if systemID == "" {
 			// Get capacity of storage pool spname in all systems, return total capacity
 			capacity, err = s.getCapacityForAllSystems(ctx, "", spname)
