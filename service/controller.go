@@ -2110,6 +2110,7 @@ func (s *service) GetCapacity(
 		pd, ok := params[KeyProtectionDomain]
 		if !ok {
 			Log.Printf("Protection Domain name not provided; there could be conflicts if two storage pools share a name")
+			Log.Printf("kkkkkkkkkkkkkkkkkk")
 		}
 		systemID := ""
 		for key, value := range params {
