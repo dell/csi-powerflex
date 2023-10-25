@@ -2136,7 +2136,10 @@ func (s *service) GetCapacity(
 	// var client1 *goscaleio.Client
 	// vol1, err := client1.GetMaxVol()
 	// Log.Println("rrrrrrrrrrrrrrrrrr max vol", vol1)
-	maxvol := getMaximumVolumeSize()
+	maxvol, err := getMaximumVolumeSize()
+	if err != nil {
+		Log.Debug("GetMaxVolumeSize returning error12333 ", err)
+	}
 	Log.Println("maxxxxxxxx vollllll", maxvol)
 
 	return &csi.GetCapacityResponse{
@@ -2144,15 +2147,15 @@ func (s *service) GetCapacity(
 	}, nil
 }
 
-func getMaximumVolumeSize() string {
+func getMaximumVolumeSize() (string, error) {
 	var client1 *goscaleio.Client
 	vol1, err := client1.GetMaxVol()
 	Log.Println("rrrrrrrrrrrrrrrrrr max vol", vol1)
 	if err != nil {
 		Log.Debug("GetMaxVolumeSize returning error ", err)
-		return err.Error()
+		return "", err
 	}
-	return vol1
+	return vol1, nil
 }
 
 func (s *service) ControllerGetCapabilities(
