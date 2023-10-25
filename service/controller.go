@@ -2150,7 +2150,7 @@ func getMaximumVolumeSize() string {
 	Log.Println("rrrrrrrrrrrrrrrrrr max vol", vol1)
 	if err != nil {
 		Log.Debug("GetMaxVolumeSize returning error ", err)
-		return nil, err
+		return err.Error()
 	}
 	return vol1
 }
