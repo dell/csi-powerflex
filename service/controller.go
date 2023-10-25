@@ -2120,6 +2120,12 @@ func (s *service) GetCapacity(
 			}
 		}
 		Log.Println("kkkkkkkkkkkkkkkkkkkkk capacity", systemID)
+		maxvol, err := getMaximumVolumeSize(systemID)
+		if err != nil {
+			Log.Debug("GetMaxVolumeSize returning error12333 ", err)
+		}
+		Log.Println("maxxxxxxxx vollllll", maxvol)
+
 		if systemID == "" {
 			// Get capacity of storage pool spname in all systems, return total capacity
 			capacity, err = s.getCapacityForAllSystems(ctx, "", spname)
@@ -2136,26 +2142,42 @@ func (s *service) GetCapacity(
 	// var client1 *goscaleio.Client
 	// vol1, err := client1.GetMaxVol()
 	// Log.Println("rrrrrrrrrrrrrrrrrr max vol", vol1)
-	maxvol, err := getMaximumVolumeSize()
-	if err != nil {
-		Log.Debug("GetMaxVolumeSize returning error12333 ", err)
-	}
-	Log.Println("maxxxxxxxx vollllll", maxvol)
+	// maxvol, err := getMaximumVolumeSize(systemID)
+	// if err != nil {
+	// 	Log.Debug("GetMaxVolumeSize returning error12333 ", err)
+	// }
+	// Log.Println("maxxxxxxxx vollllll", maxvol)
 
 	return &csi.GetCapacityResponse{
 		AvailableCapacity: capacity,
 	}, nil
 }
 
-func getMaximumVolumeSize() (string, error) {
-	var client1 *goscaleio.Client
-	vol1, err := client1.GetMaxVol()
+// func getMaximumVolumeSize() (string, error) {
+// 	var client1 goscaleio.Client
+// 	vol1, err := client1.GetMaxVol()
+// 	Log.Println("rrrrrrrrrrrrrrrrrr max vol", vol1)
+// 	if err != nil {
+// 		Log.Debug("GetMaxVolumeSize returning error ", err)
+// 		return "", err
+// 	}
+// 	return vol1, nil
+// }
+
+func (s *service) getMaximumVolumeSize(systemID string) (string, error) {
+	adminClient := s.adminClients[systemID]
+	if adminClient == nil {
+		return "", status.Errorf(codes.InvalidArgument, "can't find adminClient by id %s", systemID)
+	}
+
+	vol1, err := adminClient.GetMaxVol()
 	Log.Println("rrrrrrrrrrrrrrrrrr max vol", vol1)
 	if err != nil {
 		Log.Debug("GetMaxVolumeSize returning error ", err)
 		return "", err
 	}
 	return vol1, nil
+
 }
 
 func (s *service) ControllerGetCapabilities(
