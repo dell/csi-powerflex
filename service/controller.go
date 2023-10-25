@@ -2149,7 +2149,8 @@ func getMaximumVolumeSize() string {
 	vol1, err := client1.GetMaxVol()
 	Log.Println("rrrrrrrrrrrrrrrrrr max vol", vol1)
 	if err != nil {
-		Log.Debug(fmt.Sprintf("GetMaxVolumeSize returning error ", err))
+		Log.Debug("GetMaxVolumeSize returning error ", err)
+		return nil, err
 	}
 	return vol1
 }
