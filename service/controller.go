@@ -20,12 +20,14 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/dell/goscaleio"
@@ -2091,6 +2093,10 @@ func (s *service) getCapacityForAllSystems(ctx context.Context, protectionDomain
 	return capacity, nil
 }
 
+var maxVolumesSizeForArray = make(map[string]int64)
+
+var mutex = &sync.Mutex{}
+
 func (s *service) GetCapacity(
 	ctx context.Context,
 	req *csi.GetCapacityRequest) (
@@ -2120,11 +2126,6 @@ func (s *service) GetCapacity(
 			}
 		}
 		Log.Println("kkkkkkkkkkkkkkkkkkkkk capacity", systemID)
-		maxvol, err := getMaximumVolumeSize(systemID)
-		if err != nil {
-			Log.Debug("GetMaxVolumeSize returning error12333 ", err)
-		}
-		Log.Println("maxxxxxxxx vollllll", maxvol)
 
 		if systemID == "" {
 			// Get capacity of storage pool spname in all systems, return total capacity
@@ -2147,37 +2148,77 @@ func (s *service) GetCapacity(
 	// 	Log.Debug("GetMaxVolumeSize returning error12333 ", err)
 	// }
 	// Log.Println("maxxxxxxxx vollllll", maxvol)
+	systemID := ""
+	for key, value := range params {
+		if strings.EqualFold(key, KeySystemID) {
+			systemID = value
+			break
+		}
+	}
+	Log.Println("wwwwwwwwwwwwwww capacity", systemID)
 
+	maxVolSize, err := s.getMaximumVolumeSize(systemID)
+	if err != nil {
+		Log.Debug("GetMaxVolumeSize returning error12333 ", err)
+	}
+	Log.Println("maxxxxxxxx vollllll", maxVolSize)
+
+	if maxVolSize < 0 {
+		return &csi.GetCapacityResponse{
+			AvailableCapacity: capacity,
+		}, nil
+	}
+	maxVol := wrapperspb.Int64(maxVolSize)
 	return &csi.GetCapacityResponse{
 		AvailableCapacity: capacity,
+		MaximumVolumeSize: maxVol,
 	}, nil
+
 }
 
-// func getMaximumVolumeSize() (string, error) {
-// 	var client1 goscaleio.Client
-// 	vol1, err := client1.GetMaxVol()
-// 	Log.Println("rrrrrrrrrrrrrrrrrr max vol", vol1)
-// 	if err != nil {
-// 		Log.Debug("GetMaxVolumeSize returning error ", err)
-// 		return "", err
-// 	}
-// 	return vol1, nil
-// }
+func (s *service) getMaximumVolumeSize(systemID string) (int64, error) {
+	valueInCache, found := getCachedMaximumVolumeSize(systemID)
+	if !found || valueInCache < 0 {
+		adminClient := s.adminClients[systemID]
+		if adminClient == nil {
+			return 0, status.Errorf(codes.InvalidArgument, "can't find adminClient by id %s", systemID)
+		}
 
-func (s *service) getMaximumVolumeSize(systemID string) (string, error) {
-	adminClient := s.adminClients[systemID]
-	if adminClient == nil {
-		return "", status.Errorf(codes.InvalidArgument, "can't find adminClient by id %s", systemID)
+		vol1, err := adminClient.GetMaxVol()
+		Log.Println("rrrrrrrrrrrrrrrrrr max vol", vol1)
+		if err != nil {
+			Log.Debug("GetMaxVolumeSize returning error ", err)
+			return 0, err
+		}
+
+		value, err := strconv.ParseInt(vol1, 10, 64)
+		if err != nil {
+			Log.Debug("error converting str to int ", err)
+			return 0, err
+
+		}
+
+		cacheMaximumVolumeSize(systemID, value)
+		valueInCache = value
+
 	}
+	return valueInCache, nil
 
-	vol1, err := adminClient.GetMaxVol()
-	Log.Println("rrrrrrrrrrrrrrrrrr max vol", vol1)
-	if err != nil {
-		Log.Debug("GetMaxVolumeSize returning error ", err)
-		return "", err
-	}
-	return vol1, nil
+}
 
+func getCachedMaximumVolumeSize(key string) (int64, bool) {
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	value, found := maxVolumesSizeForArray[key]
+	return value, found
+}
+
+func cacheMaximumVolumeSize(key string, value int64) {
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	maxVolumesSizeForArray[key] = value
 }
 
 func (s *service) ControllerGetCapabilities(
