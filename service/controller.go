@@ -2163,12 +2163,14 @@ func (s *service) GetCapacity(
 	}
 	Log.Println("maxxxxxxxx vollllll", maxVolSize)
 
+	maxVolSizeinkbps := maxVolSize * kiBytesInGiB
+
 	if maxVolSize < 0 {
 		return &csi.GetCapacityResponse{
 			AvailableCapacity: capacity,
 		}, nil
 	}
-	maxVol := wrapperspb.Int64(maxVolSize)
+	maxVol := wrapperspb.Int64(maxVolSizeinkbps)
 	return &csi.GetCapacityResponse{
 		AvailableCapacity: capacity,
 		MaximumVolumeSize: maxVol,
