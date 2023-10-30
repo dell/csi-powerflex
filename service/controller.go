@@ -2098,7 +2098,7 @@ var maxVolumesSizeForArray = make(map[string]int64)
 
 var mutex = &sync.Mutex{}
 
-func (s *service) GetCapacity(
+func (s *service) city(
 	ctx context.Context,
 	req *csi.GetCapacityRequest) (
 	*csi.GetCapacityResponse, error) {
@@ -2139,26 +2139,26 @@ func (s *service) GetCapacity(
 			"Unable to get capacity: %s", err.Error())
 	}
 
-	systemID := ""
-	for key, value := range params {
-		if strings.EqualFold(key, KeySystemID) {
-			systemID = value
-			break
-		}
-	}
+	// systemID := ""
+	// for key, value := range params {
+	// 	if strings.EqualFold(key, KeySystemID) {
+	// 		systemID = value
+	// 		break
+	// 	}
+	// }
 
 	maxVolSize, err := s.getMaximumVolumeSize(systemID)
 	if err != nil {
 		Log.Debug("GetMaxVolumeSize returning error ", err)
 	}
-	maxVolSizeinbps := maxVolSize * bytesInGiB
+	maxVolSizeinBytes := maxVolSize * bytesInGiB
 
 	if maxVolSize < 0 {
 		return &csi.GetCapacityResponse{
 			AvailableCapacity: capacity,
 		}, nil
 	}
-	maxVol := wrapperspb.Int64(maxVolSizeinbps)
+	maxVol := wrapperspb.Int64(maxVolSizeinBytes)
 	return &csi.GetCapacityResponse{
 		AvailableCapacity: capacity,
 		MaximumVolumeSize: maxVol,
