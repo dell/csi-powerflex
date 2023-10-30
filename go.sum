@@ -112,8 +112,6 @@ github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.3.0 h1:yXocN5AwXzrJXG
 github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.3.0/go.mod h1:EWT6KIoauXYlcGiss60KwlnTwxFI6KCt3hklW0HZIOc=
 github.com/dell/gocsi v1.8.0 h1:0qsC/Ts6QeAWBBVaQvFrZYBXdoR7bmjrDUb3QpcMfHM=
 github.com/dell/gocsi v1.8.0/go.mod h1:X/8Ll8qqKAKCenmd1gPJMUvUmgY8cK0LiS8Pck12UaU=
-github.com/dell/gofsutil v1.13.0 h1:kAW+3YbO02GMPJTRy5H9hSsYYq4kip9gCAIffMFFOX4=
-github.com/dell/gofsutil v1.13.0/go.mod h1:UPRuS1blrPnfT2K3nWRrLHIosZsBznDglovA6DRMmUI=
 github.com/dell/gofsutil v1.13.1 h1:hu26rfykH0gvpSxPe5lTBVCHZA3m896/iO+2Ekz0U7A=
 github.com/dell/gofsutil v1.13.1/go.mod h1:UPRuS1blrPnfT2K3nWRrLHIosZsBznDglovA6DRMmUI=
 github.com/dell/goscaleio v1.12.0 h1:9KbctTsxqgVG+9Lj9NDwb4wvjzO7YMZ7uDzps4LlX2E=
@@ -725,8 +723,8 @@ google.golang.org/grpc v1.27.1/go.mod h1:qbnxyOmOxrQa7FizSgH+ReBfzJrCY1pSN7KXBS8
 google.golang.org/grpc v1.29.0/go.mod h1:itym6AZVZYACWQqET3MqgPpjcuV5QH3BxFS3IjizoKk=
 google.golang.org/grpc v1.33.1/go.mod h1:fr5YgcSWrqhRRxogOsw7RzIpsmvOZ6IcH4kBYTpR3n0=
 google.golang.org/grpc v1.38.0/go.mod h1:NREThFqKR1f3iQ6oBuvc5LadQuXVGo9rkm5ZGrQdJfM=
-google.golang.org/grpc v1.57.0 h1:kfzNeI/klCGD2YPMUlaGNT3pxvYfga7smW3Vth8Zsiw=
-google.golang.org/grpc v1.57.0/go.mod h1:Sd+9RMTACXwmub0zcNY2c4arhtrbBYD1AUHI/dt16Mo=
+google.golang.org/grpc v1.57.1 h1:upNTNqv0ES+2ZOOqACwVtS3Il8M12/+Hz41RCPzAjQg=
+google.golang.org/grpc v1.57.1/go.mod h1:Sd+9RMTACXwmub0zcNY2c4arhtrbBYD1AUHI/dt16Mo=
 google.golang.org/protobuf v0.0.0-20200109180630-ec00e32a8dfd/go.mod h1:DFci5gLYBciE7Vtevhsrf46CRTquxDuWsQurQQe4oz8=
 google.golang.org/protobuf v0.0.0-20200221191635-4d8936d0db64/go.mod h1:kwYJMbMJ01Woi6D6+Kah6886xMZcty6N08ah7+eCXa0=
 google.golang.org/protobuf v0.0.0-20200228230310-ab0ca4ff8a60/go.mod h1:cfTl7dwQJ+fmap5saPgwCLgHXTUD7jkjRqWcaiX5VyM=
