@@ -2034,7 +2034,7 @@ func (f *feature) iCallGetMaximumVolumeSize(arg1 string) {
 	systemid := arg1
 	f.maxVolSize, f.err = f.service.getMaximumVolumeSize(systemid)
 	if f.err != nil {
-		log.Printf("err while getting max vol size: %s\n", err.Error())
+		log.Printf("err while getting max vol size: %s\n", f.err.Error())
 	}
 
 }
