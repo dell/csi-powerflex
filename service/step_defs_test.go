@@ -2039,7 +2039,7 @@ func (f *feature) iCallGetMaximumVolumeSize(arg1 string) {
 
 }
 
-func (f *feature) aValidGetCapacityResponseIsReturned1() error {
+func (f *feature) aValidGetCapacityResponsewithmaxvolsizeIsReturned() error {
 	if f.err != nil {
 		return f.err
 	}
@@ -2052,7 +2052,7 @@ func (f *feature) aValidGetCapacityResponseIsReturned1() error {
 
 	if f.maxVolSize >= 0 && f.getCapacityResponse.AvailableCapacity > 0 {
 
-		fmt.Printf("Available capacity: and Max volume size: %d %d\n", f.getCapacityResponse.AvailableCapacity, f.getCapacityResponse.MaximumVolumeSize)
+		fmt.Printf("Available capacity: and Max volume size: %d %v\n", f.getCapacityResponse.AvailableCapacity, f.getCapacityResponse.MaximumVolumeSize)
 	}
 
 	fmt.Printf("Available capacity: %d\n", f.getCapacityResponse.AvailableCapacity)
@@ -4509,7 +4509,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^the volume is already mapped to an SDC$`, f.theVolumeIsAlreadyMappedToAnSDC)
 	s.Step(`^I call GetCapacity with storage pool "([^"]*)"$`, f.iCallGetCapacityWithStoragePool)
 	s.Step(`^a valid GetCapacityResponse is returned$`, f.aValidGetCapacityResponseIsReturned)
-	s.Step(`^a valid GetCapacityResponse1 is returned$`, f.aValidGetCapacityResponseIsReturned1)
+	s.Step(`^a valid GetCapacityResponse1 is returned$`, f.aValidGetCapacityResponsewithmaxvolsizeIsReturned)
 	s.Step(`^I call get GetMaximumVolumeSize with systemid "([^"]*)"$`, f.iCallGetMaximumVolumeSize)
 	s.Step(`^I call ControllerGetCapabilities "([^"]*)"$`, f.iCallControllerGetCapabilities)
 	s.Step(`^a valid ControllerGetCapabilitiesResponse is returned$`, f.aValidControllerGetCapabilitiesResponseIsReturned)

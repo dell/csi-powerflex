@@ -2116,7 +2116,6 @@ func (s *service) GetCapacity(
 		pd, ok := params[KeyProtectionDomain]
 		if !ok {
 			Log.Printf("Protection Domain name not provided; there could be conflicts if two storage pools share a name")
-			Log.Printf("kkkkkkkkkkkkkkkkkk")
 		}
 		systemID := ""
 		for key, value := range params {
@@ -2125,7 +2124,6 @@ func (s *service) GetCapacity(
 				break
 			}
 		}
-		Log.Println("kkkkkkkkkkkkkkkkkkkkk capacity", systemID)
 
 		if systemID == "" {
 			// Get capacity of storage pool spname in all systems, return total capacity
@@ -2140,14 +2138,6 @@ func (s *service) GetCapacity(
 			"Unable to get capacity: %s", err.Error())
 	}
 
-	// var client1 *goscaleio.Client
-	// vol1, err := client1.GetMaxVol()
-	// Log.Println("rrrrrrrrrrrrrrrrrr max vol", vol1)
-	// maxvol, err := getMaximumVolumeSize(systemID)
-	// if err != nil {
-	// 	Log.Debug("GetMaxVolumeSize returning error12333 ", err)
-	// }
-	// Log.Println("maxxxxxxxx vollllll", maxvol)
 	systemID := ""
 	for key, value := range params {
 		if strings.EqualFold(key, KeySystemID) {
@@ -2155,22 +2145,19 @@ func (s *service) GetCapacity(
 			break
 		}
 	}
-	Log.Println("wwwwwwwwwwwwwww capacity", systemID)
 
 	maxVolSize, err := s.getMaximumVolumeSize(systemID)
 	if err != nil {
-		Log.Debug("GetMaxVolumeSize returning error12333 ", err)
+		Log.Debug("GetMaxVolumeSize returning error ", err)
 	}
-	Log.Println("maxxxxxxxx vollllll", maxVolSize)
-
-	maxVolSizeinkbps := maxVolSize * bytesInGiB
+	maxVolSizeinbps := maxVolSize * bytesInGiB
 
 	if maxVolSize < 0 {
 		return &csi.GetCapacityResponse{
 			AvailableCapacity: capacity,
 		}, nil
 	}
-	maxVol := wrapperspb.Int64(maxVolSizeinkbps)
+	maxVol := wrapperspb.Int64(maxVolSizeinbps)
 	return &csi.GetCapacityResponse{
 		AvailableCapacity: capacity,
 		MaximumVolumeSize: maxVol,
@@ -2187,7 +2174,6 @@ func (s *service) getMaximumVolumeSize(systemID string) (int64, error) {
 		}
 
 		vol1, err := adminClient.GetMaxVol()
-		Log.Println("rrrrrrrrrrrrrrrrrr max vol", vol1)
 		if err != nil {
 			Log.Debug("GetMaxVolumeSize returning error ", err)
 			return 0, err

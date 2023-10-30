@@ -1,5 +1,334 @@
 {
-    "maxVal": "1048576",
-    "type": "volumeSizeGb",
-    "description": "Volume size in GB"
+    "systemLimitEntryList": [
+        {
+            "maxVal": "256",
+            "description": "Number of protections domains",
+            "type": "protectionDomains"
+        },
+        {
+            "maxVal": "1024",
+            "description": "Number of storage pools",
+            "type": "storagePools"
+        },
+        {
+            "maxVal": "16384",
+            "description": "Number of fault sets",
+            "type": "faultSets"
+        },
+        {
+            "maxVal": "512",
+            "description": "Number of SDSs",
+            "type": "sdss"
+        },
+        {
+            "maxVal": "2048",
+            "description": "Number of SDCs",
+            "type": "sdcs"
+        },
+        {
+            "maxVal": "131072",
+            "description": "Number of volume trees",
+            "type": "vtrees"
+        },
+        {
+            "maxVal": "131072",
+            "description": "Number of volumes",
+            "type": "volumes"
+        },
+        {
+            "maxVal": "133120",
+            "description": "Number of snapshots",
+            "type": "snapshots"
+        },
+        {
+            "maxVal": "256",
+            "description": "Number of system users",
+            "type": "users"
+        },
+        {
+            "maxVal": "8",
+            "description": "Number of LDAP services",
+            "type": "ldapEntries"
+        },
+        {
+            "maxVal": "128",
+            "description": "Number of sessions",
+            "type": "sessions"
+        },
+        {
+            "maxVal": "16",
+            "description": "Number of rsyslog clients",
+            "type": "rsyslogClients"
+        },
+        {
+            "maxVal": "512",
+            "description": "Number of SDTs",
+            "type": "sdts"
+        },
+        {
+            "maxVal": "1024",
+            "description": "Number of NVMe Hosts",
+            "type": "nvmeHosts"
+        },
+        {
+            "maxVal": "64",
+            "description": "Number of storage pools per protection domain",
+            "type": "storagePoolsPerProtectionDomain"
+        },
+        {
+            "maxVal": "128",
+            "description": "Number of SDSs per protection domain",
+            "type": "sdssPerProtectionDomain"
+        },
+        {
+            "maxVal": "64",
+            "description": "Number of fault sets per protection domain",
+            "type": "faultSetsPerProtectionDomain"
+        },
+        {
+            "maxVal": "64",
+            "description": "Number of SDSs per fault set",
+            "type": "sdssPerFaultSet"
+        },
+        {
+            "maxVal": "64",
+            "description": "Number of devices per SDS",
+            "type": "devicesPerSds"
+        },
+        {
+            "maxVal": "8",
+            "description": "Number of RFcache devices per SDS",
+            "type": "rfcacheDevicePerSds"
+        },
+        {
+            "maxVal": "300",
+            "description": "Number of devices per storage pool",
+            "type": "devicePerStoragePool"
+        },
+        {
+            "maxVal": "127",
+            "description": "Number of volumes per medium-granularity volume tree",
+            "type": "volumePerMediumGranularityVtree"
+        },
+        {
+            "maxVal": "127",
+            "description": "Number of volumes per medium-granularity volume tree",
+            "type": "volumePerVtree"
+        },
+        {
+            "maxVal": "127",
+            "description": "Number of volumes per fine-granularity volume tree",
+            "type": "volumePerFineGranularityVtree"
+        },
+        {
+            "maxVal": "254",
+            "description": "Number of snapshots per medium-granularity volume tree",
+            "type": "snapshotsPerMediumGranularityVtree"
+        },
+        {
+            "maxVal": "254",
+            "description": "Number of snapshots per medium-granularity volume tree",
+            "type": "snapshotsPerVtree"
+        },
+        {
+            "maxVal": "254",
+            "description": "Number of snapshots per fine-granularity volume tree",
+            "type": "snapshotsPerFineGranularityVtree"
+        },
+        {
+            "maxVal": "8192",
+            "description": "Number of volumes mapped to a single SDC",
+            "type": "volumesPerSdc"
+        },
+        {
+            "maxVal": "8192",
+            "description": "Number of volumes mapped to a single NVMe host",
+            "type": "volumesPerNvmeHost"
+        },
+        {
+            "maxVal": "32768",
+            "description": "Number of volumes per protection domain",
+            "type": "volumesPerProtectionDomain"
+        },
+        {
+            "maxVal": "128",
+            "minVal": "2",
+            "description": "Number of SDTs per protection domain",
+            "type": "sdtsPerProtectionDomain"
+        },
+        {
+            "maxVal": "8",
+            "description": "Number of LDAP groups per LDAP service",
+            "type": "ldapGroupsPerLdapEntry"
+        },
+        {
+            "maxVal": "4",
+            "minVal": "1",
+            "description": "Number of IPs per MDM",
+            "type": "ipPerMdm"
+        },
+        {
+            "maxVal": "8",
+            "minVal": "1",
+            "description": "Number of IPs per SDS/SDC",
+            "type": "ipPerHost"
+        },
+        {
+            "maxVal": "8",
+            "minVal": "1",
+            "description": "Number of IPs per SDT",
+            "type": "ipPerSdt"
+        },
+        {
+            "maxVal": "1048576",
+            "minVal": "8",
+            "description": "Single volume size in GB",
+            "type": "volumeSizeGb"
+        },
+        {
+            "maxVal": "4194303",
+            "description": "Total size of all volumes in Storage Pool in GB",
+            "type": "allVolumesInSpSizeGb"
+        },
+        {
+            "maxVal": "16777216",
+            "description": "Total size of all volumes in System (GB)",
+            "type": "allVolumesSizeGb"
+        },
+        {
+            "maxVal": "32768",
+            "description": "Number of VTrees per protection domain",
+            "type": "vtreesPerProtectionDomain"
+        },
+        {
+            "maxVal": "512",
+            "description": "Number of acceleration devices in acceleration pool",
+            "type": "devicesInAccelerationPool"
+        },
+        {
+            "maxVal": "32",
+            "description": "Number of acceleration pools per protections domain",
+            "type": "accelerationPoolsPerProtectionDomain"
+        },
+        {
+            "maxVal": "8",
+            "description": "Number of acceleration devices per acceleration pool that belong to the same SDS",
+            "type": "accelerationDevicesPerSdsPerAccelerationPool"
+        },
+        {
+            "maxVal": "14902",
+            "minVal": "90",
+            "description": "Capacity per medium granularity device in GB",
+            "type": "mediumGranularityDeviceSizeInGb"
+        },
+        {
+            "maxVal": "8704",
+            "minVal": "128",
+            "description": "Capacity per fine granularity device in GB",
+            "type": "fineGranularityDeviceSizeInGb"
+        },
+        {
+            "maxVal": "149504",
+            "description": "Capacity per SDS in GB",
+            "type": "capacityPerSdsInGb"
+        },
+        {
+            "maxVal": "131072",
+            "description": "Fine granularity capacity per SDS in GB",
+            "type": "fgCapacityPerSdsInGb"
+        },
+        {
+            "maxVal": "1024",
+            "description": "Number of Replication Consistency Groups",
+            "type": "replicationConsistencyGroups"
+        },
+        {
+            "maxVal": "4",
+            "description": "Number of Replication Destination Systems",
+            "type": "replicationDestinationSystems"
+        },
+        {
+            "maxVal": "128",
+            "description": "Total Number of SDRs per system",
+            "type": "sdrs"
+        },
+        {
+            "maxVal": "32768",
+            "description": "Total Number of Replication Pairs in system",
+            "type": "replicationPairs"
+        },
+        {
+            "maxVal": "512",
+            "description": "Total Number of concurrent Move Pairs operations",
+            "type": "concurrentMovePairsOperations"
+        },
+        {
+            "maxVal": "65536",
+            "minVal": "8",
+            "description": "Single replication volume size in GB",
+            "type": "replicationVolumeSizeGb"
+        },
+        {
+            "maxVal": "262143",
+            "description": "Number of mappings between volumes and hosts",
+            "type": "replicationPairsPerReplicationConsistencyGroup"
+        },
+        {
+            "maxVal": "512",
+            "description": "Number of host connections (IO controllers) per SDT",
+            "type": "ioControllersPerSdt"
+        },
+        {
+            "maxVal": "128",
+            "description": "Depth of IO controller queue",
+            "type": "ioControllersQueueDepth"
+        },
+        {
+            "maxVal": "32",
+            "description": "Number of IO controller queues",
+            "type": "ioControllersNumQueues"
+        },
+        {
+            "maxVal": "8",
+            "description": "Number of paths per volume",
+            "type": "pathsPerVolume"
+        },
+        {
+            "maxVal": "128",
+            "description": "Number of connections per host per protection domain",
+            "type": "connectionsPerHostPerProtectionDomain"
+        },
+        {
+            "maxVal": "65519",
+            "description": "Number of host connections (IO controllers) per SYSTEM",
+            "type": "ioControllersPerSystem"
+        },
+        {
+            "maxVal": "65535",
+            "description": "Number of nvme registrations (host identifier and volume)",
+            "type": "NvmeResvRegistrations"
+        },
+        {
+            "maxVal": "8",
+            "description": "Number of remote systems",
+            "type": "remoteSystems"
+        },
+        {
+            "maxVal": "16000",
+            "description": "Number of snapshot copy tasks",
+            "type": "snapshotCopyTasks"
+        },
+        {
+            "maxVal": "8",
+            "minVal": "1",
+            "description": "Number of IPs per remote system",
+            "type": "ipPerRemoteSystems"
+        },
+        {
+            "maxVal": "102400",
+            "minVal": "128",
+            "description": "Bandwidth-Limit in Mega-Bits-Per-Second",
+            "type": "systemLimitRemoteSystems"
+        }
+    ]
 }

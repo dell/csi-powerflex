@@ -459,7 +459,6 @@ Feature: VxFlex OS CSI interface
     When I call Probe
     And I call GetCapacity with storage pool ""
   
-  @wip
   Scenario: Call GetCapacity with valid Storage Pool Name
     Given a VxFlexOS service
     When I call Probe
@@ -473,8 +472,8 @@ Feature: VxFlex OS CSI interface
     Then a valid CreateVolumeResponse is returned
     And I call GetCapacity with storage pool "viki_pool_HDD_20181031"
     And I call get GetMaximumVolumeSize with systemid "14dbbf5617523654"
-    Then a valid GetCapacityResponse1 is returned   
-
+    Then a valid GetCapacityResponse1 is returned 
+  
   Scenario: Call GetCapacity with invalid Storage Pool name
     Given a VxFlexOS service
     When I call Probe
