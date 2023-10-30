@@ -2108,6 +2108,7 @@ func (s *service) city(
 		err      error
 	)
 
+	systemID := ""
 	params := req.GetParameters()
 	if params == nil || len(params) == 0 {
 		// Get capacity of all systems
@@ -2118,7 +2119,6 @@ func (s *service) city(
 		if !ok {
 			Log.Printf("Protection Domain name not provided; there could be conflicts if two storage pools share a name")
 		}
-		systemID := ""
 		for key, value := range params {
 			if strings.EqualFold(key, KeySystemID) {
 				systemID = value
@@ -2139,25 +2139,18 @@ func (s *service) city(
 			"Unable to get capacity: %s", err.Error())
 	}
 
-	// systemID := ""
-	// for key, value := range params {
-	// 	if strings.EqualFold(key, KeySystemID) {
-	// 		systemID = value
-	// 		break
-	// 	}
-	// }
-
 	maxVolSize, err := s.getMaximumVolumeSize(systemID)
 	if err != nil {
 		Log.Debug("GetMaxVolumeSize returning error ", err)
 	}
-	maxVolSizeinBytes := maxVolSize * bytesInGiB
 
 	if maxVolSize < 0 {
 		return &csi.GetCapacityResponse{
 			AvailableCapacity: capacity,
 		}, nil
 	}
+
+	maxVolSizeinBytes := maxVolSize * bytesInGiB
 	maxVol := wrapperspb.Int64(maxVolSizeinBytes)
 	return &csi.GetCapacityResponse{
 		AvailableCapacity: capacity,
