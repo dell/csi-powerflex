@@ -469,8 +469,10 @@ Feature: VxFlex OS CSI interface
   Scenario: Call GetMaximumVolumeSize with Systemid
     Given a VxFlexOS service
     When I call Probe
+    And I call CreateVolume "volume123"
+    Then a valid CreateVolumeResponse is returned
     And I call GetCapacity with storage pool "viki_pool_HDD_20181031"
-    And I call get GetMaximumVolumeSize with systemid "1235e15806d1ec0f"
+    And I call get GetMaximumVolumeSize with systemid "14dbbf5617523654"
     Then a valid GetCapacityResponse1 is returned   
 
   Scenario: Call GetCapacity with invalid Storage Pool name
