@@ -2093,6 +2093,7 @@ func (s *service) getCapacityForAllSystems(ctx context.Context, protectionDomain
 	return capacity, nil
 }
 
+// maxVolumesSizeForArray - store the maxVolumesSizeForArray
 var maxVolumesSizeForArray = make(map[string]int64)
 
 var mutex = &sync.Mutex{}
