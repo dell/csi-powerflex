@@ -52,6 +52,7 @@ var (
 		PodmonNodeProbeError          bool
 		PodmonVolumeError             bool
 		GetSystemSdcError             bool
+		GetSystemLimitError           bool
 		GetSdcInstancesError          bool
 		MapSdcError                   bool
 		ApproveSdcError               bool
@@ -254,6 +255,7 @@ func getRouter() http.Handler {
 	scaleioRouter.HandleFunc("/api/types/ReplicationPair/instances", handleReplicationPairInstances)
 	scaleioRouter.HandleFunc("/rest/v1/file-tree-quotas", handleFileTreeQuotas)
 	scaleioRouter.HandleFunc("/rest/v1/file-tree-quotas/{id}", handleGetFileTreeQuotas)
+	scaleioRouter.HandleFunc("/api/instances/System/action/querySystemLimits", handleGetSystemLimits)
 	return scaleioRouter
 }
 
@@ -272,6 +274,14 @@ func handleSystemSdc(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	returnJSONFile("features", "get_sdc_instances.json", w, nil)
+}
+
+func handleGetSystemLimits(w http.ResponseWriter, r *http.Request) {
+	if stepHandlersErrors.GetSystemLimitError {
+		writeError(w, "induced error", http.StatusRequestTimeout, codes.Internal)
+		return
+	}
+	returnJSONFile("features", "get_system_limits.json", w, nil)
 }
 
 // handleLogin implements GET /api/login

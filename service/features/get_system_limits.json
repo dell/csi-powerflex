@@ -1,0 +1,5 @@
+{
+    "maxVal": "1048576",
+    "type": "volumeSizeGb",
+    "description": "Volume size in GB"
+}
