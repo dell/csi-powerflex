@@ -2139,8 +2139,6 @@ func (s *service) GetCapacity(
 			"Unable to get capacity: %s", err.Error())
 	}
 
-	Log.Println("defaulttttttttt", s.opts.defaultSystemID)
-
 	if systemID == "" {
 		if s.opts.defaultSystemID != "" {
 			systemID = s.opts.defaultSystemID
