@@ -2139,24 +2139,37 @@ func (s *service) city(
 			"Unable to get capacity: %s", err.Error())
 	}
 
-	maxVolSize, err := s.getMaximumVolumeSize(systemID)
-	if err != nil {
-		Log.Debug("GetMaxVolumeSize returning error ", err)
+	Log.Println("defaulttttttttt", s.opts.defaultSystemID)
+
+	if systemID == "" {
+		if s.opts.defaultSystemID != "" {
+			systemID = s.opts.defaultSystemID
+		}
 	}
 
-	if maxVolSize < 0 {
+	if systemID != "" {
+		maxVolSize, err := s.getMaximumVolumeSize(systemID)
+		if err != nil {
+			Log.Debug("GetMaxVolumeSize returning error ", err)
+		}
+
+		if maxVolSize < 0 {
+			return &csi.GetCapacityResponse{
+				AvailableCapacity: capacity,
+			}, nil
+		}
+
+		maxVolSizeinBytes := maxVolSize * bytesInGiB
+		maxVol := wrapperspb.Int64(maxVolSizeinBytes)
 		return &csi.GetCapacityResponse{
 			AvailableCapacity: capacity,
+			MaximumVolumeSize: maxVol,
 		}, nil
 	}
 
-	maxVolSizeinBytes := maxVolSize * bytesInGiB
-	maxVol := wrapperspb.Int64(maxVolSizeinBytes)
 	return &csi.GetCapacityResponse{
 		AvailableCapacity: capacity,
-		MaximumVolumeSize: maxVol,
 	}, nil
-
 }
 
 func (s *service) getMaximumVolumeSize(systemID string) (int64, error) {
