@@ -1,4 +1,4 @@
-// Copyright © 2019-2022 Dell Inc. or its subsidiaries. All Rights Reserved.
+// Copyright © 2019-2023 Dell Inc. or its subsidiaries. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"github.com/cucumber/godog"
 	"github.com/dell/dell-csi-extensions/podmon"
@@ -145,6 +146,7 @@ type feature struct {
 	systemID                              string
 	context                               context.Context
 	nodeLabels                            map[string]string
+	maxVolSize                            int64
 }
 
 func (f *feature) checkGoRoutines(tag string) {
@@ -223,6 +225,7 @@ func (f *feature) aVxFlexOSServiceWithTimeoutMilliseconds(millis int) error {
 	f.createSnapshotResponse = nil
 	f.volumeIDList = f.volumeIDList[:0]
 	f.snapshotIndex = 0
+	f.maxVolSize = 0
 
 	// configure gofsutil; we use a mock interface
 	gofsutil.UseMockFS()
@@ -2023,6 +2026,36 @@ func (f *feature) iCallGetCapacityWithStoragePool(arg1 string) error {
 		log.Printf("GetCapacity call failed: %s\n", f.err.Error())
 		return nil
 	}
+	return nil
+}
+
+func (f *feature) iCallGetMaximumVolumeSize(arg1 string) {
+
+	systemid := arg1
+	f.maxVolSize, f.err = f.service.getMaximumVolumeSize(systemid)
+	if f.err != nil {
+		log.Printf("err while getting max vol size: %s\n", f.err.Error())
+	}
+
+}
+
+func (f *feature) aValidGetCapacityResponsewithmaxvolsizeIsReturned() error {
+	if f.err != nil {
+		return f.err
+	}
+	if f.maxVolSize >= 0 {
+		f.getCapacityResponse.MaximumVolumeSize = wrapperspb.Int64(f.maxVolSize)
+	}
+	if f.getCapacityResponse.AvailableCapacity <= 0 {
+		return errors.New("Expected AvailableCapacity to be positive")
+	}
+
+	if f.maxVolSize >= 0 && f.getCapacityResponse.AvailableCapacity > 0 {
+
+		fmt.Printf("Available capacity: and Max volume size: %d %v\n", f.getCapacityResponse.AvailableCapacity, f.getCapacityResponse.MaximumVolumeSize)
+	}
+
+	fmt.Printf("Available capacity: %d\n", f.getCapacityResponse.AvailableCapacity)
 	return nil
 }
 
@@ -4476,6 +4509,8 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^the volume is already mapped to an SDC$`, f.theVolumeIsAlreadyMappedToAnSDC)
 	s.Step(`^I call GetCapacity with storage pool "([^"]*)"$`, f.iCallGetCapacityWithStoragePool)
 	s.Step(`^a valid GetCapacityResponse is returned$`, f.aValidGetCapacityResponseIsReturned)
+	s.Step(`^a valid GetCapacityResponse1 is returned$`, f.aValidGetCapacityResponsewithmaxvolsizeIsReturned)
+	s.Step(`^I call get GetMaximumVolumeSize with systemid "([^"]*)"$`, f.iCallGetMaximumVolumeSize)
 	s.Step(`^I call ControllerGetCapabilities "([^"]*)"$`, f.iCallControllerGetCapabilities)
 	s.Step(`^a valid ControllerGetCapabilitiesResponse is returned$`, f.aValidControllerGetCapabilitiesResponseIsReturned)
 	s.Step(`^I call ValidateVolumeCapabilities with voltype "([^"]*)" access "([^"]*)" fstype "([^"]*)"$`, f.iCallValidateVolumeCapabilitiesWithVoltypeAccessFstype)
