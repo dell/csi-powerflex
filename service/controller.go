@@ -2098,7 +2098,7 @@ var maxVolumesSizeForArray = make(map[string]int64)
 
 var mutex = &sync.Mutex{}
 
-func (s *service) city(
+func (s *service) GetCapacity(
 	ctx context.Context,
 	req *csi.GetCapacityRequest) (
 	*csi.GetCapacityResponse, error) {
