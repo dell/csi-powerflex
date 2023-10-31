@@ -2139,34 +2139,32 @@ func (s *service) GetCapacity(
 			"Unable to get capacity: %s", err.Error())
 	}
 
-	if systemID == "" {
-		if s.opts.defaultSystemID != "" {
-			systemID = s.opts.defaultSystemID
-		}
+	if systemID == "" && s.opts.defaultSystemID != "" {
+		systemID = s.opts.defaultSystemID
 	}
 
-	if systemID != "" {
-		maxVolSize, err := s.getMaximumVolumeSize(systemID)
-		if err != nil {
-			Log.Debug("GetMaxVolumeSize returning error ", err)
-		}
-
-		if maxVolSize < 0 {
-			return &csi.GetCapacityResponse{
-				AvailableCapacity: capacity,
-			}, nil
-		}
-
-		maxVolSizeinBytes := maxVolSize * bytesInGiB
-		maxVol := wrapperspb.Int64(maxVolSizeinBytes)
+	if systemID == "" {
 		return &csi.GetCapacityResponse{
 			AvailableCapacity: capacity,
-			MaximumVolumeSize: maxVol,
 		}, nil
 	}
 
+	maxVolSize, err := s.getMaximumVolumeSize(systemID)
+	if err != nil {
+		Log.Debug("GetMaxVolumeSize returning error ", err)
+	}
+
+	if maxVolSize < 0 {
+		return &csi.GetCapacityResponse{
+			AvailableCapacity: capacity,
+		}, nil
+	}
+
+	maxVolSizeinBytes := maxVolSize * bytesInGiB
+	maxVol := wrapperspb.Int64(maxVolSizeinBytes)
 	return &csi.GetCapacityResponse{
 		AvailableCapacity: capacity,
+		MaximumVolumeSize: maxVol,
 	}, nil
 }
 
