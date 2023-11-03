@@ -102,6 +102,9 @@ var K8sClientset kubernetes.Interface
 // give default value, will be overwritten by configmap
 var Log = logrus.New()
 
+// mdsvc points to the MD driver service plugin
+var mdsvc Service
+
 // ArrayConnectionData contains data required to connect to array
 type ArrayConnectionData struct {
 	SystemID                  string `json:"systemID"`
@@ -294,6 +297,10 @@ func New() Service {
 		connectedSystemNameToID: map[string]string{},
 		volumePrefixToSystems:   map[string][]string{},
 	}
+}
+
+func PutMDService(md Service) {
+	mdsvc = md
 }
 
 func (s *service) updateDriverConfigParams(logger *logrus.Logger, v *viper.Viper) error {
