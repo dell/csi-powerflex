@@ -10,12 +10,12 @@ require (
 	github.com/container-storage-interface/spec v1.6.0
 	github.com/cucumber/godog v0.12.1
 	github.com/dell/dell-csi-extensions/common v1.2.0
-	github.com/dell/dell-csi-extensions/podmon v1.2.0
-	github.com/dell/dell-csi-extensions/replication v1.5.0
-	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.3.0
-	github.com/dell/gocsi v1.8.0
-	github.com/dell/gofsutil v1.13.1
-	github.com/dell/goscaleio v1.12.1-0.20231017093409-11580d24020f
+	github.com/dell/dell-csi-extensions/podmon v1.2.1-0.20231031131730-68f55c8c3ba2
+	github.com/dell/dell-csi-extensions/replication v1.5.1-0.20231031131631-0552297c9ca6
+	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.3.1-0.20231031131328-a7458766d22d
+	github.com/dell/gocsi v1.8.1-0.20231031194001-10803e35d2e5
+	github.com/dell/gofsutil v1.13.2-0.20231013133348-d635f385fc6d
+	github.com/dell/goscaleio v1.12.1-0.20231030141135-bfa243f15f73
 	github.com/fsnotify/fsnotify v1.5.1
 	github.com/golang/protobuf v1.5.3
 	github.com/google/uuid v1.3.0
