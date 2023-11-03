@@ -24,6 +24,7 @@ import (
 	"time"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/dell/csi-md/md"
 	"github.com/dell/gofsutil"
 	"github.com/dell/goscaleio"
 	"github.com/sirupsen/logrus"
@@ -50,10 +51,14 @@ const (
 )
 
 func (s *service) NodeStageVolume(
-	_ context.Context,
-	_ *csi.NodeStageVolumeRequest) (
-	*csi.NodeStageVolumeResponse, error,
-) {
+	ctx context.Context,
+	req *csi.NodeStageVolumeRequest) (
+	*csi.NodeStageVolumeResponse, error) {
+
+	if md.IsMDVolumeID(req.GetVolumeId()) {
+		return mdsvc.NodeStageVolume(ctx, req)
+	}
+
 	return nil, status.Error(codes.Unimplemented, "")
 }
 
@@ -63,8 +68,12 @@ func (s *service) NodeStageVolume(
 func (s *service) NodeUnstageVolume(
 	ctx context.Context,
 	req *csi.NodeUnstageVolumeRequest) (
-	*csi.NodeUnstageVolumeResponse, error,
-) {
+	*csi.NodeUnstageVolumeResponse, error) {
+
+	if md.IsMDVolumeID(req.GetVolumeId()) {
+		return mdsvc.NodeUnstageVolume(ctx, req)
+	}
+
 	var reqID string
 	headers, ok := metadata.FromIncomingContext(ctx)
 	if ok {
@@ -115,8 +124,12 @@ func (s *service) NodeUnstageVolume(
 func (s *service) NodePublishVolume(
 	ctx context.Context,
 	req *csi.NodePublishVolumeRequest) (
-	*csi.NodePublishVolumeResponse, error,
-) {
+	*csi.NodePublishVolumeResponse, error) {
+
+	if md.IsMDVolumeID(req.GetVolumeId()) {
+		return mdsvc.NodePublishVolume(ctx, req)
+	}
+
 	var reqID string
 	headers, ok := metadata.FromIncomingContext(ctx)
 	if ok {
@@ -232,8 +245,12 @@ func (s *service) NodePublishVolume(
 func (s *service) NodeUnpublishVolume(
 	ctx context.Context,
 	req *csi.NodeUnpublishVolumeRequest) (
-	*csi.NodeUnpublishVolumeResponse, error,
-) {
+	*csi.NodeUnpublishVolumeResponse, error) {
+
+	if md.IsMDVolumeID(req.GetVolumeId()) {
+		return mdsvc.NodeUnpublishVolume(ctx, req)
+	}
+
 	var reqID string
 	headers, ok := metadata.FromIncomingContext(ctx)
 	if ok {

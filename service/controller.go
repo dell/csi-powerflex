@@ -28,6 +28,7 @@ import (
 
 	"sigs.k8s.io/yaml"
 
+	"github.com/dell/csi-md/md"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -161,6 +162,10 @@ func (s *service) CreateVolume(
 	*csi.CreateVolumeResponse, error,
 ) {
 	params := req.GetParameters()
+
+	if md.IsMDStorageClass(params) {
+		return mdsvc.CreateVolume(ctx, req)
+	}
 
 	systemID, err := s.getSystemIDFromParameters(params)
 	if err != nil {
@@ -971,6 +976,10 @@ func (s *service) DeleteVolume(
 			"volume ID is required")
 	}
 
+	if md.IsMDVolumeID(csiVolID) {
+		return mdsvc.DeleteVolume(ctx, req)
+	}
+
 	isNFS := strings.Contains(csiVolID, "/")
 	// ensure no ambiguity if legacy vol
 	err := s.checkVolumesMap(csiVolID)
@@ -1236,6 +1245,10 @@ func (s *service) ControllerPublishVolume(
 	if csiVolID == "" {
 		return nil, status.Error(codes.InvalidArgument,
 			"volume ID is required")
+	}
+
+	if md.IsMDVolumeID(csiVolID) {
+		return mdsvc.ControllerPublishVolume(ctx, req)
 	}
 
 	// get systemID from req
@@ -1566,8 +1579,12 @@ func validateAccessType(
 func (s *service) ControllerUnpublishVolume(
 	ctx context.Context,
 	req *csi.ControllerUnpublishVolumeRequest) (
-	*csi.ControllerUnpublishVolumeResponse, error,
-) {
+	*csi.ControllerUnpublishVolumeResponse, error) {
+
+	if md.IsMDVolumeID(req.GetVolumeId()) {
+		return mdsvc.ControllerUnpublishVolume(ctx, req)
+	}
+
 	// get systemID from req
 	systemID := s.getSystemIDFromCsiVolumeID(req.GetVolumeId())
 	if systemID == "" {
@@ -2551,7 +2568,11 @@ func (s *service) CreateSnapshot(
 	if csiVolID == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "CSI volume ID to be snapped is required")
 	}
-	// ensure no ambiguity if legacy vol
+	if md.IsMDVolumeID(csiVolID) {
+		return mdsvc.CreateSnapshot(ctx, req)
+	}
+
+	//ensure no ambiguity if legacy vol
 	err := s.checkVolumesMap(csiVolID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal,
@@ -2789,6 +2810,9 @@ func (s *service) DeleteSnapshot(
 	csiSnapID := req.GetSnapshotId()
 	if csiSnapID == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "snapshot ID to be deleted is required")
+	}
+	if md.IsMDSnapID(csiSnapID) {
+		return mdsvc.DeleteSnapshot(ctx, req)
 	}
 
 	isNFS := strings.Contains(csiSnapID, "/")
