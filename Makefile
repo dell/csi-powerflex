@@ -32,15 +32,17 @@ dependencies:
 
 # Build the driver locally
 build: dependencies
+	(cd csi-md; make build)
 	CGO_ENABLED=0 GOOS=linux GO111MODULE=on go build
 
 # Generates the docker container (but does not push)
-docker: dependencies
-	make -f docker.mk build-base-image docker
+docker: build
+	docker build -t csi-vxflexos .
+	
 
 # Pushes container to the repository
-push: docker
-	make -f docker.mk push
+#push: docker
+#	make -f docker.mk push
 
 # Windows or Linux; requires no hardware
 unit-test:

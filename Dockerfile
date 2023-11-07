@@ -1,44 +1,31 @@
-# Copyright © 2019-2022 Dell Inc. or its subsidiaries. All Rights Reserved.
-# 
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#      http://www.apache.org/licenses/LICENSE-2.0
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License
+#Use rocky Linux as the base image
+FROM rockylinux:8
+# Copy the files from the host to the container
+COPY "csi-vxflexos" .
+COPY "csi-vxflexos.sh" .
+COPY "scripts/mkraid.disk.sh" .
+COPY "scripts/get.pflexvol.sh" .
+COPY "scripts/get.emcvol.sh" .
 
-# some arguments that must be supplied
-ARG GOPROXY
-ARG GOIMAGE
-ARG BASEIMAGE
-ARG DIGEST
+RUN yum install -y \
+    e2fsprogs \
+    which \
+    xfsprogs \
+    device-mapper-multipath \
+    libaio \
+    mdadm \
+    numactl \
+    libuuid \
+    e4fsprogs \
+    nfs-utils \
+    && \
+    yum clean all \
+    && \
+    rm -rf /var/cache/run
 
-# Stage to build the driver
-FROM $GOIMAGE as builder
-ARG GOPROXY
-RUN mkdir -p /go/src
-COPY ./ /go/src/
-WORKDIR /go/src/
-RUN CGO_ENABLED=0 \
-    make build
+# validate some cli utilities are found
+RUN which mkfs.ext4
+RUN which mkfs.xfs
 
-# Stage to build the driver image
-FROM $BASEIMAGE AS final
+# Set the command to run when the container starts
 ENTRYPOINT ["/csi-vxflexos.sh"]
-# copy in the driver
-COPY --from=builder /go/src/csi-vxflexos /
-COPY "csi-vxflexos.sh" /
-RUN chmod +x /csi-vxflexos.sh
-LABEL vendor="Dell Inc." \
-    name="csi-powerflex" \
-    summary="CSI Driver for Dell EMC PowerFlex" \
-    description="CSI Driver for provisioning persistent storage from Dell EMC PowerFlex" \
-    version="2.10.0" \
-    license="Apache-2.0"
-COPY ./licenses /licenses
-
-
-

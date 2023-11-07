@@ -5,7 +5,7 @@ module github.com/dell/csi-vxflexos/v2
 
 go 1.22
 
-replace github.com/dell/csi-md => ../csi-md
+replace github.com/dell/csi-md => ./csi-md
 
 require (
 	github.com/akutz/memconn v0.1.0

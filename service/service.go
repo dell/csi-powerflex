@@ -490,6 +490,15 @@ func (s *service) BeforeServe(
 	s.adminClients = make(map[string]*sio.Client)
 	s.systems = make(map[string]*sio.System)
 
+	// Call the md BeforeServe
+	Log.Infof("************Calling MD service BeforeServe*****************")
+	err = mdsvc.BeforeServe(ctx, sp, lis)
+	if err != nil {
+		Log.Errorf("mdsvc.Beforeserve error: %s", err.Error())
+	} else {
+		Log.Infof("mdsvc.BeforeServe had no errors")
+	}
+
 	if _, ok := csictx.LookupEnv(ctx, "X_CSI_VXFLEXOS_NO_PROBE_ON_START"); !ok {
 		return s.doProbe(ctx)
 	}
