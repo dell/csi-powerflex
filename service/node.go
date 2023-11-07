@@ -127,6 +127,19 @@ func (s *service) NodePublishVolume(
 	*csi.NodePublishVolumeResponse, error) {
 
 	if md.IsMDVolumeID(req.GetVolumeId()) {
+		// md requires a call to NodeStageVolume before node publish. The current csi-powerflex driver does not
+		// specify use of NODE_STAGE_UNSTAGE, so it needs to be called manually here.
+		nodeStageRequest := &csi.NodeStageVolumeRequest{
+			VolumeId:          req.VolumeId,
+			StagingTargetPath: getPrivateMountPoint(s.privDir, req.VolumeId),
+			PublishContext:    req.PublishContext,
+			VolumeCapability:  req.VolumeCapability,
+			VolumeContext:     req.VolumeContext,
+		}
+		_, err := mdsvc.NodeStageVolume(ctx, nodeStageRequest)
+		if err != nil {
+			return nil, fmt.Errorf("NodeStageVolume failed, ID: %s, error: %s", req.VolumeId, err.Error())
+		}
 		return mdsvc.NodePublishVolume(ctx, req)
 	}
 
@@ -248,7 +261,18 @@ func (s *service) NodeUnpublishVolume(
 	*csi.NodeUnpublishVolumeResponse, error) {
 
 	if md.IsMDVolumeID(req.GetVolumeId()) {
-		return mdsvc.NodeUnpublishVolume(ctx, req)
+		_, err := mdsvc.NodeUnpublishVolume(ctx, req)
+		if err != nil {
+			return nil, fmt.Errorf("NodeUnpublishVolume failed: ID: %s, error: %s", req.VolumeId, err.Error())
+		}
+		// csi-powerflex doesn't implement NODE_STAGE_UNSTAGE, but md requires NodeUnstage. Call it here.
+		nodeUnstageRequest := &csi.NodeUnstageVolumeRequest{
+			VolumeId:          req.VolumeId,
+			StagingTargetPath: getPrivateMountPoint(s.privDir, req.VolumeId),
+		}
+		_, err = mdsvc.NodeUnstageVolume(ctx, nodeUnstageRequest)
+		resp := &csi.NodeUnpublishVolumeResponse{}
+		return resp, err
 	}
 
 	var reqID string

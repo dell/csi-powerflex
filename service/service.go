@@ -518,6 +518,14 @@ func (s *service) BeforeServe(
 
 	// Update the ConfigMap with the Interface IPs
 	s.updateConfigMap(s.getIPAddressByInterface, ConfigMapFilePath)
+	// Call the md BeforeServe
+	Log.Infof("************Calling MD service BeforeServe*****************")
+	err = mdsvc.BeforeServe(ctx, sp, lis)
+	if err != nil {
+		Log.Errorf("mdsvc.Beforeserve error: %s", err.Error())
+	} else {
+		Log.Infof("mdsvc.BeforeServe had no errors")
+	}
 
 	if _, ok := csictx.LookupEnv(ctx, "X_CSI_VXFLEXOS_NO_PROBE_ON_START"); !ok {
 		return s.doProbe(ctx)
