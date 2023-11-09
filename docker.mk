@@ -24,8 +24,12 @@ push:
 	@echo "Pushing: $(REGISTRY)/$(IMAGENAME):$(IMAGETAG)"
 	$(BUILDER) push "$(REGISTRY)/$(IMAGENAME):$(IMAGETAG)"
 
-build-base-image:
-	@echo "Building base image from $(BASEIMAGE) and loading dependencies..."
-	./scripts/build_ubi_micro.sh $(BASEIMAGE)
+build-base-image: download-csm-common
+	$(eval include csm-common.mk)
+	@echo "Building base image from $(DEFAULT_BASEIMAGE) and loading dependencies..."
+	./scripts/build_ubi_micro.sh $(DEFAULT_BASEIMAGE)
 	@echo "Base image build: SUCCESS"
 	$(eval BASEIMAGE=localhost/csipowerflex-ubimicro:latest)
+
+download-csm-common:
+	curl -O -L https://raw.githubusercontent.com/dell/csm/main/config/csm-common.mk
