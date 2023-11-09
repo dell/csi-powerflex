@@ -6,6 +6,7 @@ COPY "csi-vxflexos.sh" .
 COPY "scripts/mkraid.disk.sh" .
 COPY "scripts/get.pflexvol.sh" .
 COPY "scripts/get.emcvol.sh" .
+COPY "scripts/init.node.sh" .
 
 RUN yum install -y \
     e2fsprogs \
@@ -18,6 +19,7 @@ RUN yum install -y \
     libuuid \
     e4fsprogs \
     nfs-utils \
+    procps-ng \
     && \
     yum clean all \
     && \
