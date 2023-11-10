@@ -1,0 +1,356 @@
+---
+# k8s/driver attributes
+
+# "version" is used to verify the values file matches driver version
+# Not recommend to change
+version: v2.8.0
+
+images:
+  # "driver" defines the container image, used for the driver container.
+  driverRepository: dellemc
+
+  # "powerflexSdc" defines the SDC image for init container.
+  powerflexSdc: dellemc/sdc:3.6.1
+
+
+# Represents number of certificate secrets, which user is going to create for ssl authentication. (vxflexos-cert-0..vxflexos-cert-n)
+# If user does not use certificate, set to 0
+certSecretCount: 0
+
+# CSI driver log level
+# Allowed values: "error", "warn"/"warning", "info", "debug"
+# Default value: "debug"
+logLevel: "debug"
+
+# CSI driver log format
+# Allowed values: "TEXT" or "JSON"
+# Default value: "TEXT"
+logFormat: "TEXT"
+
+# Specify kubelet config dir path.
+# Ensure that the config.yaml file is present at this path.
+# Default value: None
+kubeletConfigDir: /var/lib/kubelet
+
+# "defaultFsType" is used to set the default FS type which will be used
+# for mount volumes if FsType is not specified in the storage class
+# Allowed values: ext4, xfs
+# Default value: none
+defaultFsType: ext4
+
+# imagePullPolicy: Policy to determine if the image should be pulled prior to starting the container.
+# Allowed values:
+#  Always: Always pull the image.
+#  IfNotPresent: Only pull the image if it does not already exist on the node.
+#  Never: Never pull the image.
+# Default value: None
+imagePullPolicy: IfNotPresent
+
+# enableQuota: a boolean that, when enabled, will set quota limit for a newly provisioned NFS volume.
+# Allowed values:
+#   true: set quota for volume
+#   false: do not set quota for volume
+# Optional: true
+# Default value: none
+enableQuota: false
+
+# "enablesnapshotcgdelete"- a boolean that, when enabled, will delete all snapshots in a consistency group
+# everytime a snap in the group is deleted
+# Allowed values: true, false
+# Default value: none
+enablesnapshotcgdelete: "false"
+
+# "enablelistvolumesnapshot" - a boolean that, when enabled, will allow list volume operation to include snapshots (since creating a volume
+# from a snap actually results in a new snap)
+# It is recommended this be false unless instructed otherwise.
+# Allowed values: true, false
+# Default value: none
+enablelistvolumesnapshot: "false"
+
+# Setting allowRWOMultiPodAccess to "true" will allow multiple pods on the same node
+# to access the same RWO volume. This behavior conflicts with the CSI specification version 1.3
+# NodePublishVolume descrition that requires an error to be returned in this case.
+# However, some other CSI drivers support this behavior and some customers desire this behavior.
+# Kubernetes could make a change at their discretion that would preclude our ability to support this option.
+# Customers use this option at their own risk.
+# You should leave this set as "false" unless instructed to change it by Dell support.
+# Allowed values: true, false
+# Default value: "false"
+allowRWOMultiPodAccess: "false"
+
+# fsGroupPolicy: Defines if the underlying volume supports changing ownership and permission of the volume before being mounted.
+# Allowed values:
+#   ReadWriteOnceWithFSType: supports volume ownership and permissions change only if the fsType is defined
+#   and the volume's accessModes contains ReadWriteOnce.
+#   File: kubernetes may use fsGroup to change permissions and ownership of the volume 
+#   to match user requested fsGroup in the pod's security policy regardless of fstype or access mode.
+#   None: volumes will be mounted with no modifications.
+fsGroupPolicy: File
+
+# maxVxflexosVolumesPerNode: Specify default value for maximum number of volumes that controller can publish to the node.
+# If value is zero CO SHALL decide how many volumes of this type can be published by the controller to the node.
+# This limit is applicable to all the nodes in the cluster for which node label 'maxVxflexosVolumesPerNode' is not set.
+# Allowed values: n, where n >= 0
+# Default value: 0
+maxVxflexosVolumesPerNode: 0
+
+# "controller" allows to configure controller specific parameters
+controller:
+
+  # replication: allows to configure replication
+  # Replication CRDs must be installed before installing driver
+  replication:
+    # enabled: Enable/Disable replication feature
+    # Allowed values:
+    #   true: enable replication feature(install dell-csi-replicator sidecar)
+    #   false: disable replication feature(do not install dell-csi-replicator sidecar)
+    # Default value: false
+    enabled: false
+
+    # image: Image to use for dell-csi-replicator. This shouldn't be changed
+    # Allowed values: string
+    # Default value: None
+    image: dellemc/dell-csi-replicator:v1.6.0
+
+    # replicationContextPrefix: prefix to use for naming of resources created by replication feature
+    # Allowed values: string
+    # Default value: powerflex
+    replicationContextPrefix: "powerflex"
+
+    # replicationPrefix: prefix to prepend to storage classes parameters
+    # Allowed values: string
+    # Default value: replication.storage.dell.com
+    replicationPrefix: "replication.storage.dell.com"
+
+  healthMonitor:
+    # enabled: Enable/Disable health monitor of CSI volumes
+    # Allowed values:
+    #   true: enable checking of health condition of CSI volumes
+    #   false: disable checking of health condition of CSI volumes
+    # Default value: None
+    enabled: false
+
+    # interval: Interval of monitoring volume health condition
+    # Allowed values: Number followed by unit (s,m,h)
+    # Examples: 60s, 5m, 1h
+    # Default value: 60s
+    interval: 60s
+
+  # volumeNamePrefix- defines a string prepended to each volume created by the CSI driver.
+  # Default value: none
+  # Examples: "k8s", "app1"
+  volumeNamePrefix: k8s
+
+  # "controllerCount" defines the number of VxFlex controller pods to deploy
+  # Allowed values: n, where n > 0
+  # Default value: none
+  controllerCount: 2
+
+  snapshot:
+    # enabled: Enable/Disable volume snapshot feature
+    # Allowed values:
+    #   true: enable volume snapshot feature(install snapshotter sidecar)
+    #   false: disable volume snapshot feature(do not install snapshotter sidecar)
+    # Default value: None
+    enabled: true
+
+  resizer:
+    # enabled: Enable/Disable volume expansion feature
+    # Allowed values:
+    #   true: enable volume expansion feature(install resizer sidecar)
+    #   false: disable volume snapshot feature(do not install resizer sidecar)
+    # Default value: None
+    enabled: true
+  
+  #"controller.nodeSelector" defines what nodes would be selected for pods of controller deployment
+  # Leave as blank to use all nodes
+  # Allowed values: map of key-value pairs
+  # Default value: None
+  # Examples:
+  #  node-role.kubernetes.io/control-plane: ""
+  nodeSelector:
+  #  node-role.kubernetes.io/control-plane: ""
+
+  # "controller.tolerations" defines tolerations that would be applied to controller deployment
+  # Leave as blank to install controller on worker nodes
+  # Default value: None
+  tolerations:
+  # Uncomment if nodes you wish to use have the node-role.kubernetes.io/master taint 
+  # - key: "node-role.kubernetes.io/master"   
+  #   operator: "Exists"
+  #   effect: "NoSchedule"
+  # Uncomment if nodes you wish to use have the node-role.kubernetes.io/control-plane taint 
+  # - key: "node-role.kubernetes.io/control-plane"   
+  #   operator: "Exists"
+  #   effect: "NoSchedule"
+
+# "node" allows to configure node specific parameters
+node:
+  healthMonitor:
+    # enabled: Enable/Disable health monitor of CSI volumes- volume usage, volume condition
+    # Allowed values:
+    #   true: enable checking of health condition of CSI volumes
+    #   false: disable checking of health condition of CSI volumes
+    # Default value: None
+    enabled: false
+
+  # "node.nodeSelector" defines what nodes would be selected for pods of node daemonset
+  # Leave as blank to use all nodes
+  # Allowed values: map of key-value pairs
+  # Default value: None
+  # Examples:
+  #  node-role.kubernetes.io/control-plane: ""
+  nodeSelector:
+  #  node-role.kubernetes.io/control-plane: ""
+
+  # "node.tolerations" defines tolerations that would be applied to node daemonset
+  # Leave as blank to install node driver only on worker nodes
+  # Default value: None
+  tolerations:
+  # Uncomment if nodes you wish to use have the node-role.kubernetes.io/master taint
+  # - key: "node-role.kubernetes.io/master"   
+  #   operator: "Exists"
+  #   effect: "NoSchedule"
+  # Uncomment if nodes you wish to use have the node-role.kubernetes.io/control-plane taint 
+  # - key: "node-role.kubernetes.io/control-plane"   
+  #   operator: "Exists"
+  #   effect: "NoSchedule"
+  # Uncomment if CSM for Resiliency and CSI Driver pods monitor is enabled 
+  # - key: "offline.vxflexos.storage.dell.com"
+  #   operator: "Exists"
+  #   effect: "NoSchedule"
+  # - key: "vxflexos.podmon.storage.dell.com"
+  #   operator: "Exists"
+  #   effect: "NoSchedule"
+  # - key: "offline.unity.storage.dell.com"
+  #   operator: "Exists"
+  #   effect: "NoSchedule"
+  # - key: "unity.podmon.storage.dell.com"
+  #   operator: "Exists"
+  #   effect: "NoSchedule"
+  # - key: "offline.isilon.storage.dell.com"
+  #   operator: "Exists"
+  #   effect: "NoSchedule"
+  # - key: "isilon.podmon.storage.dell.com"
+  #   operator: "Exists"
+  #   effect: "NoSchedule"
+
+  # "renameSDC" defines the rename operation for SDC
+  # Default value: None
+  renameSDC:
+    # enabled: Enable/Disable rename of SDC
+    # Allowed values:
+    #   true: enable renaming
+    #   false: disable renaming
+    # Default value: "false"
+    enabled: false
+    # "prefix" defines a string for prefix of the SDC name.
+    # "prefix" + "worker_node_hostname" should not exceed 31 chars.
+    # Default value: none
+    # Examples: "rhel-sdc", "sdc-test"
+    prefix: "sdc-test"
+   
+  # "approveSDC" defines the approve operation for SDC
+  # Default value: None
+  approveSDC: 
+    # enabled: Enable/Disable SDC approval
+    #Allowed values:
+    #  true: Driver will attempt to approve restricted SDC by GUID during setup
+    #  false: Driver will not attempt to approve restricted SDC by GUID during setup
+    # Default value: false
+    enabled: false
+
+# Storage Capacity Tracking
+# Note: Capacity tracking is supported in kubernetes v1.24 and above, this feature will be automatically disabled in older versions.
+storageCapacity:
+  # enabled : Enable/Disable storage capacity tracking
+  # Allowed values:
+  #   true: enable storage capacity tracking
+  #   false: disable storage capacity tracking
+  # Default value: true
+  enabled: true
+  # pollInterval : Configure how often external-provisioner polls the driver to detect changed capacity
+  # Allowed values: 1m,2m,3m,...,10m,...,60m etc
+  # Default value: 5m
+  pollInterval: 5m     
+  
+
+# monitoring pod details
+# These options control the running of the monitoring container
+# This container gather diagnostic information in case of failure
+monitor:
+  # enabled allows the usage of the monitoring pod to be disabled
+  # Allowed values: true, false
+  # Default value: "false"
+  enabled: false
+
+  # hostNetwork determines if the monitor pod should run on the host network or not
+  # Allowed values: true, false
+  # Default value: "false"
+  hostNetwork: true
+
+  # hostPID determines if the monitor pod should run in the host namespace
+  # Allowed values: true, false
+  # Default value: "false"
+  hostPID: true
+
+sdc:
+  enabled: false
+
+
+# CSM module attributes
+
+# volume group snapshotter(vgsnapshotter) details
+# These options control the running of the vgsnapshotter container
+vgsnapshotter:
+  enabled: false
+  image: dellemc/csi-volumegroup-snapshotter:v1.3.0
+
+# Podmon is an optional feature under development and tech preview.
+# Enable this feature only after contact support for additional information
+podmon:
+  enabled: false
+  image: dellemc/podmon:v1.7.0
+  #controller:
+  # args:
+  #   - "--csisock=unix:/var/run/csi/csi.sock"
+  #   - "--labelvalue=csi-vxflexos"
+  #   - "--mode=controller"
+  #   - "--skipArrayConnectionValidation=false"
+  #   - "--driver-config-params=/vxflexos-config-params/driver-config-params.yaml"
+  #   - "--driverPodLabelValue=dell-storage"
+  #   - "--ignoreVolumelessPods=false"
+  #node:
+  # args:
+  #   - "--csisock=unix:/var/lib/kubelet/plugins/vxflexos.emc.dell.com/csi_sock"
+  #   - "--labelvalue=csi-vxflexos"
+  #   - "--mode=node"
+  #   - "--leaderelection=false"
+  #   - "--driver-config-params=/vxflexos-config-params/driver-config-params.yaml"
+  #   - "--driverPodLabelValue=dell-storage"
+  #   - "--ignoreVolumelessPods=false"
+
+# CSM module attributes
+# authorization: enable csm-authorization for RBAC
+# Deploy and configure authorization before installing driver
+# Allowed values:
+#   "true" - authorization is enabled
+#   "false" - authorization is disabled
+# Default value: "false"
+authorization:
+  enabled: false
+
+  # sidecarProxyImage: the container image used for the csm-authorization-sidecar.
+  # Default value: dellemc/csm-authorization-sidecar:v1.8.0
+  sidecarProxyImage: dellemc/csm-authorization-sidecar:v1.8.0
+
+  # proxyHost: hostname of the csm-authorization server
+  # Default value: None
+  proxyHost:
+
+  # skipCertificateValidation: certificate validation of the csm-authorization server
+  # Allowed Values:
+  #   "true" - TLS certificate verification will be skipped
+  #   "false" - TLS certificate will be verified 
+  # Default value: "true" 
+  skipCertificateValidation: true
