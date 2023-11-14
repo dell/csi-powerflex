@@ -137,6 +137,7 @@ type Service interface {
 	BeforeServe(context.Context, *gocsi.StoragePlugin, net.Listener) error
 	RegisterAdditionalServers(server *grpc.Server)
 	ProcessMapSecretChange() error
+	VolumeIDToArrayID(string) string
 }
 
 type NetworkInterface interface {
@@ -725,6 +726,16 @@ func (s *service) RegisterAdditionalServers(server *grpc.Server) {
 	podmon.RegisterPodmonServer(server, s)
 	volumeGroupSnapshot.RegisterVolumeGroupSnapshotServer(server, s)
 	replication.RegisterReplicationServer(server, s)
+}
+
+// VolumeIDToArrayID returns the array ID for a given volume.
+// Example: 7ad2b6e84ac1c70f-6d6d908a0000000d returns 7ad2b6e84ac1c70f
+func (s *service) VolumeIDToArrayID(volumeID string) string {
+	if volumeID == "" {
+		return ""
+	}
+	fields := strings.Split(volumeID, "-")
+	return fields[0]
 }
 
 // getVolProvisionType returns a string indicating thin or thick provisioning
