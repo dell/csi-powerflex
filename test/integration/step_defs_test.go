@@ -51,7 +51,7 @@ const (
 	RetrySleepTime = 10 * time.Second
 	SleepTime      = 100 * time.Millisecond
 	Pool1          = "pool1"
-	NfsPool        = "Env8-SP-SW_SSD-1"
+	NfsPool        = "SP-SW_HDD-1"
 )
 
 // ArrayConnectionData contains data required to connect to array
