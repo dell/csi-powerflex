@@ -50,7 +50,7 @@ const (
 	MaxRetries     = 10
 	RetrySleepTime = 10 * time.Second
 	SleepTime      = 100 * time.Millisecond
-	Pool1          = "pool1"
+	SP-SW_HDD-1          = "SP-SW_HDD-1"
 	NfsPool        = "SP-SW_HDD-1"
 )
 
@@ -242,7 +242,7 @@ func (f *feature) aVxFlexOSService() error {
 func (f *feature) aBasicBlockVolumeRequest(name string, size int64) error {
 	req := new(csi.CreateVolumeRequest)
 	params := make(map[string]string)
-	params["storagepool"] = Pool1
+	params["storagepool"] = SP-SW_HDD-1
 	params["thickprovisioning"] = "false"
 	if len(f.anotherSystemID) > 0 {
 		params["systemID"] = f.anotherSystemID
@@ -522,7 +522,7 @@ func (f *feature) aMountVolumeRequest(name string) error {
 func (f *feature) getMountVolumeRequest(name string) *csi.CreateVolumeRequest {
 	req := new(csi.CreateVolumeRequest)
 	params := make(map[string]string)
-	params["storagepool"] = Pool1
+	params["storagepool"] = SP-SW_HDD-1
 	if len(f.anotherSystemID) > 0 {
 		params["systemID"] = f.anotherSystemID
 	}
@@ -651,7 +651,7 @@ func (f *feature) aCapabilityWithVoltypeAccessFstype(voltype, access, fstype str
 func (f *feature) aVolumeRequest(name string, size int64) error {
 	req := new(csi.CreateVolumeRequest)
 	params := make(map[string]string)
-	params["storagepool"] = Pool1
+	params["storagepool"] = SP-SW_HDD-1
 	params["thickprovisioning"] = "true"
 	if len(f.anotherSystemID) > 0 {
 		params["systemID"] = f.anotherSystemID
@@ -737,7 +737,7 @@ func (f *feature) iCallEthemeralNodePublishVolume(id, size string) error {
 	req := f.getNodePublishVolumeRequest()
 	req.VolumeId = id
 	f.volID = req.VolumeId
-	req.VolumeContext = map[string]string{"csi.storage.k8s.io/ephemeral": "true", "volumeName": "int-ephemeral-vol", "size": size, "storagepool": "pool1"}
+	req.VolumeContext = map[string]string{"csi.storage.k8s.io/ephemeral": "true", "volumeName": "int-ephemeral-vol", "size": size, "storagepool": "SP-SW_HDD-1"}
 
 	ctx := context.Background()
 	client := csi.NewNodeClient(grpcClient)
