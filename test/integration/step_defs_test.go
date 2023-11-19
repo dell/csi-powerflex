@@ -50,7 +50,7 @@ const (
 	MaxRetries     = 10
 	RetrySleepTime = 10 * time.Second
 	SleepTime      = 100 * time.Millisecond
-	SP-SW_HDD-1          = "SP-SW_HDD-1"
+	Pool1          = "SP-SW_HDD-1"
 	NfsPool        = "SP-SW_HDD-1"
 )
 
@@ -242,7 +242,7 @@ func (f *feature) aVxFlexOSService() error {
 func (f *feature) aBasicBlockVolumeRequest(name string, size int64) error {
 	req := new(csi.CreateVolumeRequest)
 	params := make(map[string]string)
-	params["storagepool"] = SP-SW_HDD-1
+	params["storagepool"] = Pool1
 	params["thickprovisioning"] = "false"
 	if len(f.anotherSystemID) > 0 {
 		params["systemID"] = f.anotherSystemID
@@ -522,7 +522,7 @@ func (f *feature) aMountVolumeRequest(name string) error {
 func (f *feature) getMountVolumeRequest(name string) *csi.CreateVolumeRequest {
 	req := new(csi.CreateVolumeRequest)
 	params := make(map[string]string)
-	params["storagepool"] = SP-SW_HDD-1
+	params["storagepool"] = Pool1
 	if len(f.anotherSystemID) > 0 {
 		params["systemID"] = f.anotherSystemID
 	}
@@ -651,7 +651,7 @@ func (f *feature) aCapabilityWithVoltypeAccessFstype(voltype, access, fstype str
 func (f *feature) aVolumeRequest(name string, size int64) error {
 	req := new(csi.CreateVolumeRequest)
 	params := make(map[string]string)
-	params["storagepool"] = SP-SW_HDD-1
+	params["storagepool"] = Pool1
 	params["thickprovisioning"] = "true"
 	if len(f.anotherSystemID) > 0 {
 		params["systemID"] = f.anotherSystemID
