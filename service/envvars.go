@@ -63,4 +63,7 @@ const (
 
 	// EnvQuotaEnabled enables setting of quota for NFS volumes.
 	EnvQuotaEnabled = "X_CSI_QUOTA_ENABLED"
+
+	// EnvExternalAccess is the IP of an additional router you wish to add for nfs export
+	EnvExternalAccess = "X_CSI_POWERFLEX_EXTERNAL_ACCESS"
 )

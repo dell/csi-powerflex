@@ -4430,6 +4430,24 @@ func (f *feature) iSpecifyNoGracePeriod() error {
 	return nil
 }
 
+func (f *feature) iCallParseCIDR(ip string) error {
+	_, err := ParseCIDR(ip)
+	f.err = err
+	return nil
+}
+
+func (f *feature) iCallGetIPListWithMaskFromString(ip string) error {
+	_, err := GetIPListWithMaskFromString(ip)
+	f.err = err
+	return nil
+}
+
+func (f *feature) iCallparseMask(ip string) error {
+	_, err := parseMask(ip)
+	f.err = err
+	return nil
+}
+
 func FeatureContext(s *godog.ScenarioContext) {
 	f := &feature{}
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
@@ -4637,6 +4655,9 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I specify NoPath$`, f.iSpecifyNoPath)
 	s.Step(`^I specify NoSoftLimit`, f.iSpecifyNoSoftLimit)
 	s.Step(`^I specify NoGracePeriod`, f.iSpecifyNoGracePeriod)
+	s.Step(`^I call ParseCIDR with ip "([^"]*)"`, f.iCallParseCIDR)
+	s.Step(`^I call GetIPListWithMaskFromString with ip "([^"]*)"`, f.iCallGetIPListWithMaskFromString)
+	s.Step(`^I call parseMask with ip "([^"]*)"`, f.iCallparseMask)
 
 	s.After(func(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
 		if f.server != nil {

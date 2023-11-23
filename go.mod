@@ -7,6 +7,7 @@ go 1.21
 
 require (
 	github.com/akutz/memconn v0.1.0
+	github.com/apparentlymart/go-cidr v1.1.0
 	github.com/container-storage-interface/spec v1.6.0
 	github.com/cucumber/godog v0.12.1
 	github.com/dell/dell-csi-extensions/common v1.2.0
@@ -15,7 +16,7 @@ require (
 	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.3.0
 	github.com/dell/gocsi v1.8.0
 	github.com/dell/gofsutil v1.13.1
-	github.com/dell/goscaleio v1.12.1-0.20231117141021-9981200769bc
+	github.com/dell/goscaleio v1.12.1-0.20231120172452-c373d2c950ca
 	github.com/fsnotify/fsnotify v1.5.1
 	github.com/golang/protobuf v1.5.3
 	github.com/google/uuid v1.3.0

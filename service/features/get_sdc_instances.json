@@ -12,7 +12,7 @@
     "installedSoftwareVersionInfo": "R2_6.0.0",
     "kernelVersion": "3.10.0",
     "kernelBuildNumber": null,
-    "sdcIp": "127.1.1.11",
+    "sdcIps": ["127.1.1.11"],
     "sdcApprovedIps": null,
     "systemId": "14dbbf5617523654",
     "name": null,
