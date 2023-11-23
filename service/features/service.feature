@@ -1488,3 +1488,12 @@ Feature: VxFlex OS CSI interface
   Scenario: Parse IP with no Mask
     When I call parseMask with ip "192.168.1.34"
     Then the error contains "Parse Mask: Error parsing mask"
+
+  Scenario: External Access Already Added
+    Given an NFSExport instance with nfsexporthost <nfsexporthost>
+    When I call externalAccessAlreadyAdded with externalAccess <externalAccess>
+    Then the error contains <errorMsg>
+    Examples:
+      |  nfsexporthost                  | externalAccess                | errorMsg                              |
+      |  "127.0.0.1/255.255.255.255"    | "127.0.0.1/255.255.255.255"   | "external access exists"              |
+      |  "127.1.1.0/255.255.255.255"    | "127.0.0.1/255.255.255.255"   | "external access does not exist"      |
