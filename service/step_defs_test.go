@@ -4467,6 +4467,11 @@ func (f *feature) iCallexternalAccessAlreadyAdded(externalAccess string) error {
 	return nil
 }
 
+func (f *feature) iSpecifyExternalAccess(externalAccess string) error {
+	f.service.opts.ExternalAccess, _ = ParseCIDR(externalAccess)
+	return nil
+}
+
 func FeatureContext(s *godog.ScenarioContext) {
 	f := &feature{}
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
@@ -4679,6 +4684,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call parseMask with ip "([^"]*)"`, f.iCallparseMask)
 	s.Step(`^I call externalAccessAlreadyAdded with externalAccess "([^"]*)"`, f.iCallexternalAccessAlreadyAdded)
 	s.Step(`^an NFSExport instance with nfsexporthost "([^"]*)"`, f.iCallGivenNFSExport)
+	s.Step(`^I specify External Access "([^"]*)"`, f.iSpecifyExternalAccess)
 
 	s.After(func(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
 		if f.server != nil {
