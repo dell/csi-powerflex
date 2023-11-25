@@ -299,7 +299,7 @@ Feature: VxFlex OS CSI interface
     And I call Probe
     Then the error contains "none"
 
-  Scenario Outline: Publish Volume with Wrong Access Types
+   : Publish Volume with Wrong Access Types
     Given a VxFlexOS service
     And a valid volume
     And I use AccessType Mount

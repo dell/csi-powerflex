@@ -50,8 +50,8 @@ const (
 	MaxRetries     = 10
 	RetrySleepTime = 10 * time.Second
 	SleepTime      = 100 * time.Millisecond
-	Pool1          = "SP-SW_HDD-1"
-	NfsPool        = "SP-SW_HDD-1"
+	Pool1          = "SP1"
+	NfsPool        = "SP1"
 )
 
 // ArrayConnectionData contains data required to connect to array
@@ -737,7 +737,7 @@ func (f *feature) iCallEthemeralNodePublishVolume(id, size string) error {
 	req := f.getNodePublishVolumeRequest()
 	req.VolumeId = id
 	f.volID = req.VolumeId
-	req.VolumeContext = map[string]string{"csi.storage.k8s.io/ephemeral": "true", "volumeName": "int-ephemeral-vol", "size": size, "storagepool": "SP-SW_HDD-1"}
+	req.VolumeContext = map[string]string{"csi.storage.k8s.io/ephemeral": "true", "volumeName": "int-ephemeral-vol", "size": size, "storagepool": "SP1"}
 
 	ctx := context.Background()
 	client := csi.NewNodeClient(grpcClient)
