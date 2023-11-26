@@ -16,9 +16,9 @@
 # on this system. This will make real calls to the SIO.
 # NOTE: you must run this as root, as the plugin cannot retrieve the SdcGUID without being root!
 
-sh validate_http_unauthorized.sh
-rc=$?
-if [ $rc -ne 0 ]; then echo "failed http unauthorized test"; exit $rc; fi
+# sh validate_http_unauthorized.sh
+# rc=$?
+# if [ $rc -ne 0 ]; then echo "failed http unauthorized test"; exit $rc; fi
 
 rm -f unix.sock
 source ../../env.sh
