@@ -5,7 +5,7 @@ Feature: VxFlex OS CSI interface
   
   Scenario: Expand Nfs Volume
     Given a VxFlexOS service
-    And a nfs capability with voltype "mount" access "single-writer" fstype "ext4"
+    And a nfs capability with voltype "mount" access "single-writer" fstype "nfs"
     And a nfs volume request "nfsinttestvol2" "16"
     When I call CreateVolume
     And there are no errors
