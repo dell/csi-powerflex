@@ -1,4 +1,8 @@
-
+Feature: VxFlex OS CSI interface
+  As a consumer of the CSI interface
+  I want to run a system test
+  So that I know the service functions correctly.
+  
   Scenario: Expand Nfs Volume
     Given a VxFlexOS service
     And a nfs capability with voltype "mount" access "single-writer" fstype "nfs"
