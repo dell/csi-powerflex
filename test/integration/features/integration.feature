@@ -557,7 +557,8 @@ Feature: VxFlex OS CSI interface
     Examples:
       | voltype | access          | fstype | errormsg |
       | "mount" | "single-writer" | "nfs"  | "none"   | 
-
+  
+  @wip
   Scenario: Expand Nfs Volume
     Given a VxFlexOS service
     And a nfs capability with voltype "mount" access "single-writer" fstype "nfs"
@@ -697,7 +698,7 @@ Feature: VxFlex OS CSI interface
     And there are no errors
     And when I call NodePublishVolume for nfs "SDC_GUID"
     And there are no errors
-    And when I call NfsExpandVolume to "15000"
+    And when I call NfsExpandVolume to "150000000"
     Then the error message should contain <errormsg>
     Examples:
     | errormsg    |
@@ -707,7 +708,7 @@ Feature: VxFlex OS CSI interface
   Scenario: Expand Nfs Volume with tree quota disabled
     Given a VxFlexOS service
     And a nfs capability with voltype "mount" access "single-writer" fstype "nfs"
-    And a basic nfs volume request with quota enabled volname "vol-quota" volsize "10" path "/nfs-quota" softlimit "80" graceperiod "86400"
+    And a basic nfs volume request with quota enabled volname "vol-quota-exp" volsize "10" path "/nfs-quota" softlimit "80" graceperiod "86400"
     When I call CreateVolume
     And there are no errors
     And when I call PublishVolume for nfs "SDC_GUID"
