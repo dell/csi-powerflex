@@ -15,7 +15,7 @@
 export X_CSI_VXFLEXOS_THICKPROVISION=false
 export X_CSI_VXFLEXOS_ENABLESNAPSHOTCGDELETE="true"
 export X_CSI_VXFLEXOS_ENABLELISTVOLUMESNAPSHOTS="true"
-export X_CSI_QUOTA_ENABLED="false"
+export X_CSI_QUOTA_ENABLED="true"
 
 # Variables for using tests
 export CSI_ENDPOINT=`pwd`/unix_sock
