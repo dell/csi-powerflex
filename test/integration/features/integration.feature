@@ -3,19 +3,23 @@ Feature: VxFlex OS CSI interface
   I want to run a system test
   So that I know the service functions correctly.
 
-  Scenario: Create, publish, unpublish, and delete basic vol, change name of array and specify wrong allSystemNames , this will pass if volume because handle has id
+  Scenario: Expand Nfs Volume with tree quota disabled
     Given a VxFlexOS service
-    And I set another systemID "altSystem"
-    And Set System Name As "block-legacy-gateway"
-    And Set Bad AllSystemNames
-    And a capability with voltype "mount" access "single-writer" fstype "ext4"
-    And a volume request "integration9" "8"
+    And a nfs capability with voltype "mount" access "single-writer" fstype "nfs"
+    And a basic nfs volume request with quota enabled volname "vol-quota-exp" volsize "10" path "/nfs-quota1" softlimit "80" graceperiod "86400"
     When I call CreateVolume
-    And Set System Name As "1235e15806d1ec0f_pflex_system"
-    And when I call PublishVolume "SDC_GUID"
     And there are no errors
-    And when I call NodePublishVolume "SDC_GUID"
-    And when I call NodeUnpublishVolume "SDC_GUID"
-    And when I call UnpublishVolume "SDC_GUID"
+    And when I call PublishVolume for nfs "SDC_GUID"
+    And there are no errors
+    And when I call NodePublishVolume for nfs "SDC_GUID"
+    And there are no errors
+    And when I call NfsExpandVolume to "15"
+    And there are no errors
+    And I call ListVolume
+    And a valid ListVolumeResponse is returned
+    And when I call NodeUnpublishVolume for nfs "SDC_GUID"
+    And there are no errors
+    And when I call UnpublishVolume for nfs "SDC_GUID"
     And there are no errors
     And when I call DeleteVolume
+    Then there are no errors    
