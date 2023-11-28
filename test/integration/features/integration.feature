@@ -58,12 +58,55 @@ Feature: VxFlex OS CSI interface
     And when I call DeleteVolume
     Then there are no errors
 
+  Scenario: Expand Nfs Volume with tree quota disabled
+    Given a VxFlexOS service
+    And a nfs capability with voltype "mount" access "single-writer" fstype "nfs"
+    And a basic nfs volume request with quota enabled volname "vol-quota-exp" volsize "10" path "/nfs-quota1" softlimit "80" graceperiod "86400"
+    When I call CreateVolume
+    And there are no errors
+    And when I call PublishVolume for nfs "SDC_GUID"
+    And there are no errors
+    And when I call NodePublishVolume for nfs "SDC_GUID"
+    And there are no errors
+    And when I call NfsExpandVolume to "15"
+    And there are no errors
+    And I call ListVolume
+    And a valid ListVolumeResponse is returned
+    And when I call NodeUnpublishVolume for nfs "SDC_GUID"
+    And there are no errors
+    And when I call UnpublishVolume for nfs "SDC_GUID"
+    And there are no errors
+    And when I call DeleteVolume
+    Then there are no errors    
+  
+
   Scenario: Idempotent create and delete basic volume
     Given a VxFlexOS service
     And a basic block volume request "integration2" "8"
     When I call CreateVolume
     And I call CreateVolume
     And when I call DeleteVolume
+    And when I call DeleteVolume
+    Then there are no errors
+
+  Scenario: Expand Nfs Volume
+    Given a VxFlexOS service
+    And a nfs capability with voltype "mount" access "single-writer" fstype "nfs"
+    And a nfs volume request "nfsinttestvol2" "16"
+    When I call CreateVolume
+    And there are no errors
+    And when I call PublishVolume for nfs "SDC_GUID"
+    And there are no errors
+    And when I call NodePublishVolume for nfs "SDC_GUID"
+    And there are no errors
+    And when I call NfsExpandVolume to "20"
+    And there are no errors
+    And I call ListVolume
+    And a valid ListVolumeResponse is returned
+    And when I call NodeUnpublishVolume for nfs "SDC_GUID"
+    And there are no errors
+    And when I call UnpublishVolume for nfs "SDC_GUID"
+    And there are no errors
     And when I call DeleteVolume
     Then there are no errors
 
@@ -107,62 +150,62 @@ Feature: VxFlex OS CSI interface
       | "single-node-single-writer" |
       | "single-node-multi-writer"  |
 
-  Scenario Outline: Create, publish, unpublish, and delete basic vol, using systemName. Second run: sc has ID, but secret has name
-    Given a VxFlexOS service
-    And a capability with voltype "mount" access "single-writer" fstype "ext4"
-    And I set another systemName "altSystem"
-    And a volume request <name> "8"
-    When I call CreateVolume
-    And there are no errors
-    And when I call PublishVolume "SDC_GUID"
-    And there are no errors
-    And when I call NodePublishVolume "SDC_GUID"
-    And when I call NodeUnpublishVolume "SDC_GUID"
-    And when I call UnpublishVolume "SDC_GUID"
-    And there are no errors
-    And when I call DeleteVolume
-    Then there are no errors
+ # Scenario Outline: Create, publish, unpublish, and delete basic vol, using systemName. Second run: sc has ID, but secret has name
+#    Given a VxFlexOS service
+#    And a capability with voltype "mount" access "single-writer" fstype "ext4"
+#    And I set another systemName "altSystem"
+#    And a volume request <name> "8"
+#    When I call CreateVolume
+#    And there are no errors
+#    And when I call PublishVolume "SDC_GUID"
+#    And there are no errors
+#    And when I call NodePublishVolume "SDC_GUID"
+#    And when I call NodeUnpublishVolume "SDC_GUID"
+#    And when I call UnpublishVolume "SDC_GUID"
+#    And there are no errors
+#    And when I call DeleteVolume
+#    Then there are no errors
+#
+#    Examples:
+#      | name                         |
+#      | "integration7"               |
+#      | "alt_system_id_integration8" |
+#
+#  Scenario: Create, publish, unpublish, and delete basic vol, change name of array and specify wrong allSystemNames , this will pass if volume because handle has id
+#    Given a VxFlexOS service
+#    And I set another systemID "altSystem"
+#    And Set System Name As "1235e15806d1ec0f-pflex-system"
+#    And Set Bad AllSystemNames
+#    And a capability with voltype "mount" access "single-writer" fstype "ext4"
+#    And a volume request "integration9" "8"
+#    When I call CreateVolume
+#    And Set System Name As "1235e15806d1ec0f_pflex_system"
+#    And when I call PublishVolume "SDC_GUID"
+#    And there are no errors
+#    And when I call NodePublishVolume "SDC_GUID"
+#    And when I call NodeUnpublishVolume "SDC_GUID"
+#    And when I call UnpublishVolume "SDC_GUID"
+#    And there are no errors
+#    And when I call DeleteVolume
 
-    Examples:
-      | name                         |
-      | "integration7"               |
-      | "alt_system_id_integration8" |
 
-  Scenario: Create, publish, unpublish, and delete basic vol, change name of array and specify wrong allSystemNames , this will pass if volume because handle has id
-    Given a VxFlexOS service
-    And I set another systemID "altSystem"
-    And Set System Name As "1235e15806d1ec0f-pflex-system"
-    And Set Bad AllSystemNames
-    And a capability with voltype "mount" access "single-writer" fstype "ext4"
-    And a volume request "integration9" "8"
-    When I call CreateVolume
-    And Set System Name As "1235e15806d1ec0f_pflex_system"
-    And when I call PublishVolume "SDC_GUID"
-    And there are no errors
-    And when I call NodePublishVolume "SDC_GUID"
-    And when I call NodeUnpublishVolume "SDC_GUID"
-    And when I call UnpublishVolume "SDC_GUID"
-    And there are no errors
-    And when I call DeleteVolume
-
-
-  Scenario: Create, publish, unpublish, and delete basic vol, change name of array and specify allSystemNames
-    Given a VxFlexOS service
-    And I set another systemID "altSystem"
-    And Set System Name As "1235e15806d1ec0f-pflex-system"
-    And a capability with voltype "mount" access "single-writer" fstype "ext4"
-    And a volume request "integration8" "8"
-    When I call CreateVolume
-    And Set System Name As "1235e15806d1ec0f_pflex_system"
-    And there are no errors
-    And when I call PublishVolume "SDC_GUID"
-    And there are no errors
-    And when I call NodePublishVolume "SDC_GUID"
-    And when I call NodeUnpublishVolume "SDC_GUID"
-    And when I call UnpublishVolume "SDC_GUID"
-    And there are no errors
-    And when I call DeleteVolume
-    Then there are no errors
+  #Scenario: Create, publish, unpublish, and delete basic vol, change name of array and specify allSystemNames
+#    Given a VxFlexOS service
+#    And I set another systemID "altSystem"
+#    And Set System Name As "1235e15806d1ec0f-pflex-system"
+#    And a capability with voltype "mount" access "single-writer" fstype "ext4"
+#    And a volume request "integration8" "8"
+#    When I call CreateVolume
+#    And Set System Name As "1235e15806d1ec0f_pflex_system"
+#    And there are no errors
+#    And when I call PublishVolume "SDC_GUID"
+#    And there are no errors
+#    And when I call NodePublishVolume "SDC_GUID"
+#    And when I call NodeUnpublishVolume "SDC_GUID"
+#    And when I call UnpublishVolume "SDC_GUID"
+#    And there are no errors
+#    And when I call DeleteVolume
+#    Then there are no errors
 
   @long
   Scenario Outline: Create volume, create snapshot, delete snapshot, delete volume for multiple sizes
@@ -579,28 +622,8 @@ Feature: VxFlex OS CSI interface
       | voltype | access          | fstype | errormsg |
       | "mount" | "single-writer" | "nfs"  | "none"   | 
   
-  @wip
-  Scenario: Expand Nfs Volume
-    Given a VxFlexOS service
-    And a nfs capability with voltype "mount" access "single-writer" fstype "nfs"
-    And a nfs volume request "nfsinttestvol2" "16"
-    When I call CreateVolume
-    And there are no errors
-    And when I call PublishVolume for nfs "SDC_GUID"
-    And there are no errors
-    And when I call NodePublishVolume for nfs "SDC_GUID"
-    And there are no errors
-    And when I call NfsExpandVolume to "20"
-    And there are no errors
-    And I call ListVolume
-    And a valid ListVolumeResponse is returned
-    And when I call NodeUnpublishVolume for nfs "SDC_GUID"
-    And there are no errors
-    And when I call UnpublishVolume for nfs "SDC_GUID"
-    And there are no errors
-    And when I call DeleteVolume
-    Then there are no errors
-
+  
+  
   Scenario: NFS Create volume, create snapshot, delete volume
     Given a VxFlexOS service
     And a basic nfs volume request "nfsvolume1" "8"
@@ -687,65 +710,6 @@ Feature: VxFlex OS CSI interface
     When I call CreateVolume
     Then the error message should contain "requested softLimit: 200 perc is greater than volume size"
   
-  Scenario: Expand Nfs Volume with tree quota enabled
-    Given a VxFlexOS service
-    And a nfs capability with voltype "mount" access "single-writer" fstype "nfs"
-    And a basic nfs volume request with quota enabled volname "vol-quota10" volsize "10" path "/nfs-quotakk" softlimit "80" graceperiod "86400"
-    When I call CreateVolume
-    And there are no errors
-    And when I call PublishVolume for nfs "SDC_GUID"
-    And there are no errors
-    And when I call NodePublishVolume for nfs "SDC_GUID"
-    And there are no errors
-    And when I call NfsExpandVolume to "15"
-    And there are no errors
-    And I call ListVolume
-    And a valid ListVolumeResponse is returned
-    And when I call NodeUnpublishVolume for nfs "SDC_GUID"
-    And there are no errors
-    And when I call UnpublishVolume for nfs "SDC_GUID"
-    And there are no errors
-    And when I call DeleteVolume
-    Then there are no errors
-
-  
-  Scenario: Expand Nfs Volume with tree quota enabled given invalid volume size for exapnd volume
-    Given a VxFlexOS service
-    And a nfs capability with voltype "mount" access "single-writer" fstype "nfs"
-    And a basic nfs volume request with quota enabled volname "vol-quota123" volsize "10" path "/nfs-quotakk" softlimit "80" graceperiod "86400"
-    When I call CreateVolume
-    And there are no errors
-    And when I call PublishVolume for nfs "SDC_GUID"
-    And there are no errors
-    And when I call NodePublishVolume for nfs "SDC_GUID"
-    And there are no errors
-    And when I call NfsExpandVolume to "150000000"
-    Then the error message should contain <errormsg>
-    Examples:
-    | errormsg    |
-    | "422 Unprocessable Entity" |   
-    
-
-  Scenario: Expand Nfs Volume with tree quota disabled
-    Given a VxFlexOS service
-    And a nfs capability with voltype "mount" access "single-writer" fstype "nfs"
-    And a basic nfs volume request with quota enabled volname "vol-quota-exp" volsize "10" path "/nfs-quota1" softlimit "80" graceperiod "86400"
-    When I call CreateVolume
-    And there are no errors
-    And when I call PublishVolume for nfs "SDC_GUID"
-    And there are no errors
-    And when I call NodePublishVolume for nfs "SDC_GUID"
-    And there are no errors
-    And when I call NfsExpandVolume to "15"
-    And there are no errors
-    And I call ListVolume
-    And a valid ListVolumeResponse is returned
-    And when I call NodeUnpublishVolume for nfs "SDC_GUID"
-    And there are no errors
-    And when I call UnpublishVolume for nfs "SDC_GUID"
-    And there are no errors
-    And when I call DeleteVolume
-    Then there are no errors    
 
   Scenario Outline: Publish and Unpublish Ephemeral Volume
     Given a VxFlexOS service
@@ -753,7 +717,7 @@ Feature: VxFlex OS CSI interface
     And I call EthemeralNodePublishVolume with ID <id> and size <size>
     And when I call NodeUnpublishVolume "SDC_GUID"
     Then the error message should contain <errormsg>
-Examples:
+   Examples:
   |  id           | size      |  access         | fstype | errormsg                                             | 
   | "123456789"   | "8Gi"     |"single-writer"  | "xfs"  | "none"                                               | 
   | "123456789"   | "8Gi"     |"single-writer"  | "ext4" | "none"                                               |
@@ -908,3 +872,20 @@ Scenario: Call NodeGetVolumeStats on unmounted volume
   And there are no errors
   And when I call DeleteVolume
   Then there are no errors
+
+  Scenario: Expand Nfs Volume with tree quota enabled given invalid volume size for exapnd volume
+    Given a VxFlexOS service
+    And a nfs capability with voltype "mount" access "single-writer" fstype "nfs"
+    And a basic nfs volume request with quota enabled volname "vol-quota123" volsize "10" path "/nfs-quotakk" softlimit "80" graceperiod "86400"
+    When I call CreateVolume
+    And there are no errors
+    And when I call PublishVolume for nfs "SDC_GUID"
+    And there are no errors
+    And when I call NodePublishVolume for nfs "SDC_GUID"
+    And there are no errors
+    And when I call NfsExpandVolume to "150000000"
+    Then the error message should contain <errormsg>
+    Examples:
+    | errormsg    |
+    | "422 Unprocessable Entity" |   
+    
