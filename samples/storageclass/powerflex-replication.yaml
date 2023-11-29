@@ -1,0 +1,126 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  # name for the storage class
+  name: powerflex-replication
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: csi-vxflexos.dellemc.com
+
+# reclaimPolicy: PVs that are dynamically created by a StorageClass will have the reclaim policy specified here
+# Allowed values:
+#   Reclaim: retain the PV after PVC deletion
+#   Delete: delete the PV after PVC deletion
+# Optional: true
+# Default value: Delete
+reclaimPolicy: Delete
+
+# allowVolumeExpansion: allows the users to resize the volume by editing the corresponding PVC object
+# Allowed values:
+#   true: allow users to resize the PVC
+#   false: does not allow users to resize the PVC
+# Optional: true
+# Default value: false
+allowVolumeExpansion: true
+
+parameters:
+  # Storage pool to use on system
+  # Optional: false
+  storagepool: <sourceStoragePool>
+
+  # System you would like this storage class to use
+  # Allowed values: one string for system ID
+  # Optional: false
+  systemID: <sourceSystemID>
+
+  # protectiondomain: Source array’s protection domain to use.
+  # Allowed values: string
+  # Optional: true
+  # Default value: None
+  protectiondomain: <sourceProtectionDomain>
+
+  # replicationPrefix paramater in values.yaml must be used as prefix for all replication parameters in storage class
+  # for e.g., all replication parameters have prefix: replication.storage.dell.com here
+
+  # replication.storage.dell.com/isReplicationEnabled:
+  # Allowed values:
+  #   true: enable replication sidecar
+  #   false: disable replication sidecar
+  # Optional: true
+  # Default value: false
+  replication.storage.dell.com/isReplicationEnabled: "true"
+
+  # replication.storage.dell.com/remoteStorageClassName:
+  # Allowed values: string
+  # Optional: true
+  # Default value: None
+  replication.storage.dell.com/remoteStorageClassName: "powerflex-replication"
+
+  # replication.storage.dell.com/remoteStoragePool:
+  # Allowed values: string
+  # Optional: true
+  # Default value: None
+  replication.storage.dell.com/remoteStoragePool: <remoteStoragePool>
+
+  # replication.storage.dell.com/remoteClusterID: point to correct remote cluster id
+  # Allowed values: string
+  # Optional: true
+  # Default value: None
+  replication.storage.dell.com/remoteClusterID: <remoteClusterID>
+
+  # replication.storage.dell.com/remoteSystem: point to correct remote PowerFlex system
+  # Allowed values: string
+  # Optional: true
+  # Default value: None
+  replication.storage.dell.com/remoteSystem: <remoteSystemID>
+
+  # replication.storage.dell.com/rpo: change to any other RPOs supported by PowerFlex
+  # Allowed values: time in seconds between 10 seconds and 6000 seconds (60 minutes)
+  # Optional: true
+  # Default value: None
+  replication.storage.dell.com/rpo: "60"
+
+  # replication.storage.dell.com/volumeGroupPrefix: volume group prefix
+  # Allowed values: string
+  # Optional: true
+  # Default value: None
+  replication.storage.dell.com/volumeGroupPrefix: "csi"
+
+  # # replication.storage.dell.com/remotePVRetentionPolicy: PV retention policy
+  # # Allowed values: string
+  # # Optional: true
+  # # Default value: retain
+  replication.storage.dell.com/remotePVRetentionPolicy: "Delete"
+
+  # replication.storage.dell.com/remoteRGRetentionPolicy: RG retention policy
+  # Allowed values: string
+  # Optional: true
+  # Default value: retain
+  replication.storage.dell.com/remoteRGRetentionPolicy: "Delete"
+
+  # replication.storage.dell.com/consistencyGroupName: Desired group name in the array
+  # Allowed values: string
+  # Optional: true
+  # Default value: None
+  replication.storage.dell.com/consistencyGroupName: <desiredConsistencyGroupName>
+
+  # replication.storage.dell.com/protectionDomain: Remote array’s protection domain to use.
+  # Allowed values: string
+  # Optional: true
+  # Default value: None
+  replication.storage.dell.com/protectionDomain: <remoteProtectionDomain>
+
+# volumeBindingMode determines how volume binding and dynamic provisioning should occur
+# Allowed values:
+#  Immediate: volume binding and dynamic provisioning occurs once PVC is created
+#  WaitForFirstConsumer: delay the binding and provisioning of PV until a pod using the PVC is created.
+#  Optional: false
+# Default value: WaitForFirstConsumer (required for topology section below)
+volumeBindingMode: WaitForFirstConsumer
+
+# allowedTopologies helps scheduling pods on worker nodes which match all of below expressions.
+allowedTopologies:
+  - matchLabelExpressions:
+      - key: csi-vxflexos.dellemc.com/<SYSTEM_ID> # Insert System ID
+        values:
+          - csi-vxflexos.dellemc.com
