@@ -1058,12 +1058,12 @@ func (s *service) DeleteVolume(
 				} else {
 					// either of RWRootHosts or RWHosts has one entry but it is not externalAccess
 					return nil, status.Errorf(codes.FailedPrecondition,
-						"filesystem %s cannot be deleted as it has associated NFS shares.",
+						"filesystem %s can not be deleted as it has associated NFS shares.",
 						fsID)
 				}
 			} else {
 				return nil, status.Errorf(codes.FailedPrecondition,
-					"filesystem %s cannot be deleted as it has associated NFS shares.",
+					"filesystem %s can not be deleted as it has associated NFS shares.",
 					fsID)
 			}
 		}
