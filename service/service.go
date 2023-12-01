@@ -153,7 +153,7 @@ type Opts struct {
 	replicationPrefix          string
 	MaxVolumesPerNode          int64
 	IsQuotaEnabled             bool   // allow driver to enable quota limits for NFS volumes
-	ExternalAccess             string // used for adding multiple ip to the NFS export
+	ExternalAccess             string // used for adding extra IP/IP range to the NFS export
 }
 
 type service struct {

@@ -49,7 +49,7 @@ Feature: VxFlex OS CSI interface
     And I call NFS PublishVolume with "single-writer"
     Then a valid PublishVolumeResponse is returned
      And I call DeleteVolume nfs with "single-writer"
-    Then the error contains "cannot be deleted as it has associated NFS shares"
+    Then the error contains "can not be deleted as it has associated NFS shares"
     
   Scenario: a Basic Nfs delete FileSystem with Snapshot
     Given a VxFlexOS service
