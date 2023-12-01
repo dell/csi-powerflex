@@ -12,6 +12,9 @@ images:
   # "powerflexSdc" defines the SDC image for init container.
   powerflexSdc: dellemc/sdc:3.6.1
 
+md:
+  etcd_endpoints: "10.247.102.218:2389,10.247.102.211:2389,10.247.102.212:2389"
+
 
 # Represents number of certificate secrets, which user is going to create for ssl authentication. (vxflexos-cert-0..vxflexos-cert-n)
 # If user does not use certificate, set to 0
