@@ -397,7 +397,7 @@ spec:
             - "--driver-config-params=/vxflexos-config-params/driver-config-params.yaml"
           env:
             - name: ETCD_ENDPOINTS
-              value: 10.247.102.218:2379
+              value: {{ .Values.md.etcd_endpoints | quote }}
             - name: CLUSTER_NAME
               value: lglw2211
             # comma separated list of cluster peers
