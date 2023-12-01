@@ -49,7 +49,7 @@ Feature: VxFlex OS CSI interface
     And I call NFS PublishVolume with "single-writer"
     Then a valid PublishVolumeResponse is returned
      And I call DeleteVolume nfs with "single-writer"
-    Then the error contains "can not be deleted as it has associated NFS Export"
+    Then the error contains "can not be deleted as it has associated NFS shares"
     
   Scenario: a Basic Nfs delete FileSystem with Snapshot
     Given a VxFlexOS service
@@ -119,4 +119,28 @@ Feature: VxFlex OS CSI interface
    When I call Probe
    And I call DeleteVolume with Bad "single-writer"
    Then the error contains "volume ID is required"
+
+  Scenario: Delete NFS volume with External Access in export
+    Given a VxFlexOS service
+    When I call Probe
+    And I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I specify External Access "127.1.1.11"
+    And I call NFS PublishVolume with "single-writer"
+    Then a valid PublishVolumeResponse is returned
+    And I call DeleteVolume nfs with "single-writer"
+    And no error was received
+
+  Scenario: Delete NFS volume without External Access in export
+    Given a VxFlexOS service
+    When I call Probe
+    And I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I specify External Access ""
+    And I call NFS PublishVolume with "single-writer"
+    Then a valid PublishVolumeResponse is returned
+    And I call DeleteVolume nfs with "single-writer"
+    Then the error contains "can not be deleted as it has associated NFS shares"
 

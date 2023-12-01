@@ -646,11 +646,6 @@ func handleGetNFSExports(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if inducedError.Error() == "deleteNFSExportError" {
-			writeError(w, "delete NFS Export failed", http.StatusNotFound, codes.NotFound)
-			return
-		}
-
 		nfsExp := make(map[string]string)
 
 		if array, ok := systemArrays[r.Host]; ok {

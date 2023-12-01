@@ -1024,11 +1024,50 @@ func (s *service) DeleteVolume(
 				return nil, status.Errorf(codes.Internal,
 					"error getting the NFS Export for the fs: %s", err.Error())
 			}
-		} else {
-			if nfsExport != nil {
-				return nil, status.Errorf(codes.FailedPrecondition, "NFS volume %s can not be deleted as it has associated NFS Export.", fsID)
+		}
+
+		if nfsExport != nil &&
+			(len(nfsExport.ReadOnlyHosts) > 0 ||
+				len(nfsExport.ReadOnlyRootHosts) > 0 ||
+				len(nfsExport.ReadWriteHosts) > 0 ||
+				len(nfsExport.ReadWriteRootHosts) > 0) {
+			// if one entry is there for RWRootHosts or RWHosts, check if this is the same externalAccess defined in value.yaml
+			// if yes modifyNFSExport and remove externalAccess from the HostAcceesList on the array
+			if (len(nfsExport.ReadWriteRootHosts) == 1 || len(nfsExport.ReadWriteHosts) == 1) && s.opts.ExternalAccess != "" {
+				externalAccess := s.opts.ExternalAccess
+				modifyNFSExport := false
+				// we need to construct the payload dynamically otherwise 400 error will be thrown
+				var modifyParam *siotypes.NFSExportModify = &siotypes.NFSExportModify{}
+				// Removing externalAccess from RWHosts as well as RWRootHosts
+				if len(nfsExport.ReadWriteRootHosts) == 1 && externalAccess == nfsExport.ReadWriteRootHosts[0] {
+					Log.Debug("Trying to remove externalAccess IP with mask having RWRootHosts access while deleting the volume: ", externalAccess)
+					modifyNFSExport = true
+					modifyParam.RemoveReadWriteRootHosts = []string{externalAccess}
+				}
+				if len(nfsExport.ReadWriteHosts) == 1 && externalAccess == nfsExport.ReadWriteHosts[0] {
+					Log.Debug("Trying to remove externalAccess IP with mask having RWHosts access while deleting the volume: ", externalAccess)
+					modifyNFSExport = true
+					modifyParam.RemoveReadWriteHosts = []string{externalAccess}
+				}
+				// call ModifyNFSExport API only when modifyParam payload is not empty i.e. something is there to modify
+				if modifyNFSExport {
+					err = client.ModifyNFSExport(modifyParam, fsID)
+					if err != nil {
+						Log.Warn("failure when removing externalAccess from nfs export: ", err.Error())
+					}
+				} else {
+					// either of RWRootHosts or RWHosts has one entry but it is not externalAccess
+					return nil, status.Errorf(codes.FailedPrecondition,
+						"filesystem %s can not be deleted as it has associated NFS shares.",
+						fsID)
+				}
+			} else {
+				return nil, status.Errorf(codes.FailedPrecondition,
+					"filesystem %s can not be deleted as it has associated NFS shares.",
+					fsID)
 			}
 		}
+
 		Log.WithFields(logrus.Fields{"name": fsName, "id": fsID}).Info("Deleting NFS volume")
 		err = system.DeleteFileSystem(fsName)
 		if err != nil {
@@ -1204,12 +1243,15 @@ func (s *service) ControllerPublishVolume(
 				err.Error())
 		}
 
-		sdcIP, err := s.getSDCIP(nodeID, systemID)
+		sdcIPs, err := s.getSDCIPs(nodeID, systemID)
 		if err != nil {
 			return nil, status.Errorf(codes.NotFound, err.Error())
+		} else if len(sdcIPs) == 0 {
+			return nil, status.Errorf(codes.NotFound, "received empty sdcIPs")
 		}
 
-		publishContext["host"] = sdcIP
+		externalAccess := s.opts.ExternalAccess
+		publishContext["host"] = sdcIPs[0]
 
 		fsc := req.GetVolumeCapability()
 		if fsc == nil {
@@ -1227,7 +1269,7 @@ func (s *service) ControllerPublishVolume(
 				errUnknownAccessMode)
 		}
 		//Export for NFS
-		resp, err := s.exportFilesystem(ctx, req, adminClient, fs, sdcIP, nodeID, publishContext, am)
+		resp, err := s.exportFilesystem(ctx, req, adminClient, fs, sdcIPs, externalAccess, nodeID, publishContext, am)
 		return resp, err
 	}
 	volID := getVolumeIDFromCsiVolumeID(csiVolID)
@@ -1526,13 +1568,15 @@ func (s *service) ControllerUnpublishVolume(
 				err.Error())
 		}
 
-		sdcIP, err := s.getSDCIP(nodeID, systemID)
+		sdcIPs, err := s.getSDCIPs(nodeID, systemID)
 		if err != nil {
 			return nil, status.Errorf(codes.NotFound, err.Error())
+		} else if len(sdcIPs) == 0 {
+			return nil, status.Errorf(codes.NotFound, "received empty sdcIPs")
 		}
 
 		//unexport for NFS
-		err = s.unexportFilesystem(ctx, req, adminClient, fs, req.GetVolumeId(), sdcIP, nodeID)
+		err = s.unexportFilesystem(ctx, req, adminClient, fs, req.GetVolumeId(), sdcIPs, nodeID)
 		if err != nil {
 			return nil, err
 		}

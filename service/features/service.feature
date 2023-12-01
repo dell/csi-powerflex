@@ -1460,3 +1460,40 @@ Feature: VxFlex OS CSI interface
     And a controller published volume
     When I call ControllerExpandVolume set to "12"
     Then the error contains "Fetching tree quota for filesystem failed, error:"
+
+  Scenario: Parse valid IP
+    When I call ParseCIDR with ip "127.0.0.1"
+    And no error was received
+
+  Scenario: Parse invalid IP
+    When I call ParseCIDR with ip "127.0.0"
+    Then the error contains "invalid CIDR address"
+
+  Scenario: Get IP with valid IP and valid Mask
+    When I call GetIPListWithMaskFromString with ip "127.0.0.1/32"
+    And no error was received
+
+  Scenario: Get IP with invalid IP and invalid Mask
+    When I call GetIPListWithMaskFromString with ip "127.0.1/34"
+    Then the error contains "doesn't seem to be a valid IP"
+
+  Scenario: Get IP with valid IP and invalid Mask
+    When I call GetIPListWithMaskFromString with ip "127.0.1.1/34"
+    Then the error contains "doesn't seem to be a valid IP"
+
+  Scenario: Get IP with invalid Mask
+    When I call GetIPListWithMaskFromString with ip "127.0.1.1//34"
+    Then the error contains "doesn't seem to be a valid IP"
+
+  Scenario: Parse IP with no Mask
+    When I call parseMask with ip "192.168.1.34"
+    Then the error contains "Parse Mask: Error parsing mask"
+
+  Scenario: External Access Already Added
+    Given an NFSExport instance with nfsexporthost <nfsexporthost>
+    When I call externalAccessAlreadyAdded with externalAccess <externalAccess>
+    Then the error contains <errorMsg>
+    Examples:
+      |  nfsexporthost                  | externalAccess                | errorMsg                              |
+      |  "127.0.0.1/255.255.255.255"    | "127.0.0.1/255.255.255.255"   | "external access exists"              |
+      |  "127.1.1.0/255.255.255.255"    | "127.0.0.1/255.255.255.255"   | "external access does not exist"      |

@@ -147,6 +147,7 @@ type feature struct {
 	context                               context.Context
 	nodeLabels                            map[string]string
 	maxVolSize                            int64
+	nfsExport                             types.NFSExport
 }
 
 func (f *feature) checkGoRoutines(tag string) {
@@ -4430,6 +4431,47 @@ func (f *feature) iSpecifyNoGracePeriod() error {
 	return nil
 }
 
+func (f *feature) iCallParseCIDR(ip string) error {
+	_, err := ParseCIDR(ip)
+	f.err = err
+	return nil
+}
+
+func (f *feature) iCallGetIPListWithMaskFromString(ip string) error {
+	_, err := GetIPListWithMaskFromString(ip)
+	f.err = err
+	return nil
+}
+
+func (f *feature) iCallparseMask(ip string) error {
+	_, err := parseMask(ip)
+	f.err = err
+	return nil
+}
+
+func (f *feature) iCallGivenNFSExport(nfsexporthost string) error {
+	f.nfsExport = types.NFSExport{
+		ReadWriteHosts: []string{nfsexporthost},
+	}
+	return nil
+}
+
+func (f *feature) iCallexternalAccessAlreadyAdded(externalAccess string) error {
+	export := f.nfsExport
+	resp := externalAccessAlreadyAdded(&export, externalAccess)
+	if resp {
+		f.err = errors.New("external access exists")
+	} else {
+		f.err = errors.New("external access does not exist")
+	}
+	return nil
+}
+
+func (f *feature) iSpecifyExternalAccess(externalAccess string) error {
+	f.service.opts.ExternalAccess, _ = ParseCIDR(externalAccess)
+	return nil
+}
+
 func FeatureContext(s *godog.ScenarioContext) {
 	f := &feature{}
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
@@ -4637,6 +4679,12 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I specify NoPath$`, f.iSpecifyNoPath)
 	s.Step(`^I specify NoSoftLimit`, f.iSpecifyNoSoftLimit)
 	s.Step(`^I specify NoGracePeriod`, f.iSpecifyNoGracePeriod)
+	s.Step(`^I call ParseCIDR with ip "([^"]*)"`, f.iCallParseCIDR)
+	s.Step(`^I call GetIPListWithMaskFromString with ip "([^"]*)"`, f.iCallGetIPListWithMaskFromString)
+	s.Step(`^I call parseMask with ip "([^"]*)"`, f.iCallparseMask)
+	s.Step(`^I call externalAccessAlreadyAdded with externalAccess "([^"]*)"`, f.iCallexternalAccessAlreadyAdded)
+	s.Step(`^an NFSExport instance with nfsexporthost "([^"]*)"`, f.iCallGivenNFSExport)
+	s.Step(`^I specify External Access "([^"]*)"`, f.iSpecifyExternalAccess)
 
 	s.After(func(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
 		if f.server != nil {
