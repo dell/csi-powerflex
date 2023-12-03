@@ -15,7 +15,7 @@ if [ "$1" = "" ]; then echo "arg: replicas"; exit 2; fi
 replicas=$1
 target=$(expr $replicas \* 3)
 echo replicas $replicas target $target
-helm install --set "name=pool1,replicas=$replicas,storageClass=vxflexos"  -n pool1 --namespace helmtest-vxflexos  50replicas
+helm install --set "name=SP1,replicas=$replicas,storageClass=vxflexos"  -n SP1 --namespace helmtest-vxflexos  50replicas
 helm install --set "name=pool2,replicas=$replicas,storageClass=vxflexos-pool2"  -n pool2 --namespace helmtest-vxflexos  50replicas
 helm install --set "name=pool3,replicas=$replicas,storageClass=vxflexos-pool3"  -n pool3 --namespace helmtest-vxflexos  50replicas
 

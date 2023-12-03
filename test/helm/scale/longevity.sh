@@ -40,21 +40,21 @@ Target=$(expr $Replicas \* 3)
 
 deployPods() {
 echo deploying pods replicas $replicas target $target
-helm install --set "name=pool1,namespace=$ns,replicas=$replicas,storageClass=vxflexos"  -n pool1 --namespace $ns  $helmDir
+helm install --set "name=SP1,namespace=$ns,replicas=$replicas,storageClass=vxflexos"  -n SP1 --namespace $ns  $helmDir
 helm install --set "name=pool2,namespace=$ns,replicas=$replicas,storageClass=vxflexos-pool2"  -n pool2 --namespace $ns  $helmDir
 helm install --set "name=pool3,namespace=$ns,replicas=$replicas,storageClass=vxflexos-pool3"  -n pool3 --namespace $ns  $helmDir
 }
 
 rescalePods() {
 echo rescaling pods replicas $replicas target $target
-helm upgrade --set "name=pool1,namespace=$ns,replicas=$1,storageClass=vxflexos"  pool1 --namespace $ns  $helmDir
+helm upgrade --set "name=SP1,namespace=$ns,replicas=$1,storageClass=vxflexos"  SP1 --namespace $ns  $helmDir
 helm upgrade --set "name=pool2,namespace=$ns,replicas=$1,storageClass=vxflexos-pool2"  pool2 --namespace $ns  $helmDir
 helm upgrade --set "name=pool3,namespace=$ns,replicas=$1,storageClass=vxflexos-pool3"  pool3 --namespace $ns  $helmDir
 }
 
 helmDelete() {
 echo "Deleting helm charts"
-helm delete --purge pool1
+helm delete --purge SP1
 helm delete --purge pool2
 helm delete --purge pool3
 }

@@ -2980,7 +2980,7 @@ func (f *feature) iCallEphemeralNodePublish() error {
 	ctx := metadata.NewIncomingContext(context.Background(), header)
 	req := new(csi.NodePublishVolumeRequest)
 	systemName := "bad-system-config"
-	req.VolumeContext = map[string]string{"csi.storage.k8s.io/ephemeral": "true", "volumeName": "xxxx", "size": "8Gi", "storagepool": "pool1", "systemID": systemName}
+	req.VolumeContext = map[string]string{"csi.storage.k8s.io/ephemeral": "true", "volumeName": "xxxx", "size": "8Gi", "storagepool": "SP1", "systemID": systemName}
 	_, err := f.service.ephemeralNodePublish(ctx, req)
 	if err != nil {
 		fmt.Printf("ephemeralNodePublish 1 failed: %s\n", err.Error())
