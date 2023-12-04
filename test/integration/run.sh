@@ -20,8 +20,8 @@
 # rc=$?
 # if [ $rc -ne 0 ]; then echo "failed http unauthorized test"; exit $rc; fi
 
-rm -f unix.sock
-source ../../env.sh
+rm -f unix_sock
+. ../../env.sh
 echo $SDC_GUID
 GOOS=linux CGO_ENABLED=0 GO111MODULE=on go test -v -coverprofile=c.linux.out -timeout 200m -coverpkg=github.com/dell/csi-vxflexos/service *test.go &
 if [ -f ./csi-sanity ] ; then
