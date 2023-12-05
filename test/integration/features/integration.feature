@@ -3,21 +3,18 @@ Feature: VxFlex OS CSI interface
   I want to run a system test
   So that I know the service functions correctly.
    
-   Scenario Outline: Scalability test to create volumes, publish, node publish, node unpublish, unpublish, delete volumes in parallel
+   Scenario: Expand Nfs Volume with tree quota enabled given invalid volume size for exapnd volume
     Given a VxFlexOS service
-    And I set another systemID <id>
-    When I create <numberOfVolumes> volumes in parallel
+    And a nfs capability with voltype "mount" access "single-writer" fstype "nfs"
+    And a basic nfs volume request with quota enabled volname "vol-quota123" volsize "10" path "/nfs-quotakk" softlimit "80" graceperiod "86400"
+    When I call CreateVolume
     And there are no errors
-    And I publish <numberOfVolumes> volumes in parallel
+    And when I call PublishVolume for nfs "SDC_GUID"
     And there are no errors
-    And I node publish <numberOfVolumes> volumes in parallel
+    And when I call NodePublishVolume for nfs "SDC_GUID"
     And there are no errors
-    And I node unpublish <numberOfVolumes> volumes in parallel
-    And there are no errors
-    And I unpublish <numberOfVolumes> volumes in parallel
-    And there are no errors
-    And when I delete <numberOfVolumes> volumes in parallel
-    Then there are no errors
+    And when I call NfsExpandVolume to "15000"
+    Then the error message should contain <errormsg>
     Examples:
-      | id              | numberOfVolumes |
-      | "defaultSystem" | 5               |
+    | errormsg    |
+    | "422 Unprocessable Entity" |   
