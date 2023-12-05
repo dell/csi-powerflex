@@ -30,7 +30,7 @@ export GOSCALEIO_SHOWHTTP="false"
 #If you put the system ID in your config.json, put the
 #system's name here, and vice versa. If your instance does not have a name,
 #leave this variable blank. 
-export ALT_SYSTEM_ID="1235e15806d1ec0f-pflex-system"
+export ALT_SYSTEM_ID=""
 
 MDM=`grep mdm ../../config.json | awk -F":" '{print $2}'`
 for i in $MDM
