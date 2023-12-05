@@ -13,7 +13,7 @@ Feature: VxFlex OS CSI interface
     And there are no errors
     And when I call NodePublishVolume for nfs "SDC_GUID"
     And there are no errors
-    And when I call NfsExpandVolume to "15000"
+    And when I call NfsExpandVolume to "1500000000000000000000"
     Then the error message should contain <errormsg>
     Examples:
     | errormsg    |
