@@ -3,22 +3,21 @@ Feature: VxFlex OS CSI interface
   I want to run a system test
   So that I know the service functions correctly.
    
-   Scenario: Craete volume, clone volume, delete original volume, delete new volume
+   Scenario Outline: Scalability test to create volumes, publish, node publish, node unpublish, unpublish, delete volumes in parallel
     Given a VxFlexOS service
     And I set another systemID <id>
-    And a basic block volume request "integration1" "8"
-    When I call CreateVolume
-    And I call CloneVolume
+    When I create <numberOfVolumes> volumes in parallel
     And there are no errors
-    And I call ListVolume
-    And a valid ListVolumeResponse is returned
-    And I call ListSnapshot
-    And a valid ListSnapshotResponse is returned
-    And when I call DeleteVolume
+    And I publish <numberOfVolumes> volumes in parallel
     And there are no errors
-    And when I call DeleteAllVolumes
+    And I node publish <numberOfVolumes> volumes in parallel
     And there are no errors
-    And I call ListVolume
+    And I node unpublish <numberOfVolumes> volumes in parallel
+    And there are no errors
+    And I unpublish <numberOfVolumes> volumes in parallel
+    And there are no errors
+    And when I delete <numberOfVolumes> volumes in parallel
+    Then there are no errors
     Examples:
-      | id              |   
-      | "defaultSystem" |
+      | id              | numberOfVolumes |
+      | "defaultSystem" | 5               |
