@@ -154,6 +154,7 @@ type Opts struct {
 	MaxVolumesPerNode          int64
 	IsQuotaEnabled             bool   // allow driver to enable quota limits for NFS volumes
 	ExternalAccess             string // used for adding extra IP/IP range to the NFS export
+	KubeNodeName               string
 }
 
 type service struct {
@@ -348,6 +349,7 @@ func (s *service) BeforeServe(
 			"MaxVolumesPerNode":      s.opts.MaxVolumesPerNode,
 			"IsQuotaEnabled":         s.opts.IsQuotaEnabled,
 			"ExternalAccess":         s.opts.ExternalAccess,
+			"KubeNodeName":           s.opts.KubeNodeName,
 		}
 
 		Log.WithFields(fields).Infof("configured %s", Name)
@@ -448,6 +450,9 @@ func (s *service) BeforeServe(
 				opts.ExternalAccess = ""
 			}
 		}
+	}
+	if kubeNodeName, ok := csictx.LookupEnv(ctx, EnvKubeNodeName); ok {
+		opts.KubeNodeName = kubeNodeName
 	}
 
 	// log csiNode topology keys
@@ -1653,13 +1658,9 @@ func (s *service) GetNodeLabels(ctx context.Context) (map[string]string, error) 
 		}
 		K8sClientset = k8sutils.Clientset
 	}
-	hostName, ok := os.LookupEnv("HOSTNAME")
-	if !ok {
-		return nil, status.Errorf(codes.FailedPrecondition, "%s not set", "HOSTNAME")
-	}
-	hostName = strings.ToLower(hostName)
+
 	// access the API to fetch node object
-	node, err := K8sClientset.CoreV1().Nodes().Get(context.TODO(), hostName, v1.GetOptions{})
+	node, err := K8sClientset.CoreV1().Nodes().Get(context.TODO(), s.opts.KubeNodeName, v1.GetOptions{})
 	if err != nil {
 		return nil, status.Error(codes.Internal, GetMessage("Unable to fetch the node labels. Error: %v", err))
 	}
