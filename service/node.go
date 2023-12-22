@@ -125,6 +125,7 @@ func (s *service) NodePublishVolume(
 	req *csi.NodePublishVolumeRequest) (
 	*csi.NodePublishVolumeResponse, error) {
 
+	Log := getLogger(ctx)
 	if md.IsMDVolumeID(req.GetVolumeId()) {
 		// md requires a call to NodeStageVolume before node publish. The current csi-powerflex driver does not
 		// specify use of NODE_STAGE_UNSTAGE, so it needs to be called manually here.
@@ -259,6 +260,7 @@ func (s *service) NodeUnpublishVolume(
 	req *csi.NodeUnpublishVolumeRequest) (
 	*csi.NodeUnpublishVolumeResponse, error) {
 
+	Log := getLogger(ctx)
 	if md.IsMDVolumeID(req.GetVolumeId()) {
 		_, err := mdsvc.NodeUnpublishVolume(ctx, req)
 		if err != nil {
