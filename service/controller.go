@@ -163,6 +163,7 @@ func (s *service) CreateVolume(
 ) {
 	params := req.GetParameters()
 
+	Log := getLogger(ctx)
 	if md.IsMDStorageClass(params) {
 		return mdsvc.CreateVolume(ctx, req)
 	}
@@ -976,6 +977,7 @@ func (s *service) DeleteVolume(
 			"volume ID is required")
 	}
 
+	Log := getLogger(ctx)
 	if md.IsMDVolumeID(csiVolID) {
 		return mdsvc.DeleteVolume(ctx, req)
 	}
@@ -1225,8 +1227,9 @@ func (s *service) findNetworkInterfaceIPs() ([]string, error) {
 func (s *service) ControllerPublishVolume(
 	ctx context.Context,
 	req *csi.ControllerPublishVolumeRequest) (
-	*csi.ControllerPublishVolumeResponse, error,
-) {
+	*csi.ControllerPublishVolumeResponse, error) {
+
+	Log := getLogger(ctx)
 	volumeContext := req.GetVolumeContext()
 	if volumeContext != nil {
 		Log.Printf("VolumeContext:")
@@ -1581,6 +1584,7 @@ func (s *service) ControllerUnpublishVolume(
 	req *csi.ControllerUnpublishVolumeRequest) (
 	*csi.ControllerUnpublishVolumeResponse, error) {
 
+	Log := getLogger(ctx)
 	if md.IsMDVolumeID(req.GetVolumeId()) {
 		return mdsvc.ControllerUnpublishVolume(ctx, req)
 	}

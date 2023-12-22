@@ -50,6 +50,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -649,6 +650,21 @@ func (s *service) getIPAddressByInterface(interfaceName string, networkInterface
 	}
 
 	return "", fmt.Errorf("no IPv4 address found for interface %s", interfaceName)
+}
+
+func getLogger(ctx context.Context) *logrus.Entry {
+	fields := logrus.Fields{}
+	headers, ok := metadata.FromIncomingContext(ctx)
+	if ok {
+		if req, ok := headers["csi.requestid"]; ok && len(req) > 0 {
+			fields["request_id"] = req[0]
+		}
+	} else {
+		if ctx.Value("request_id") != nil {
+			fields["request_id"] = ctx.Value("request_id").(string)
+		}
+	}
+	return logrus.WithFields(fields)
 }
 
 func (s *service) checkNFS(ctx context.Context, systemID string) (bool, error) {
