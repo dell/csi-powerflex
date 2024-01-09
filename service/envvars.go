@@ -66,4 +66,7 @@ const (
 
 	// EnvExternalAccess is the IP of an additional router you wish to add for nfs export
 	EnvExternalAccess = "X_CSI_POWERFLEX_EXTERNAL_ACCESS"
+
+	// EnvKubeNodeName is the name of the environment variable which stores current kubernetes node name
+	EnvKubeNodeName = "X_CSI_POWERFLEX_KUBE_NODE_NAME"
 )
