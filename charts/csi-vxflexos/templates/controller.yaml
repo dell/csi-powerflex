@@ -399,10 +399,10 @@ spec:
             - name: ETCD_ENDPOINTS
               value: {{ .Values.md.etcd_endpoints | quote }}
             - name: CLUSTER_NAME
-              value: lglw2211
+              value: {{ .Values.md.cluster_name | quote }}
             # comma separated list of cluster peers
             - name: CLUSTER_PEERS
-              value: lglw2212
+              value: {{ .Values.md.cluster_peers | quote }}
             - name: CSI_ENDPOINT
               value: /var/run/csi/csi.sock
             - name: X_CSI_MODE

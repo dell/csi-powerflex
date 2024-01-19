@@ -14,7 +14,9 @@ images:
 
 md:
   etcd_endpoints: "10.247.102.218:2389,10.247.102.211:2389,10.247.102.212:2389"
-
+  cluster_name: "lglw2212"
+  # comma separated list of cluster peers
+  cluster_peers: "lglw2211"
 
 # Represents number of certificate secrets, which user is going to create for ssl authentication. (vxflexos-cert-0..vxflexos-cert-n)
 # If user does not use certificate, set to 0
