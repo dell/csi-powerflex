@@ -235,7 +235,7 @@ DRIVER="csi-vxflexos"
 SCRIPTDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 REPODIR="$( dirname "${SCRIPTDIR}" )"
 
-DRIVERVERSION="csi-vxflexos-2.9.0"
+DRIVERVERSION="csi-vxflexos-2.9.1"
 
 while getopts "cprv:h" opt; do
   case $opt in
