@@ -1856,7 +1856,7 @@ func mockGetNodeLabelsWithInvalidVolumeLimits(ctx context.Context, s *service) (
 }
 
 func (f *feature) setFakeNode() (*v1.Node, error) {
-	f.service.opts.KubeNodeName = "node1"
+	os.Setenv("HOSTNAME", "node1")
 	fakeNode := &v1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   "node1",
@@ -1896,7 +1896,7 @@ func mockLookupEnv(ctx context.Context, key string) (string, bool) {
 }
 
 func (f *feature) iCallGetNodeLabelsWithInvalidNode() error {
-	f.service.opts.KubeNodeName = "node2"
+	os.Setenv("HOSTNAME", "node2")
 	_, f.err = f.service.GetNodeLabels(f.context)
 	return nil
 }
