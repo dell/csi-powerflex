@@ -102,15 +102,15 @@ var Log = logrus.New()
 
 // ArrayConnectionData contains data required to connect to array
 type ArrayConnectionData struct {
-	SystemID                  string  `json:"systemID"`
-	Username                  string  `json:"username"`
-	Password                  string  `json:"password"`
-	Endpoint                  string  `json:"endpoint"`
-	SkipCertificateValidation bool    `json:"skipCertificateValidation,omitempty"`
-	Insecure                  bool    `json:"insecure,omitempty"`
-	IsDefault                 bool    `json:"isDefault,omitempty"`
-	AllSystemNames            string  `json:"allSystemNames"`
-	NasName                   *string `json:"nasName"`
+	SystemID                  string `json:"systemID"`
+	Username                  string `json:"username"`
+	Password                  string `json:"password"`
+	Endpoint                  string `json:"endpoint"`
+	SkipCertificateValidation bool   `json:"skipCertificateValidation,omitempty"`
+	Insecure                  bool   `json:"insecure,omitempty"`
+	IsDefault                 bool   `json:"isDefault,omitempty"`
+	AllSystemNames            string `json:"allSystemNames"`
+	NasName                   string `json:"nasName"`
 }
 
 // Manifest is the SP's manifest.
@@ -513,9 +513,10 @@ func (s *service) checkNFS(ctx context.Context, systemID string) (bool, error) {
 			return false, err
 		}
 		array := arrayConData[systemID]
-		if array.NasName == nil || *(array.NasName) == "" {
-			return false, fmt.Errorf("nasName value not found in secret, it is mandatory parameter for NFS volume operations, if not specified, provide the default value as 'none'")
+		if strings.TrimSpace(array.NasName) == "" {
+			Log.Warnf("nasName value not found in secret, it is mandatory parameter for NFS volume operations")
 		}
+		// even though NasName is not present but PowerFlex version is >=4.0 we support NFS.
 		return true, nil
 	}
 	return false, nil
@@ -859,8 +860,8 @@ func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error
 
 			// for PowerFlex v4.0
 			str := ""
-			if c.NasName == nil || *(c.NasName) == "" {
-				c.NasName = &str
+			if strings.TrimSpace(c.NasName) == "" {
+				c.NasName = str
 			}
 
 			skipCertificateValidation := c.SkipCertificateValidation || c.Insecure

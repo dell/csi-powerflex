@@ -284,7 +284,12 @@ func (s *service) CreateVolume(
 			nasName = params[KeyNasName] // Storage class takes precedence
 		} else {
 			Log.Debug("nasName not present in storage class, value taken from secret")
-			nasName = *(arr.NasName) // Secrets next
+			nasName = (arr.NasName) // Secrets next
+			// should we keep this check or not since line 294 will return an error for sure if nasName will empty
+			if strings.TrimSpace(arr.NasName) == "" {
+				Log.Printf("NasName in secret is empty")
+				return nil, fmt.Errorf("NasName is neither provided in SC not in secret file")
+			}
 		}
 		nasServerID, err := s.getNASServerIDFromName(systemID, nasName)
 		if err != nil {

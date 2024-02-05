@@ -56,14 +56,14 @@ const (
 
 // ArrayConnectionData contains data required to connect to array
 type ArrayConnectionData struct {
-	SystemID       string  `json:"systemID"`
-	Username       string  `json:"username"`
-	Password       string  `json:"password"`
-	Endpoint       string  `json:"endpoint"`
-	Insecure       bool    `json:"insecure,omitempty"`
-	IsDefault      bool    `json:"isDefault,omitempty"`
-	AllSystemNames string  `json:"allSystemNames"`
-	NasName        *string `json:"nasname"`
+	SystemID       string `json:"systemID"`
+	Username       string `json:"username"`
+	Password       string `json:"password"`
+	Endpoint       string `json:"endpoint"`
+	Insecure       bool   `json:"insecure,omitempty"`
+	IsDefault      bool   `json:"isDefault,omitempty"`
+	AllSystemNames string `json:"allSystemNames"`
+	NasName        string `json:"nasname"`
 }
 
 type feature struct {
@@ -182,8 +182,8 @@ func (f *feature) getArrayConfig() (map[string]*ArrayConnectionData, error) {
 
 			// for PowerFlex v4.0
 			str := ""
-			if c.NasName == nil || *(c.NasName) == "" {
-				c.NasName = &str
+			if strings.TrimSpace(c.NasName) == "" {
+				c.NasName = str
 			}
 
 			fields := map[string]interface{}{
@@ -194,7 +194,7 @@ func (f *feature) getArrayConfig() (map[string]*ArrayConnectionData, error) {
 				"isDefault":      c.IsDefault,
 				"systemID":       c.SystemID,
 				"allSystemNames": c.AllSystemNames,
-				"nasName":        *c.NasName,
+				"nasName":        c.NasName,
 			}
 
 			fmt.Printf("array found  %s %#v\n", c.SystemID, fields)
@@ -359,8 +359,8 @@ func (f *feature) aNfsVolumeRequestWithQuota(volname string, volsize int64, path
 		}
 
 		if val {
-			if a.NasName != nil {
-				params["nasName"] = *a.NasName
+			if a.NasName != "" {
+				params["nasName"] = a.NasName
 			}
 			params["storagepool"] = NfsPool
 			params["thickprovisioning"] = "false"
@@ -1967,7 +1967,7 @@ func (f *feature) aBasicNfsVolumeRequestWithWrongNasName(name string, size int64
 		}
 
 		if val {
-			if a.NasName != nil {
+			if a.NasName != "" {
 				params["nasName"] = wrongNasName
 			}
 
@@ -2093,8 +2093,8 @@ func (f *feature) aNfsVolumeRequest(name string, size int64) error {
 		if val {
 			req := new(csi.CreateVolumeRequest)
 			params := make(map[string]string)
-			if a.NasName != nil {
-				params["nasName"] = *a.NasName
+			if a.NasName != "" {
+				params["nasName"] = a.NasName
 			}
 			params["storagepool"] = NfsPool
 			params["thickprovisioning"] = "false"
@@ -2159,7 +2159,7 @@ func (f *feature) controllerPublishVolumeForNfs(id string, nodeIDEnvVar string) 
 
 		for _, a := range f.arrays {
 			req.VolumeContext = make(map[string]string)
-			req.VolumeContext["nasName"] = *a.NasName
+			req.VolumeContext["nasName"] = a.NasName
 			req.VolumeContext["fsType"] = "nfs"
 			ctx := context.Background()
 			client := csi.NewControllerClient(grpcClient)
@@ -2458,7 +2458,7 @@ func (f *feature) checkNFS(ctx context.Context, systemID string) (bool, error) {
 			return false, err
 		}
 		array := arrayConData[systemID]
-		if array.NasName == nil || *(array.NasName) == "" {
+		if array.NasName == "" {
 			return false, nil
 		}
 		return true, nil
