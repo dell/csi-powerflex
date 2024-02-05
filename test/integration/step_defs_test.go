@@ -2459,7 +2459,7 @@ func (f *feature) checkNFS(ctx context.Context, systemID string) (bool, error) {
 		}
 		array := arrayConData[systemID]
 		if array.NasName == "" {
-			return false, nil
+			fmt.Println("nasName value not found in secret, it is mandatory parameter for NFS volume operations")
 		}
 		return true, nil
 	}
