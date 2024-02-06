@@ -516,7 +516,7 @@ func (s *service) checkNFS(ctx context.Context, systemID string) (bool, error) {
 		if strings.TrimSpace(array.NasName) == "" {
 			Log.Warnf("nasName value not found in secret, it is mandatory parameter for NFS volume operations")
 		}
-		/// Even though NasName is not present in secret but PowerFlex version is >=4.0; we support NFS.
+		// Even though NasName is not present in secret but PowerFlex version is >=4.0; we support NFS.
 		return true, nil
 	}
 	return false, nil
