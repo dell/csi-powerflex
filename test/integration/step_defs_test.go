@@ -181,9 +181,8 @@ func (f *feature) getArrayConfig() (map[string]*ArrayConnectionData, error) {
 			}
 
 			// for PowerFlex v4.0
-			str := ""
 			if strings.TrimSpace(c.NasName) == "" {
-				c.NasName = str
+				c.NasName = ""
 			}
 
 			fields := map[string]interface{}{

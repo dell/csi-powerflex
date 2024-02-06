@@ -284,7 +284,7 @@ func (s *service) CreateVolume(
 			nasName = params[KeyNasName] // Storage class takes precedence
 		} else {
 			Log.Debug("nasName not present in storage class, value taken from secret")
-			nasName = (arr.NasName) // Secrets next
+			nasName = arr.NasName // Secret next
 		}
 		nasServerID, err := s.getNASServerIDFromName(systemID, nasName)
 		if err != nil {
