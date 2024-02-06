@@ -1,4 +1,4 @@
-// Copyright © 2019-2022 Dell Inc. or its subsidiaries. All Rights Reserved.
+// Copyright © 2019-2024 Dell Inc. or its subsidiaries. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -25,6 +26,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -33,9 +35,6 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-
-	"encoding/json"
-	"path/filepath"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/cucumber/godog"
@@ -56,14 +55,14 @@ const (
 
 // ArrayConnectionData contains data required to connect to array
 type ArrayConnectionData struct {
-	SystemID       string  `json:"systemID"`
-	Username       string  `json:"username"`
-	Password       string  `json:"password"`
-	Endpoint       string  `json:"endpoint"`
-	Insecure       bool    `json:"insecure,omitempty"`
-	IsDefault      bool    `json:"isDefault,omitempty"`
-	AllSystemNames string  `json:"allSystemNames"`
-	NasName        *string `json:"nasname"`
+	SystemID       string `json:"systemID"`
+	Username       string `json:"username"`
+	Password       string `json:"password"`
+	Endpoint       string `json:"endpoint"`
+	Insecure       bool   `json:"insecure,omitempty"`
+	IsDefault      bool   `json:"isDefault,omitempty"`
+	AllSystemNames string `json:"allSystemNames"`
+	NasName        string `json:"nasname"`
 }
 
 type feature struct {
@@ -181,9 +180,8 @@ func (f *feature) getArrayConfig() (map[string]*ArrayConnectionData, error) {
 			}
 
 			// for PowerFlex v4.0
-			str := ""
-			if c.NasName == nil || *(c.NasName) == "" {
-				c.NasName = &str
+			if strings.TrimSpace(c.NasName) == "" {
+				c.NasName = ""
 			}
 
 			fields := map[string]interface{}{
@@ -194,7 +192,7 @@ func (f *feature) getArrayConfig() (map[string]*ArrayConnectionData, error) {
 				"isDefault":      c.IsDefault,
 				"systemID":       c.SystemID,
 				"allSystemNames": c.AllSystemNames,
-				"nasName":        *c.NasName,
+				"nasName":        c.NasName,
 			}
 
 			fmt.Printf("array found  %s %#v\n", c.SystemID, fields)
@@ -359,8 +357,8 @@ func (f *feature) aNfsVolumeRequestWithQuota(volname string, volsize int64, path
 		}
 
 		if val {
-			if a.NasName != nil {
-				params["nasName"] = *a.NasName
+			if a.NasName != "" {
+				params["nasName"] = a.NasName
 			}
 			params["storagepool"] = NfsPool
 			params["thickprovisioning"] = "false"
@@ -402,8 +400,7 @@ func (f *feature) aNfsVolumeRequestWithQuota(volname string, volsize int64, path
 func (f *feature) accessTypeIs(arg1 string) error {
 	switch arg1 {
 	case "multi-writer":
-		f.createVolumeRequest.VolumeCapabilities[0].AccessMode.Mode =
-			csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER
+		f.createVolumeRequest.VolumeCapabilities[0].AccessMode.Mode = csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER
 	}
 	return nil
 }
@@ -703,7 +700,7 @@ func (f *feature) whenICallNodePublishVolumeWithPoint(arg1 string, arg2 string) 
 	} else {
 		_, err := os.Stat(arg2)
 		if err != nil && os.IsNotExist(err) {
-			err = os.Mkdir(arg2, 0777)
+			err = os.Mkdir(arg2, 0o777)
 			if err != nil {
 				return err
 			}
@@ -746,7 +743,6 @@ func (f *feature) iCallEthemeralNodePublishVolume(id, size string) error {
 		f.addError(err)
 	}
 	return nil
-
 }
 
 func (f *feature) nodePublishVolume(id string, path string) error {
@@ -1097,7 +1093,6 @@ func (f *feature) aValidListSnapshotResponseIsReturned() error {
 }
 
 func (f *feature) iSetAnotherSystemName(systemType string) error {
-
 	if f.arrays == nil {
 		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
 		var err error
@@ -1129,7 +1124,6 @@ func (f *feature) iSetAnotherSystemName(systemType string) error {
 }
 
 func (f *feature) iSetAnotherSystemID(systemType string) error {
-
 	if f.arrays == nil {
 		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
 		var err error
@@ -1254,7 +1248,7 @@ func (f *feature) iNodePublishVolumesInParallel(nVols int) error {
 	for i := 0; i < nVols; i++ {
 		dataDirName := fmt.Sprintf("/tmp/datadir%d", i)
 		fmt.Printf("Checking %s\n", dataDirName)
-		var fileMode os.FileMode = 0777
+		var fileMode os.FileMode = 0o777
 		err := os.Mkdir(dataDirName, fileMode)
 		if err != nil && !os.IsExist(err) {
 			fmt.Printf("%s: %s\n", dataDirName, err)
@@ -1435,7 +1429,7 @@ func (f *feature) iWriteBlockData() error {
 	for i := 0; i < 1024*1024; i++ {
 		buf[i] = 0x57
 	}
-	fp, err := os.OpenFile("/tmp/datafile", os.O_RDWR, 0666)
+	fp, err := os.OpenFile("/tmp/datafile", os.O_RDWR, 0o666)
 	if err != nil {
 		return err
 	}
@@ -1453,7 +1447,6 @@ func (f *feature) iWriteBlockData() error {
 	fp.Close()
 	fmt.Printf("\rWrote %d MB\n", nrecords)
 	return nil
-
 }
 
 // Writes a fixed pattern of block data (0x57 bytes) in 1 MB chunks to raw block mounted at /tmp/datafile.
@@ -1472,7 +1465,7 @@ func (f *feature) iReadWriteToVolume(folder string) error {
 	// allow mount to stabilize
 	time.Sleep(6 * time.Second)
 	path := fmt.Sprintf("%s/%s", folder, "file")
-	fp, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0755)
+	fp, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o755)
 	if err != nil {
 		files, err1 := os.ReadDir(path)
 		if err1 != nil {
@@ -1512,11 +1505,9 @@ func (f *feature) iReadWriteToVolume(folder string) error {
 	fp1.Close()
 	fmt.Printf("Read done %d \n", nrecords)
 	return nil
-
 }
 
 func (f *feature) iCallValidateVolumeHostConnectivity() error {
-
 	ctx := context.Background()
 	pclient := csiext.NewPodmonClient(grpcClient)
 
@@ -1537,9 +1528,9 @@ func (f *feature) iCallValidateVolumeHostConnectivity() error {
 	}
 
 	fmt.Printf("Volume %s IosInProgress=%t\n", f.volID, connect.IosInProgress)
-	//connect = nil
-	//req = nil
-	//pclient = nil
+	// connect = nil
+	// req = nil
+	// pclient = nil
 	f.errs = make([]error, 0)
 	if connect.IosInProgress || connect.Connected {
 		return nil
@@ -1550,7 +1541,7 @@ func (f *feature) iCallValidateVolumeHostConnectivity() error {
 }
 
 func (f *feature) iRemoveAVolumeFromVolumeGroupSnapshotRequest() error {
-	//cut last volume off of list
+	// cut last volume off of list
 	f.volIDList = f.volIDList[0 : len(f.volIDList)-1]
 	return nil
 }
@@ -1589,14 +1580,14 @@ func (f *feature) iCallSplitVolumeGroupSnapshot() error {
 	vgsClient := volGroupSnap.NewVolumeGroupSnapshotClient(grpcClient)
 	snapList := f.VolumeGroupSnapshot.Snapshots
 
-	//delete first snap from VGS, and save corresponding VGS as f.volumeGroupSnapshot2
+	// delete first snap from VGS, and save corresponding VGS as f.volumeGroupSnapshot2
 	f.VolumeGroupSnapshot.Snapshots = snapList[0:1]
 	fmt.Printf("Snapshots in VGS to be deleted are: %v \n", f.VolumeGroupSnapshot.Snapshots)
 	f.iCallDeleteVGS()
 	f.VolumeGroupSnapshot.Snapshots = snapList[1:]
 	f.VolumeGroupSnapshot2 = f.VolumeGroupSnapshot
 
-	//adjust f.volIDList to only contain the first, unsnapped volume, and create another VGS for it. Save this one as  f.volumeGroupSnapshot
+	// adjust f.volIDList to only contain the first, unsnapped volume, and create another VGS for it. Save this one as  f.volumeGroupSnapshot
 	f.volIDListShort = f.volIDList[0:1]
 	req := &volGroupSnap.CreateVolumeGroupSnapshotRequest{
 		Name:            "apple",
@@ -1614,7 +1605,6 @@ func (f *feature) iCallSplitVolumeGroupSnapshot() error {
 	fmt.Printf("group 2 is: %v \n", f.VolumeGroupSnapshot2)
 
 	return nil
-
 }
 
 func (f *feature) iCallDeleteVGS() error {
@@ -1646,13 +1636,11 @@ func (f *feature) iCallDeleteVGS() error {
 				fmt.Printf("DeleteSnapshot returned error: %s\n", err.Error())
 			}
 		}
-
 	}
 	return nil
 }
 
 func (f *feature) whenICallExpandVolumeTo(size int64) error {
-
 	err := f.controllerExpandVolume(f.volID, size)
 	if err != nil {
 		fmt.Printf("ControllerExpandVolume %s:\n", err.Error())
@@ -1665,7 +1653,6 @@ func (f *feature) whenICallExpandVolumeTo(size int64) error {
 }
 
 func (f *feature) controllerExpandVolume(volID string, size int64) error {
-
 	const bytesInKiB = 1024
 	var resp *csi.ControllerExpandVolumeResponse
 	var err error
@@ -1688,7 +1675,6 @@ func (f *feature) controllerExpandVolume(volID string, size int64) error {
 }
 
 func (f *feature) whenICallNodeExpandVolume() error {
-
 	nodePublishReq := f.nodePublishVolumeRequest
 	if nodePublishReq == nil {
 		err := fmt.Errorf("Volume is not stage, nodePublishVolumeRequest not found")
@@ -1703,7 +1689,6 @@ func (f *feature) whenICallNodeExpandVolume() error {
 	}
 	time.Sleep(SleepTime)
 	return nil
-
 }
 
 func (f *feature) iCallNodeGetVolumeStats() error {
@@ -1722,7 +1707,6 @@ func (f *feature) iCallNodeGetVolumeStats() error {
 }
 
 func (f *feature) theVolumeConditionIs(condition string) error {
-
 	fmt.Printf("f.nodeGetVolumeStatsResponse is %v\n", f.nodeGetVolumeStatsResponse)
 
 	abnormal := false
@@ -1737,7 +1721,6 @@ func (f *feature) theVolumeConditionIs(condition string) error {
 	}
 	fmt.Printf("abnormal should have been %v, but was %v instead", abnormal, f.nodeGetVolumeStatsResponse.VolumeCondition.Abnormal)
 	return status.Errorf(codes.Internal, "Check NodeGetVolumeStatsResponse failed")
-
 }
 
 func (f *feature) nodeExpandVolume(volID, volPath string) error {
@@ -1778,7 +1761,6 @@ func (f *feature) iCallControllerGetVolume() error {
 }
 
 func (f *feature) theVolumeconditionIs(health string) error {
-
 	abnormal := false
 
 	if health == "healthy" {
@@ -1807,7 +1789,7 @@ func makeAUniqueName(name *string) {
 		temp := "tmp"
 		name = &temp
 	}
-	var suffix = os.Getenv("VOL_NAME_SUFFIX")
+	suffix := os.Getenv("VOL_NAME_SUFFIX")
 	if len(suffix) == 0 {
 		now := time.Now()
 		suffix = fmt.Sprintf("%02d%02d%02d", now.Hour(), now.Minute(), now.Second())
@@ -1886,7 +1868,6 @@ func (f *feature) iSetSystemName(name string) error {
 }
 
 func (f *feature) restCallToSetName(auth string, url string, name string) (string, error) {
-
 	var req *http.Request
 	var err error
 	if name != "" {
@@ -1967,7 +1948,7 @@ func (f *feature) aBasicNfsVolumeRequestWithWrongNasName(name string, size int64
 		}
 
 		if val {
-			if a.NasName != nil {
+			if a.NasName != "" {
 				params["nasName"] = wrongNasName
 			}
 
@@ -2093,8 +2074,8 @@ func (f *feature) aNfsVolumeRequest(name string, size int64) error {
 		if val {
 			req := new(csi.CreateVolumeRequest)
 			params := make(map[string]string)
-			if a.NasName != nil {
-				params["nasName"] = *a.NasName
+			if a.NasName != "" {
+				params["nasName"] = a.NasName
 			}
 			params["storagepool"] = NfsPool
 			params["thickprovisioning"] = "false"
@@ -2159,7 +2140,7 @@ func (f *feature) controllerPublishVolumeForNfs(id string, nodeIDEnvVar string) 
 
 		for _, a := range f.arrays {
 			req.VolumeContext = make(map[string]string)
-			req.VolumeContext["nasName"] = *a.NasName
+			req.VolumeContext["nasName"] = a.NasName
 			req.VolumeContext["fsType"] = "nfs"
 			ctx := context.Background()
 			client := csi.NewControllerClient(grpcClient)
@@ -2436,7 +2417,6 @@ func (f *feature) iCallDeleteSnapshotForFS() error {
 }
 
 func (f *feature) checkNFS(ctx context.Context, systemID string) (bool, error) {
-
 	c, err := f.getGoscaleioClient()
 	if err != nil {
 		return false, errors.New("Geting goscaleio client failed " + err.Error())
@@ -2458,8 +2438,8 @@ func (f *feature) checkNFS(ctx context.Context, systemID string) (bool, error) {
 			return false, err
 		}
 		array := arrayConData[systemID]
-		if array.NasName == nil || *(array.NasName) == "" {
-			return false, nil
+		if array.NasName == "" {
+			fmt.Println("nasName value not found in secret, it is mandatory parameter for NFS volume operations")
 		}
 		return true, nil
 	}

@@ -58,7 +58,7 @@ parameters:
   # If specified in both, secret and storage class, then precedence is given to storage class value.
   # Allowed values: string
   # Optional: true
-  # Default value: None
+  # Default value: ""
   nasName: "nas-server"
 
   # path: relative path to the root of the associated filesystem.
