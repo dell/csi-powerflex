@@ -12,12 +12,12 @@
 
 # some arguments that must be supplied
 ARG GOPROXY
-ARG GOVERSION
+ARG GOIMAGE
 ARG BASEIMAGE
 ARG DIGEST
 
 # Stage to build the driver
-FROM golang:${GOVERSION} as builder
+FROM $GOIMAGE as builder
 ARG GOPROXY
 RUN mkdir -p /go/src
 COPY ./ /go/src/
