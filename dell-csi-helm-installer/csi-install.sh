@@ -20,8 +20,8 @@ PROG="${0}"
 NODE_VERIFY=1
 VERIFY=1
 MODE="install"
-DEFAULT_DRIVER_VERSION="v2.9.1"
-DRIVERVERSION="csi-vxflexos-2.9.1"
+DEFAULT_DRIVER_VERSION="v2.9.2"
+DRIVERVERSION="csi-vxflexos-2.9.2"
 WATCHLIST=""
 
 # export the name of the debug log, so child processes will see it
