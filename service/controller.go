@@ -2700,7 +2700,10 @@ func generateSnapName(volumeName string) string {
 	name := strings.Replace(volumeName+"_"+timestamp, "-", "", -1)
 	name = strings.Replace(name, ":", "", -1)
 	namebytes := []byte(name)
-	name = string(namebytes[0:31])
+	if len(namebytes) > 31 {
+		name = string(namebytes[0:31])
+		Log.Printf("Requested name %s longer than 31 character max, truncated to %s\n", string(namebytes), name)
+	}
 	return name
 }
 
