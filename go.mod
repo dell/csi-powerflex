@@ -10,13 +10,13 @@ require (
 	github.com/apparentlymart/go-cidr v1.1.0
 	github.com/container-storage-interface/spec v1.6.0
 	github.com/cucumber/godog v0.12.1
-	github.com/dell/dell-csi-extensions/common v1.3.0
-	github.com/dell/dell-csi-extensions/podmon v1.3.0
-	github.com/dell/dell-csi-extensions/replication v1.6.0
-	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.4.0
-	github.com/dell/gocsi v1.9.0
-	github.com/dell/gofsutil v1.14.0
-	github.com/dell/goscaleio v1.13.1-0.20240226075834-efeafcfb3ee1
+	github.com/dell/dell-csi-extensions/common v1.4.0
+	github.com/dell/dell-csi-extensions/podmon v1.4.0
+	github.com/dell/dell-csi-extensions/replication v1.7.0
+	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.5.0
+	github.com/dell/gocsi v1.10.0
+	github.com/dell/gofsutil v1.15.0
+	github.com/dell/goscaleio v1.14.0
 	github.com/fsnotify/fsnotify v1.5.1
 	github.com/golang/protobuf v1.5.3
 	github.com/google/uuid v1.3.0
@@ -27,7 +27,7 @@ require (
 	github.com/stretchr/testify v1.7.0
 	golang.org/x/net v0.17.0
 	google.golang.org/grpc v1.57.1
-	google.golang.org/protobuf v1.31.0
+	google.golang.org/protobuf v1.32.0
 	k8s.io/api v0.22.2
 	k8s.io/apimachinery v0.22.2
 	k8s.io/client-go v0.22.2
