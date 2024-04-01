@@ -51,7 +51,7 @@ The Node portion of the driver can only be run on nodes which have network conne
 Also, if the `X_CSI_VXFLEXOS_SDCGUID` environment variable is not set, the driver will attempt to query the SDC GUID automatically. If this fails, the driver will not run.
 
 ## Driver Installation
-Please consult the [Installation Guide] to install the driver via various methods. (https://dell.github.io/csm-docs/docs/deployment/)
+Please consult the [Installation Guide](https://dell.github.io/csm-docs/docs/deployment/) to install the driver via various methods.
 
 ## Using driver
 Please refer to the section `Testing Drivers` in the [Documentation](https://dell.github.io/csm-docs/docs/csidriver/test/) for more info.
