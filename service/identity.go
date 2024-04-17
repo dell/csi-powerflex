@@ -20,7 +20,7 @@ import (
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	commonext "github.com/dell/dell-csi-extensions/common"
-	wrappers "github.com/golang/protobuf/ptypes/wrappers"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"github.com/dell/csi-vxflexos/v2/core"
 )
@@ -91,7 +91,7 @@ func (s *service) Probe(
 			return nil, err
 		}
 	}
-	ready := new(wrappers.BoolValue)
+	ready := new(wrapperspb.BoolValue)
 	ready.Value = true
 	rep := new(csi.ProbeResponse)
 	rep.Ready = ready

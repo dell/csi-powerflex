@@ -32,7 +32,7 @@ import (
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/dell/goscaleio"
 	siotypes "github.com/dell/goscaleio/types/v1"
-	ptypes "github.com/golang/protobuf/ptypes"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"github.com/sirupsen/logrus"
 )
 
@@ -2568,7 +2568,7 @@ func (s *service) CreateSnapshot(
 		creationTime, _ := strconv.Atoi(newSnap.CreationTimestamp)
 
 		creationTimeUnix := time.Unix(int64(creationTime), 0)
-		creationTimeStamp, _ := ptypes.TimestampProto(creationTimeUnix)
+		creationTimeStamp := timestamppb.New(creationTimeUnix)
 		slash := "/"
 		csiSnapshotID := systemID + slash + newSnap.ID
 		snapshot := &csi.Snapshot{
@@ -2581,7 +2581,7 @@ func (s *service) CreateSnapshot(
 		s.clearCache()
 
 		Log.Printf("createSnapshot: SnapshotId %s SourceVolumeId %s CreationTime %s",
-			snapshot.SnapshotId, snapshot.SourceVolumeId, ptypes.TimestampString(snapshot.CreationTime))
+			snapshot.SnapshotId, snapshot.SourceVolumeId, snapshot.CreationTime.AsTime().Format(time.RFC3339Nano))
 		return csiSnapResponse, nil
 
 	}
@@ -2674,7 +2674,7 @@ func (s *service) CreateSnapshot(
 		return nil, status.Errorf(codes.NotFound, "volume %s was not found", volID)
 	}
 	creationTimeUnix := time.Unix(int64(vol.CreationTime), 0)
-	creationTimeStamp, _ := ptypes.TimestampProto(creationTimeUnix)
+	creationTimeStamp := timestamppb.New(creationTimeUnix)
 	dash := "-"
 	csiSnapshotID := systemID + dash + snapResponse.VolumeIDList[0]
 	snapshot := &csi.Snapshot{
@@ -2687,7 +2687,7 @@ func (s *service) CreateSnapshot(
 	s.clearCache()
 
 	Log.Printf("createSnapshot: SnapshotId %s SourceVolumeId %s CreationTime %s",
-		snapshot.SnapshotId, snapshot.SourceVolumeId, ptypes.TimestampString(snapshot.CreationTime))
+		snapshot.SnapshotId, snapshot.SourceVolumeId, snapshot.CreationTime.AsTime().Format(time.RFC3339Nano))
 	return resp, nil
 }
 

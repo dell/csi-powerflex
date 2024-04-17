@@ -42,7 +42,6 @@ import (
 	"github.com/dell/goscaleio"
 
 	volGroupSnap "github.com/dell/dell-csi-extensions/volumeGroupSnapshot"
-	"github.com/golang/protobuf/ptypes"
 )
 
 const (
@@ -852,7 +851,7 @@ func (f *feature) iCallCreateSnapshot() error {
 	} else {
 		f.snapshotID = resp.Snapshot.SnapshotId
 		fmt.Printf("createSnapshot: SnapshotId %s SourceVolumeId %s CreationTime %s\n",
-			resp.Snapshot.SnapshotId, resp.Snapshot.SourceVolumeId, ptypes.TimestampString(resp.Snapshot.CreationTime))
+			resp.Snapshot.SnapshotId, resp.Snapshot.SourceVolumeId, resp.Snapshot.CreationTime.AsTime().Format(time.RFC3339Nano))
 	}
 	time.Sleep(RetrySleepTime)
 	return nil
@@ -902,7 +901,7 @@ func (f *feature) iCallCreateSnapshotConsistencyGroup() error {
 	} else {
 		f.snapshotID = resp.Snapshot.SnapshotId
 		fmt.Printf("createSnapshot: SnapshotId %s SourceVolumeId %s CreationTime %s\n",
-			resp.Snapshot.SnapshotId, resp.Snapshot.SourceVolumeId, ptypes.TimestampString(resp.Snapshot.CreationTime))
+			resp.Snapshot.SnapshotId, resp.Snapshot.SourceVolumeId, resp.Snapshot.CreationTime.AsTime().Format(time.RFC3339Nano))
 	}
 	time.Sleep(SleepTime)
 	return nil
@@ -1077,7 +1076,7 @@ func (f *feature) aValidListSnapshotResponseIsReturned() error {
 	for j := 0; j < len(entries); j++ {
 		entry := entries[j]
 		id := entry.GetSnapshot().SnapshotId
-		ts := ptypes.TimestampString(entry.GetSnapshot().CreationTime)
+		ts := entry.GetSnapshot().CreationTime.AsTime().Format(time.RFC3339Nano)
 
 		fmt.Printf("snapshot ID %s source ID %s timestamp %s\n", id, entry.GetSnapshot().SourceVolumeId, ts)
 		if f.snapshotID != "" && strings.Contains(id, f.snapshotID) {
@@ -2388,7 +2387,7 @@ func (f *feature) iCallCreateSnapshotForFS() error {
 		} else {
 			f.snapshotID = resp.Snapshot.SnapshotId
 			fmt.Printf("createSnapshot: SnapshotId %s SourceVolumeId %s CreationTime %s\n",
-				resp.Snapshot.SnapshotId, resp.Snapshot.SourceVolumeId, ptypes.TimestampString(resp.Snapshot.CreationTime))
+				resp.Snapshot.SnapshotId, resp.Snapshot.SourceVolumeId, resp.Snapshot.CreationTime.AsTime().Format(time.RFC3339))
 		}
 		time.Sleep(RetrySleepTime)
 		return nil

@@ -42,7 +42,7 @@ import (
 	sio "github.com/dell/goscaleio"
 	siotypes "github.com/dell/goscaleio/types/v1"
 	"github.com/fsnotify/fsnotify"
-	"github.com/golang/protobuf/ptypes"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"k8s.io/client-go/kubernetes"
@@ -736,10 +736,7 @@ func (s *service) getCSISnapshot(vol *siotypes.Volume, systemID string) *csi.Sna
 		ReadyToUse:     true,
 	}
 	// Convert array timestamp to CSI timestamp and add
-	csiTimestamp, err := ptypes.TimestampProto(time.Unix(int64(vol.CreationTime), 0))
-	if err != nil {
-		Log.Printf("Could not convert time %v to ptypes.Timestamp %v\n", vol.CreationTime, csiTimestamp)
-	}
+	csiTimestamp := timestamppb.New(time.Unix(int64(vol.CreationTime), 0))
 	if csiTimestamp != nil {
 		snapshot.CreationTime = csiTimestamp
 	}
@@ -756,10 +753,7 @@ func (s *service) getCSISnapshotFromFileSystem(fs *siotypes.FileSystem, systemID
 	}
 	creationTime, _ := strconv.Atoi(fs.CreationTimestamp)
 	// Convert array timestamp to CSI timestamp and add
-	csiTimestamp, err := ptypes.TimestampProto(time.Unix(int64(creationTime), 0))
-	if err != nil {
-		Log.Printf("Could not convert time %v to ptypes.Timestamp %v\n", creationTime, csiTimestamp)
-	}
+	csiTimestamp := timestamppb.New(time.Unix(int64(creationTime), 0))
 	if csiTimestamp != nil {
 		snapshot.CreationTime = csiTimestamp
 	}
