@@ -19,7 +19,7 @@ Installing any of the Dell EMC CSI Drivers requires a few utilities to be instal
 | Dependency    | Usage  |
 | ------------- | ----- |
 | `kubectl`     | Kubectl is used to validate that the Kubernetes system meets the requirements of the driver. |
-| `helm`        | Helm v3 is used as the deployment tool for Charts. See, [Install HELM 3](https://helm.sh/docs/intro/install/) for instructions to install HELM 3. |
+| `helm`        | Helm v3 is used as the deployment tool for Charts. See, [Install Helm 3](https://helm.sh/docs/intro/install/) for instructions to install Helm 3. |
 | `sshpass`     | sshpass is used to check certain pre-requisities in worker nodes (in chosen drivers). |
 
 
@@ -36,7 +36,7 @@ This project provides the following capabilitites, each one is discussed in deta
 
 
 Most of these usages require the creation/specification of a values file. These files specify configuration settings that are passed into the driver and configure it for use. To create one of these files, the following steps should be followed:
-1. Download a template file for the driver to a new location, naming this new file is at the users discretion. The template files are always found at `https://github.com/dell/helm-charts/raw/csi-vxflexos-2.8.0/charts/csi-vxflexos/values.yaml`
+1. Download a template file for the driver to a new location, naming this new file is at the users discretion. The template files are always found at `https://github.com/dell/helm-charts/raw/csi-vxflexos-2.10.0/charts/csi-vxflexos/values.yaml`
 2. Edit the file such that it contains the proper configuration settings for the specific environment. These files are yaml formatted so maintaining the file structure is important.
 
 For example, to create a values file for the PowerFlex driver the following steps can be executed
@@ -45,7 +45,7 @@ For example, to create a values file for the PowerFlex driver the following step
 cd dell-csi-helm-installer
 
 # download the template file
- wget -O my-vxflexos-settings.yaml  https://github.com/dell/helm-charts/raw/csi-vxflexos-2.8.0/charts/csi-vxflexos/values.yaml
+ wget -O my-vxflexos-settings.yaml  https://github.com/dell/helm-charts/raw/csi-vxflexos-2.10.0/charts/csi-vxflexos/values.yaml
 
 # edit the newly created values file
 vi my-vxflexos-settings.yaml

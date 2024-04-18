@@ -17,10 +17,10 @@ Execute "sh run.sh" to run the test in a kubernetes environment that supports v1
 the vxflexos CSI torage system in run.sh. You can edit run.sh and change the storageclass, snapclass (the volumesnapshotclass name),
 and namespace parameters to run the test for a different type of CSI storage.
 
-The test is constructed from three helm charts that are deployed in the following sequence:
+The test is constructed from three Helm charts that are deployed in the following sequence:
 1. 1vol creates one volume and deploys it in a pod
 2. 1snap creates a snapshot from the volume in step 1.
 3. 1volfromsnap creates a volume from the snapshot and deploys it in a second pod.
 
 If the test runs succssfully, it compares the data generated in the first pod with the data from the snap in the second pod
-to make sure they match. Then it deletes the helm deployments and waits until the pvcs in the namespace are deleted.
+to make sure they match. Then it deletes the Helm deployments and waits until the pvcs in the namespace are deleted.

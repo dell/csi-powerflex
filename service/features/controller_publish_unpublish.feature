@@ -98,17 +98,6 @@ Feature: VxFlex OS CSI interface
     And I call UnpublishVolume nfs
     Then the error contains "none"
     
-    Scenario: a Basic NFS controller Publish and unpublish delete NFS export error
-    Given a VxFlexOS service
-    When I specify CreateVolumeMountRequest "nfs"
-    And I call CreateVolume "volume1"
-    Then a valid CreateVolumeResponse is returned
-    And I call NFS PublishVolume with "single-writer"
-    Then a valid PublishVolumeResponse is returned
-    And I induce error "deleteNFSExportError"
-    And I call UnpublishVolume nfs
-    Then the error contains "delete NFS Export failed"
-    
     Scenario: a Basic NFS controller Publish Idempotent no error
     Given a VxFlexOS service
     When I specify CreateVolumeMountRequest "nfs"

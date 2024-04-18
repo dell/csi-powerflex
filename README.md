@@ -10,7 +10,7 @@
 ## Description
 CSI Driver for PowerFlex is part of the [CSM (Container Storage Modules)](https://github.com/dell/csm) open-source suite of Kubernetes storage enablers for Dell products. CSI Driver for PowerFlex is a Container Storage Interface (CSI) driver that provides support for provisioning persistent storage using Dell PowerFlex storage array. 
 
-It supports CSI specification version 1.5.
+It supports CSI specification version 1.6.
 
 This project may be compiled as a stand-alone binary using Golang that, when run, provides a valid CSI endpoint. It also can be used as a precompiled container image.
 
@@ -51,10 +51,10 @@ The Node portion of the driver can only be run on nodes which have network conne
 Also, if the `X_CSI_VXFLEXOS_SDCGUID` environment variable is not set, the driver will attempt to query the SDC GUID automatically. If this fails, the driver will not run.
 
 ## Driver Installation
-Please consult the [Installation Guide](https://dell.github.io/csm-docs/docs/csidriver/installation)
+Please consult the [Installation Guide](https://dell.github.io/csm-docs/docs/deployment/) to install the driver via various methods.
 
 ## Using driver
-Please refer to the section `Testing Drivers` in the [Documentation](https://dell.github.io/csm-docs/docs/csidriver/installation/test/) for more info.
+Please refer to the section `Testing Drivers` in the [Documentation](https://dell.github.io/csm-docs/docs/csidriver/test/) for more info.
 
 ## Documentation
 For more detailed information on the driver, please refer to [Container Storage Modules documentation](https://dell.github.io/csm-docs/).

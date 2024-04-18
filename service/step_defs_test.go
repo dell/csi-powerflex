@@ -1,4 +1,4 @@
-// Copyright © 2019-2022 Dell Inc. or its subsidiaries. All Rights Reserved.
+// Copyright © 2019-2023 Dell Inc. or its subsidiaries. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"github.com/cucumber/godog"
 	"github.com/dell/dell-csi-extensions/podmon"
@@ -145,6 +146,8 @@ type feature struct {
 	systemID                              string
 	context                               context.Context
 	nodeLabels                            map[string]string
+	maxVolSize                            int64
+	nfsExport                             types.NFSExport
 }
 
 func (f *feature) checkGoRoutines(tag string) {
@@ -223,6 +226,7 @@ func (f *feature) aVxFlexOSServiceWithTimeoutMilliseconds(millis int) error {
 	f.createSnapshotResponse = nil
 	f.volumeIDList = f.volumeIDList[:0]
 	f.snapshotIndex = 0
+	f.maxVolSize = 0
 
 	// configure gofsutil; we use a mock interface
 	gofsutil.UseMockFS()
@@ -1850,7 +1854,7 @@ func mockGetNodeLabelsWithInvalidVolumeLimits(ctx context.Context, s *service) (
 }
 
 func (f *feature) setFakeNode() (*v1.Node, error) {
-	os.Setenv("HOSTNAME", "node1")
+	f.service.opts.KubeNodeName = "node1"
 	fakeNode := &v1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   "node1",
@@ -1892,7 +1896,7 @@ func mockLookupEnv(ctx context.Context, key string) (string, bool) {
 }
 
 func (f *feature) iCallGetNodeLabelsWithInvalidNode() error {
-	os.Setenv("HOSTNAME", "node2")
+	f.service.opts.KubeNodeName = "node2"
 	_, f.err = f.service.GetNodeLabels(f.context)
 	return nil
 }
@@ -2023,6 +2027,36 @@ func (f *feature) iCallGetCapacityWithStoragePool(arg1 string) error {
 		log.Printf("GetCapacity call failed: %s\n", f.err.Error())
 		return nil
 	}
+	return nil
+}
+
+func (f *feature) iCallGetMaximumVolumeSize(arg1 string) {
+
+	systemid := arg1
+	f.maxVolSize, f.err = f.service.getMaximumVolumeSize(systemid)
+	if f.err != nil {
+		log.Printf("err while getting max vol size: %s\n", f.err.Error())
+	}
+
+}
+
+func (f *feature) aValidGetCapacityResponsewithmaxvolsizeIsReturned() error {
+	if f.err != nil {
+		return f.err
+	}
+	if f.maxVolSize >= 0 {
+		f.getCapacityResponse.MaximumVolumeSize = wrapperspb.Int64(f.maxVolSize)
+	}
+	if f.getCapacityResponse.AvailableCapacity <= 0 {
+		return errors.New("Expected AvailableCapacity to be positive")
+	}
+
+	if f.maxVolSize >= 0 && f.getCapacityResponse.AvailableCapacity > 0 {
+
+		fmt.Printf("Available capacity: and Max volume size: %d %v\n", f.getCapacityResponse.AvailableCapacity, f.getCapacityResponse.MaximumVolumeSize)
+	}
+
+	fmt.Printf("Available capacity: %d\n", f.getCapacityResponse.AvailableCapacity)
 	return nil
 }
 
@@ -4387,6 +4421,47 @@ func (f *feature) iSpecifyNoGracePeriod() error {
 	return nil
 }
 
+func (f *feature) iCallParseCIDR(ip string) error {
+	_, err := ParseCIDR(ip)
+	f.err = err
+	return nil
+}
+
+func (f *feature) iCallGetIPListWithMaskFromString(ip string) error {
+	_, err := GetIPListWithMaskFromString(ip)
+	f.err = err
+	return nil
+}
+
+func (f *feature) iCallparseMask(ip string) error {
+	_, err := parseMask(ip)
+	f.err = err
+	return nil
+}
+
+func (f *feature) iCallGivenNFSExport(nfsexporthost string) error {
+	f.nfsExport = types.NFSExport{
+		ReadWriteHosts: []string{nfsexporthost},
+	}
+	return nil
+}
+
+func (f *feature) iCallexternalAccessAlreadyAdded(externalAccess string) error {
+	export := f.nfsExport
+	resp := externalAccessAlreadyAdded(&export, externalAccess)
+	if resp {
+		f.err = errors.New("external access exists")
+	} else {
+		f.err = errors.New("external access does not exist")
+	}
+	return nil
+}
+
+func (f *feature) iSpecifyExternalAccess(externalAccess string) error {
+	f.service.opts.ExternalAccess, _ = ParseCIDR(externalAccess)
+	return nil
+}
+
 func FeatureContext(s *godog.ScenarioContext) {
 	f := &feature{}
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
@@ -4466,6 +4541,8 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^the volume is already mapped to an SDC$`, f.theVolumeIsAlreadyMappedToAnSDC)
 	s.Step(`^I call GetCapacity with storage pool "([^"]*)"$`, f.iCallGetCapacityWithStoragePool)
 	s.Step(`^a valid GetCapacityResponse is returned$`, f.aValidGetCapacityResponseIsReturned)
+	s.Step(`^a valid GetCapacityResponse1 is returned$`, f.aValidGetCapacityResponsewithmaxvolsizeIsReturned)
+	s.Step(`^I call get GetMaximumVolumeSize with systemid "([^"]*)"$`, f.iCallGetMaximumVolumeSize)
 	s.Step(`^I call ControllerGetCapabilities "([^"]*)"$`, f.iCallControllerGetCapabilities)
 	s.Step(`^a valid ControllerGetCapabilitiesResponse is returned$`, f.aValidControllerGetCapabilitiesResponseIsReturned)
 	s.Step(`^I call ValidateVolumeCapabilities with voltype "([^"]*)" access "([^"]*)" fstype "([^"]*)"$`, f.iCallValidateVolumeCapabilitiesWithVoltypeAccessFstype)
@@ -4592,6 +4669,12 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I specify NoPath$`, f.iSpecifyNoPath)
 	s.Step(`^I specify NoSoftLimit`, f.iSpecifyNoSoftLimit)
 	s.Step(`^I specify NoGracePeriod`, f.iSpecifyNoGracePeriod)
+	s.Step(`^I call ParseCIDR with ip "([^"]*)"`, f.iCallParseCIDR)
+	s.Step(`^I call GetIPListWithMaskFromString with ip "([^"]*)"`, f.iCallGetIPListWithMaskFromString)
+	s.Step(`^I call parseMask with ip "([^"]*)"`, f.iCallparseMask)
+	s.Step(`^I call externalAccessAlreadyAdded with externalAccess "([^"]*)"`, f.iCallexternalAccessAlreadyAdded)
+	s.Step(`^an NFSExport instance with nfsexporthost "([^"]*)"`, f.iCallGivenNFSExport)
+	s.Step(`^I specify External Access "([^"]*)"`, f.iSpecifyExternalAccess)
 
 	s.After(func(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
 		if f.server != nil {

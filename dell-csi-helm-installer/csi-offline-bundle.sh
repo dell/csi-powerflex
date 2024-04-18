@@ -235,7 +235,7 @@ DRIVER="csi-vxflexos"
 SCRIPTDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 REPODIR="$( dirname "${SCRIPTDIR}" )"
 
-DRIVERVERSION="csi-vxflexos-2.8.0"
+DRIVERVERSION="csi-vxflexos-2.10.0"
 
 while getopts "cprv:h" opt; do
   case $opt in
@@ -321,7 +321,7 @@ if [ "${MODE}" == "helm" ]; then
     "${REPODIR}/LICENSE"
   )
 else
-  DRIVERNAME="dell-csi-operator"
+  DRIVERNAME="dell-csm-operator"
   DISTBASE="${REPODIR}"
   DRIVERDIR="${DRIVERNAME}-bundle"
   DISTDIR="${DISTBASE}/${DRIVERDIR}"

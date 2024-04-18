@@ -545,22 +545,25 @@ func contains(list []string, item string) bool {
 // return pair is a bool flag of whether file was created, and an error
 func mkfile(path string) (bool, error) {
 	st, err := os.Stat(path)
-	if os.IsNotExist(err) {
-		/* #nosec G302 G304 */
-		file, err := os.OpenFile(path, os.O_CREATE, 0o755)
-		if err != nil {
-			Log.WithField("dir", path).WithError(
-				err).Error("Unable to create dir")
-			return false, err
+	if err != nil {
+		Log.Warnf("Unable to check stat of file: %s with error: %v", path, err.Error())
+		if os.IsNotExist(err) {
+			/* #nosec G302 G304 */
+			file, err := os.OpenFile(path, os.O_CREATE, 0o755)
+			if err != nil {
+				Log.WithField("dir", path).WithError(
+					err).Error("Unable to create dir")
+				return false, err
+			}
+			err = file.Close()
+			if err != nil {
+				// Log the error but keep going
+				Log.WithField("file", path).WithError(
+					err).Error("Unable to close file")
+			}
+			Log.WithField("path", path).Debug("created file")
+			return true, nil
 		}
-		err = file.Close()
-		if err != nil {
-			// Log the error but keep going
-			Log.WithField("file", path).WithError(
-				err).Error("Unable to close file")
-		}
-		Log.WithField("path", path).Debug("created file")
-		return true, nil
 	}
 	if st.IsDir() {
 		return false, fmt.Errorf("existing path is a directory")
@@ -572,15 +575,18 @@ func mkfile(path string) (bool, error) {
 // return pair is a bool flag of whether dir was created, and an error
 func mkdir(path string) (bool, error) {
 	st, err := os.Stat(path)
-	if os.IsNotExist(err) {
-		/* #nosec G301 */
-		if err := os.Mkdir(path, 0o755); err != nil {
-			Log.WithField("dir", path).WithError(
-				err).Error("Unable to create dir")
-			return false, err
+	if err != nil {
+		Log.Warnf("Unable to check stat of file: %s with error: %v", path, err.Error())
+		if os.IsNotExist(err) {
+			err := os.Mkdir(path, 0o755) // #nosec G301
+			if err != nil {
+				Log.WithField("dir", path).WithError(
+					err).Error("Unable to create dir")
+				return false, err
+			}
+			Log.WithField("path", path).Debug("created directory")
+			return true, nil
 		}
-		Log.WithField("path", path).Debug("created directory")
-		return true, nil
 	}
 	if !st.IsDir() {
 		return false, fmt.Errorf("existing path is not a directory")

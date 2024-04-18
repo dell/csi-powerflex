@@ -1,4 +1,4 @@
-// Copyright © 2019-2022 Dell Inc. or its subsidiaries. All Rights Reserved.
+// Copyright © 2019-2024 Dell Inc. or its subsidiaries. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,12 +14,14 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"net"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
@@ -27,6 +29,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/apparentlymart/go-cidr/cidr"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/dell/csi-vxflexos/v2/core"
 	"github.com/dell/csi-vxflexos/v2/k8sutils"
@@ -101,15 +104,15 @@ var Log = logrus.New()
 
 // ArrayConnectionData contains data required to connect to array
 type ArrayConnectionData struct {
-	SystemID                  string  `json:"systemID"`
-	Username                  string  `json:"username"`
-	Password                  string  `json:"password"`
-	Endpoint                  string  `json:"endpoint"`
-	SkipCertificateValidation bool    `json:"skipCertificateValidation,omitempty"`
-	Insecure                  bool    `json:"insecure,omitempty"`
-	IsDefault                 bool    `json:"isDefault,omitempty"`
-	AllSystemNames            string  `json:"allSystemNames"`
-	NasName                   *string `json:"nasName"`
+	SystemID                  string `json:"systemID"`
+	Username                  string `json:"username"`
+	Password                  string `json:"password"`
+	Endpoint                  string `json:"endpoint"`
+	SkipCertificateValidation bool   `json:"skipCertificateValidation,omitempty"`
+	Insecure                  bool   `json:"insecure,omitempty"`
+	IsDefault                 bool   `json:"isDefault,omitempty"`
+	AllSystemNames            string `json:"allSystemNames"`
+	NasName                   string `json:"nasName"`
 }
 
 // Manifest is the SP's manifest.
@@ -151,7 +154,9 @@ type Opts struct {
 	replicationContextPrefix   string
 	replicationPrefix          string
 	MaxVolumesPerNode          int64
-	IsQuotaEnabled             bool // allow driver to enable quota limits for NFS volumes
+	IsQuotaEnabled             bool   // allow driver to enable quota limits for NFS volumes
+	ExternalAccess             string // used for adding extra IP/IP range to the NFS export
+	KubeNodeName               string
 }
 
 type service struct {
@@ -344,6 +349,8 @@ func (s *service) BeforeServe(
 			"IsApproveSDCEnabled":    s.opts.IsApproveSDCEnabled,
 			"MaxVolumesPerNode":      s.opts.MaxVolumesPerNode,
 			"IsQuotaEnabled":         s.opts.IsQuotaEnabled,
+			"ExternalAccess":         s.opts.ExternalAccess,
+			"KubeNodeName":           s.opts.KubeNodeName,
 		}
 
 		Log.WithFields(fields).Infof("configured %s", Name)
@@ -431,6 +438,23 @@ func (s *service) BeforeServe(
 	} else {
 		opts.MaxVolumesPerNode = MaxVolumesPerNode
 	}
+	if externalAccess, ok := csictx.LookupEnv(ctx, EnvExternalAccess); ok {
+		// Trimming spaces if any
+		externalAccess = strings.TrimSpace(externalAccess)
+		if externalAccess == "" {
+			Log.Infof("externalAccess is not provided")
+			opts.ExternalAccess = ""
+		} else {
+			opts.ExternalAccess, err = ParseCIDR(externalAccess)
+			if err != nil {
+				Log.Warnf("error while parsing the externalAccess : %s, defaulting to empty", err)
+				opts.ExternalAccess = ""
+			}
+		}
+	}
+	if kubeNodeName, ok := csictx.LookupEnv(ctx, EnvKubeNodeName); ok {
+		opts.KubeNodeName = kubeNodeName
+	}
 
 	// log csiNode topology keys
 	if err = s.logCsiNodeTopologyKeys(); err != nil {
@@ -489,9 +513,10 @@ func (s *service) checkNFS(ctx context.Context, systemID string) (bool, error) {
 			return false, err
 		}
 		array := arrayConData[systemID]
-		if array.NasName == nil || *(array.NasName) == "" {
-			return false, fmt.Errorf("nasName value not found in secret, it is mandatory parameter for NFS volume operations, if not specified, provide the default value as 'none'")
+		if strings.TrimSpace(array.NasName) == "" {
+			Log.Warnf("nasName value not found in secret, it is mandatory parameter for NFS volume operations")
 		}
+		// Even though NasName is not present in secret but PowerFlex version is >=4.0; we support NFS.
 		return true, nil
 	}
 	return false, nil
@@ -606,21 +631,20 @@ func (s *service) getSDCID(sdcGUID string, systemID string) (string, error) {
 	return id.Sdc.ID, nil
 }
 
-// getSDCID returns SDC ID from the given sdc GUID and system ID.
-func (s *service) getSDCIP(sdcGUID string, systemID string) (string, error) {
+// getSDCIPs returns SDC IPs from the given sdc GUID and system ID.
+func (s *service) getSDCIPs(sdcGUID string, systemID string) ([]string, error) { // name change
 	sdcGUID = strings.ToUpper(sdcGUID)
 
-	// Need to translate sdcGUID to fmt.Errorf("getSDCIP error systemID not found: %s", systemID)
 	if s.systems[systemID] == nil {
-		return "", fmt.Errorf("getSDCIP error systemID not found: %s", systemID)
+		return nil, fmt.Errorf("getSDCIPs error systemID not found: %s", systemID)
 	}
 	id, err := s.systems[systemID].FindSdc("SdcGUID", sdcGUID)
 	if err != nil {
-		return "", fmt.Errorf("error finding SDC from GUID: %s, err: %s",
+		return nil, fmt.Errorf("error finding SDC from GUID: %s, err: %s",
 			sdcGUID, err.Error())
 	}
 
-	return id.Sdc.SdcIP, nil
+	return id.Sdc.SdcIPs, nil
 }
 
 // getStoragePoolID returns pool ID from the given name, system ID, and protectionDomain name
@@ -778,8 +802,12 @@ func (s *service) logStatistics() {
 func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error) {
 	arrays := make(map[string]*ArrayConnectionData)
 
-	if _, err := os.Stat(ArrayConfigFile); os.IsNotExist(err) {
-		return nil, fmt.Errorf(fmt.Sprintf("File %s does not exist", ArrayConfigFile))
+	_, err := os.Stat(ArrayConfigFile)
+	if err != nil {
+		Log.Errorf("Found error %v while checking stat of file %s ", err, ArrayConfigFile)
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf(fmt.Sprintf("File %s does not exist", ArrayConfigFile))
+		}
 	}
 
 	config, err := os.ReadFile(filepath.Clean(ArrayConfigFile))
@@ -825,9 +853,8 @@ func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error
 			}
 
 			// for PowerFlex v4.0
-			str := ""
-			if c.NasName == nil || *(c.NasName) == "" {
-				c.NasName = &str
+			if strings.TrimSpace(c.NasName) == "" {
+				c.NasName = ""
 			}
 
 			skipCertificateValidation := c.SkipCertificateValidation || c.Insecure
@@ -986,13 +1013,99 @@ func Contains(slice []string, element string) bool {
 	return false
 }
 
-func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnpublishVolumeRequest, client *goscaleio.Client, fs *siotypes.FileSystem, volumeContextID, nodeIP, nodeID string) error {
-	var nfsExportName string
-	nfsExportName = NFSExportNamePrefix + fs.Name
+// parseMask converts the subnet mask from CIDR notation to the dotted-decimal format
+// An input of x.x.x.x/32 will return 255.255.255.255
+func parseMask(ipaddr string) (mask string, err error) {
+	removeExtra := regexp.MustCompile("^(.*[\\/])")
+	asd := ipaddr[len(ipaddr)-3:]
+	findSubnet := removeExtra.ReplaceAll([]byte(asd), []byte(""))
+	subnet, err := strconv.ParseInt(string(findSubnet), 10, 64)
+	if err != nil {
+		return "", errors.New("Parse Mask: Error parsing mask")
+	}
+	if subnet < 0 || subnet > 32 {
+		return "", errors.New("Invalid subnet mask")
+	}
+	var buff bytes.Buffer
+	for i := 0; i < int(subnet); i++ {
+		buff.WriteString("1")
+	}
+	for i := subnet; i < 32; i++ {
+		buff.WriteString("0")
+	}
+	masker := buff.String()
+	a, _ := strconv.ParseUint(masker[:8], 2, 64)
+	b, _ := strconv.ParseUint(masker[8:16], 2, 64)
+	c, _ := strconv.ParseUint(masker[16:24], 2, 64)
+	d, _ := strconv.ParseUint(masker[24:32], 2, 64)
+	resultMask := fmt.Sprintf("%v.%v.%v.%v", a, b, c, d)
+	return resultMask, nil
+}
 
+// GetIPListWithMaskFromString returns ip and mask in string form found in input string
+// A return value of nil indicates no match
+func GetIPListWithMaskFromString(input string) (string, error) {
+	// Split the IP address and subnet mask if present
+	parts := strings.Split(input, "/")
+	ip := parts[0]
+	result := net.ParseIP(ip)
+	if result == nil {
+		return "", errors.New("doesn't seem to be a valid IP")
+	}
+	if len(parts) > 1 {
+		// ideally there will be only 2 substrings for a valid IP/SubnetMask
+		if len(parts) > 2 {
+			return "", errors.New("doesn't seem to be a valid IP")
+		}
+		mask, err := parseMask(input)
+		if err != nil {
+			return "", errors.New("doesn't seem to be a valid IP")
+		}
+		ip = ip + "/" + mask
+	}
+	return ip, nil
+}
+
+// ParseCIDR parses the CIDR address to the valid start IP range with Mask
+func ParseCIDR(externalAccessCIDR string) (string, error) {
+	// check if externalAccess has netmask bit or not
+	if !strings.Contains(externalAccessCIDR, "/") {
+		// if externalAccess is a plane ip we can add /32 from our end
+		externalAccessCIDR += "/32"
+		Log.Debug("externalAccess after appending netMask bit:", externalAccessCIDR)
+	}
+	ip, ipnet, err := net.ParseCIDR(externalAccessCIDR)
+	if err != nil {
+		return "", err
+	}
+	Log.Debug("Parsed CIDR:", externalAccessCIDR, "-> ip:", ip, " net:", ipnet)
+	start, _ := cidr.AddressRange(ipnet)
+	fromString, err := GetIPListWithMaskFromString(externalAccessCIDR)
+	if err != nil {
+		return "", err
+	}
+	Log.Debug("IP with Mask:", fromString)
+	part := strings.Split(fromString, "/")
+
+	// ExernalAccess IP consists of Starting range IP of CIDR+Mask and hence concatenating the same to remove from the array
+	externalAccess := start.String() + "/" + part[1]
+	return externalAccess, nil
+}
+
+// ExternalAccessAlreadyAdded return true if externalAccess is present on ARRAY in any access mode type
+func externalAccessAlreadyAdded(export *siotypes.NFSExport, externalAccess string) bool {
+	if Contains(export.ReadWriteRootHosts, externalAccess) || Contains(export.ReadWriteHosts, externalAccess) || Contains(export.ReadOnlyRootHosts, externalAccess) || Contains(export.ReadOnlyHosts, externalAccess) {
+		Log.Debug("ExternalAccess is already added into Host Access list on array: ", externalAccess)
+		return true
+	}
+	Log.Debug("Going to add externalAccess into Host Access list on array: ", externalAccess)
+	return false
+}
+
+func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnpublishVolumeRequest, client *goscaleio.Client, fs *siotypes.FileSystem, volumeContextID string, nodeIPs []string, nodeID string) error {
+	nfsExportName := NFSExportNamePrefix + fs.Name
 	nfsExportExists := false
 	var nfsExportID string
-	deleteExport := true
 	// Check if nfs export exists for the File system
 	nfsExportList, err := client.GetNFSExport()
 	if err != nil {
@@ -1002,13 +1115,7 @@ func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnp
 	for _, nfsExport := range nfsExportList {
 		if nfsExport.FileSystemID == fs.ID {
 			nfsExportExists = true
-			if nfsExport.Name != nfsExportName {
-				// This means that share was created manually on array, hence don't delete via driver
-				deleteExport = false
-				nfsExportName = nfsExport.Name
-			}
 			nfsExportID = nfsExport.ID
-			nfsExportName = nfsExport.Name
 		}
 	}
 
@@ -1028,31 +1135,40 @@ func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnp
 	var modifyParam *siotypes.NFSExportModify = &siotypes.NFSExportModify{}
 
 	sort.Strings(nfsExportResp.ReadOnlyHosts)
-	index := sort.SearchStrings(nfsExportResp.ReadOnlyHosts, nodeIP)
-	if len(nfsExportResp.ReadOnlyHosts) > 0 {
-		if index >= 0 {
-			modifyParam.RemoveReadOnlyHosts = []string{nodeIP + "/255.255.255.255"} // we can't remove without netmask
-			Log.Debug("Going to remove IP from ROHosts: ", modifyParam.RemoveReadOnlyHosts[0])
+	index := 0
+	for _, nodeIP := range nodeIPs {
+		index = sort.SearchStrings(nfsExportResp.ReadOnlyHosts, nodeIP)
+		if len(nfsExportResp.ReadOnlyHosts) > 0 {
+			if index >= 0 {
+				modifyParam.RemoveReadOnlyHosts = append(modifyParam.RemoveReadOnlyHosts, nodeIP+"/255.255.255.255") // we can't remove without netmask
+				Log.Debug("Going to remove IP from ROHosts: ", nodeIP)
+			}
 		}
 	}
 
 	sort.Strings(nfsExportResp.ReadOnlyRootHosts)
-	index = sort.SearchStrings(nfsExportResp.ReadOnlyRootHosts, nodeIP)
-	if len(nfsExportResp.ReadOnlyRootHosts) > 0 {
-		if index >= 0 {
-			modifyParam.RemoveReadOnlyRootHosts = []string{nodeIP + "/255.255.255.255"} // we can't remove without netmask
-			Log.Debug("Going to remove IP from RORootHosts: ", modifyParam.RemoveReadOnlyRootHosts[0])
+	for _, nodeIP := range nodeIPs {
+		index = sort.SearchStrings(nfsExportResp.ReadOnlyRootHosts, nodeIP)
+		if len(nfsExportResp.ReadOnlyRootHosts) > 0 {
+			if index >= 0 {
+				modifyParam.RemoveReadOnlyRootHosts = append(modifyParam.RemoveReadOnlyRootHosts, nodeIP+"/255.255.255.255") // we can't remove without netmask
+				Log.Debug("Going to remove IP from RORootHosts: ", nodeIP)
+			}
 		}
 	}
 
-	if Contains(nfsExportResp.ReadWriteHosts, nodeIP+"/255.255.255.255") {
-		modifyParam.RemoveReadWriteHosts = []string{nodeIP + "/255.255.255.255"} // we can't remove without netmask
-		Log.Debug("Going to remove IP from RWHosts: ", modifyParam.RemoveReadWriteHosts[0])
+	for _, nodeIP := range nodeIPs {
+		if Contains(nfsExportResp.ReadWriteHosts, nodeIP+"/255.255.255.255") {
+			modifyParam.RemoveReadWriteHosts = append(modifyParam.RemoveReadWriteHosts, nodeIP+"/255.255.255.255") // we can't remove without netmask
+			Log.Debug("Going to remove IP from RWHosts: ", nodeIP)
+		}
 	}
 
-	if Contains(nfsExportResp.ReadWriteRootHosts, nodeIP+"/255.255.255.255") {
-		modifyParam.RemoveReadWriteRootHosts = []string{nodeIP + "/255.255.255.255"} // we can't remove without netmask
-		Log.Debug("Going to remove IP from RWRootHosts: ", modifyParam.RemoveReadWriteRootHosts[0])
+	for _, nodeIP := range nodeIPs {
+		if Contains(nfsExportResp.ReadWriteRootHosts, nodeIP+"/255.255.255.255") {
+			modifyParam.RemoveReadWriteRootHosts = append(modifyParam.RemoveReadWriteRootHosts, nodeIP+"/255.255.255.255") // we can't remove without netmask
+			Log.Debug("Going to remove IP from RWRootHosts: ", nodeIP)
+		}
 	}
 
 	err = client.ModifyNFSExport(modifyParam, nfsExportID)
@@ -1061,25 +1177,16 @@ func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnp
 		return status.Errorf(codes.NotFound, "Allocating host %s access to NFS Export failed. Error: %v", nodeID, err)
 	}
 	Log.Debugf("Host: %s access is removed from NFS Share: %s", nodeID, nfsExportID)
-
-	if deleteExport {
-		err = client.DeleteNFSExport(nfsExportID)
-
-		if err != nil {
-			return status.Errorf(codes.NotFound, "delete NFS Export failed. Error:%v", err)
-		}
-
-		Log.Printf("NFS export %s  deleted successfully", nfsExportID)
-	}
-
 	Log.Debugf("ControllerUnpublishVolume successful for volid: [%s]", volumeContextID)
 
 	return nil
 }
 
 // exportFilesystem - Method to export filesystem with idempotency
-func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPublishVolumeRequest, client *goscaleio.Client, fs *siotypes.FileSystem, nodeIP, nodeID string, pContext map[string]string, am *csi.VolumeCapability_AccessMode) (*csi.ControllerPublishVolumeResponse, error) {
-	hostURL := nodeIP + "/" + "255.255.255.255"
+func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPublishVolumeRequest, client *goscaleio.Client, fs *siotypes.FileSystem, nodeIPs []string, externalAccess string, nodeID string, pContext map[string]string, am *csi.VolumeCapability_AccessMode) (*csi.ControllerPublishVolumeResponse, error) {
+	for i, nodeIP := range nodeIPs {
+		nodeIPs[i] = nodeIP + "/255.255.255.255"
+	}
 	var nfsExportName string
 	nfsExportName = NFSExportNamePrefix + fs.Name
 
@@ -1132,7 +1239,7 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 	var readHostList, readWriteHostList []string
 
 	for _, host := range readOnlyHosts {
-		if host == hostURL {
+		if Contains(nodeIPs, host) {
 			foundIncompatible = true
 			break
 		}
@@ -1141,7 +1248,7 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 	otherHostsWithAccess += len(readWriteHosts)
 	if !foundIncompatible {
 		for _, host := range readWriteHosts {
-			if host == hostURL {
+			if Contains(nodeIPs, host) {
 				foundIncompatible = true
 				break
 			}
@@ -1151,7 +1258,7 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 	otherHostsWithAccess += len(readOnlyRootHosts)
 	if !foundIncompatible {
 		for _, host := range readOnlyRootHosts {
-			if host == hostURL {
+			if Contains(nodeIPs, host) {
 				if am.Mode == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
 					foundIdempotent = true
 				} else {
@@ -1164,7 +1271,7 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 
 	if !foundIncompatible && !foundIdempotent {
 		for _, host := range readWriteRootHosts {
-			if host == hostURL {
+			if Contains(nodeIPs, host) {
 				if am.Mode == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
 					foundIncompatible = true
 				} else {
@@ -1188,15 +1295,28 @@ func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPubli
 		Log.Info("Host has access to the given host and exists in the required state.")
 		return &csi.ControllerPublishVolumeResponse{PublishContext: pContext}, nil
 	}
+
+	// Check and remove the default host if given in external access
+	if Contains(nodeIPs, externalAccess) {
+		Log.Debug("Setting externalAccess to empty as it contains the host ip")
+		externalAccess = ""
+	}
+
 	// Allocate host access to NFS Share with appropriate access mode
 	if am.Mode == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
-		readHostList = append(readHostList, hostURL)
+		readHostList = append(readHostList, nodeIPs...)
+		if externalAccess != "" && !externalAccessAlreadyAdded(nfsExportResp, externalAccess) {
+			readHostList = append(readHostList, externalAccess)
+		}
 		err := client.ModifyNFSExport(&siotypes.NFSExportModify{AddReadOnlyRootHosts: readHostList}, nfsExportID)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "Allocating host access failed with the error: %v", err)
 		}
 	} else {
-		readWriteHostList = append(readWriteHostList, hostURL)
+		readWriteHostList = append(readWriteHostList, nodeIPs...)
+		if externalAccess != "" && !externalAccessAlreadyAdded(nfsExportResp, externalAccess) {
+			readWriteHostList = append(readWriteHostList, externalAccess)
+		}
 		err := client.ModifyNFSExport(&siotypes.NFSExportModify{AddReadWriteRootHosts: readWriteHostList}, nfsExportID)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "Allocating host access failed with the error: %v", err)
@@ -1511,13 +1631,9 @@ func (s *service) GetNodeLabels(ctx context.Context) (map[string]string, error) 
 		}
 		K8sClientset = k8sutils.Clientset
 	}
-	hostName, ok := os.LookupEnv("HOSTNAME")
-	if !ok {
-		return nil, status.Errorf(codes.FailedPrecondition, "%s not set", "HOSTNAME")
-	}
-	hostName = strings.ToLower(hostName)
+
 	// access the API to fetch node object
-	node, err := K8sClientset.CoreV1().Nodes().Get(context.TODO(), hostName, v1.GetOptions{})
+	node, err := K8sClientset.CoreV1().Nodes().Get(context.TODO(), s.opts.KubeNodeName, v1.GetOptions{})
 	if err != nil {
 		return nil, status.Error(codes.Internal, GetMessage("Unable to fetch the node labels. Error: %v", err))
 	}

@@ -12,12 +12,12 @@
 
 # some arguments that must be supplied
 ARG GOPROXY
-ARG GOVERSION
+ARG GOIMAGE
 ARG BASEIMAGE
 ARG DIGEST
 
 # Stage to build the driver
-FROM golang:${GOVERSION} as builder
+FROM $GOIMAGE as builder
 ARG GOPROXY
 RUN mkdir -p /go/src
 COPY ./ /go/src/
@@ -36,7 +36,7 @@ LABEL vendor="Dell Inc." \
     name="csi-powerflex" \
     summary="CSI Driver for Dell EMC PowerFlex" \
     description="CSI Driver for provisioning persistent storage from Dell EMC PowerFlex" \
-    version="2.7.0" \
+    version="2.10.0" \
     license="Apache-2.0"
 COPY ./licenses /licenses
 

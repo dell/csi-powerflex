@@ -1,4 +1,4 @@
-// Copyright © 2019-2022 Dell Inc. or its subsidiaries. All Rights Reserved.
+// Copyright © 2019-2024 Dell Inc. or its subsidiaries. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,12 +20,14 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/dell/goscaleio"
@@ -280,7 +282,7 @@ func (s *service) CreateVolume(
 			nasName = params[KeyNasName] // Storage class takes precedence
 		} else {
 			Log.Debug("nasName not present in storage class, value taken from secret")
-			nasName = *(arr.NasName) // Secrets next
+			nasName = arr.NasName // Secret next
 		}
 		nasServerID, err := s.getNASServerIDFromName(systemID, nasName)
 		if err != nil {
@@ -1016,11 +1018,50 @@ func (s *service) DeleteVolume(
 				return nil, status.Errorf(codes.Internal,
 					"error getting the NFS Export for the fs: %s", err.Error())
 			}
-		} else {
-			if nfsExport != nil {
-				return nil, status.Errorf(codes.FailedPrecondition, "NFS volume %s can not be deleted as it has associated NFS Export.", fsID)
+		}
+
+		if nfsExport != nil &&
+			(len(nfsExport.ReadOnlyHosts) > 0 ||
+				len(nfsExport.ReadOnlyRootHosts) > 0 ||
+				len(nfsExport.ReadWriteHosts) > 0 ||
+				len(nfsExport.ReadWriteRootHosts) > 0) {
+			// if one entry is there for RWRootHosts or RWHosts, check if this is the same externalAccess defined in value.yaml
+			// if yes modifyNFSExport and remove externalAccess from the HostAcceesList on the array
+			if (len(nfsExport.ReadWriteRootHosts) == 1 || len(nfsExport.ReadWriteHosts) == 1) && s.opts.ExternalAccess != "" {
+				externalAccess := s.opts.ExternalAccess
+				modifyNFSExport := false
+				// we need to construct the payload dynamically otherwise 400 error will be thrown
+				var modifyParam *siotypes.NFSExportModify = &siotypes.NFSExportModify{}
+				// Removing externalAccess from RWHosts as well as RWRootHosts
+				if len(nfsExport.ReadWriteRootHosts) == 1 && externalAccess == nfsExport.ReadWriteRootHosts[0] {
+					Log.Debug("Trying to remove externalAccess IP with mask having RWRootHosts access while deleting the volume: ", externalAccess)
+					modifyNFSExport = true
+					modifyParam.RemoveReadWriteRootHosts = []string{externalAccess}
+				}
+				if len(nfsExport.ReadWriteHosts) == 1 && externalAccess == nfsExport.ReadWriteHosts[0] {
+					Log.Debug("Trying to remove externalAccess IP with mask having RWHosts access while deleting the volume: ", externalAccess)
+					modifyNFSExport = true
+					modifyParam.RemoveReadWriteHosts = []string{externalAccess}
+				}
+				// call ModifyNFSExport API only when modifyParam payload is not empty i.e. something is there to modify
+				if modifyNFSExport {
+					err = client.ModifyNFSExport(modifyParam, fsID)
+					if err != nil {
+						Log.Warn("failure when removing externalAccess from nfs export: ", err.Error())
+					}
+				} else {
+					// either of RWRootHosts or RWHosts has one entry but it is not externalAccess
+					return nil, status.Errorf(codes.FailedPrecondition,
+						"filesystem %s can not be deleted as it has associated NFS shares.",
+						fsID)
+				}
+			} else {
+				return nil, status.Errorf(codes.FailedPrecondition,
+					"filesystem %s can not be deleted as it has associated NFS shares.",
+					fsID)
 			}
 		}
+
 		Log.WithFields(logrus.Fields{"name": fsName, "id": fsID}).Info("Deleting NFS volume")
 		err = system.DeleteFileSystem(fsName)
 		if err != nil {
@@ -1194,12 +1235,15 @@ func (s *service) ControllerPublishVolume(
 				err.Error())
 		}
 
-		sdcIP, err := s.getSDCIP(nodeID, systemID)
+		sdcIPs, err := s.getSDCIPs(nodeID, systemID)
 		if err != nil {
 			return nil, status.Errorf(codes.NotFound, err.Error())
+		} else if len(sdcIPs) == 0 {
+			return nil, status.Errorf(codes.NotFound, "received empty sdcIPs")
 		}
 
-		publishContext["host"] = sdcIP
+		externalAccess := s.opts.ExternalAccess
+		publishContext["host"] = sdcIPs[0]
 
 		fsc := req.GetVolumeCapability()
 		if fsc == nil {
@@ -1217,7 +1261,7 @@ func (s *service) ControllerPublishVolume(
 				errUnknownAccessMode)
 		}
 		// Export for NFS
-		resp, err := s.exportFilesystem(ctx, req, adminClient, fs, sdcIP, nodeID, publishContext, am)
+		resp, err := s.exportFilesystem(ctx, req, adminClient, fs, sdcIPs, externalAccess, nodeID, publishContext, am)
 		return resp, err
 	}
 	volID := getVolumeIDFromCsiVolumeID(csiVolID)
@@ -1514,13 +1558,15 @@ func (s *service) ControllerUnpublishVolume(
 				err.Error())
 		}
 
-		sdcIP, err := s.getSDCIP(nodeID, systemID)
+		sdcIPs, err := s.getSDCIPs(nodeID, systemID)
 		if err != nil {
 			return nil, status.Errorf(codes.NotFound, err.Error())
+		} else if len(sdcIPs) == 0 {
+			return nil, status.Errorf(codes.NotFound, "received empty sdcIPs")
 		}
 
 		// unexport for NFS
-		err = s.unexportFilesystem(ctx, req, adminClient, fs, req.GetVolumeId(), sdcIP, nodeID)
+		err = s.unexportFilesystem(ctx, req, adminClient, fs, req.GetVolumeId(), sdcIPs, nodeID)
 		if err != nil {
 			return nil, err
 		}
@@ -2075,6 +2121,11 @@ func (s *service) getCapacityForAllSystems(ctx context.Context, protectionDomain
 	return capacity, nil
 }
 
+// maxVolumesSizeForArray - store the maxVolumesSizeForArray
+var maxVolumesSizeForArray = make(map[string]int64)
+
+var mutex = &sync.Mutex{}
+
 func (s *service) GetCapacity(
 	ctx context.Context,
 	req *csi.GetCapacityRequest) (
@@ -2085,6 +2136,7 @@ func (s *service) GetCapacity(
 		err      error
 	)
 
+	systemID := ""
 	params := req.GetParameters()
 	if params == nil || len(params) == 0 {
 		// Get capacity of all systems
@@ -2095,7 +2147,6 @@ func (s *service) GetCapacity(
 		if !ok {
 			Log.Printf("Protection Domain name not provided; there could be conflicts if two storage pools share a name")
 		}
-		systemID := ""
 		for key, value := range params {
 			if strings.EqualFold(key, KeySystemID) {
 				systemID = value
@@ -2116,9 +2167,76 @@ func (s *service) GetCapacity(
 			"Unable to get capacity: %s", err.Error())
 	}
 
+	if systemID == "" && s.opts.defaultSystemID != "" {
+		systemID = s.opts.defaultSystemID
+	}
+
+	if systemID == "" {
+		return &csi.GetCapacityResponse{
+			AvailableCapacity: capacity,
+		}, nil
+	}
+
+	maxVolSize, err := s.getMaximumVolumeSize(systemID)
+	if err != nil {
+		Log.Debug("GetMaxVolumeSize returning error ", err)
+	}
+
+	if maxVolSize < 0 {
+		return &csi.GetCapacityResponse{
+			AvailableCapacity: capacity,
+		}, nil
+	}
+
+	maxVolSizeinBytes := maxVolSize * bytesInGiB
+	maxVol := wrapperspb.Int64(maxVolSizeinBytes)
 	return &csi.GetCapacityResponse{
 		AvailableCapacity: capacity,
+		MaximumVolumeSize: maxVol,
 	}, nil
+}
+
+func (s *service) getMaximumVolumeSize(systemID string) (int64, error) {
+	valueInCache, found := getCachedMaximumVolumeSize(systemID)
+	if !found || valueInCache < 0 {
+		adminClient := s.adminClients[systemID]
+		if adminClient == nil {
+			return 0, status.Errorf(codes.InvalidArgument, "can't find adminClient by id %s", systemID)
+		}
+
+		vol1, err := adminClient.GetMaxVol()
+		if err != nil {
+			Log.Debug("GetMaxVolumeSize returning error ", err)
+			return 0, err
+		}
+
+		value, err := strconv.ParseInt(vol1, 10, 64)
+		if err != nil {
+			Log.Debug("error converting str to int ", err)
+			return 0, err
+
+		}
+
+		cacheMaximumVolumeSize(systemID, value)
+		valueInCache = value
+
+	}
+	return valueInCache, nil
+}
+
+func getCachedMaximumVolumeSize(key string) (int64, bool) {
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	value, found := maxVolumesSizeForArray[key]
+	return value, found
+}
+
+func cacheMaximumVolumeSize(key string, value int64) {
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	maxVolumesSizeForArray[key] = value
 }
 
 func (s *service) ControllerGetCapabilities(
@@ -2581,7 +2699,10 @@ func generateSnapName(volumeName string) string {
 	name := strings.Replace(volumeName+"_"+timestamp, "-", "", -1)
 	name = strings.Replace(name, ":", "", -1)
 	namebytes := []byte(name)
-	name = string(namebytes[0:31])
+	if len(namebytes) > 31 {
+		name = string(namebytes[0:31])
+		Log.Printf("Requested name %s longer than 31 character max, truncated to %s\n", string(namebytes), name)
+	}
 	return name
 }
 
