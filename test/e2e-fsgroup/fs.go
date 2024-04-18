@@ -277,7 +277,6 @@ func doOneCyclePVCTest(ctx context.Context, policy string, accessMode v1.Persist
 
 		pod, err = createPodForFSGroup(client, namespace, nil, []*v1.PersistentVolumeClaim{pvclaim},
 			true, testParameters["execCommand"], newFsGroupInt64, newRunAsUserInt64)
-
 		// in case of error help debug by showing events
 		if err != nil {
 			getEvents(client, pvclaim.Namespace, pvclaim.Name, "PersistentVolumeClaim")
@@ -326,7 +325,6 @@ func readYaml(values string) (map[string]string, error) {
 	data := make(map[string]string)
 
 	err = yaml.Unmarshal(yfile, &data)
-
 	if err != nil {
 		return nil, err
 	}

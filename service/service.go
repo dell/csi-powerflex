@@ -1172,7 +1172,6 @@ func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnp
 	}
 
 	err = client.ModifyNFSExport(modifyParam, nfsExportID)
-
 	if err != nil {
 		return status.Errorf(codes.NotFound, "Allocating host %s access to NFS Export failed. Error: %v", nodeID, err)
 	}

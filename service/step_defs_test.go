@@ -2031,13 +2031,11 @@ func (f *feature) iCallGetCapacityWithStoragePool(arg1 string) error {
 }
 
 func (f *feature) iCallGetMaximumVolumeSize(arg1 string) {
-
 	systemid := arg1
 	f.maxVolSize, f.err = f.service.getMaximumVolumeSize(systemid)
 	if f.err != nil {
 		log.Printf("err while getting max vol size: %s\n", f.err.Error())
 	}
-
 }
 
 func (f *feature) aValidGetCapacityResponsewithmaxvolsizeIsReturned() error {
@@ -2052,7 +2050,6 @@ func (f *feature) aValidGetCapacityResponsewithmaxvolsizeIsReturned() error {
 	}
 
 	if f.maxVolSize >= 0 && f.getCapacityResponse.AvailableCapacity > 0 {
-
 		fmt.Printf("Available capacity: and Max volume size: %d %v\n", f.getCapacityResponse.AvailableCapacity, f.getCapacityResponse.MaximumVolumeSize)
 	}
 

@@ -787,7 +787,6 @@ func (s *service) createVolumeFromSnapshot(req *csi.CreateVolumeRequest,
 		_, err = system.RestoreFileSystemFromSnapshot(&siotypes.RestoreFsSnapParam{
 			SnapshotID: snapID,
 		}, srcVol.ParentID)
-
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "error during fs creation from snapshot: %s", snapshotSource.SnapshotId)
 		}
@@ -1930,7 +1929,6 @@ func (s *service) listVolumes(systemID string, startToken int, maxEntries int, d
 	// Handle exactly one volume or snapshot
 	if volumeID != "" || ancestorID != "" {
 		sioVols, err = adminClient.GetVolume("", volumeID, ancestorID, "", false)
-
 		if err != nil {
 			return nil, "", status.Errorf(codes.Internal,
 				"Unable to list volumes for volume ID %s ancestor ID %s: %s", volumeID, ancestorID, err.Error())

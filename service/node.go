@@ -757,7 +757,6 @@ func (s *service) NodeGetInfo(
 
 		if val, ok := labels[maxVxflexosVolumesPerNodeLabel]; ok {
 			maxVxflexosVolumesPerNode, err = strconv.ParseInt(val, 10, 64)
-
 			if err != nil {
 				return nil, status.Error(codes.InvalidArgument, GetMessage("invalid value '%s' specified for 'max-vxflexos-volumes-per-node' node label", val))
 			}

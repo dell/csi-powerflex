@@ -116,7 +116,6 @@ func (s *service) ephemeralNodePublish(
 	}
 
 	err = s.systemProbe(ctx, array)
-
 	if err != nil {
 		Log.Errorf("systemProb  Ephemeral %s", err.Error())
 		return nil, status.Error(codes.Internal, "inline ephemeral system prob failed: "+err.Error())
