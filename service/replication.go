@@ -37,11 +37,13 @@ const (
 	sioReplicationGroupNotFound     = "The Replication Consistency Group was not found"
 )
 
-var getRemoteSnapDelay = (1 * time.Second)
-var snapshotMaxRetries = 10
+var (
+	getRemoteSnapDelay = (1 * time.Second)
+	snapshotMaxRetries = 10
+)
 
 func (s *service) GetReplicationCapabilities(ctx context.Context, req *replication.GetReplicationCapabilityRequest) (*replication.GetReplicationCapabilityResponse, error) {
-	var rep = new(replication.GetReplicationCapabilityResponse)
+	rep := new(replication.GetReplicationCapabilityResponse)
 	rep.Capabilities = []*replication.ReplicationCapability{
 		{
 			Type: &replication.ReplicationCapability_Rpc{
@@ -339,7 +341,7 @@ func (s *service) CreateStorageProtectionGroup(ctx context.Context, req *replica
 			rcgPrefix = "rcg"
 		}
 
-		consistencyGroupName, err = s.createUniqueConsistencyGroupName(systemID, remoteSystemID, rpo,
+		consistencyGroupName, err = s.createUniqueConsistencyGroupName(systemID, rpo,
 			localProtectionDomain, remoteProtectionDomain, remoteClusterID, clusterUID, rcgPrefix)
 		if err != nil {
 			return nil, err
@@ -649,7 +651,7 @@ func (s *service) getReplicationConsistencyGroupByID(systemID string, groupID st
 	return group, nil
 }
 
-func (s *service) createUniqueConsistencyGroupName(systemID, remoteSystemID, rpo, localPd, remotePd, remoteClusterID, clusterUID, rcgPrefix string) (string, error) {
+func (s *service) createUniqueConsistencyGroupName(systemID, rpo, localPd, remotePd, remoteClusterID, clusterUID, rcgPrefix string) (string, error) {
 	consistencyGroupName := rcgPrefix + "-"
 	clusterUID = strings.Replace(clusterUID, "-", "", -1)
 	remoteClusterID = strings.Replace(remoteClusterID, "-", "", -1)
@@ -684,10 +686,9 @@ func (s *service) createUniqueConsistencyGroupName(systemID, remoteSystemID, rpo
 				consistencyGroupName = rcg.Name
 				found = true
 				break
-			} else {
-				if rcg.Name[len(rcg.Name)-1:] == strconv.Itoa(version) {
-					version++
-				}
+			}
+			if rcg.Name[len(rcg.Name)-1:] == strconv.Itoa(version) {
+				version++
 			}
 		}
 	}
