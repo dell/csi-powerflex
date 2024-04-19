@@ -40,7 +40,6 @@ import (
 	"github.com/dell/gofsutil"
 	"github.com/dell/goscaleio"
 	types "github.com/dell/goscaleio/types/v1"
-	"github.com/golang/protobuf/ptypes"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/metadata"
 	v1 "k8s.io/api/core/v1"
@@ -3743,7 +3742,7 @@ func (f *feature) aValidListSnapshotsResponseIsReturnedWithListedAndNexttoken(li
 		entry := entries[j]
 		id := entry.GetSnapshot().SnapshotId
 		if expectedEntries <= 10 {
-			ts := ptypes.TimestampString(entry.GetSnapshot().CreationTime)
+			ts := entry.GetSnapshot().CreationTime.AsTime().Format(time.RFC3339)
 			fmt.Printf("snapshot ID %s source ID %s timestamp %s\n", id, entry.GetSnapshot().SourceVolumeId, ts)
 		}
 		if f.listedVolumeIDs[id] {
@@ -4673,7 +4672,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^an NFSExport instance with nfsexporthost "([^"]*)"`, f.iCallGivenNFSExport)
 	s.Step(`^I specify External Access "([^"]*)"`, f.iSpecifyExternalAccess)
 
-	s.After(func(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
+	s.After(func(ctx context.Context, _ *godog.Scenario, _ error) (context.Context, error) {
 		if f.server != nil {
 			f.server.Close()
 		}
