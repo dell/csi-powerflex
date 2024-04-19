@@ -37,7 +37,6 @@ import (
 var mountPath = "/data"
 
 var _ = ginkgo.Describe("[csi-adv-fsg] Nodes Scale-up and Scale-down", func() {
-
 	f := framework.NewDefaultFramework("e2e-scale-nodes")
 
 	// prevent annoying psp warning
@@ -119,8 +118,7 @@ var _ = ginkgo.Describe("[csi-adv-fsg] Nodes Scale-up and Scale-down", func() {
 		statefulset := GetStatefulSetFromManifest(namespace)
 		ginkgo.By("Creating statefulset")
 
-		statefulset.Spec.VolumeClaimTemplates[len(statefulset.Spec.VolumeClaimTemplates)-1].Spec.AccessModes[0] =
-			v1.ReadWriteOnce
+		statefulset.Spec.VolumeClaimTemplates[len(statefulset.Spec.VolumeClaimTemplates)-1].Spec.AccessModes[0] = v1.ReadWriteOnce
 
 		statefulset.Spec.VolumeClaimTemplates[len(statefulset.Spec.VolumeClaimTemplates)-1].
 			Annotations["volume.beta.kubernetes.io/storage-class"] = scName

@@ -42,7 +42,6 @@ import (
 	"github.com/dell/goscaleio"
 
 	volGroupSnap "github.com/dell/dell-csi-extensions/volumeGroupSnapshot"
-	"github.com/golang/protobuf/ptypes"
 )
 
 const (
@@ -206,9 +205,9 @@ func (f *feature) getArrayConfig() (map[string]*ArrayConnectionData, error) {
 			}
 
 			// copy in the arrayConnectionData to arrays
-			copy := ArrayConnectionData{}
-			copy = c
-			arrays[c.SystemID] = &copy
+			copyOfCred := ArrayConnectionData{}
+			copyOfCred = c
+			arrays[c.SystemID] = &copyOfCred
 		}
 	} else {
 		return nil, fmt.Errorf("arrays details are not provided in configFile %s", configFile)
@@ -408,18 +407,18 @@ func (f *feature) accessTypeIs(arg1 string) error {
 func (f *feature) iCallCreateVolume() error {
 	if f.createVolumeRequest == nil {
 		return nil
-	} else {
-		volResp, err := f.createVolume(f.createVolumeRequest)
-		if err != nil {
-			fmt.Printf("CreateVolume %s:\n", err.Error())
-			f.addError(err)
-		} else {
-			fmt.Printf("CreateVolume %s (%s) %s\n", volResp.GetVolume().VolumeContext["Name"],
-				volResp.GetVolume().VolumeId, volResp.GetVolume().VolumeContext["CreationTime"])
-			f.volID = volResp.GetVolume().VolumeId
-			f.volIDList = append(f.volIDList, volResp.GetVolume().VolumeId)
-		}
 	}
+	volResp, err := f.createVolume(f.createVolumeRequest)
+	if err != nil {
+		fmt.Printf("CreateVolume %s:\n", err.Error())
+		f.addError(err)
+	} else {
+		fmt.Printf("CreateVolume %s (%s) %s\n", volResp.GetVolume().VolumeContext["Name"],
+			volResp.GetVolume().VolumeId, volResp.GetVolume().VolumeContext["CreationTime"])
+		f.volID = volResp.GetVolume().VolumeId
+		f.volIDList = append(f.volIDList, volResp.GetVolume().VolumeId)
+	}
+
 	return nil
 }
 
@@ -444,39 +443,37 @@ func (f *feature) createVolume(req *csi.CreateVolumeRequest) (*csi.CreateVolumeR
 func (f *feature) whenICallDeleteVolume() error {
 	if f.createVolumeRequest == nil {
 		return nil
-	} else {
-		err := f.deleteVolume(f.volID)
-		if err != nil {
-			fmt.Printf("DeleteVolume %s:\n", err.Error())
-			f.addError(err)
-		} else {
-			fmt.Printf("DeleteVolume %s completed successfully\n", f.volID)
-		}
-		return nil
 	}
+	err := f.deleteVolume(f.volID)
+	if err != nil {
+		fmt.Printf("DeleteVolume %s:\n", err.Error())
+		f.addError(err)
+	} else {
+		fmt.Printf("DeleteVolume %s completed successfully\n", f.volID)
+	}
+	return nil
 }
 
 func (f *feature) deleteVolume(id string) error {
 	if f.createVolumeRequest == nil {
 		return nil
-	} else {
-		ctx := context.Background()
-		client := csi.NewControllerClient(grpcClient)
-		delVolReq := new(csi.DeleteVolumeRequest)
-		delVolReq.VolumeId = id
-		var err error
-		// Retry loop to deal with VxFlexOS API being overwhelmed
-		for i := 0; i < f.maxRetryCount; i++ {
-			_, err = client.DeleteVolume(ctx, delVolReq)
-			if err == nil || !strings.Contains(err.Error(), "Insufficient resources") {
-				// no need for retry
-				break
-			}
-			fmt.Printf("retry: %s\n", err.Error())
-			time.Sleep(RetrySleepTime)
-		}
-		return err
 	}
+	ctx := context.Background()
+	client := csi.NewControllerClient(grpcClient)
+	delVolReq := new(csi.DeleteVolumeRequest)
+	delVolReq.VolumeId = id
+	var err error
+	// Retry loop to deal with VxFlexOS API being overwhelmed
+	for i := 0; i < f.maxRetryCount; i++ {
+		_, err = client.DeleteVolume(ctx, delVolReq)
+		if err == nil || !strings.Contains(err.Error(), "Insufficient resources") {
+			// no need for retry
+			break
+		}
+		fmt.Printf("retry: %s\n", err.Error())
+		time.Sleep(RetrySleepTime)
+	}
+	return err
 }
 
 func (f *feature) thereAreNoErrors() error {
@@ -490,24 +487,23 @@ func (f *feature) theErrorMessageShouldContain(expected string) error {
 	// If arg1 is none, we expect no error, any error received is unexpected
 	if f.createVolumeRequest == nil {
 		return nil
-	} else {
-		if expected == "none" {
-			if len(f.errs) == 0 {
-				return nil
-			}
-			return fmt.Errorf("Unexpected error(s): %s", f.errs[0])
-		}
-		// We expect an error...
-		if len(f.errs) == 0 {
-			return errors.New("there were no errors but we expected: " + expected)
-		}
-		err0 := f.errs[0]
-		if !strings.Contains(err0.Error(), expected) {
-			return fmt.Errorf("Error %s does not contain the expected message: %s", err0.Error(), expected)
-		}
-		f.errs = nil
-		return nil
 	}
+	if expected == "none" {
+		if len(f.errs) == 0 {
+			return nil
+		}
+		return fmt.Errorf("Unexpected error(s): %s", f.errs[0])
+	}
+	// We expect an error...
+	if len(f.errs) == 0 {
+		return errors.New("there were no errors but we expected: " + expected)
+	}
+	err0 := f.errs[0]
+	if !strings.Contains(err0.Error(), expected) {
+		return fmt.Errorf("Error %s does not contain the expected message: %s", err0.Error(), expected)
+	}
+	f.errs = nil
+	return nil
 }
 
 func (f *feature) aMountVolumeRequest(name string) error {
@@ -694,10 +690,10 @@ func (f *feature) getNodePublishVolumeRequest() *csi.NodePublishVolumeRequest {
 	return req
 }
 
+//nolint:revive
 func (f *feature) whenICallNodePublishVolumeWithPoint(arg1 string, arg2 string) error {
 	block := f.capability.GetBlock()
-	if block != nil {
-	} else {
+	if block == nil {
 		_, err := os.Stat(arg2)
 		if err != nil && os.IsNotExist(err) {
 			err = os.Mkdir(arg2, 0o777)
@@ -718,6 +714,7 @@ func (f *feature) whenICallNodePublishVolumeWithPoint(arg1 string, arg2 string) 
 	return nil
 }
 
+//nolint:revive
 func (f *feature) whenICallNodePublishVolume(arg1 string) error {
 	err := f.nodePublishVolume(f.volID, "")
 	if err != nil {
@@ -764,6 +761,7 @@ func (f *feature) nodePublishVolume(id string, path string) error {
 	return err
 }
 
+//nolint:revive
 func (f *feature) whenICallNodeUnpublishVolume(arg1 string) error {
 	err := f.nodeUnpublishVolume(f.volID, f.nodePublishVolumeRequest.TargetPath)
 	if err != nil {
@@ -776,6 +774,7 @@ func (f *feature) whenICallNodeUnpublishVolume(arg1 string) error {
 	return nil
 }
 
+//nolint:revive
 func (f *feature) whenICallNodeUnpublishVolumeWithPoint(arg1, arg2 string) error {
 	err := f.nodeUnpublishVolume(f.volID, arg2)
 	if err != nil {
@@ -799,6 +798,7 @@ func (f *feature) nodeUnpublishVolume(id string, path string) error {
 	return err
 }
 
+//nolint:revive
 func (f *feature) verifyPublishedVolumeWithVoltypeAccessFstype(voltype, access, fstype string) error {
 	if len(f.errs) > 0 {
 		fmt.Printf("Not verifying published volume because of previous error")
@@ -852,7 +852,7 @@ func (f *feature) iCallCreateSnapshot() error {
 	} else {
 		f.snapshotID = resp.Snapshot.SnapshotId
 		fmt.Printf("createSnapshot: SnapshotId %s SourceVolumeId %s CreationTime %s\n",
-			resp.Snapshot.SnapshotId, resp.Snapshot.SourceVolumeId, ptypes.TimestampString(resp.Snapshot.CreationTime))
+			resp.Snapshot.SnapshotId, resp.Snapshot.SourceVolumeId, resp.Snapshot.CreationTime.AsTime().Format(time.RFC3339Nano))
 	}
 	time.Sleep(RetrySleepTime)
 	return nil
@@ -902,7 +902,7 @@ func (f *feature) iCallCreateSnapshotConsistencyGroup() error {
 	} else {
 		f.snapshotID = resp.Snapshot.SnapshotId
 		fmt.Printf("createSnapshot: SnapshotId %s SourceVolumeId %s CreationTime %s\n",
-			resp.Snapshot.SnapshotId, resp.Snapshot.SourceVolumeId, ptypes.TimestampString(resp.Snapshot.CreationTime))
+			resp.Snapshot.SnapshotId, resp.Snapshot.SourceVolumeId, resp.Snapshot.CreationTime.AsTime().Format(time.RFC3339Nano))
 	}
 	time.Sleep(SleepTime)
 	return nil
@@ -994,40 +994,38 @@ func (f *feature) iCallCloneManyVolumes() error {
 func (f *feature) iCallListVolume() error {
 	if f.createVolumeRequest == nil {
 		return nil
-	} else {
-		var err error
-		ctx := context.Background()
-		req := &csi.ListVolumesRequest{}
-		client := csi.NewControllerClient(grpcClient)
-		f.listVolumesResponse, err = client.ListVolumes(ctx, req)
-		if err != nil {
-			return err
-		}
-		return nil
 	}
+	var err error
+	ctx := context.Background()
+	req := &csi.ListVolumesRequest{}
+	client := csi.NewControllerClient(grpcClient)
+	f.listVolumesResponse, err = client.ListVolumes(ctx, req)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (f *feature) aValidListVolumeResponseIsReturned() error {
 	if f.createVolumeRequest == nil {
 		return nil
-	} else {
-		resp := f.listVolumesResponse
-		entries := resp.GetEntries()
-		if entries == nil {
-			return errors.New("expected ListVolumeResponse.Entries but none")
-		}
-		for _, entry := range entries {
-			vol := entry.GetVolume()
-			if vol != nil {
-				id := vol.VolumeId
-				capacity := vol.CapacityBytes
-				name := vol.VolumeContext["Name"]
-				creation := vol.VolumeContext["CreationTime"]
-				fmt.Printf("Volume ID: %s Name: %s Capacity: %d CreationTime: %s\n", id, name, capacity, creation)
-			}
-		}
-		return nil
 	}
+	resp := f.listVolumesResponse
+	entries := resp.GetEntries()
+	if entries == nil {
+		return errors.New("expected ListVolumeResponse.Entries but none")
+	}
+	for _, entry := range entries {
+		vol := entry.GetVolume()
+		if vol != nil {
+			id := vol.VolumeId
+			capacity := vol.CapacityBytes
+			name := vol.VolumeContext["Name"]
+			creation := vol.VolumeContext["CreationTime"]
+			fmt.Printf("Volume ID: %s Name: %s Capacity: %d CreationTime: %s\n", id, name, capacity, creation)
+		}
+	}
+	return nil
 }
 
 func (f *feature) iCallListSnapshotForSnap() error {
@@ -1073,18 +1071,18 @@ func (f *feature) aValidListSnapshotResponseIsReturned() error {
 	}
 	fmt.Printf("Looking for snap id %s\n", f.snapshotID)
 	entries := f.listSnapshotsResponse.GetEntries()
-	var FOUND_SNAP bool
+	var foundSnapshot bool
 	for j := 0; j < len(entries); j++ {
 		entry := entries[j]
 		id := entry.GetSnapshot().SnapshotId
-		ts := ptypes.TimestampString(entry.GetSnapshot().CreationTime)
+		ts := entry.GetSnapshot().CreationTime.AsTime().Format(time.RFC3339Nano)
 
 		fmt.Printf("snapshot ID %s source ID %s timestamp %s\n", id, entry.GetSnapshot().SourceVolumeId, ts)
 		if f.snapshotID != "" && strings.Contains(id, f.snapshotID) {
-			FOUND_SNAP = true
+			foundSnapshot = true
 		}
 	}
-	if f.snapshotID != "" && !FOUND_SNAP {
+	if f.snapshotID != "" && !foundSnapshot {
 		msg := "ListSnapshots does not contain snap id " + f.snapshotID
 		fmt.Print(msg)
 		return errors.New(msg)
@@ -1696,10 +1694,10 @@ func (f *feature) iCallNodeGetVolumeStats() error {
 	client := csi.NewNodeClient(grpcClient)
 	var err error
 
-	volId := f.volID
+	volID := f.volID
 	vPath := "/tmp/datadir"
 
-	req := &csi.NodeGetVolumeStatsRequest{VolumeId: volId, VolumePath: vPath}
+	req := &csi.NodeGetVolumeStatsRequest{VolumeId: volID, VolumePath: vPath}
 
 	f.nodeGetVolumeStatsResponse, err = client.NodeGetVolumeStats(ctx, req)
 
@@ -1899,7 +1897,7 @@ func (f *feature) restCallToSetName(auth string, url string, name string) (strin
 	req.Header.Set("Content-Type", "application/json")
 
 	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // #nosec G402
 	}
 	hc := &http.Client{Timeout: 2 * time.Second, Transport: tr}
 
@@ -2108,188 +2106,181 @@ func (f *feature) aNfsVolumeRequest(name string, size int64) error {
 func (f *feature) whenICallPublishVolumeForNfs(nodeIDEnvVar string) error {
 	if f.createVolumeRequest == nil {
 		return nil
-	} else {
-		err := f.controllerPublishVolumeForNfs(f.volID, nodeIDEnvVar)
-		if err != nil {
-			fmt.Printf("ControllerPublishVolume %s:\n", err.Error())
-			f.addError(err)
-		} else {
-			fmt.Printf("ControllerPublishVolume completed successfully\n")
-		}
-		time.Sleep(SleepTime)
-		return nil
 	}
+	err := f.controllerPublishVolumeForNfs(f.volID, nodeIDEnvVar)
+	if err != nil {
+		fmt.Printf("ControllerPublishVolume %s:\n", err.Error())
+		f.addError(err)
+	} else {
+		fmt.Printf("ControllerPublishVolume completed successfully\n")
+	}
+	time.Sleep(SleepTime)
+	return nil
 }
 
 func (f *feature) controllerPublishVolumeForNfs(id string, nodeIDEnvVar string) error {
 	if f.createVolumeRequest == nil {
 		return nil
-	} else {
-		req := f.getControllerPublishVolumeRequest()
-		req.VolumeId = id
-		req.NodeId = os.Getenv(nodeIDEnvVar)
+	}
+	req := f.getControllerPublishVolumeRequest()
+	req.VolumeId = id
+	req.NodeId = os.Getenv(nodeIDEnvVar)
 
-		if f.arrays == nil {
-			fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
-			var err error
-			f.arrays, err = f.getArrayConfig()
-			if err != nil {
-				return errors.New("Get multi array config failed " + err.Error())
-			}
-		}
-
-		for _, a := range f.arrays {
-			req.VolumeContext = make(map[string]string)
-			req.VolumeContext["nasName"] = a.NasName
-			req.VolumeContext["fsType"] = "nfs"
-			ctx := context.Background()
-			client := csi.NewControllerClient(grpcClient)
-			_, err := client.ControllerPublishVolume(ctx, req)
-			return err
+	if f.arrays == nil {
+		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
+		var err error
+		f.arrays, err = f.getArrayConfig()
+		if err != nil {
+			return errors.New("Get multi array config failed " + err.Error())
 		}
 	}
+
+	for _, a := range f.arrays {
+		req.VolumeContext = make(map[string]string)
+		req.VolumeContext["nasName"] = a.NasName
+		req.VolumeContext["fsType"] = "nfs"
+		ctx := context.Background()
+		client := csi.NewControllerClient(grpcClient)
+		_, err := client.ControllerPublishVolume(ctx, req)
+		return err
+	}
+
 	return nil
 }
 
 func (f *feature) getNodePublishVolumeRequestForNfs() *csi.NodePublishVolumeRequest {
 	if f.createVolumeRequest == nil {
 		return nil
-	} else {
-		req := new(csi.NodePublishVolumeRequest)
-		req.VolumeId = f.volID
-		req.Readonly = false
-		req.VolumeContext = make(map[string]string)
-		req.VolumeContext["fsType"] = "nfs"
-
-		if f.capability.AccessMode.Mode == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
-			req.Readonly = true
-		}
-
-		req.VolumeCapability = f.capability
-		block := f.capability.GetBlock()
-		if block != nil {
-			req.TargetPath = datafile
-		}
-		mount := f.capability.GetMount()
-		if mount != nil {
-			req.TargetPath = datadir
-		}
-		f.nodePublishVolumeRequest = req
-		return req
 	}
+	req := new(csi.NodePublishVolumeRequest)
+	req.VolumeId = f.volID
+	req.Readonly = false
+	req.VolumeContext = make(map[string]string)
+	req.VolumeContext["fsType"] = "nfs"
+
+	if f.capability.AccessMode.Mode == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
+		req.Readonly = true
+	}
+
+	req.VolumeCapability = f.capability
+	block := f.capability.GetBlock()
+	if block != nil {
+		req.TargetPath = datafile
+	}
+	mount := f.capability.GetMount()
+	if mount != nil {
+		req.TargetPath = datadir
+	}
+	f.nodePublishVolumeRequest = req
+	return req
 }
 
+//nolint:revive
 func (f *feature) whenICallNodePublishVolumeForNfs(arg1 string) error {
 	if f.createVolumeRequest == nil {
 		return nil
-	} else {
-		err := f.nodePublishVolumeForNfs(f.volID, "")
-		if err != nil {
-			fmt.Printf("NodePublishVolume failed: %s\n", err.Error())
-			f.addError(err)
-		} else {
-			fmt.Printf("NodePublishVolume completed successfully\n")
-		}
-		time.Sleep(SleepTime)
-		return nil
 	}
+	err := f.nodePublishVolumeForNfs(f.volID, "")
+	if err != nil {
+		fmt.Printf("NodePublishVolume failed: %s\n", err.Error())
+		f.addError(err)
+	} else {
+		fmt.Printf("NodePublishVolume completed successfully\n")
+	}
+	time.Sleep(SleepTime)
+	return nil
 }
 
 func (f *feature) nodePublishVolumeForNfs(id string, path string) error {
 	if f.createVolumeRequest == nil {
 		return nil
-	} else {
-		req := f.getNodePublishVolumeRequestForNfs()
-		if path != "" {
-			block := f.capability.GetBlock()
-			if block != nil {
-				req.TargetPath = path
-			}
-			mount := f.capability.GetMount()
-			if mount != nil {
-				req.TargetPath = path
-			}
-		}
-		req.VolumeId = id
-		ctx := context.Background()
-		client := csi.NewNodeClient(grpcClient)
-		_, err := client.NodePublishVolume(ctx, req)
-		return err
 	}
+	req := f.getNodePublishVolumeRequestForNfs()
+	if path != "" {
+		block := f.capability.GetBlock()
+		if block != nil {
+			req.TargetPath = path
+		}
+		mount := f.capability.GetMount()
+		if mount != nil {
+			req.TargetPath = path
+		}
+	}
+	req.VolumeId = id
+	ctx := context.Background()
+	client := csi.NewNodeClient(grpcClient)
+	_, err := client.NodePublishVolume(ctx, req)
+	return err
 }
 
+//nolint:revive
 func (f *feature) whenICallNodeUnpublishVolumeForNfs(arg1 string) error {
 	if f.createVolumeRequest == nil {
 		return nil
-	} else {
-		err := f.nodeUnpublishVolumeForNfs(f.volID, f.nodePublishVolumeRequest.TargetPath)
-		if err != nil {
-			fmt.Printf("NodeUnpublishVolume failed: %s\n", err.Error())
-			f.addError(err)
-		} else {
-			fmt.Printf("NodeUnpublishVolume completed successfully\n")
-		}
-		time.Sleep(SleepTime)
-		return nil
 	}
+	err := f.nodeUnpublishVolumeForNfs(f.volID, f.nodePublishVolumeRequest.TargetPath)
+	if err != nil {
+		fmt.Printf("NodeUnpublishVolume failed: %s\n", err.Error())
+		f.addError(err)
+	} else {
+		fmt.Printf("NodeUnpublishVolume completed successfully\n")
+	}
+	time.Sleep(SleepTime)
+	return nil
 }
 
 func (f *feature) nodeUnpublishVolumeForNfs(id string, path string) error {
 	if f.createVolumeRequest == nil {
 		return nil
-	} else {
-		req := &csi.NodeUnpublishVolumeRequest{VolumeId: id, TargetPath: path}
-		ctx := context.Background()
-		client := csi.NewNodeClient(grpcClient)
-		_, err := client.NodeUnpublishVolume(ctx, req)
-		return err
 	}
+	req := &csi.NodeUnpublishVolumeRequest{VolumeId: id, TargetPath: path}
+	ctx := context.Background()
+	client := csi.NewNodeClient(grpcClient)
+	_, err := client.NodeUnpublishVolume(ctx, req)
+	return err
 }
 
 func (f *feature) whenICallUnpublishVolumeForNfs(nodeIDEnvVar string) error {
 	if f.createVolumeRequest == nil {
 		return nil
-	} else {
-		err := f.controllerUnpublishVolumeForNfs(f.publishVolumeRequest.VolumeId, nodeIDEnvVar)
-		if err != nil {
-			fmt.Printf("ControllerUnpublishVolume failed: %s\n", err.Error())
-			f.addError(err)
-		} else {
-			fmt.Printf("ControllerUnpublishVolume completed successfully\n")
-		}
-		time.Sleep(SleepTime)
-		return nil
 	}
+	err := f.controllerUnpublishVolumeForNfs(f.publishVolumeRequest.VolumeId, nodeIDEnvVar)
+	if err != nil {
+		fmt.Printf("ControllerUnpublishVolume failed: %s\n", err.Error())
+		f.addError(err)
+	} else {
+		fmt.Printf("ControllerUnpublishVolume completed successfully\n")
+	}
+	time.Sleep(SleepTime)
+	return nil
 }
 
 func (f *feature) controllerUnpublishVolumeForNfs(id string, nodeIDEnvVar string) error {
 	if f.createVolumeRequest == nil {
 		return nil
-	} else {
-		req := new(csi.ControllerUnpublishVolumeRequest)
-		req.VolumeId = id
-		req.NodeId = os.Getenv(nodeIDEnvVar)
-		ctx := context.Background()
-		client := csi.NewControllerClient(grpcClient)
-		_, err := client.ControllerUnpublishVolume(ctx, req)
-		return err
 	}
+	req := new(csi.ControllerUnpublishVolumeRequest)
+	req.VolumeId = id
+	req.NodeId = os.Getenv(nodeIDEnvVar)
+	ctx := context.Background()
+	client := csi.NewControllerClient(grpcClient)
+	_, err := client.ControllerUnpublishVolume(ctx, req)
+	return err
 }
 
 func (f *feature) whenICallNfsExpandVolumeTo(size int64) error {
 	if f.createVolumeRequest == nil {
 		return nil
-	} else {
-		err := f.controllerExpandVolumeForNfs(f.volID, size)
-		if err != nil {
-			fmt.Printf("ControllerExpandVolume %s:\n", err.Error())
-			f.addError(err)
-		} else {
-			fmt.Printf("ControllerExpandVolume completed successfully\n")
-		}
-		time.Sleep(SleepTime)
-		return nil
 	}
+	err := f.controllerExpandVolumeForNfs(f.volID, size)
+	if err != nil {
+		fmt.Printf("ControllerExpandVolume %s:\n", err.Error())
+		f.addError(err)
+	} else {
+		fmt.Printf("ControllerExpandVolume completed successfully\n")
+	}
+	time.Sleep(SleepTime)
+	return nil
 }
 
 func (f *feature) controllerExpandVolumeForNfs(volID string, size int64) error {
@@ -2346,18 +2337,18 @@ func (f *feature) ICallListFileSystemSnapshot() error {
 			if err != nil {
 				return err
 			}
-			var FOUND_SNAP bool
+			var foundSnapshot bool
 			for j := 0; j < len(FileSystems); j++ {
 				fs := FileSystems[j]
-				fs_id := fs.ID
+				fsID := fs.ID
 
-				if f.snapshotID != "" && strings.Contains(f.snapshotID, fs_id) {
-					FOUND_SNAP = true
-					fmt.Printf("FOUND_SNAP changed to %v", FOUND_SNAP)
+				if f.snapshotID != "" && strings.Contains(f.snapshotID, fsID) {
+					foundSnapshot = true
+					fmt.Printf("found_snapshot changed to %v", foundSnapshot)
 
 				}
 			}
-			if f.snapshotID != "" && !FOUND_SNAP {
+			if f.snapshotID != "" && !foundSnapshot {
 				msg := "ListFileSystemSnapshot does not contain snap id " + f.snapshotID
 				fmt.Print(msg)
 				return errors.New(msg)
@@ -2373,47 +2364,45 @@ func (f *feature) ICallListFileSystemSnapshot() error {
 func (f *feature) iCallCreateSnapshotForFS() error {
 	if f.createVolumeRequest == nil {
 		return nil
-	} else {
-		var err error
-		ctx := context.Background()
-		client := csi.NewControllerClient(grpcClient)
-		req := &csi.CreateSnapshotRequest{
-			SourceVolumeId: f.volID,
-			Name:           "snapshot-9x89727a-0000-11e9-ab1c-005056a64ad3",
-		}
-		resp, err := client.CreateSnapshot(ctx, req)
-		if err != nil {
-			fmt.Printf("CreateSnapshot returned error: %s\n", err.Error())
-			f.addError(err)
-		} else {
-			f.snapshotID = resp.Snapshot.SnapshotId
-			fmt.Printf("createSnapshot: SnapshotId %s SourceVolumeId %s CreationTime %s\n",
-				resp.Snapshot.SnapshotId, resp.Snapshot.SourceVolumeId, ptypes.TimestampString(resp.Snapshot.CreationTime))
-		}
-		time.Sleep(RetrySleepTime)
-		return nil
 	}
+	var err error
+	ctx := context.Background()
+	client := csi.NewControllerClient(grpcClient)
+	req := &csi.CreateSnapshotRequest{
+		SourceVolumeId: f.volID,
+		Name:           "snapshot-9x89727a-0000-11e9-ab1c-005056a64ad3",
+	}
+	resp, err := client.CreateSnapshot(ctx, req)
+	if err != nil {
+		fmt.Printf("CreateSnapshot returned error: %s\n", err.Error())
+		f.addError(err)
+	} else {
+		f.snapshotID = resp.Snapshot.SnapshotId
+		fmt.Printf("createSnapshot: SnapshotId %s SourceVolumeId %s CreationTime %s\n",
+			resp.Snapshot.SnapshotId, resp.Snapshot.SourceVolumeId, resp.Snapshot.CreationTime.AsTime().Format(time.RFC3339))
+	}
+	time.Sleep(RetrySleepTime)
+	return nil
 }
 
 func (f *feature) iCallDeleteSnapshotForFS() error {
 	if f.createVolumeRequest == nil {
 		return nil
-	} else {
-		ctx := context.Background()
-		client := csi.NewControllerClient(grpcClient)
-		req := &csi.DeleteSnapshotRequest{
-			SnapshotId: f.snapshotID,
-		}
-		_, err := client.DeleteSnapshot(ctx, req)
-		if err != nil {
-			fmt.Printf("DeleteSnapshot returned error: %s\n", err.Error())
-			f.addError(err)
-		} else {
-			fmt.Printf("DeleteSnapshot: SnapshotId %s\n", req.SnapshotId)
-		}
-		time.Sleep(RetrySleepTime)
-		return nil
 	}
+	ctx := context.Background()
+	client := csi.NewControllerClient(grpcClient)
+	req := &csi.DeleteSnapshotRequest{
+		SnapshotId: f.snapshotID,
+	}
+	_, err := client.DeleteSnapshot(ctx, req)
+	if err != nil {
+		fmt.Printf("DeleteSnapshot returned error: %s\n", err.Error())
+		f.addError(err)
+	} else {
+		fmt.Printf("DeleteSnapshot: SnapshotId %s\n", req.SnapshotId)
+	}
+	time.Sleep(RetrySleepTime)
+	return nil
 }
 
 func (f *feature) checkNFS(ctx context.Context, systemID string) (bool, error) {

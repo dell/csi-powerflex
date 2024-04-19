@@ -32,8 +32,8 @@ import (
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/dell/goscaleio"
 	siotypes "github.com/dell/goscaleio/types/v1"
-	ptypes "github.com/golang/protobuf/ptypes"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 const (
@@ -787,7 +787,6 @@ func (s *service) createVolumeFromSnapshot(req *csi.CreateVolumeRequest,
 		_, err = system.RestoreFileSystemFromSnapshot(&siotypes.RestoreFsSnapParam{
 			SnapshotID: snapID,
 		}, srcVol.ParentID)
-
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "error during fs creation from snapshot: %s", snapshotSource.SnapshotId)
 		}
@@ -1654,7 +1653,7 @@ func (s *service) ValidateVolumeCapabilities(
 	}
 
 	volID := getVolumeIDFromCsiVolumeID(csiVolID)
-	vol, err := s.getVolByID(volID, systemID)
+	_, err = s.getVolByID(volID, systemID)
 	if err != nil {
 		if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
 			return nil, status.Error(codes.NotFound,
@@ -1666,7 +1665,7 @@ func (s *service) ValidateVolumeCapabilities(
 	}
 
 	vcs := req.GetVolumeCapabilities()
-	supported, reason := valVolumeCaps(vcs, vol)
+	supported, reason := valVolumeCaps(vcs)
 
 	resp := &csi.ValidateVolumeCapabilitiesResponse{}
 	if supported {
@@ -1711,7 +1710,6 @@ func checkValidAccessTypes(vcs []*csi.VolumeCapability) bool {
 
 func valVolumeCaps(
 	vcs []*csi.VolumeCapability,
-	vol *siotypes.Volume,
 ) (bool, string) {
 	var (
 		supported = true
@@ -1931,7 +1929,6 @@ func (s *service) listVolumes(systemID string, startToken int, maxEntries int, d
 	// Handle exactly one volume or snapshot
 	if volumeID != "" || ancestorID != "" {
 		sioVols, err = adminClient.GetVolume("", volumeID, ancestorID, "", false)
-
 		if err != nil {
 			return nil, "", status.Errorf(codes.Internal,
 				"Unable to list volumes for volume ID %s ancestor ID %s: %s", volumeID, ancestorID, err.Error())
@@ -2568,7 +2565,7 @@ func (s *service) CreateSnapshot(
 		creationTime, _ := strconv.Atoi(newSnap.CreationTimestamp)
 
 		creationTimeUnix := time.Unix(int64(creationTime), 0)
-		creationTimeStamp, _ := ptypes.TimestampProto(creationTimeUnix)
+		creationTimeStamp := timestamppb.New(creationTimeUnix)
 		slash := "/"
 		csiSnapshotID := systemID + slash + newSnap.ID
 		snapshot := &csi.Snapshot{
@@ -2581,7 +2578,7 @@ func (s *service) CreateSnapshot(
 		s.clearCache()
 
 		Log.Printf("createSnapshot: SnapshotId %s SourceVolumeId %s CreationTime %s",
-			snapshot.SnapshotId, snapshot.SourceVolumeId, ptypes.TimestampString(snapshot.CreationTime))
+			snapshot.SnapshotId, snapshot.SourceVolumeId, snapshot.CreationTime.AsTime().Format(time.RFC3339Nano))
 		return csiSnapResponse, nil
 
 	}
@@ -2674,7 +2671,7 @@ func (s *service) CreateSnapshot(
 		return nil, status.Errorf(codes.NotFound, "volume %s was not found", volID)
 	}
 	creationTimeUnix := time.Unix(int64(vol.CreationTime), 0)
-	creationTimeStamp, _ := ptypes.TimestampProto(creationTimeUnix)
+	creationTimeStamp := timestamppb.New(creationTimeUnix)
 	dash := "-"
 	csiSnapshotID := systemID + dash + snapResponse.VolumeIDList[0]
 	snapshot := &csi.Snapshot{
@@ -2687,7 +2684,7 @@ func (s *service) CreateSnapshot(
 	s.clearCache()
 
 	Log.Printf("createSnapshot: SnapshotId %s SourceVolumeId %s CreationTime %s",
-		snapshot.SnapshotId, snapshot.SourceVolumeId, ptypes.TimestampString(snapshot.CreationTime))
+		snapshot.SnapshotId, snapshot.SourceVolumeId, snapshot.CreationTime.AsTime().Format(time.RFC3339Nano))
 	return resp, nil
 }
 

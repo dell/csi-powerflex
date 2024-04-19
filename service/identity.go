@@ -15,12 +15,13 @@ package service
 
 import (
 	"fmt"
-	"golang.org/x/net/context"
 	"strings"
+
+	"golang.org/x/net/context"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	commonext "github.com/dell/dell-csi-extensions/common"
-	wrappers "github.com/golang/protobuf/ptypes/wrappers"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"github.com/dell/csi-vxflexos/v2/core"
 )
@@ -28,8 +29,8 @@ import (
 func (s *service) GetPluginInfo(
 	ctx context.Context,
 	req *csi.GetPluginInfoRequest) (
-	*csi.GetPluginInfoResponse, error) {
-
+	*csi.GetPluginInfoResponse, error,
+) {
 	return &csi.GetPluginInfoResponse{
 		Name:          Name,
 		VendorVersion: core.SemVer,
@@ -40,8 +41,8 @@ func (s *service) GetPluginInfo(
 func (s *service) GetPluginCapabilities(
 	ctx context.Context,
 	req *csi.GetPluginCapabilitiesRequest) (
-	*csi.GetPluginCapabilitiesResponse, error) {
-
+	*csi.GetPluginCapabilitiesResponse, error,
+) {
 	var rep csi.GetPluginCapabilitiesResponse
 	if !strings.EqualFold(s.mode, "node") {
 		rep.Capabilities = []*csi.PluginCapability{
@@ -74,8 +75,8 @@ func (s *service) GetPluginCapabilities(
 func (s *service) Probe(
 	ctx context.Context,
 	req *csi.ProbeRequest) (
-	*csi.ProbeResponse, error) {
-
+	*csi.ProbeResponse, error,
+) {
 	Log.Debug("Probe called")
 	if !strings.EqualFold(s.mode, "node") {
 		Log.Debug("systemProbe")
@@ -91,7 +92,7 @@ func (s *service) Probe(
 			return nil, err
 		}
 	}
-	ready := new(wrappers.BoolValue)
+	ready := new(wrapperspb.BoolValue)
 	ready.Value = true
 	rep := new(csi.ProbeResponse)
 	rep.Ready = ready
@@ -102,8 +103,8 @@ func (s *service) Probe(
 
 func (s *service) ProbeController(ctx context.Context,
 	req *commonext.ProbeControllerRequest) (
-	*commonext.ProbeControllerResponse, error) {
-
+	*commonext.ProbeControllerResponse, error,
+) {
 	if !strings.EqualFold(s.mode, "node") {
 		Log.Debug("systemProbe")
 		if err := s.systemProbeAll(ctx); err != nil {
