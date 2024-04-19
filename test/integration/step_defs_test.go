@@ -1896,9 +1896,8 @@ func (f *feature) restCallToSetName(auth string, url string, name string) (strin
 	req.SetBasicAuth(tokens[0], tokens[1])
 	req.Header.Set("Content-Type", "application/json")
 
-	// #nosec G402
 	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // #nosec G402
 	}
 	hc := &http.Client{Timeout: 2 * time.Second, Transport: tr}
 
@@ -2365,26 +2364,25 @@ func (f *feature) ICallListFileSystemSnapshot() error {
 func (f *feature) iCallCreateSnapshotForFS() error {
 	if f.createVolumeRequest == nil {
 		return nil
-	} else {
-		var err error
-		ctx := context.Background()
-		client := csi.NewControllerClient(grpcClient)
-		req := &csi.CreateSnapshotRequest{
-			SourceVolumeId: f.volID,
-			Name:           "snapshot-9x89727a-0000-11e9-ab1c-005056a64ad3",
-		}
-		resp, err := client.CreateSnapshot(ctx, req)
-		if err != nil {
-			fmt.Printf("CreateSnapshot returned error: %s\n", err.Error())
-			f.addError(err)
-		} else {
-			f.snapshotID = resp.Snapshot.SnapshotId
-			fmt.Printf("createSnapshot: SnapshotId %s SourceVolumeId %s CreationTime %s\n",
-				resp.Snapshot.SnapshotId, resp.Snapshot.SourceVolumeId, resp.Snapshot.CreationTime.AsTime().Format(time.RFC3339))
-		}
-		time.Sleep(RetrySleepTime)
-		return nil
 	}
+	var err error
+	ctx := context.Background()
+	client := csi.NewControllerClient(grpcClient)
+	req := &csi.CreateSnapshotRequest{
+		SourceVolumeId: f.volID,
+		Name:           "snapshot-9x89727a-0000-11e9-ab1c-005056a64ad3",
+	}
+	resp, err := client.CreateSnapshot(ctx, req)
+	if err != nil {
+		fmt.Printf("CreateSnapshot returned error: %s\n", err.Error())
+		f.addError(err)
+	} else {
+		f.snapshotID = resp.Snapshot.SnapshotId
+		fmt.Printf("createSnapshot: SnapshotId %s SourceVolumeId %s CreationTime %s\n",
+			resp.Snapshot.SnapshotId, resp.Snapshot.SourceVolumeId, resp.Snapshot.CreationTime.AsTime().Format(time.RFC3339))
+	}
+	time.Sleep(RetrySleepTime)
+	return nil
 }
 
 func (f *feature) iCallDeleteSnapshotForFS() error {

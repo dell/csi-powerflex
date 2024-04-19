@@ -192,7 +192,7 @@ func (s *service) ProcessMapSecretChange() error {
 		return err
 	}
 	vc.WatchConfig()
-	vc.OnConfigChange(func(e fsnotify.Event) {
+	vc.OnConfigChange(func(_ fsnotify.Event) {
 		// Putting in mutex to allow tests to pass with race flag
 		mx.Lock()
 		defer mx.Unlock()
@@ -209,7 +209,7 @@ func (s *service) ProcessMapSecretChange() error {
 
 	va.WatchConfig()
 
-	va.OnConfigChange(func(e fsnotify.Event) {
+	va.OnConfigChange(func(_ fsnotify.Event) {
 		// Putting in mutex to allow tests to pass with race flag
 		mx.Lock()
 		defer mx.Unlock()
