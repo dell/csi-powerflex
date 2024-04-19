@@ -19,7 +19,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
 	"time"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
@@ -45,7 +44,6 @@ type Device struct {
 // GetDevice returns a Device struct with info about the given device, or
 // an error if it doesn't exist or is not a block device
 func GetDevice(path string) (*Device, error) {
-
 	fi, err := os.Lstat(path)
 	if err != nil {
 		return nil, err
@@ -84,8 +82,8 @@ func GetDevice(path string) (*Device, error) {
 // publishVolume handles both Mount and Block access types
 func publishVolume(
 	req *csi.NodePublishVolumeRequest,
-	privDir, device string, reqID string) error {
-
+	privDir, device string, reqID string,
+) error {
 	id := req.GetVolumeId()
 
 	target := req.GetTargetPath()
@@ -365,7 +363,6 @@ func publishNFS(ctx context.Context, req *csi.NodePublishVolumeRequest, nfsExpor
 
 	// make sure target is created
 	_, err := mkdir(target)
-
 	if err != nil {
 		return status.Error(codes.FailedPrecondition, fmt.Sprintf("Could not create '%s': '%s'", target, err.Error()))
 	}
@@ -395,20 +392,20 @@ func publishNFS(ctx context.Context, req *csi.NodePublishVolumeRequest, nfsExpor
 	if len(mnts) != 0 {
 		for _, m := range mnts {
 			// check for idempotency
-			//same volume
+			// same volume
 			if m.Device == nfsExportURL {
 				if m.Path == target {
-					//as per specs, T1=T2, P1=P2 - return OK
+					// as per specs, T1=T2, P1=P2 - return OK
 					if contains(m.Opts, rwOption) {
 						Log.WithFields(fields).Debug(
 							"mount already in place with same options")
 						return nil
 					}
-					//T1=T2, P1!=P2 - return AlreadyExists
+					// T1=T2, P1!=P2 - return AlreadyExists
 					Log.WithFields(fields).Error("Mount point already in use by device with different options")
 					return status.Error(codes.AlreadyExists, "Mount point already in use by device with different options")
 				}
-				//T1!=T2, P1==P2 || P1 != P2 - return FailedPrecondition for single node
+				// T1!=T2, P1==P2 || P1 != P2 - return FailedPrecondition for single node
 				if am.GetMode() == csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER ||
 					am.GetMode() == csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY ||
 					am.GetMode() == csi.VolumeCapability_AccessMode_SINGLE_NODE_SINGLE_WRITER {
@@ -421,9 +418,9 @@ func publishNFS(ctx context.Context, req *csi.NodePublishVolumeRequest, nfsExpor
 
 	Log.Infof("The mountOptions being used for mount are: %s", mntOptions)
 	if err := gofsutil.Mount(context.Background(), nfsExportURL, target, "nfs", mntOptions...); err != nil {
-		var count = 0
-		var errmsg = err.Error()
-		//Both substring validation is for NFSv3 and NFSv4 errors resp.
+		count := 0
+		errmsg := err.Error()
+		// Both substring validation is for NFSv3 and NFSv4 errors resp.
 		for (strings.Contains(strings.ToLower(errmsg), "access denied by server while mounting") || (strings.Contains(strings.ToLower(errmsg), "no such file or directory"))) && count < 5 {
 			time.Sleep(2 * time.Second)
 			Log.Infof("Mount re-trial attempt-%d", count)
@@ -441,7 +438,6 @@ func publishNFS(ctx context.Context, req *csi.NodePublishVolumeRequest, nfsExpor
 		}
 	}
 	return nil
-
 }
 
 func unpublishNFS(ctx context.Context, req *csi.NodeUnpublishVolumeRequest, filterStr string) error {
@@ -465,7 +461,6 @@ func unpublishNFS(ctx context.Context, req *csi.NodeUnpublishVolumeRequest, filt
 }
 
 func isVolumeMounted(ctx context.Context, filterStr string, target string) (bool, error) {
-
 	mnts, err := gofsutil.GetMounts(ctx)
 	if err != nil {
 		return false, status.Errorf(codes.Internal,
@@ -501,8 +496,8 @@ func handlePrivFSMount(
 	accMode *csi.VolumeCapability_AccessMode,
 	sysDevice *Device,
 	mntFlags []string,
-	fs, privTgt, fsFormatOption string) error {
-
+	fs, privTgt, fsFormatOption string,
+) error {
 	// Invoke the formats with a No Discard option to reduce formatting time
 	formatCtx := context.WithValue(ctx, gofsutil.ContextKey(gofsutil.NoDiscard), gofsutil.NoDiscard)
 
@@ -554,7 +549,7 @@ func mkfile(path string) (bool, error) {
 		Log.Warnf("Unable to check stat of file: %s with error: %v", path, err.Error())
 		if os.IsNotExist(err) {
 			/* #nosec G302 G304 */
-			file, err := os.OpenFile(path, os.O_CREATE, 0755)
+			file, err := os.OpenFile(path, os.O_CREATE, 0o755)
 			if err != nil {
 				Log.WithField("dir", path).WithError(
 					err).Error("Unable to create dir")
@@ -583,7 +578,7 @@ func mkdir(path string) (bool, error) {
 	if err != nil {
 		Log.Warnf("Unable to check stat of file: %s with error: %v", path, err.Error())
 		if os.IsNotExist(err) {
-			err := os.Mkdir(path, 0755) // #nosec G301
+			err := os.Mkdir(path, 0o755) // #nosec G301
 			if err != nil {
 				Log.WithField("dir", path).WithError(
 					err).Error("Unable to create dir")
@@ -605,8 +600,8 @@ func mkdir(path string) (bool, error) {
 // other than the private mount.
 func unpublishVolume(
 	req *csi.NodeUnpublishVolumeRequest,
-	privDir, device string, reqID string) error {
-
+	privDir, device string, reqID string,
+) error {
 	ctx := context.Background()
 	id := req.GetVolumeId()
 
@@ -686,8 +681,8 @@ func unpublishVolume(
 func unmountPrivMount(
 	ctx context.Context,
 	dev *Device,
-	target string) error {
-
+	target string,
+) error {
 	mnts, err := getDevMounts(dev)
 	if err != nil {
 		return err
@@ -707,8 +702,8 @@ func unmountPrivMount(
 }
 
 func getDevMounts(
-	sysDevice *Device) ([]gofsutil.Info, error) {
-
+	sysDevice *Device,
+) ([]gofsutil.Info, error) {
 	ctx := context.Background()
 	devMnts := make([]gofsutil.Info, 0)
 
