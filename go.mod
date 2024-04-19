@@ -18,7 +18,6 @@ require (
 	github.com/dell/gofsutil v1.15.0
 	github.com/dell/goscaleio v1.14.0
 	github.com/fsnotify/fsnotify v1.5.1
-	github.com/golang/protobuf v1.5.4
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/mux v1.8.0
 	github.com/kubernetes-csi/csi-lib-utils v0.9.1
@@ -46,6 +45,7 @@ require (
 	github.com/gofrs/uuid v4.0.0+incompatible // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
+	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/google/gofuzz v1.1.0 // indirect
 	github.com/googleapis/gnostic v0.5.5 // indirect
