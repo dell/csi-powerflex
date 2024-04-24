@@ -2256,11 +2256,7 @@ func cacheMaximumVolumeSize(key string, value int64) {
 	maxVolumesSizeForArray[key] = value
 }
 
-func (s *service) ControllerGetCapabilities(
-	ctx context.Context,
-	req *csi.ControllerGetCapabilitiesRequest) (
-	*csi.ControllerGetCapabilitiesResponse, error) {
-
+func (s *service) ControllerGetCapabilities(ctx context.Context, req *csi.ControllerGetCapabilitiesRequest) (*csi.ControllerGetCapabilitiesResponse, error) {
 	capabilities := []*csi.ControllerServiceCapability{
 		{
 			Type: &csi.ControllerServiceCapability_Rpc{
@@ -2471,6 +2467,10 @@ func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) e
 	return nil
 }
 
+// Function to format an integer between 1 and 100
+func formatIntBetween1and100(num int) string {
+	return strconv.Itoa(num)
+}
 func (s *service) requireProbe(ctx context.Context, systemID string) error {
 	if s.adminClients[systemID] == nil {
 		Log.Debugf("probing system %s automatically", systemID)

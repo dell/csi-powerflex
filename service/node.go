@@ -53,7 +53,54 @@ func (s *service) NodeStageVolume(
 	req *csi.NodeStageVolumeRequest) (
 	*csi.NodeStageVolumeResponse, error) {
 
-	return nil, status.Error(codes.Unimplemented, "")
+	if req.GetVolumeCapability() == nil {
+		return nil, status.Error(codes.InvalidArgument, "volume capability is required")
+	}
+
+	id := req.GetVolumeId()
+	if id == "" {
+		return nil, status.Error(codes.InvalidArgument, "volume ID is required")
+	}
+
+	if req.GetStagingTargetPath() == "" {
+		return nil, status.Error(codes.InvalidArgument, "staging target path is required")
+	}
+
+	nvmeIP := strings.Split(req.PublishContext["PORTAL0"], ":")
+	nvmeTargets, _ := s.nvmeLib.DiscoverNVMeTCPTargets(nvmeIP[0], false)
+	for i, t := range nvmeTargets {
+		req.PublishContext[fmt.Sprintf("%s%d", common.PublishContextNVMETCPTargetsPrefix, i)] = t.TargetNqn
+		req.PublishContext[fmt.Sprintf("%s%d", common.PublishContextNVMETCPPortalsPrefix, i)] = t.Portal + ":4420"
+	}
+	// we may not need this
+	// we can get the protocol from vol id after splitting it.
+	id, arrayID, protocol, _ := array.ParseVolumeID(ctx, id, s.DefaultArray(), req.VolumeCapability)
+
+	arr, ok := s.Arrays()[arrayID]
+	if !ok {
+		return nil, status.Errorf(codes.Internal, "can't find array with provided arrayID %s", arrayID)
+	}
+
+	if protocol == "nfs" {
+		/* stager = &NFSStager{
+			array: arr,
+		} */
+		nfsNodeStager()
+	} else {
+		/* stager = &SCSIStager{
+			useNVME:       s.useNVME,
+			nvmeConnector: s.nvmeConnector,
+		} */
+		nvmeNodeStager()
+	}
+
+	return nil, nil
+}
+func nfsNodeStager() error {
+	return nil
+}
+func nvmeNodeStager() error {
+
 }
 
 // NodeUnstageVolume will cleanup the staging path passed in the request.
@@ -704,6 +751,13 @@ func (s *service) NodeGetCapabilities(
 			Type: &csi.NodeServiceCapability_Rpc{
 				Rpc: &csi.NodeServiceCapability_RPC{
 					Type: csi.NodeServiceCapability_RPC_SINGLE_NODE_MULTI_WRITER,
+				},
+			},
+		},
+		{
+			Type: &csi.NodeServiceCapability_Rpc{
+				Rpc: &csi.NodeServiceCapability_RPC{
+					Type: csi.NodeServiceCapability_RPC_STAGE_UNSTAGE_VOLUME,
 				},
 			},
 		},
