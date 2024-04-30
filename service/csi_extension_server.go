@@ -69,7 +69,7 @@ func (s *service) ValidateVolumeHostConnectivity(ctx context.Context, req *podmo
 	// Then retrieve the SDC and seet the connection state
 	sdc, err := s.systems[systemID].FindSdc("SdcGUID", req.GetNodeId())
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "NodeID is invalid: %s - there is no corresponding SDC", req.GetNodeId())
+		return nil, status.Errorf(codes.InvalidArgument, "NodeID is invalid: %s - there is no corresponding SDC, error: %s", req.GetNodeId(), err.Error())
 	}
 	connectionState := sdc.Sdc.MdmConnectionState
 	rep.Messages = append(rep.Messages, fmt.Sprintf("SDC connection state: %s", connectionState))
@@ -85,14 +85,14 @@ func (s *service) ValidateVolumeHostConnectivity(ctx context.Context, req *podmo
 		}
 		if prevSystemID != systemID {
 			if err := s.requireProbe(ctx, systemID); err != nil {
-				rep.Messages = append(rep.Messages, fmt.Sprintf("Could not probe system: %s", volID))
+				rep.Messages = append(rep.Messages, fmt.Sprintf("Could not probe system: %s, error: %s", volID, err.Error()))
 				continue
 			}
 		}
 		// Get the Volume
 		vol, err := s.getVolByID(getVolumeIDFromCsiVolumeID(volID), systemID)
 		if err != nil {
-			rep.Messages = append(rep.Messages, fmt.Sprintf("Could not retrieve volume: %s", volID))
+			rep.Messages = append(rep.Messages, fmt.Sprintf("Could not retrieve volume: %s, error: %s", volID, err.Error()))
 			continue
 		}
 		// Get the volume statistics
@@ -100,7 +100,7 @@ func (s *service) ValidateVolumeHostConnectivity(ctx context.Context, req *podmo
 		volume.Volume = vol
 		stats, err := volume.GetVolumeStatistics()
 		if err != nil {
-			rep.Messages = append(rep.Messages, fmt.Sprintf("Could not retrieve volume statistics: %s", volID))
+			rep.Messages = append(rep.Messages, fmt.Sprintf("Could not retrieve volume statistics: %s, error: %s", volID, err.Error()))
 			continue
 		}
 		readCount := stats.UserDataReadBwc.NumOccured
