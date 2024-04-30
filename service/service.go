@@ -157,6 +157,7 @@ type Opts struct {
 	IsQuotaEnabled             bool   // allow driver to enable quota limits for NFS volumes
 	ExternalAccess             string // used for adding extra IP/IP range to the NFS export
 	KubeNodeName               string
+	CipherSuites               []string
 }
 
 type service struct {
@@ -351,6 +352,7 @@ func (s *service) BeforeServe(
 			"IsQuotaEnabled":         s.opts.IsQuotaEnabled,
 			"ExternalAccess":         s.opts.ExternalAccess,
 			"KubeNodeName":           s.opts.KubeNodeName,
+			"CipherSuites":           s.opts.CipherSuites,
 		}
 
 		Log.WithFields(fields).Infof("configured %s", Name)
@@ -454,6 +456,15 @@ func (s *service) BeforeServe(
 	}
 	if kubeNodeName, ok := csictx.LookupEnv(ctx, EnvKubeNodeName); ok {
 		opts.KubeNodeName = kubeNodeName
+	}
+
+	var cipherSuites []string
+	if cipherSuitesYAML, ok := csictx.LookupEnv(ctx, EnvCipherSuites); ok {
+		if err := yaml.Unmarshal([]byte(cipherSuitesYAML), &cipherSuites); err != nil {
+			Log.Warnf("Invalid cipher suites list provided")
+			cipherSuites = []string{}
+		}
+		opts.CipherSuites = cipherSuites
 	}
 
 	// log csiNode topology keys

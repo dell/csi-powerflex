@@ -69,4 +69,7 @@ const (
 
 	// EnvKubeNodeName is the name of the environment variable which stores current kubernetes node name
 	EnvKubeNodeName = "X_CSI_POWERFLEX_KUBE_NODE_NAME"
+
+	// EnvCipherSuites stores list of ciphers
+	EnvCipherSuites = "X_CSI_POWERFLEX_CIPHER_SUITES"
 )
