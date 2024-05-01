@@ -3,20 +3,40 @@
 
 # "version" is used to verify the values file matches driver version
 # Not recommend to change
-version: v2.8.0
+version: v2.10.0
+
+# "images" defines every container images used for the driver and its sidecars.
+#  To use your own images, or a private registry, change the values here.
 
 images:
   # "driver" defines the container image, used for the driver container.
-  driverRepository: dellemc
-
+  driver: dellemc/csi-vxflexos:v2.10.0
   # "powerflexSdc" defines the SDC image for init container.
-  powerflexSdc: dellemc/sdc:3.6.1
+  powerflexSdc: dellemc/sdc:4.5.1
+  # CSI sidecars
+  attacher: registry.k8s.io/sig-storage/csi-attacher:v4.5.0
+  provisioner: registry.k8s.io/sig-storage/csi-provisioner:v4.0.0
+  snapshotter: registry.k8s.io/sig-storage/csi-snapshotter:v7.0.1
+  resizer: registry.k8s.io/sig-storage/csi-resizer:v1.10.0
+  registrar: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.10.0
+  healthmonitor: registry.k8s.io/sig-storage/csi-external-health-monitor-controller:v0.11.0
+  # CSM sidecars
+  replication: dellemc/dell-csi-replicator:v1.8.0
+  vgsnapshotter: dellemc/csi-volumegroup-snapshotter:v1.5.0
+  podmon: dellemc/podmon:v1.9.0
+  authorization: dellemc/csm-authorization-sidecar:v1.10.0
+
+# Enable the sdcinit container to automatically install the SDC.
+# Disable this if you manually install the SDCs, or if you don't need them (e.g. NFS only).
+sdcinit:
+  enabled: false
 
 md:
-  etcd_endpoints: "10.247.102.218:2389,10.247.102.211:2389,10.247.102.212:2389"
-  cluster_name: "lglw2212"
+  etcd_endpoints: "127.0.0.1,127.0.0.2,127.0.0.3"
+  cluster_name: "mycluster"
   # comma separated list of cluster peers
-  cluster_peers: "lglw2211"
+  cluster_peers: "mypeercluster"
+
 
 # Represents number of certificate secrets, which user is going to create for ssl authentication. (vxflexos-cert-0..vxflexos-cert-n)
 # If user does not use certificate, set to 0
@@ -34,7 +54,7 @@ logFormat: "TEXT"
 
 # Specify kubelet config dir path.
 # Ensure that the config.yaml file is present at this path.
-# Default value: None
+# Default value: /var/lib/kubelet
 kubeletConfigDir: /var/lib/kubelet
 
 # "defaultFsType" is used to set the default FS type which will be used
@@ -50,6 +70,11 @@ defaultFsType: ext4
 #  Never: Never pull the image.
 # Default value: None
 imagePullPolicy: IfNotPresent
+
+# externalAccess: allows to specify additional entries for hostAccess of NFS volumes. Both single IP address and subnet are valid entries.
+# Allowed Values: x.x.x.x/xx or x.x.x.x
+# Default Value: None
+externalAccess:
 
 # enableQuota: a boolean that, when enabled, will set quota limit for a newly provisioned NFS volume.
 # Allowed values:
@@ -111,11 +136,6 @@ controller:
     #   false: disable replication feature(do not install dell-csi-replicator sidecar)
     # Default value: false
     enabled: false
-
-    # image: Image to use for dell-csi-replicator. This shouldn't be changed
-    # Allowed values: string
-    # Default value: None
-    image: dellemc/dell-csi-replicator:v1.6.0
 
     # replicationContextPrefix: prefix to use for naming of resources created by replication feature
     # Allowed values: string
@@ -299,9 +319,6 @@ monitor:
   # Default value: "false"
   hostPID: true
 
-sdc:
-  enabled: false
-
 
 # CSM module attributes
 
@@ -309,31 +326,30 @@ sdc:
 # These options control the running of the vgsnapshotter container
 vgsnapshotter:
   enabled: false
-  image: dellemc/csi-volumegroup-snapshotter:v1.3.0
 
 # Podmon is an optional feature under development and tech preview.
 # Enable this feature only after contact support for additional information
 podmon:
   enabled: false
-  image: dellemc/podmon:v1.7.0
-  #controller:
-  # args:
-  #   - "--csisock=unix:/var/run/csi/csi.sock"
-  #   - "--labelvalue=csi-vxflexos"
-  #   - "--mode=controller"
-  #   - "--skipArrayConnectionValidation=false"
-  #   - "--driver-config-params=/vxflexos-config-params/driver-config-params.yaml"
-  #   - "--driverPodLabelValue=dell-storage"
-  #   - "--ignoreVolumelessPods=false"
-  #node:
-  # args:
-  #   - "--csisock=unix:/var/lib/kubelet/plugins/vxflexos.emc.dell.com/csi_sock"
-  #   - "--labelvalue=csi-vxflexos"
-  #   - "--mode=node"
-  #   - "--leaderelection=false"
-  #   - "--driver-config-params=/vxflexos-config-params/driver-config-params.yaml"
-  #   - "--driverPodLabelValue=dell-storage"
-  #   - "--ignoreVolumelessPods=false"
+
+  controller:
+    args:
+      - "--csisock=unix:/var/run/csi/csi.sock"
+      - "--labelvalue=csi-vxflexos"
+      - "--mode=controller"
+      - "--skipArrayConnectionValidation=false"
+      - "--driver-config-params=/vxflexos-config-params/driver-config-params.yaml"
+      - "--driverPodLabelValue=dell-storage"
+      - "--ignoreVolumelessPods=false"
+  node:
+    args:
+      - "--csisock=unix:/var/lib/kubelet/plugins/vxflexos.emc.dell.com/csi_sock"
+      - "--labelvalue=csi-vxflexos"
+      - "--mode=node"
+      - "--leaderelection=false"
+      - "--driver-config-params=/vxflexos-config-params/driver-config-params.yaml"
+      - "--driverPodLabelValue=dell-storage"
+      - "--ignoreVolumelessPods=false"
 
 # CSM module attributes
 # authorization: enable csm-authorization for RBAC
@@ -344,10 +360,6 @@ podmon:
 # Default value: "false"
 authorization:
   enabled: false
-
-  # sidecarProxyImage: the container image used for the csm-authorization-sidecar.
-  # Default value: dellemc/csm-authorization-sidecar:v1.8.0
-  sidecarProxyImage: dellemc/csm-authorization-sidecar:v1.8.0
 
   # proxyHost: hostname of the csm-authorization server
   # Default value: None

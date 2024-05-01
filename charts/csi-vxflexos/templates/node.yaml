@@ -80,6 +80,8 @@ spec:
 {{- if eq .Values.podmon.enabled true }}
         driver.dellemc.com: dell-storage
 {{- end }}
+      annotations:
+        kubectl.kubernetes.io/default-container: "driver"
     spec:
       {{- if .Values.node.nodeSelector }}
       nodeSelector:
@@ -106,7 +108,7 @@ spec:
             capabilities:
               add: ["SYS_ADMIN"]
             allowPrivilegeEscalation: true
-          image: {{ required "Must provide the podmon container image." .Values.podmon.image }}
+          image: {{ required "Must provide the podmon container image." .Values.images.podmon }}
           imagePullPolicy: {{ .Values.imagePullPolicy }}
           args:
             {{- toYaml .Values.podmon.node.args | nindent 12 }}
@@ -148,7 +150,7 @@ spec:
 {{- if hasKey .Values "authorization" }}
 {{- if eq .Values.authorization.enabled true }}
         - name: karavi-authorization-proxy
-          image: {{ required "Must provide the authorization sidecar container image." .Values.authorization.sidecarProxyImage }}
+          image: {{ required "Must provide the authorization sidecar container image." .Values.images.authorization }}
           imagePullPolicy: {{ .Values.imagePullPolicy }}
           env:
             - name: PROXY_HOST
@@ -182,7 +184,7 @@ spec:
             allowPrivilegeEscalation: true
             capabilities:
               add: ["SYS_ADMIN"]
-          image: "{{ required "Must provide the driver image repository." .Values.images.driverRepository }}/{{ .Chart.Name }}-rbo54:{{ .Values.version }}"
+          image: "{{ required "Must provide the driver image repository." .Values.images.driver }}"
           imagePullPolicy: {{ .Values.imagePullPolicy }}
           command: [ "/csi-vxflexos.sh" ]
           args:
@@ -200,6 +202,12 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
+            - name: scaleio-path-opt
+              mountPath: /opt/emc/scaleio/sdc/bin
+            - name: scaleio-path-bin
+              mountPath: /bin/emc/scaleio
+            - name: var-log
+              mountPath: /node/var/log
             - name: CSI_ENDPOINT
               value: unix://{{ .Values.kubeletConfigDir }}/plugins/vxflexos.emc.dell.com/csi_sock
             - name: X_CSI_MODE
@@ -228,6 +236,11 @@ spec:
               value: "{{ .Values.node.renameSDC.prefix }}"
             {{- end }}
             {{- end }}
+            - name: X_CSI_POWERFLEX_KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: spec.nodeName
           volumeMounts:
             - name: driver-path
               mountPath: {{ .Values.kubeletConfigDir }}/plugins/vxflexos.emc.dell.com
@@ -237,6 +250,8 @@ spec:
             - name: pods-path
               mountPath: {{ .Values.kubeletConfigDir }}/pods
               mountPropagation: "Bidirectional"
+            - name: noderoot
+              mountPath: /noderoot
             - name: dev
               mountPath: /dev
             - name: vxflexos-config
@@ -255,7 +270,7 @@ spec:
               readOnly: true
 {{- end}}
         - name: registrar
-          image: {{ required "Must provide the CSI registrar container image." ( include "csi-vxflexos.registrarImage" . ) }}
+          image: {{ required "Must provide the CSI registrar container image." .Values.images.registrar }}
           imagePullPolicy: {{ .Values.imagePullPolicy }}
           args:
             - "--v=5"
@@ -310,9 +325,11 @@ spec:
               mountPath: /storage
             - name: udev-d
               mountPath: /rules.d
+            - name: host-opt-emc-path
+              mountPath: /host_opt_emc_path
         {{- end }}
       initContainers:
-        {{- if eq .Values.sdc.enabled true }}
+        {{- if eq .Values.sdcinit.enabled true }}
         - name: sdc
           securityContext:
             privileged: true
@@ -337,6 +354,8 @@ spec:
               mountPath: /dev
             - name: os-release
               mountPath: /host-os-release
+            - name: host-opt-emc-path
+              mountPath: /host_opt_emc_path
             - name: sdc-storage
               mountPath: /storage 
             - name: udev-d
@@ -361,6 +380,10 @@ spec:
           hostPath:
             path: {{ .Values.kubeletConfigDir }}/pods
             type: Directory
+        - name: noderoot
+          hostPath:
+            path: /
+            type: Directory
         - name: dev
           hostPath:
             path: /dev
@@ -370,7 +393,7 @@ spec:
             path: /opt/emc/scaleio/sdc/bin
             type: DirectoryOrCreate
         - name: scaleio-path-bin
-          hostPath: 
+          hostPath:
             path: /bin/emc/scaleio
             type: DirectoryOrCreate
         - name: var-log
@@ -389,6 +412,10 @@ spec:
           hostPath:
             path: /etc/os-release
             type: File
+        - name: host-opt-emc-path
+          hostPath:
+            path: /opt/emc
+            type: Directory
         - name: vxflexos-config
           secret:
             secretName: {{ .Release.Name }}-config
