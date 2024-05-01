@@ -682,6 +682,7 @@ func getSystemsKnownToSDC() ([]string, error) {
 
 	discoveredSystems, err := goscaleio.DrvCfgQuerySystems()
 	if err != nil {
+		Log.Infof("goscaleio.DrvCfgQuerySystems error: %s", err)
 		return systems, err
 	}
 
@@ -689,16 +690,10 @@ func getSystemsKnownToSDC() ([]string, error) {
 
 	for _, s := range *discoveredSystems {
 		_, ok := set[s.SystemID]
-		// duplicate SDC ID found
-		if s.SystemID == "0000000000000000" {
-			Log.Infof("skipping system ID all zeros: %v", s)
-			continue
-		}
 		if ok {
 			return nil, fmt.Errorf("duplicate systems found that are known to SDC: %s", s.SystemID)
 		}
 		set[s.SystemID] = struct{}{}
-
 		systems = append(systems, s.SystemID)
 		Log.WithField("ID", s.SystemID).Info("Found connected system")
 	}
