@@ -458,13 +458,14 @@ func (s *service) BeforeServe(
 		opts.KubeNodeName = kubeNodeName
 	}
 
-	var cipherSuites []string
-	if cipherSuitesYAML, ok := csictx.LookupEnv(ctx, EnvCipherSuites); ok {
-		if err := yaml.Unmarshal([]byte(cipherSuitesYAML), &cipherSuites); err != nil {
-			Log.Warnf("Invalid cipher suites list provided")
-			cipherSuites = []string{}
+	var cipherList []string
+	if cipherSuites, ok := csictx.LookupEnv(ctx, EnvCipherSuites); ok {
+		if cipherSuites == "" {
+			Log.Infof("cipher suites list not provided")
+		} else {
+			cipherList = strings.Split(cipherSuites, ",")
 		}
-		opts.CipherSuites = cipherSuites
+		opts.CipherSuites = cipherList
 	}
 
 	// log csiNode topology keys
