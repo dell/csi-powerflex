@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Copyright © 2020-2022 Dell Inc. or its subsidiaries. All Rights Reserved.
+# Copyright © 2020-2024 Dell Inc. or its subsidiaries. All Rights Reserved.
  
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -235,7 +235,7 @@ DRIVER="csi-vxflexos"
 SCRIPTDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 REPODIR="$( dirname "${SCRIPTDIR}" )"
 
-DRIVERVERSION="csi-vxflexos-2.10.0"
+DRIVERVERSION="csi-vxflexos-2.10.2"
 
 while getopts "cprv:h" opt; do
   case $opt in

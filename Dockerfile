@@ -1,4 +1,4 @@
-# Copyright © 2019-2022 Dell Inc. or its subsidiaries. All Rights Reserved.
+# Copyright © 2019-2024 Dell Inc. or its subsidiaries. All Rights Reserved.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ LABEL vendor="Dell Inc." \
     name="csi-powerflex" \
     summary="CSI Driver for Dell EMC PowerFlex" \
     description="CSI Driver for provisioning persistent storage from Dell EMC PowerFlex" \
-    version="2.10.0" \
+    version="2.10.1" \
     license="Apache-2.0"
 COPY ./licenses /licenses
 

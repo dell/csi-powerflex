@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Copyright © 2020-2022 Dell Inc. or its subsidiaries. All Rights Reserved.
+# Copyright © 2020-2024 Dell Inc. or its subsidiaries. All Rights Reserved.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,8 +20,8 @@ PROG="${0}"
 NODE_VERIFY=1
 VERIFY=1
 MODE="install"
-DEFAULT_DRIVER_VERSION="v2.10.0"
-DRIVERVERSION="csi-vxflexos-2.10.0"
+DEFAULT_DRIVER_VERSION="v2.10.1"
+DRIVERVERSION="csi-vxflexos-2.10.2"
 WATCHLIST=""
 
 # export the name of the debug log, so child processes will see it
