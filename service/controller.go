@@ -765,7 +765,7 @@ func (s *service) createVolumeFromSnapshot(req *csi.CreateVolumeRequest,
 		snapID := getFilesystemIDFromCsiVolumeID(snapshotSource.SnapshotId)
 		srcVol, err := s.getFilesystemByID(snapID, systemID)
 		if err != nil {
-			return nil, status.Errorf(codes.NotFound, "Snapshot not found: %s, error: %s", snapshotSource.SnapshotId, err.Error())
+			return nil, status.Errorf(codes.NotFound, "Snapshot not found: %s", snapshotSource.SnapshotId)
 		}
 
 		// Validate the size is the same.
@@ -788,13 +788,13 @@ func (s *service) createVolumeFromSnapshot(req *csi.CreateVolumeRequest,
 			SnapshotID: snapID,
 		}, srcVol.ParentID)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "error during fs creation from snapshot: %s, error: %s", snapshotSource.SnapshotId, err.Error())
+			return nil, status.Errorf(codes.Internal, "error during fs creation from snapshot: %s", snapshotSource.SnapshotId)
 		}
 
 		restoreFs, err := system.GetFileSystemByIDName(srcVol.ParentID, "")
 		if err != nil {
 			if strings.Contains(err.Error(), sioGatewayFileSystemNotFound) {
-				return nil, status.Errorf(codes.NotFound, "NFS volume not found: %s, error: %s", srcVol.ID, err.Error())
+				return nil, status.Errorf(codes.NotFound, "NFS volume not found: %s", srcVol.ID)
 			}
 		}
 
@@ -814,7 +814,7 @@ func (s *service) createVolumeFromSnapshot(req *csi.CreateVolumeRequest,
 	srcVol, err := s.getVolByID(snapID, systemID)
 	if err != nil {
 		if err != nil {
-			return nil, status.Errorf(codes.NotFound, "Snapshot not found: %s, error: %s", snapshotSource.SnapshotId, err.Error())
+			return nil, status.Errorf(codes.NotFound, "Snapshot not found: %s", snapshotSource.SnapshotId)
 		}
 	}
 	// Validate the size is the same.
@@ -874,7 +874,7 @@ func (s *service) createVolumeFromSnapshot(req *csi.CreateVolumeRequest,
 	dstID := snapResponse.VolumeIDList[0]
 	dstVol, err := s.getVolByID(dstID, systemID)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not retrieve created volume: %s, error: %s", dstID, err.Error())
+		return nil, status.Errorf(codes.Internal, "Could not retrieve created volume: %s", dstID)
 	}
 	// Create a volume response and return it
 	s.clearCache()
@@ -1426,7 +1426,7 @@ func (s *service) setQoSParameters(
 	volID := getVolumeIDFromCsiVolumeID(csiVolID)
 	vol, err := s.getVolByID(volID, systemID)
 	if err != nil {
-		return status.Errorf(codes.NotFound, "volume %s was not found, error: %s", volID, err.Error())
+		return status.Errorf(codes.NotFound, "volume %s was not found", volID)
 	}
 	tgtVol.Volume = vol
 	settings := siotypes.SetMappedSdcLimitsParam{
@@ -1783,8 +1783,8 @@ func (s *service) ListVolumes(
 		if err != nil {
 			return nil, status.Errorf(
 				codes.Aborted,
-				"Unable to parse StartingToken: %v into uint32, err: %v",
-				req.StartingToken, err)
+				"Unable to parse StartingToken: %v into uint32",
+				req.StartingToken)
 		}
 		startToken = int(i)
 	}
@@ -1829,8 +1829,8 @@ func (s *service) ListSnapshots(
 		if err != nil {
 			return nil, status.Errorf(
 				codes.Aborted,
-				"Unable to parse StartingToken: %v into uint32, err: %v",
-				req.StartingToken, err)
+				"Unable to parse StartingToken: %v into uint32",
+				req.StartingToken)
 		}
 		startToken = int(i)
 	}
@@ -2668,7 +2668,7 @@ func (s *service) CreateSnapshot(
 	// populate response structure
 	vol, err = s.getVolByID(volID, systemID)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "volume %s was not found, error: %s", volID, err.Error())
+		return nil, status.Errorf(codes.NotFound, "volume %s was not found", volID)
 	}
 	creationTimeUnix := time.Unix(int64(vol.CreationTime), 0)
 	creationTimeStamp := timestamppb.New(creationTimeUnix)
@@ -2743,7 +2743,7 @@ func (s *service) DeleteSnapshot(
 		snapID := getFilesystemIDFromCsiVolumeID(csiSnapID)
 		system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
 		if err != nil {
-			return nil, fmt.Errorf("can't find system by id %s, error: %s", systemID, err.Error())
+			return nil, fmt.Errorf("can't find system by id %s", systemID)
 		}
 		snap, err := s.getFilesystemByID(snapID, systemID)
 		if err == nil {
@@ -3107,7 +3107,7 @@ func (s *service) Clone(req *csi.CreateVolumeRequest,
 	sourceVolID := getVolumeIDFromCsiVolumeID(volumeSource.VolumeId)
 	srcVol, err := s.getVolByID(sourceVolID, systemID)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "Volume not found: %s, error: %s", volumeSource.VolumeId, err.Error())
+		return nil, status.Errorf(codes.NotFound, "Volume not found: %s", volumeSource.VolumeId)
 	}
 
 	// Validate the size is the same
@@ -3168,7 +3168,7 @@ func (s *service) Clone(req *csi.CreateVolumeRequest,
 	destID := snapResponse.VolumeIDList[0]
 	destVol, err := s.getVolByID(destID, systemID)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not retrieve created volume: %s, error: %s", destID, err.Error())
+		return nil, status.Errorf(codes.Internal, "Could not retrieve created volume: %s", destID)
 	}
 
 	// Create a volume response and return it

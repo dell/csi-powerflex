@@ -464,8 +464,8 @@ func (s *service) nodeProbe(ctx context.Context) error {
 		// try to query the SDC GUID
 		guid, err := goscaleio.DrvCfgQueryGUID()
 		if err != nil {
-			return status.Errorf(codes.FailedPrecondition,
-				"unable to get SDC GUID via config or automatically, error: %s", err.Error())
+			return status.Error(codes.FailedPrecondition,
+				"unable to get SDC GUID via config or automatically")
 		}
 
 		s.opts.SdcGUID = guid
@@ -477,7 +477,7 @@ func (s *service) nodeProbe(ctx context.Context) error {
 	if len(connectedSystemID) == 0 {
 		connectedSystemID, err = getSystemsKnownToSDC()
 		if err != nil {
-			return status.Errorf(codes.FailedPrecondition, "%s", err.Error())
+			return status.Errorf(codes.FailedPrecondition, "%s", err)
 		}
 	}
 
