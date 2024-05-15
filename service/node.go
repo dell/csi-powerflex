@@ -152,6 +152,10 @@ func (s *service) NodePublishVolume(
 		}
 	}
 	s.logStatistics()
+	metadataerror := s.StoreMetaData(ctx, req)
+	if metadataerror != nil {
+		Log.Infof("Error storing meta-data: %s", metadataerror)
+	}
 	volumeContext := req.GetVolumeContext()
 	if volumeContext != nil {
 		Log.Info("VolumeContext:")
@@ -356,6 +360,7 @@ func (s *service) NodeUnpublishVolume(
 			return nil, err
 		}
 
+		s.RemoveMetaData(ctx, csiVolID)
 		return &csi.NodeUnpublishVolumeResponse{}, nil
 
 	}
@@ -428,6 +433,7 @@ func (s *service) NodeUnpublishVolume(
 
 	}
 
+	s.RemoveMetaData(ctx, csiVolID)
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 

@@ -16,8 +16,10 @@ package service
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -45,6 +47,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/yaml"
 
@@ -184,6 +187,7 @@ type service struct {
 	snapCacheRWL        sync.RWMutex
 	snapCacheSystemID   string // systemID for cached snapshots
 	privDir             string
+	metaDir             string
 	storagePoolIDToName map[string]string
 	statisticsCounter   int
 	// maps the first 24 bits of a volume ID to the volume's systemID
@@ -375,6 +379,7 @@ func (s *service) BeforeServe(
 			"sdcGUID":                s.opts.SdcGUID,
 			"thickprovision":         s.opts.Thick,
 			"privatedir":             s.privDir,
+			"metadir":                s.metaDir,
 			"autoprobe":              s.opts.AutoProbe,
 			"mode":                   s.mode,
 			"allowRWOMultiPodAccess": s.opts.AllowRWOMultiPodAccess,
@@ -415,6 +420,14 @@ func (s *service) BeforeServe(
 	}
 	if pd, ok := csictx.LookupEnv(ctx, "X_CSI_PRIVATE_MOUNT_DIR"); ok {
 		s.privDir = pd
+	}
+	if meta, ok := csictx.LookupEnv(ctx, "X_CSI_PRIVATE_META_DIR"); ok {
+		s.metaDir = meta
+		_, err = mkdir(meta)
+		if err != nil {
+			Log.Warnf("Unable to make meta directory")
+			s.metaDir = ""
+		}
 	}
 	if snapshotCGDelete, ok := csictx.LookupEnv(ctx, "X_CSI_VXFLEXOS_ENABLESNAPSHOTCGDELETE"); ok {
 		if snapshotCGDelete == "true" {
@@ -1871,6 +1884,20 @@ func (s *service) GetNodeUID(_ context.Context) (string, error) {
 		return "", status.Error(codes.Internal, GetMessage("Unable to fetch the node details. Error: %v", err))
 	}
 	return string(node.UID), nil
+
+// GetPersistentVolume retrieves a persistent volume with the given name.
+// If the Kubernetes clientset is not initialized, it will be created.
+// Returns the persistent volume and any error encountered during the retrieval.
+func (s *service) GetPersistentVolume(pvName string) (*corev1.PersistentVolume, error) {
+	if K8sClientset == nil {
+		err := k8sutils.CreateKubeClientSet()
+		if err != nil {
+			return nil, status.Error(codes.Internal, GetMessage("init client failed with error: %v", err))
+		}
+		K8sClientset = k8sutils.Clientset
+	}
+	pv, err := K8sClientset.CoreV1().PersistentVolumes().Get(context.TODO(), pvName, v1.GetOptions{})
+	return pv, err
 }
 
 // GetMessage - Get message
@@ -1893,4 +1920,51 @@ func ParseInt64FromContext(ctx context.Context, key string) (int64, error) {
 
 func lookupEnv(ctx context.Context, key string) (string, bool) {
 	return csictx.LookupEnv(ctx, key)
+}
+
+// StoreMetaData saves file meta data about a volume. This is intended to store the VolumeContext for node operations.
+func (s *service) StoreMetaData(ctx context.Context, req *csi.NodePublishVolumeRequest) error {
+	if s.metaDir == "" {
+		return nil
+	}
+	file, err := os.OpenFile(s.metaDir+"/"+req.VolumeId, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0660)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	encoder := json.NewEncoder(file)
+	encoder.SetIndent("", "    ")
+	err = encoder.Encode(req)
+	return err
+}
+
+// LoadMetaData loads the meta data about a volume.
+func (s *service) LoadMetaData(ctx context.Context, volumeId string) (*csi.NodePublishVolumeRequest, error) {
+	if s.metaDir == "" {
+		return nil, nil
+	}
+	file, err := os.Open(s.metaDir + "/" + volumeId)
+	if err != nil {
+		return nil, fmt.Errorf("error opening metadata: %w", err)
+	}
+	// Read the entire file.
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return nil, fmt.Errorf("error reading file: %w", err)
+	}
+
+	// Unmarshal the JSON data into a map.
+	var result csi.NodePublishVolumeRequest
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, fmt.Errorf("error unmarshaling JSON: %w", err)
+	}
+	return &result, nil
+}
+
+func (s *service) RemoveMetaData(ctx context.Context, volumeId string) error {
+	if s.metaDir == "" {
+		return nil
+	}
+	err := os.Remove(s.metaDir + "/" + volumeId)
+	return err
 }

@@ -154,7 +154,10 @@ const (
 	HeaderCSIPluginIdentifier = "x-csi-plugin-id"
 )
 
-var interestingParameters = [...]string{0: "FsType", 1: KeyMkfsFormatOption, 2: KeyBandwidthLimitInKbps, 3: KeyIopsLimit}
+// These parameters are copied from the StorageClass parameters to the VolumeContext. The replication ones are used by the node for identifying replicated volumes.
+var interestingParameters = [...]string{0: "FsType", 1: KeyMkfsFormatOption, 2: KeyBandwidthLimitInKbps, 3: KeyIopsLimit,
+	4: KeyReplicationPrefix + KeyReplicationConsistencyGroupName, 5: KeyReplicationPrefix + KeyReplicationEnabled, 6: KeyReplicationPrefix + KeyReplicationClusterID,
+	7: KeyReplicationPrefix + KeyReplicationRemoteSystem}
 
 func (s *service) CreateVolume(
 	ctx context.Context,

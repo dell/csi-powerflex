@@ -18,6 +18,10 @@ import (
 )
 
 const (
+	// KeyReplicationPrefix is the prefix of keys related to replication.
+	KeyReplicationPrefix = "replication.storage.dell.com/"
+	// KeyReplicationEnabled indicates replication is enabled.
+	KeyReplicationEnabled = "isReplicationEnabled"
 	// KeyReplicationRemoteSystem represents key for replication remote system
 	KeyReplicationRemoteSystem = "remoteSystem"
 	// KeyReplicationRemoteStoragePool represents key for replication remote storage pool
