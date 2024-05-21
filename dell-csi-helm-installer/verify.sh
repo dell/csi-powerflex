@@ -199,7 +199,7 @@ function verify_k8s_versions() {
   if [[ ${V} < ${MIN} ]]; then
     error=1
     found_warning "Kubernetes version ${V} is too old. Minimum required version is: ${MIN}"
-    found_warning "To ensure the driver is fully supported run cert-csi and make sure all tests pass. More details: https://dell.github.io/csm-docs/docs/cert-csi/"
+    found_warning "To ensure the driver is fully supported run cert-csi and make sure all tests pass. More details: https://dell.github.io/csm-docs/docs/support/cert-csi/"
   fi
   check_error error
 
@@ -210,7 +210,7 @@ function verify_k8s_versions() {
   if [[ ${V} > ${MAX} ]]; then
     error=1
     found_warning "Kubernetes version ${V} is newer than the version that has been tested. Latest tested version is: ${MAX}"
-    found_warning "To ensure the driver is fully supported run cert-csi and make sure all tests pass. More details: https://dell.github.io/csm-docs/docs/cert-csi/"
+    found_warning "To ensure the driver is fully supported run cert-csi and make sure all tests pass. More details: https://dell.github.io/csm-docs/docs/support/cert-csi/"
   fi
   check_error error
 
@@ -234,7 +234,7 @@ function verify_openshift_versions() {
   if (( ${V%%.*} < ${MIN%%.*} || ( ${V%%.*} == ${MIN%%.*} && ${V##*.} < ${MIN##*.} ) )) ; then
     error=1
     found_warning "OpenShift version ${V} is too old. Minimum required version is: ${MIN}"
-    found_warning "To ensure the driver is fully supported run cert-csi and make sure all tests pass. More details: https://dell.github.io/csm-docs/docs/cert-csi/"
+    found_warning "To ensure the driver is fully supported run cert-csi and make sure all tests pass. More details: https://dell.github.io/csm-docs/docs/support/cert-csi/"
   fi
   check_error error
 
@@ -245,7 +245,7 @@ function verify_openshift_versions() {
   if (( ${V%%.*} > ${MAX%%.*} || ( ${V%%.*} == ${MAX%%.*} && ${V##*.} > ${MAX##*.} ) )) ; then
     error=1
     found_warning "OpenShift version ${V} is newer than the version that has been tested. Latest tested version is: ${MAX}"
-    found_warning "To ensure the driver is fully supported run cert-csi and make sure all tests pass. More details: https://dell.github.io/csm-docs/docs/cert-csi/"
+    found_warning "To ensure the driver is fully supported run cert-csi and make sure all tests pass. More details: https://dell.github.io/csm-docs/docs/support/cert-csi/"
   fi
   check_error error
 }
