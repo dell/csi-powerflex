@@ -501,6 +501,8 @@ func (s *service) checkNFS(ctx context.Context, systemID string) (bool, error) {
 	}
 	version, err := c.GetVersion()
 	if err != nil {
+		Log.WithError(err).WithField("systemID", systemID).Warn("failed to get versionnnnnnnnnnnnnn")
+		fmt.Println("errorrrr1", err)
 		return false, err
 	}
 	ver, err := strconv.ParseFloat(version, 64)
