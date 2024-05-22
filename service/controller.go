@@ -860,7 +860,7 @@ func (s *service) createVolumeFromSnapshot(req *csi.CreateVolumeRequest,
 	snapshotDefs := make([]*siotypes.SnapshotDef, 0)
 	snapDef := &siotypes.SnapshotDef{VolumeID: snapID, SnapshotName: name}
 	snapshotDefs = append(snapshotDefs, snapDef)
-	snapParam := &siotypes.SnapshotVolumesParam{SnapshotDefs: snapshotDefs}
+	snapParam := &siotypes.SnapshotVolumesParam{SnapshotDefs: snapshotDefs, AccessMode: "ReadWrite"}
 
 	// Create snapshot
 	snapResponse, err := system.CreateSnapshotConsistencyGroup(snapParam)
@@ -2660,7 +2660,7 @@ func (s *service) CreateSnapshot(
 			snapshotDefs = append(snapshotDefs, &snapshotDefX)
 		}
 	}
-	snapParam := &siotypes.SnapshotVolumesParam{SnapshotDefs: snapshotDefs}
+	snapParam := &siotypes.SnapshotVolumesParam{SnapshotDefs: snapshotDefs, AccessMode: "ReadOnly"}
 
 	// Create snapshot(s)
 	snapResponse, err := s.systems[systemID].CreateSnapshotConsistencyGroup(snapParam)
@@ -3154,7 +3154,7 @@ func (s *service) Clone(req *csi.CreateVolumeRequest,
 	snapshotDefs := make([]*siotypes.SnapshotDef, 0)
 	snapDef := &siotypes.SnapshotDef{VolumeID: sourceVolID, SnapshotName: name}
 	snapshotDefs = append(snapshotDefs, snapDef)
-	snapParam := &siotypes.SnapshotVolumesParam{SnapshotDefs: snapshotDefs}
+	snapParam := &siotypes.SnapshotVolumesParam{SnapshotDefs: snapshotDefs, AccessMode: "ReadWrite"}
 
 	// Create snapshot
 	system := s.systems[systemID]
