@@ -194,7 +194,7 @@ function verify_k8s_versions() {
   local V="${kMajorVersion}.${kMinorVersion}"
   # check non supported version (k8s alpha/beta)
   if [ -n "${kNonGAVersion}" ]; then
-    echo "Installing on an unreleased version of Kubernetes. Acknowlegde and proceed with installation? (y/n)"
+    echo "Installing on an unreleased version of Kubernetes : ${kNonGAVersion}. Acknowlegde and proceed with installation? (y/n)"
     read -n 1 -p "Press 'y' to continue or any other key to exit: " CONT
     decho
       if [ "${CONT}" != "Y" -a "${CONT}" != "y" ]; then
@@ -581,7 +581,8 @@ MINION_NODES=$(run_command kubectl get nodes -o wide | grep -v -e master -e INTE
 MASTER_NODES=$(run_command kubectl get nodes -o wide | awk ' /master/{ print $6; }')
 # Get the kubernetes major and minor version numbers.
 kMajorVersion=$(run_command kubectl version | grep 'Server Version' | sed -E 's/.*v([0-9]+)\.[0-9]+\.[0-9]+.*/\1/')
-kMinorVersion=$(run_command kubectl version | grep 'Server Version' |  sed -E 's/.*v[0-9]+\.([0-9]+)\.[0-9]+.*/\1/')
+kMinorVersion=$(run_command kubectl version | grep 'Server Version' | sed -E 's/.*v[0-9]+\.([0-9]+)\.[0-9]+.*/\1/')
+kNonGAVersion=$(run_command kubectl version | grep 'Server Version' | sed -n 's/.*\(-[alpha|beta][^ ]*\).*/\1/p')
 
 while getopts ":h-:" optchar; do
   case "${optchar}" in
