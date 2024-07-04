@@ -314,7 +314,10 @@ func (s *service) CreateVolume(
 
 		// fetch volume size
 		size := cr.GetRequiredBytes()
-
+		// round off the size to the 3Gi if less than 3Gi
+		if size < 3*kiBytesInGiB {
+			size = 3 * kiBytesInGiB
+		}
 		contentSource := req.GetVolumeContentSource()
 		if contentSource != nil {
 			snapshotSource := contentSource.GetSnapshot()
