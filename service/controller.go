@@ -314,10 +314,10 @@ func (s *service) CreateVolume(
 
 		// fetch volume size
 		size := cr.GetRequiredBytes()
-		Log.Printf("Size from request: %d", size)
+		Log.Printf("Size from request: %d bytes", size)
 		// round off the size to the 3Gi if less than 3Gi
 		if size < 3*bytesInGiB {
-			Log.Printf("Size %d is less than 3GiB, rounding to 3GiB", size/kiBytesInGiB)
+			Log.Printf("Size %d is less than 3GiB, rounding to 3GiB", size/bytesInGiB)
 			size = 3 * bytesInGiB
 		}
 		contentSource := req.GetVolumeContentSource()
