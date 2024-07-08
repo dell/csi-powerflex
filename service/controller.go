@@ -106,6 +106,9 @@ const (
 	// bytesInGiB is the number of bytes in a gibibyte
 	bytesInGiB = kiBytesInGiB * bytesInKiB
 
+	// Minimum Filesystem size for NFS
+	minNfsSize = 3 * bytesInGiB
+
 	// VolumeIDList is the list of volume IDs
 	VolumeIDList = "VolumeIDList"
 
@@ -314,9 +317,8 @@ func (s *service) CreateVolume(
 
 		// fetch volume size
 		size := cr.GetRequiredBytes()
-		Log.Printf("Size from request: %d bytes", size)
 		// round off the size to the 3GB if less than 3GB
-		if size < 3*bytesInGiB {
+		if size < minNfsSize {
 			Log.Printf("Size %d is less than 3GB, rounding to 3GB", size/bytesInGiB)
 			size = 3 * bytesInGiB
 		}
