@@ -106,7 +106,7 @@ const (
 	// bytesInGiB is the number of bytes in a gibibyte
 	bytesInGiB = kiBytesInGiB * bytesInKiB
 
-	// Minimum Filesystem size for NFS
+	// minNfsSize is the minimum filesystem size for NFS
 	minNfsSize = 3 * bytesInGiB
 
 	// VolumeIDList is the list of volume IDs
