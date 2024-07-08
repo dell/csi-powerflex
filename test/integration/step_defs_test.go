@@ -294,7 +294,70 @@ func (f *feature) aBasicNfsVolumeRequest(name string, size int64) error {
 			params["storagepool"] = NfsPool
 			params["thickprovisioning"] = "false"
 			if os.Getenv("X_CSI_QUOTA_ENABLED") == "true" {
-				fmt.Printf("errrror")
+				params["isQuotaEnabled"] = "true"
+				params["softLimit"] = "20"
+				params["path"] = "/nfs-quota1"
+				params["gracePeriod"] = "86400"
+			}
+			if len(f.anotherSystemID) > 0 {
+				params["systemID"] = f.anotherSystemID
+			}
+			req.Parameters = params
+			makeAUniqueName(&name)
+			req.Name = name
+			capacityRange := new(csi.CapacityRange)
+			capacityRange.RequiredBytes = size * 1024 * 1024 * 1024
+			req.CapacityRange = capacityRange
+			capability := new(csi.VolumeCapability)
+			mount := new(csi.VolumeCapability_MountVolume)
+			mount.FsType = "nfs"
+			mountType := new(csi.VolumeCapability_Mount)
+			mountType.Mount = mount
+			capability.AccessType = mountType
+			accessMode := new(csi.VolumeCapability_AccessMode)
+			accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER
+			capability.AccessMode = accessMode
+			f.capability = capability
+			capabilities := make([]*csi.VolumeCapability, 0)
+			capabilities = append(capabilities, capability)
+			req.VolumeCapabilities = capabilities
+			f.createVolumeRequest = req
+			return nil
+		}
+		fmt.Printf("Array with SystemId %s does not support NFS. Skipping this step", systemid)
+		return nil
+	}
+	return nil
+}
+
+func (f *feature) aBasicNfsVolumeRequestWithSizeLessThan3Gi(name string, size int64) error {
+	req := new(csi.CreateVolumeRequest)
+	params := make(map[string]string)
+
+	ctx := context.Background()
+
+	fmt.Println("f.arrays,len", f.arrays, f.arrays)
+
+	if f.arrays == nil {
+		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
+		var err error
+		f.arrays, err = f.getArrayConfig()
+		if err != nil {
+			return errors.New("Get multi array config failed " + err.Error())
+		}
+	}
+
+	for _, a := range f.arrays {
+		systemid := a.SystemID
+		val, err := f.checkNFS(ctx, systemid)
+		if err != nil {
+			return err
+		}
+
+		if val {
+			params["storagepool"] = NfsPool
+			params["thickprovisioning"] = "false"
+			if os.Getenv("X_CSI_QUOTA_ENABLED") == "true" {
 				params["isQuotaEnabled"] = "true"
 				params["softLimit"] = "20"
 				params["path"] = "/nfs-quota1"
@@ -2078,7 +2141,6 @@ func (f *feature) aNfsVolumeRequest(name string, size int64) error {
 			params["storagepool"] = NfsPool
 			params["thickprovisioning"] = "false"
 			if os.Getenv("X_CSI_QUOTA_ENABLED") == "true" {
-				fmt.Printf("errrrorkkkkk")
 				params["isQuotaEnabled"] = "true"
 				params["softLimit"] = "20"
 				params["path"] = "/nfs-quota1"
@@ -2497,6 +2559,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^the VolumeCondition is "([^"]*)"$`, f.theVolumeConditionIs)
 	s.Step(`^a basic nfs volume request with wrong nasname "([^"]*)" "(\d+)"$`, f.aBasicNfsVolumeRequestWithWrongNasName)
 	s.Step(`^a basic nfs volume request "([^"]*)" "(\d+)"$`, f.aBasicNfsVolumeRequest)
+	s.Step(`^a basic nfs volume request "([^"]*)" "(\d+)"$`, f.aBasicNfsVolumeRequestWithSizeLessThan3Gi)
 	s.Step(`^a basic nfs volume request with quota enabled volname "([^"]*)" volsize "(\d+)" path "([^"]*)" softlimit "([^"]*)" graceperiod "([^"]*)"$`, f.aNfsVolumeRequestWithQuota)
 	s.Step(`^a nfs capability with voltype "([^"]*)" access "([^"]*)" fstype "([^"]*)"$`, f.aNfsCapabilityWithVoltypeAccessFstype)
 	s.Step(`^a nfs volume request "([^"]*)" "(\d+)"$`, f.aNfsVolumeRequest)

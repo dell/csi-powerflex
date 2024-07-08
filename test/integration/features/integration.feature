@@ -514,6 +514,15 @@ Feature: VxFlex OS CSI interface
     And when I call DeleteVolume
     Then there are no errors
 
+  Scenario: Create and delete basic nfs volume with size less than 3Gi
+    Given a VxFlexOS service
+    And a basic nfs volume request "nfsvolume100" "2"
+    When I call CreateVolume
+    When I call ListVolume
+    Then a valid ListVolumeResponse is returned
+    And when I call DeleteVolume
+    Then there are no errors
+
   Scenario: Idempotent create and delete basic nfs volume
     Given a VxFlexOS service
     And a basic nfs volume request "nfsvolume2" "8"
