@@ -754,7 +754,7 @@ func (f *feature) getNodePublishVolumeRequest() *csi.NodePublishVolumeRequest {
 }
 
 //nolint:revive
-func (f *feature) whenICallNodePublishVolumeWithPoint(arg1 string, arg2 string) error {
+func (f *feature) whenICallNodePublishVolumeWithPoint(arg1 string, arg2 string, mkfsFormatOption string) error {
 	block := f.capability.GetBlock()
 	if block == nil {
 		_, err := os.Stat(arg2)
@@ -766,7 +766,7 @@ func (f *feature) whenICallNodePublishVolumeWithPoint(arg1 string, arg2 string) 
 
 		}
 	}
-	err := f.nodePublishVolume(f.volID, arg2)
+	err := f.nodePublishVolume(f.volID, arg2, mkfsFormatOption)
 	if err != nil {
 		fmt.Printf("NodePublishVolume failed: %s\n", err.Error())
 		f.addError(err)
@@ -779,7 +779,7 @@ func (f *feature) whenICallNodePublishVolumeWithPoint(arg1 string, arg2 string) 
 
 //nolint:revive
 func (f *feature) whenICallNodePublishVolume(arg1 string) error {
-	err := f.nodePublishVolume(f.volID, "")
+	err := f.nodePublishVolume(f.volID, "", "")
 	if err != nil {
 		fmt.Printf("NodePublishVolume failed: %s\n", err.Error())
 		f.addError(err)
@@ -805,7 +805,7 @@ func (f *feature) iCallEthemeralNodePublishVolume(id, size string) error {
 	return nil
 }
 
-func (f *feature) nodePublishVolume(id string, path string) error {
+func (f *feature) nodePublishVolume(id string, path string, mkfsFormatOption string) error {
 	req := f.getNodePublishVolumeRequest()
 	if path != "" {
 		block := f.capability.GetBlock()
@@ -818,6 +818,9 @@ func (f *feature) nodePublishVolume(id string, path string) error {
 		}
 	}
 	req.VolumeId = id
+	if len(mkfsFormatOption) > 0 {
+		req.VolumeContext = map[string]string{"mkfsFormatOption": mkfsFormatOption}
+	}
 	ctx := context.Background()
 	client := csi.NewNodeClient(grpcClient)
 	_, err := client.NodePublishVolume(ctx, req)
@@ -1327,7 +1330,7 @@ func (f *feature) iNodePublishVolumesInParallel(nVols int) error {
 		}
 		dataDirName := fmt.Sprintf("/tmp/datadir%d", i)
 		go func(id string, dataDirName string, done chan bool, errchan chan error) {
-			err := f.nodePublishVolume(id, dataDirName)
+			err := f.nodePublishVolume(id, dataDirName, "")
 			done <- true
 			errchan <- err
 		}(id, dataDirName, done, errchan)
@@ -2517,7 +2520,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^a capability with voltype "([^"]*)" access "([^"]*)" fstype "([^"]*)"$`, f.aCapabilityWithVoltypeAccessFstype)
 	s.Step(`^a volume request "([^"]*)" "(\d+)"$`, f.aVolumeRequest)
 	s.Step(`^when I call NodePublishVolume "([^"]*)"$`, f.whenICallNodePublishVolume)
-	s.Step(`^when I call NodePublishVolumeWithPoint "([^"]*)" "([^"]*)"$`, f.whenICallNodePublishVolumeWithPoint)
+	s.Step(`^when I call NodePublishVolumeWithPoint "([^"]*)" "([^"]*)" "([^"]*)"$`, f.whenICallNodePublishVolumeWithPoint)
 	s.Step(`^when I call NodeUnpublishVolume "([^"]*)"$`, f.whenICallNodeUnpublishVolume)
 	s.Step(`^when I call NodeUnpublishVolumeWithPoint "([^"]*)" "([^"]*)"$`, f.whenICallNodeUnpublishVolumeWithPoint)
 	s.Step(`^verify published volume with voltype "([^"]*)" access "([^"]*)" fstype "([^"]*)"$`, f.verifyPublishedVolumeWithVoltypeAccessFstype)

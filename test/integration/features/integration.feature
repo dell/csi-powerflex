@@ -10,7 +10,7 @@ Feature: VxFlex OS CSI interface
     When I call CreateVolume
     And there are no errors
     And when I call PublishVolume "SDC_GUID"
-    And when I call NodePublishVolumeWithPoint "SDC_GUID" "/tmp/podmondev1"
+    And when I call NodePublishVolumeWithPoint "SDC_GUID" "/tmp/podmondev1" ""
     And there are no errors
     And I read write data to volume "/tmp/podmondev1"
     And when I call Validate Volume Host connectivity
@@ -332,8 +332,8 @@ Feature: VxFlex OS CSI interface
     And when I call UnpublishVolume "SDC_GUID"
     And a capability with voltype "mount" access "multi-reader" fstype "xfs"
     And when I call PublishVolume "SDC_GUID"
-    And when I call NodePublishVolumeWithPoint "SDC_GUID" "temp1"
-    And when I call NodePublishVolumeWithPoint "SDC_GUID" "temp2"
+    And when I call NodePublishVolumeWithPoint "SDC_GUID" "temp1" ""
+    And when I call NodePublishVolumeWithPoint "SDC_GUID" "temp2" ""
     And when I call NodeUnpublishVolumeWithPoint "SDC_GUID" "temp1"
     And when I call NodeUnpublishVolumeWithPoint "SDC_GUID" "temp2"
     And when I call UnpublishVolume "SDC_GUID"
@@ -348,9 +348,9 @@ Feature: VxFlex OS CSI interface
     And there are no errors
     And when I call PublishVolume "SDC_GUID"
     And when I call PublishVolume "ALT_GUID"
-    And when I call NodePublishVolumeWithPoint "SDC_GUID" "/tmp/tempdev1"
+    And when I call NodePublishVolumeWithPoint "SDC_GUID" "/tmp/tempdev1" ""
     And there are no errors
-    And when I call NodePublishVolumeWithPoint "SDC_GUID" "/tmp/tempdev2"
+    And when I call NodePublishVolumeWithPoint "SDC_GUID" "/tmp/tempdev2" ""
     And there are no errors
     And when I call NodePublishVolume "ALT_GUID"
     And there are no errors
@@ -895,3 +895,29 @@ Scenario: Call NodeGetVolumeStats on unmounted volume
   And there are no errors
   And when I call DeleteVolume
   Then there are no errors
+
+Scenario: Custom file system format options (mkfsFormatOption)
+  Given a VxFlexOS service
+  And a capability with voltype <voltype> access <access> fstype <fstype>
+  And a volume request "mkfs1" "8"
+  When I call CreateVolume
+  And there are no errors
+  And when I call PublishVolume "SDC_GUID"
+  And when I call NodePublishVolumeWithPoint "SDC_GUID" "/tmp/mkfsdev1" <mkfsFormatOption>
+  And the error message should contain <errormsg>
+  And I read write data to volume "/tmp/mkfsdev1"
+  And when I call Validate Volume Host connectivity
+  Then there are no errors
+  And when I call NodeUnpublishVolumeWithPoint "SDC_GUID" "/tmp/mkfsdev1"
+  And when I call NodeUnpublishVolume "SDC_GUID"
+  And when I call UnpublishVolume "SDC_GUID"
+  And there are no errors
+  And when I call DeleteVolume
+  Then there are no errors
+  Examples:
+    | voltype | mkfsFormatOption   | access                      | fstype | errormsg                         |
+    | "mount" | "-L MyVolume"      | "single-writer"             | "xfs"  | "none"                           |
+    | "mount" | "-L MyVolume -m 1" | "single-node-single-writer" | "ext4" | "none"                           |
+    | "mount" | "-T largefile4"    |"single-node-multi-writer"   | "ext4" | "none"                           |
+    | "mount" | ":-L MyVolume"     | "single-writer"             | "xfs"  | "error performing private mount" |
+    | "mount" | "abc"              | "single-node-single-writer" | "ext4" | "error performing private mount" |
