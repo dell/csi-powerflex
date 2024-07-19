@@ -17,6 +17,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 
@@ -144,7 +145,9 @@ func (s *service) ephemeralNodePublish(
 	if errLock != nil {
 		return nil, errLock
 	}
-	f, errLock := os.Create(ephemeralStagingMountPath + volID + "/id")
+	safePath := filepath.Join(ephemeralStagingMountPath, volID, "id")
+	safePath = filepath.Clean(safePath)
+	f, errLock := os.Create(safePath)
 	if errLock != nil {
 		return nil, errLock
 	}
