@@ -21,6 +21,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -69,6 +70,7 @@ func main() {
 		format = "ver"
 	} else {
 		/* #nosec G304 */
+		format = filepath.Clean(format)
 		if fileExists(format) {
 			buf, err := os.ReadFile(format)
 			if err != nil {
@@ -83,6 +85,7 @@ func main() {
 
 	var w io.Writer = os.Stdout
 	if len(output) > 0 {
+		output = filepath.Clean(output)
 		fout, err := os.Create(output)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
