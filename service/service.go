@@ -223,10 +223,6 @@ func (s *service) ProcessMapSecretChange() error {
 		if err != nil {
 			Log.WithError(err).Error("unable to probe array in multi array config")
 		}
-		// log csiNode topology keys
-		if err = s.logCsiNodeTopologyKeys(); err != nil {
-			Log.WithError(err).Error("unable to log csiNode topology keys")
-		}
 	})
 	return nil
 }
@@ -454,11 +450,6 @@ func (s *service) BeforeServe(
 	}
 	if kubeNodeName, ok := csictx.LookupEnv(ctx, EnvKubeNodeName); ok {
 		opts.KubeNodeName = kubeNodeName
-	}
-
-	// log csiNode topology keys
-	if err = s.logCsiNodeTopologyKeys(); err != nil {
-		Log.WithError(err).Error("unable to log csiNode topology keys")
 	}
 
 	// pb parses an environment variable into a boolean value. If an error
