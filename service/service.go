@@ -46,6 +46,7 @@ import (
 	"github.com/spf13/viper"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/yaml"
 
 	"google.golang.org/grpc"
@@ -176,6 +177,11 @@ type service struct {
 	// maps the first 24 bits of a volume ID to the volume's systemID
 	volumePrefixToSystems   map[string][]string
 	connectedSystemNameToID map[string]string
+}
+
+// InterfaceNames represents the structure of the YAML config file
+type InterfaceNames struct {
+	InterfaceNames map[string]string `yaml:"interfaceNames"`
 }
 
 // Process dynamic changes to configMap or Secret.
@@ -483,10 +489,125 @@ func (s *service) BeforeServe(
 	s.adminClients = make(map[string]*sio.Client)
 	s.systems = make(map[string]*sio.System)
 
+	// Update ConfigMap with the interfaces/IPs
+	s.updateConfigMap()
+
 	if _, ok := csictx.LookupEnv(ctx, "X_CSI_VXFLEXOS_NO_PROBE_ON_START"); !ok {
 		return s.doProbe(ctx)
 	}
 	return nil
+}
+
+func (s *service) updateConfigMap() {
+	configFilePath := "/vxflexos-config-params/driver-config-params.yaml" // Path to the mounted ConfigMap file
+
+	configData, err := os.ReadFile(configFilePath)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to read the ConfigMap file: %v", err))
+	}
+
+	var interfacesData InterfaceNames
+	err = yaml.Unmarshal(configData, &interfacesData)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to parse the YAML file: %v", err))
+	}
+	interfaceNames := interfacesData.InterfaceNames
+
+	updateInterfaceNameswithIPs := map[string]string{}
+	for node, ifaceList := range interfaceNames {
+		if !strings.EqualFold(node, s.opts.KubeNodeName) {
+			continue
+		}
+
+		interfaces := strings.Split(ifaceList, ",")
+		var ips []string
+		for _, iface := range interfaces {
+			iface = strings.TrimSpace(iface)
+			ip, err := s.getIPAddress(iface)
+			if err != nil {
+				fmt.Printf("Error fetching IP for interface %s: %v\n", iface, err)
+				continue
+			}
+			ips = append(ips, ip)
+		}
+
+		if len(ips) > 0 {
+			updateInterfaceNameswithIPs[node] = strings.Join(ips, ",")
+		}
+	}
+
+	// Create a Kubernetes client
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		panic(fmt.Sprintf("Failed to create Kubernetes client config: %v", err))
+	}
+
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to create Kubernetes client: %v", err))
+	}
+
+	// Get the ConfigMap
+	cm, err := clientset.CoreV1().ConfigMaps("vxflexos").Get(context.TODO(), "vxflexos-config-params", metav1.GetOptions{})
+	if err != nil {
+		panic(fmt.Sprintf("Failed to get ConfigMap: %v", err))
+	}
+
+	for node, ipList := range updateInterfaceNameswithIPs {
+		if existingYaml, ok := cm.Data["driver-config-params.yaml"]; ok {
+			var configData map[string]interface{}
+			err := yaml.Unmarshal([]byte(existingYaml), &configData)
+			if err != nil {
+				panic(fmt.Sprintf("Failed to parse ConfigMap data: %v", err))
+			}
+
+			// Check and update interfaceNames
+			if interfaceNames, ok := configData["interfaceNames"].(map[string]interface{}); ok {
+				interfaceNames[node] = ipList
+			} else {
+				panic("interfaceNames key missing or not in expected format")
+			}
+
+			updatedYaml, err := yaml.Marshal(configData)
+			if err != nil {
+				panic(fmt.Sprintf("Failed to marshal updated data: %v", err))
+			}
+
+			cm.Data["driver-config-params.yaml"] = string(updatedYaml)
+		}
+	}
+
+	// Update the ConfigMap in Kubernetes
+	_, err = clientset.CoreV1().ConfigMaps("vxflexos").Update(context.TODO(), cm, metav1.UpdateOptions{})
+	if err != nil {
+		panic(fmt.Sprintf("Failed to update ConfigMap: %v", err))
+	}
+
+	fmt.Println("ConfigMap updated successfully")
+}
+
+func (s *service) getIPAddress(interfaceName string) (string, error) {
+	interfaceObj, err := net.InterfaceByName(interfaceName)
+	if err != nil {
+		return "", err
+	}
+
+	addrs, err := interfaceObj.Addrs()
+	if err != nil {
+		return "", err
+	}
+
+	for _, addr := range addrs {
+		ipNet, ok := addr.(*net.IPNet)
+		if !ok {
+			continue
+		}
+		if ipNet.IP.To4() != nil {
+			return ipNet.IP.String(), nil
+		}
+	}
+
+	return "", fmt.Errorf("no IPv4 address found for interface %s", interfaceName)
 }
 
 func (s *service) checkNFS(ctx context.Context, systemID string) (bool, error) {
