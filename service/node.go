@@ -450,9 +450,25 @@ func (s *service) getSystemName(ctx context.Context, systems []string) bool {
 	return true
 }
 
+// checkServiceStatus checks the status of the service
+func checkServiceStatus(serviceName string) bool {
+	cmd := exec.Command("systemctl", "is-active", serviceName)
+	output, err := cmd.CombinedOutput()
+	if err != nil || string(output) == "inactive" {
+		fmt.Printf("Error checking service status: %v\n", err)
+		return false
+	}
+	fmt.Printf("service %s status: %s", serviceName, string(output))
+	return true
+}
+
 // nodeProbe fetchs the SDC GUID by drv_cfg and the systemIDs/names by getSystemName method.
 // It also makes sure private directory(privDir) is created
 func (s *service) nodeProbe(ctx context.Context) error {
+	// check if sdc driver is installed
+	if checkServiceStatus("scini") {
+		return nil
+	}
 	// make sure the kernel module is loaded
 	if !kmodLoaded(s.opts) {
 		return status.Error(codes.FailedPrecondition,
@@ -717,57 +733,78 @@ func (s *service) NodeGetInfo(
 	req *csi.NodeGetInfoRequest) (
 	*csi.NodeGetInfoResponse, error,
 ) {
-	// Fetch SDC GUID
-	if s.opts.SdcGUID == "" {
-		if err := s.nodeProbe(ctx); err != nil {
-			return nil, err
-		}
-	}
-
-	// Fetch Node ID
-	if len(connectedSystemID) == 0 {
-		if err := s.nodeProbe(ctx); err != nil {
-			return nil, err
-		}
-	}
-
 	// Create the topology keys
 	// csi-vxflexos.dellemc.com/<systemID>: <provisionerName>
 	topology := map[string]string{}
-	for _, sysID := range connectedSystemID {
-		isNFS, err := s.checkNFS(ctx, sysID)
+	for _, array := range s.opts.arrays {
+		// check the requested protocols
+		// this could be sdc (only supported with current release), fc, nvmetcp, nvmefc, etc etc
+		// check if this is an NFS array i.e. NFS is supported by this storage array
+		// todo - introduce const for this service name
+		if checkServiceStatus("scini") {
+			// Fetch SDC GUID
+			if s.opts.SdcGUID == "" {
+				if err := s.nodeProbe(ctx); err != nil {
+					return nil, err
+				}
+			}
+			// Fetch Node ID
+			if len(connectedSystemID) == 0 {
+				if err := s.nodeProbe(ctx); err != nil {
+					return nil, err
+				}
+			}
+			// set the topology key for sdc protocol
+			topology[Name+"/"+array.SystemID] = SystemTopologySystemValue
+			array.IsSdc = true
+
+		} /*else if array.IsNvme {
+			// Fetch Node ID
+			if len(connectedSystemID) == 0 {
+				if err := s.nodeProbe(ctx); err != nil {
+					return nil, err
+				}
+			}
+		}*/
+
+		// check if this is an NFS array i.e. NFS is supported by this storage array
+		isNFS, err := s.checkNFS(ctx, array.SystemID)
 		if err != nil {
+			// log and return error
+			array.IsNFS = false
 			return nil, err
 		}
+
 		if isNFS {
-			topology[Name+"/"+sysID+"-nfs"] = "true"
+			// set the topology key for nfs protocol if nfs is supported
+			topology[Name+"/"+array.SystemID+"-nfs"] = "true"
+			// set it as true here so in case if this will be needed any where this can be utilized
+			array.IsNFS = true
 		}
-		topology[Name+"/"+sysID] = SystemTopologySystemValue
+
 	}
 
 	var maxVxflexosVolumesPerNode int64
-	if len(connectedSystemID) != 0 {
-		// Check for node label 'max-vxflexos-volumes-per-node'. If present set 'MaxVolumesPerNode' to this value.
-		// If node label is not present, set 'MaxVolumesPerNode' to default value i.e., 0
+	// Check for node label 'max-vxflexos-volumes-per-node'. If present set 'MaxVolumesPerNode' to this value.
+	// If node label is not present, set 'MaxVolumesPerNode' to default value i.e., 0
 
-		labels, err := GetNodeLabels(ctx, s)
+	labels, err := GetNodeLabels(ctx, s)
+	if err != nil {
+		return nil, err
+	}
+
+	if val, ok := labels[maxVxflexosVolumesPerNodeLabel]; ok {
+		maxVxflexosVolumesPerNode, err = strconv.ParseInt(val, 10, 64)
 		if err != nil {
-			return nil, err
+			return nil, status.Error(codes.InvalidArgument, GetMessage("invalid value '%s' specified for 'max-vxflexos-volumes-per-node' node label", val))
 		}
-
-		if val, ok := labels[maxVxflexosVolumesPerNodeLabel]; ok {
-			maxVxflexosVolumesPerNode, err = strconv.ParseInt(val, 10, 64)
-			if err != nil {
-				return nil, status.Error(codes.InvalidArgument, GetMessage("invalid value '%s' specified for 'max-vxflexos-volumes-per-node' node label", val))
-			}
-		} else {
-			// As per the csi spec the plugin MUST NOT set negative values to
-			// 'MaxVolumesPerNode' in the NodeGetInfoResponse response
-			if s.opts.MaxVolumesPerNode < 0 {
-				return nil, status.Error(codes.InvalidArgument, GetMessage("maxVxflexosVolumesPerNode MUST NOT be set to negative value"))
-			}
-			maxVxflexosVolumesPerNode = s.opts.MaxVolumesPerNode
+	} else {
+		// As per the csi spec the plugin MUST NOT set negative values to
+		// 'MaxVolumesPerNode' in the NodeGetInfoResponse response
+		if s.opts.MaxVolumesPerNode < 0 {
+			return nil, status.Error(codes.InvalidArgument, GetMessage("maxVxflexosVolumesPerNode MUST NOT be set to negative value"))
 		}
+		maxVxflexosVolumesPerNode = s.opts.MaxVolumesPerNode
 	}
 
 	Log.Debugf("MaxVolumesPerNode: %v\n", maxVxflexosVolumesPerNode)

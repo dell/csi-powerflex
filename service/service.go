@@ -113,6 +113,9 @@ type ArrayConnectionData struct {
 	IsDefault                 bool   `json:"isDefault,omitempty"`
 	AllSystemNames            string `json:"allSystemNames"`
 	NasName                   string `json:"nasName"`
+	Protocol                  string `json:"protocol"`
+	IsNFS                     bool   `json:"isNFS,omitempty"`
+	IsSdc                     bool   `json:"isSdc,omitempty"`
 }
 
 // Manifest is the SP's manifest.
@@ -845,6 +848,12 @@ func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error
 				names := strings.Split(c.AllSystemNames, ",")
 				Log.Printf("Powerflex systemID %s AllSytemNames given %#v\n", systemID, names)
 			}
+			// get the protocol
+			if c.Protocol == "" {
+				Log.Printf("Powerflex systemID %s Protocol not given, defaulting to 'Auto'\n", systemID)
+				// if user has not mentioned it explicitly, let's use the Auto one
+				c.Protocol = "Auto"
+			}
 
 			// for PowerFlex v4.0
 			if strings.TrimSpace(c.NasName) == "" {
@@ -862,6 +871,7 @@ func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error
 				"systemID":                  c.SystemID,
 				"allSystemNames":            c.AllSystemNames,
 				"nasName":                   c.NasName,
+				"protocol":                  c.Protocol,
 			}
 
 			Log.WithFields(fields).Infof("configured %s", c.SystemID)
