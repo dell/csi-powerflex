@@ -1,31 +1,16 @@
 # CODEOWNERS
 #
-# documentation for this file can be found at:
+# Documentation for this file can be found at:
 # https://help.github.com/en/articles/about-code-owners
+
 # These are the default owners for the code and will
 # be requested for review when someone opens a pull request.
-# order is alphabetical for easier maintenance.
+# Order is alphabetical for easier maintenance.
 #
-# Abhilash (abhi16394)
+# Abhilash Muralidhara (abhi16394)
 # Adarsh Kumar Yadav (adarsh-dell)
 # Akshay Saini (AkshaySainiDell)
-# Aaron Tye (atye)
-# Ashley Joy (ashleyvjoy)
-# Bharath Sreekanth (bharathsreekanth)
-# Deepak Ghivari (Deepak-Ghivari)
-# Emily Kinuthia (EmilyKatdell)
-# Jacob Grosner (JacobGros)
-# Jooseppi Luna (jooseppi-luna)
-# Rajshree Khare (khareRajshree)
-# Kshitija Kakde (KshitijaKakde)
-# Kumar Karthik Gosa (kumarkgosa)
-# Abrar Basha (mbasha-dell)
-# Matt Schmaelzle (mjsdell)
-# Prabhu Revur (prabhu-dell)
-# Rishabh Raj (rishabhatdell)
-# Sakshi Garg (sakshi-garg1)
-# Shayna Finocchiaro (shaynafinocchiaro)
-# Surya Prakash Gupta (suryagupta4)
+# Don Khan (donatwork)
 
-
-* @abhi16394 @adarsh-dell @AkshaySainiDell @atye @ashleyvjoy @bharathsreekanth @Deepak-Ghivari @EmilyKatdell @JacobGros @jooseppi-luna @khareRajshree @KshitijaKakde @kumarkgosa @mbasha-dell @mjsdell @prabhu-dell  @rishabhatdell @sakshi-garg1 @shaynafinocchiaro @suryagupta4
+# for all files
+* @abhi16394 @adarsh-dell @AkshaySainiDell @donatwork
