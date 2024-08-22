@@ -2144,7 +2144,7 @@ func (f *feature) iCallListVolumesWith(maxEntriesString, startingToken string) e
 		default:
 			return fmt.Errorf(`want start token of "next", "none", "invalid", "larger", got %q`, st)
 		}
-		req = f.getControllerListVolumesRequest(int32(maxEntries), startingToken)
+		req = f.getControllerListVolumesRequest(int32(maxEntries), startingToken) // #nosec: G115 false positive
 		f.listVolumesRequest = req
 	}
 	log.Printf("Calling ListVolumes with req=%+v", f.listVolumesRequest)
@@ -2401,7 +2401,7 @@ func (f *feature) aControllerPublishedEphemeralVolume() error {
 	if err != nil {
 		err = os.MkdirAll(nodePublishSymlinkDir, 0o777)
 		if err != nil {
-			fmt.Printf("by-id: " + err.Error())
+			fmt.Printf("by-id: %s", err.Error())
 		}
 	}
 
@@ -2472,7 +2472,7 @@ func (f *feature) aControllerPublishedVolume() error {
 	if err != nil {
 		err = os.MkdirAll(nodePublishSymlinkDir, 0o777)
 		if err != nil {
-			fmt.Printf("by-id: " + err.Error())
+			fmt.Printf("by-id: %s", err.Error())
 		}
 	}
 
@@ -3667,7 +3667,7 @@ func (f *feature) iCallListSnapshotsWithMaxentriesAndStartingtoken(maxEntriesStr
 		return nil
 	}
 	ctx := new(context.Context)
-	req := &csi.ListSnapshotsRequest{MaxEntries: int32(maxEntries), StartingToken: startingTokenString}
+	req := &csi.ListSnapshotsRequest{MaxEntries: int32(maxEntries), StartingToken: startingTokenString} // #nosec: G115 false positive
 	f.listSnapshotsRequest = req
 	log.Printf("Calling ListSnapshots with req=%+v", f.listVolumesRequest)
 	f.listSnapshotsResponse, f.err = f.service.ListSnapshots(*ctx, req)

@@ -800,13 +800,13 @@ func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error
 	if err != nil {
 		Log.Errorf("Found error %v while checking stat of file %s ", err, ArrayConfigFile)
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf(fmt.Sprintf("File %s does not exist", ArrayConfigFile))
+			return nil, fmt.Errorf("File %s does not exist", ArrayConfigFile)
 		}
 	}
 
 	config, err := os.ReadFile(filepath.Clean(ArrayConfigFile))
 	if err != nil {
-		return nil, fmt.Errorf(fmt.Sprintf("File %s errors: %v", ArrayConfigFile, err))
+		return nil, fmt.Errorf("File %s errors: %v", ArrayConfigFile, err)
 	}
 
 	if string(config) != "" {
@@ -815,30 +815,30 @@ func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error
 		config, _ = yaml.JSONToYAML(config)
 		err = yaml.Unmarshal(config, &creds)
 		if err != nil {
-			return nil, fmt.Errorf(fmt.Sprintf("Unable to parse the credentials: %v", err))
+			return nil, fmt.Errorf("Unable to parse the credentials: %v", err)
 		}
 
 		if len(creds) == 0 {
-			return nil, fmt.Errorf("no arrays are provided in vxflexos-creds secret")
+			return nil, fmt.Errorf("%s", "no arrays are provided in vxflexos-creds secret")
 		}
 
 		noOfDefaultArray := 0
 		for i, c := range creds {
 			systemID := c.SystemID
 			if _, ok := arrays[systemID]; ok {
-				return nil, fmt.Errorf(fmt.Sprintf("duplicate system ID %s found at index %d", systemID, i))
+				return nil, fmt.Errorf("duplicate system ID %s found at index %d", systemID, i)
 			}
 			if systemID == "" {
-				return nil, fmt.Errorf(fmt.Sprintf("invalid value for system name at index %d", i))
+				return nil, fmt.Errorf("invalid value for system name at index %d", i)
 			}
 			if c.Username == "" {
-				return nil, fmt.Errorf(fmt.Sprintf("invalid value for Username at index %d", i))
+				return nil, fmt.Errorf("invalid value for Username at index %d", i)
 			}
 			if c.Password == "" {
-				return nil, fmt.Errorf(fmt.Sprintf("invalid value for Password at index %d", i))
+				return nil, fmt.Errorf("invalid value for Password at index %d", i)
 			}
 			if c.Endpoint == "" {
-				return nil, fmt.Errorf(fmt.Sprintf("invalid value for Endpoint at index %d", i))
+				return nil, fmt.Errorf("invalid value for Endpoint at index %d", i)
 			}
 			// ArrayConnectionData
 			if c.AllSystemNames != "" {

@@ -502,7 +502,7 @@ func (s *service) ExecuteAction(ctx context.Context, req *replication.ExecuteAct
 
 	client, err := s.verifySystem(localSystem)
 	if err != nil {
-		return nil, status.Errorf(codes.FailedPrecondition, err.Error())
+		return nil, status.Errorf(codes.FailedPrecondition, "%s", err.Error())
 	}
 
 	group, err := s.getReplicationConsistencyGroupByID(localSystem, protectionGroupID)
