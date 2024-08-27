@@ -524,7 +524,7 @@ func (s *service) CreateVolume(
 			// volume already exists, look it up by name
 			id, err = s.adminClients[systemID].FindVolumeID(name)
 			if err != nil {
-				return nil, status.Errorf(codes.Internal, err.Error())
+				return nil, status.Errorf(codes.Internal, "%s", err.Error())
 			}
 		} else {
 			id = createResp.ID
@@ -1243,7 +1243,7 @@ func (s *service) ControllerPublishVolume(
 
 		sdcIPs, err := s.getSDCIPs(nodeID, systemID)
 		if err != nil {
-			return nil, status.Errorf(codes.NotFound, err.Error())
+			return nil, status.Errorf(codes.NotFound, "%s", err.Error())
 		} else if len(sdcIPs) == 0 {
 			return nil, status.Errorf(codes.NotFound, "received empty sdcIPs")
 		}
@@ -1284,7 +1284,7 @@ func (s *service) ControllerPublishVolume(
 
 	sdcID, err := s.getSDCID(nodeID, systemID)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, err.Error())
+		return nil, status.Errorf(codes.NotFound, "%s", err.Error())
 	}
 
 	vc := req.GetVolumeCapability()
@@ -1356,7 +1356,7 @@ func (s *service) ControllerPublishVolume(
 
 		allowMultipleMappings, err = shouldAllowMultipleMappings(isBlock, am)
 		if err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, err.Error())
+			return nil, status.Errorf(codes.InvalidArgument, "%s", err.Error())
 		}
 
 		if err := validateAccessType(am, isBlock); err != nil {
@@ -1365,7 +1365,7 @@ func (s *service) ControllerPublishVolume(
 	} else {
 		allowMultipleMappings, err = shouldAllowMultipleMappings(isBlock, am)
 		if err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, err.Error())
+			return nil, status.Errorf(codes.InvalidArgument, "%s", err.Error())
 		}
 	}
 
@@ -1566,7 +1566,7 @@ func (s *service) ControllerUnpublishVolume(
 
 		sdcIPs, err := s.getSDCIPs(nodeID, systemID)
 		if err != nil {
-			return nil, status.Errorf(codes.NotFound, err.Error())
+			return nil, status.Errorf(codes.NotFound, "%s", err.Error())
 		} else if len(sdcIPs) == 0 {
 			return nil, status.Errorf(codes.NotFound, "received empty sdcIPs")
 		}
@@ -1594,7 +1594,7 @@ func (s *service) ControllerUnpublishVolume(
 
 	sdcID, err := s.getSDCID(nodeID, systemID)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, err.Error())
+		return nil, status.Errorf(codes.NotFound, "%s", err.Error())
 	}
 
 	// check if volume is attached to node at all
@@ -2245,8 +2245,8 @@ func cacheMaximumVolumeSize(key string, value int64) {
 }
 
 func (s *service) ControllerGetCapabilities(
-	ctx context.Context,
-	req *csi.ControllerGetCapabilitiesRequest) (
+	_ context.Context,
+	_ *csi.ControllerGetCapabilitiesRequest) (
 	*csi.ControllerGetCapabilitiesResponse, error,
 ) {
 	capabilities := []*csi.ControllerServiceCapability{
@@ -2363,7 +2363,7 @@ func (s *service) systemProbeAll(ctx context.Context) error {
 }
 
 // systemProbe will probe the given array
-func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) error {
+func (s *service) systemProbe(_ context.Context, array *ArrayConnectionData) error {
 	// Check that we have the details needed to login to the Gateway
 	if array.Endpoint == "" {
 		return status.Error(codes.FailedPrecondition,
@@ -2821,8 +2821,8 @@ func (s *service) DeleteSnapshot(
 // DeleteSnapshotConsistencyGroup is called when we wish to delete an entire CG
 // of snapshots. We retrieve all the volumes and determine if any are in use.
 func (s *service) DeleteSnapshotConsistencyGroup(
-	ctx context.Context, snapVol *siotypes.Volume,
-	req *csi.DeleteSnapshotRequest, adminClient *goscaleio.Client) (
+	_ context.Context, snapVol *siotypes.Volume,
+	_ *csi.DeleteSnapshotRequest, adminClient *goscaleio.Client) (
 	*csi.DeleteSnapshotResponse, error,
 ) {
 	cgVols := make([]*siotypes.Volume, 0)
@@ -3192,7 +3192,7 @@ func (s *service) Clone(req *csi.CreateVolumeRequest,
 
 // ControllerGetVolume fetch current information about a volume
 // returns volume condition if found else returns not found
-func (s *service) ControllerGetVolume(ctx context.Context, req *csi.ControllerGetVolumeRequest) (*csi.ControllerGetVolumeResponse, error) {
+func (s *service) ControllerGetVolume(_ context.Context, req *csi.ControllerGetVolumeRequest) (*csi.ControllerGetVolumeResponse, error) {
 	abnormal := false
 	csiVolID := req.GetVolumeId()
 	if csiVolID == "" {

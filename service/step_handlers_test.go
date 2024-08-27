@@ -262,7 +262,7 @@ func getRouter() http.Handler {
 }
 
 // handle implements GET /api/types/StoragePool/instances
-func handleVolumeStatistics(w http.ResponseWriter, r *http.Request) {
+func handleVolumeStatistics(w http.ResponseWriter, _ *http.Request) {
 	if stepHandlersErrors.PodmonVolumeStatisticsError {
 		writeError(w, "induced error", http.StatusRequestTimeout, codes.Internal)
 		return
@@ -270,7 +270,7 @@ func handleVolumeStatistics(w http.ResponseWriter, r *http.Request) {
 	returnJSONFile("features", "get_volume_statistics.json", w, nil)
 }
 
-func handleSystemSdc(w http.ResponseWriter, r *http.Request) {
+func handleSystemSdc(w http.ResponseWriter, _ *http.Request) {
 	if stepHandlersErrors.GetSystemSdcError {
 		writeError(w, "induced error", http.StatusRequestTimeout, codes.Internal)
 		return
@@ -278,7 +278,7 @@ func handleSystemSdc(w http.ResponseWriter, r *http.Request) {
 	returnJSONFile("features", "get_sdc_instances.json", w, nil)
 }
 
-func handleGetSystemLimits(w http.ResponseWriter, r *http.Request) {
+func handleGetSystemLimits(w http.ResponseWriter, _ *http.Request) {
 	if stepHandlersErrors.GetSystemLimitError {
 		writeError(w, "induced error", http.StatusRequestTimeout, codes.Internal)
 		return
@@ -303,7 +303,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleLogin implements GET /api/version
-func handleVersion(w http.ResponseWriter, r *http.Request) {
+func handleVersion(w http.ResponseWriter, _ *http.Request) {
 	if testControllerHasNoConnection {
 		w.WriteHeader(http.StatusRequestTimeout)
 		return
@@ -312,7 +312,7 @@ func handleVersion(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleSystemInstances implements GET /api/types/System/instances
-func handleSystemInstances(w http.ResponseWriter, r *http.Request) {
+func handleSystemInstances(w http.ResponseWriter, _ *http.Request) {
 	if stepHandlersErrors.PodmonNodeProbeError {
 		writeError(w, "PodmonNodeProbeError", http.StatusRequestTimeout, codes.Internal)
 		return
@@ -383,7 +383,7 @@ func handleNFSSnapshots(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleSystemInstances implements GET /api/types/System/instances
-func handleNasInstances(w http.ResponseWriter, r *http.Request) {
+func handleNasInstances(w http.ResponseWriter, _ *http.Request) {
 	if stepHandlersErrors.NasServerNotFoundError {
 		writeError(w, "nas server not found", http.StatusNotFound, codes.NotFound)
 		return
@@ -392,7 +392,7 @@ func handleNasInstances(w http.ResponseWriter, r *http.Request) {
 	returnJSONFile("features", "get_nas_servers.json", w, nil)
 }
 
-func handleGetNasInstances(w http.ResponseWriter, r *http.Request) {
+func handleGetNasInstances(w http.ResponseWriter, _ *http.Request) {
 	if stepHandlersErrors.NasServerNotFoundError {
 		writeError(w, "nas server not found", http.StatusNotFound, codes.NotFound)
 		return
@@ -401,7 +401,7 @@ func handleGetNasInstances(w http.ResponseWriter, r *http.Request) {
 	returnJSONFile("features", "get_nas_server_id.json", w, nil)
 }
 
-func handleGetFileInterface(w http.ResponseWriter, r *http.Request) {
+func handleGetFileInterface(w http.ResponseWriter, _ *http.Request) {
 	if stepHandlersErrors.FileInterfaceNotFoundError {
 		writeError(w, "file interace not found", http.StatusNotFound, codes.NotFound)
 		return
@@ -970,7 +970,7 @@ func handleGetFileSystems(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleStoragePoolInstances implements GET /api/types/StoragePool/instances
-func handleStoragePoolInstances(w http.ResponseWriter, r *http.Request) {
+func handleStoragePoolInstances(w http.ResponseWriter, _ *http.Request) {
 	if stepHandlersErrors.GetStoragePoolsError {
 		writeError(w, "induced error", http.StatusRequestTimeout, codes.Internal)
 		return
@@ -978,7 +978,7 @@ func handleStoragePoolInstances(w http.ResponseWriter, r *http.Request) {
 	returnJSONFile("features", "get_storage_pool_instances.json", w, nil)
 }
 
-func handlePeerMdmInstances(w http.ResponseWriter, r *http.Request) {
+func handlePeerMdmInstances(w http.ResponseWriter, _ *http.Request) {
 	if inducedError.Error() == "PeerMdmError" {
 		writeError(w, "PeerMdmError", http.StatusRequestTimeout, codes.Internal)
 		return

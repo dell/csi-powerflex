@@ -49,8 +49,8 @@ const (
 )
 
 func (s *service) NodeStageVolume(
-	ctx context.Context,
-	req *csi.NodeStageVolumeRequest) (
+	_ context.Context,
+	_ *csi.NodeStageVolumeRequest) (
 	*csi.NodeStageVolumeResponse, error,
 ) {
 	return nil, status.Error(codes.Unimplemented, "")
@@ -436,7 +436,7 @@ func getMappedVol(volID string, systemID string) (*goscaleio.SdcMappedVolume, er
 }
 
 // getSystemName gets the system name for each system and append it to connectedSystemID variable
-func (s *service) getSystemName(ctx context.Context, systems []string) bool {
+func (s *service) getSystemName(_ context.Context, systems []string) bool {
 	for systemID := range s.opts.arrays {
 		if id, ok := s.connectedSystemNameToID[systemID]; ok {
 			for _, system := range systems {
@@ -660,8 +660,8 @@ func getSystemsKnownToSDC() ([]string, error) {
 }
 
 func (s *service) NodeGetCapabilities(
-	ctx context.Context,
-	req *csi.NodeGetCapabilitiesRequest) (
+	_ context.Context,
+	_ *csi.NodeGetCapabilitiesRequest) (
 	*csi.NodeGetCapabilitiesResponse, error,
 ) {
 	// these capabilities deal with volume health monitoring, and are only advertised by driver when user sets
@@ -714,7 +714,7 @@ func (s *service) NodeGetCapabilities(
 // AccessibleTopology will be set with the VxFlex OS SystemID
 func (s *service) NodeGetInfo(
 	ctx context.Context,
-	req *csi.NodeGetInfoRequest) (
+	_ *csi.NodeGetInfoRequest) (
 	*csi.NodeGetInfoResponse, error,
 ) {
 	// Fetch SDC GUID

@@ -793,20 +793,20 @@ func (s *service) logStatistics() {
 	}
 }
 
-func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error) {
+func getArrayConfig(_ context.Context) (map[string]*ArrayConnectionData, error) {
 	arrays := make(map[string]*ArrayConnectionData)
 
 	_, err := os.Stat(ArrayConfigFile)
 	if err != nil {
 		Log.Errorf("Found error %v while checking stat of file %s ", err, ArrayConfigFile)
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf(fmt.Sprintf("File %s does not exist", ArrayConfigFile))
+			return nil, fmt.Errorf("File %s does not exist", ArrayConfigFile)
 		}
 	}
 
 	config, err := os.ReadFile(filepath.Clean(ArrayConfigFile))
 	if err != nil {
-		return nil, fmt.Errorf(fmt.Sprintf("File %s errors: %v", ArrayConfigFile, err))
+		return nil, fmt.Errorf("File %s errors: %v", ArrayConfigFile, err)
 	}
 
 	if string(config) != "" {
@@ -815,7 +815,7 @@ func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error
 		config, _ = yaml.JSONToYAML(config)
 		err = yaml.Unmarshal(config, &creds)
 		if err != nil {
-			return nil, fmt.Errorf(fmt.Sprintf("Unable to parse the credentials: %v", err))
+			return nil, fmt.Errorf("Unable to parse the credentials: %v", err)
 		}
 
 		if len(creds) == 0 {
@@ -826,19 +826,19 @@ func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error
 		for i, c := range creds {
 			systemID := c.SystemID
 			if _, ok := arrays[systemID]; ok {
-				return nil, fmt.Errorf(fmt.Sprintf("duplicate system ID %s found at index %d", systemID, i))
+				return nil, fmt.Errorf("duplicate system ID %s found at index %d", systemID, i)
 			}
 			if systemID == "" {
-				return nil, fmt.Errorf(fmt.Sprintf("invalid value for system name at index %d", i))
+				return nil, fmt.Errorf("invalid value for system name at index %d", i)
 			}
 			if c.Username == "" {
-				return nil, fmt.Errorf(fmt.Sprintf("invalid value for Username at index %d", i))
+				return nil, fmt.Errorf("invalid value for Username at index %d", i)
 			}
 			if c.Password == "" {
-				return nil, fmt.Errorf(fmt.Sprintf("invalid value for Password at index %d", i))
+				return nil, fmt.Errorf("invalid value for Password at index %d", i)
 			}
 			if c.Endpoint == "" {
-				return nil, fmt.Errorf(fmt.Sprintf("invalid value for Endpoint at index %d", i))
+				return nil, fmt.Errorf("invalid value for Endpoint at index %d", i)
 			}
 			// ArrayConnectionData
 			if c.AllSystemNames != "" {
@@ -1096,7 +1096,7 @@ func externalAccessAlreadyAdded(export *siotypes.NFSExport, externalAccess strin
 	return false
 }
 
-func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnpublishVolumeRequest, client *goscaleio.Client, fs *siotypes.FileSystem, volumeContextID string, nodeIPs []string, nodeID string) error {
+func (s *service) unexportFilesystem(_ context.Context, _ *csi.ControllerUnpublishVolumeRequest, client *goscaleio.Client, fs *siotypes.FileSystem, volumeContextID string, nodeIPs []string, nodeID string) error {
 	nfsExportName := NFSExportNamePrefix + fs.Name
 	nfsExportExists := false
 	var nfsExportID string
@@ -1176,7 +1176,7 @@ func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnp
 }
 
 // exportFilesystem - Method to export filesystem with idempotency
-func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPublishVolumeRequest, client *goscaleio.Client, fs *siotypes.FileSystem, nodeIPs []string, externalAccess string, nodeID string, pContext map[string]string, am *csi.VolumeCapability_AccessMode) (*csi.ControllerPublishVolumeResponse, error) {
+func (s *service) exportFilesystem(_ context.Context, _ *csi.ControllerPublishVolumeRequest, client *goscaleio.Client, fs *siotypes.FileSystem, nodeIPs []string, externalAccess string, nodeID string, pContext map[string]string, am *csi.VolumeCapability_AccessMode) (*csi.ControllerPublishVolumeResponse, error) {
 	for i, nodeIP := range nodeIPs {
 		nodeIPs[i] = nodeIP + "/255.255.255.255"
 	}
@@ -1616,7 +1616,7 @@ func (s *service) GetNfsTopology(systemID string) []*csi.Topology {
 	return []*csi.Topology{nfsTopology}
 }
 
-func (s *service) GetNodeLabels(ctx context.Context) (map[string]string, error) {
+func (s *service) GetNodeLabels(_ context.Context) (map[string]string, error) {
 	if K8sClientset == nil {
 		err := k8sutils.CreateKubeClientSet()
 		if err != nil {

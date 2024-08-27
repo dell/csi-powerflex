@@ -2144,6 +2144,8 @@ func (f *feature) iCallListVolumesWith(maxEntriesString, startingToken string) e
 		default:
 			return fmt.Errorf(`want start token of "next", "none", "invalid", "larger", got %q`, st)
 		}
+		// ignoring integer overflow issue, will not be an issue if maxEntries is less than 2147483647
+		// #nosec G115
 		req = f.getControllerListVolumesRequest(int32(maxEntries), startingToken)
 		f.listVolumesRequest = req
 	}
@@ -2401,7 +2403,7 @@ func (f *feature) aControllerPublishedEphemeralVolume() error {
 	if err != nil {
 		err = os.MkdirAll(nodePublishSymlinkDir, 0o777)
 		if err != nil {
-			fmt.Printf("by-id: " + err.Error())
+			fmt.Printf("by-id: %s", err.Error())
 		}
 	}
 
@@ -2472,7 +2474,7 @@ func (f *feature) aControllerPublishedVolume() error {
 	if err != nil {
 		err = os.MkdirAll(nodePublishSymlinkDir, 0o777)
 		if err != nil {
-			fmt.Printf("by-id: " + err.Error())
+			fmt.Printf("by-id: %s", err.Error())
 		}
 	}
 
@@ -3667,6 +3669,8 @@ func (f *feature) iCallListSnapshotsWithMaxentriesAndStartingtoken(maxEntriesStr
 		return nil
 	}
 	ctx := new(context.Context)
+	// ignoring integer overflow issue, will not be an issue if maxEntries is less than 2147483647
+	// #nosec G115
 	req := &csi.ListSnapshotsRequest{MaxEntries: int32(maxEntries), StartingToken: startingTokenString}
 	f.listSnapshotsRequest = req
 	log.Printf("Calling ListSnapshots with req=%+v", f.listVolumesRequest)
