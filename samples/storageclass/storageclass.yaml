@@ -23,7 +23,7 @@ allowVolumeExpansion: true
 parameters:
   # Storage pool to use on system
   # Optional: false
-  storagepool: <STORAGE_POOL> # Insert Storage pool
+  storagepool: <STORAGE_POOL>
   # Protection domain that storage pool above belongs to
   # Needed if array has two storagepools that share the same name, but belong to different protection domains
   # Optional: true
@@ -32,7 +32,7 @@ parameters:
   # System you would like this storage class to use
   # Allowed values: one string for system ID
   # Optional: false
-  systemID: <SYSTEM_ID> # Insert System ID
+  systemID: <SYSTEM_ID>
   # format options to pass to mkfs
   # Allowed values: A string dictating the fs options you want passed
   # Optional: true
@@ -65,6 +65,6 @@ volumeBindingMode: WaitForFirstConsumer
 # allowedTopologies helps scheduling pods on worker nodes which match all of below expressions.
 allowedTopologies:
   - matchLabelExpressions:
-      - key: csi-vxflexos.dellemc.com/<SYSTEM_ID> # Insert System ID
+      - key: csi-vxflexos.dellemc.com/<SYSTEM_ID>
         values:
           - csi-vxflexos.dellemc.com
