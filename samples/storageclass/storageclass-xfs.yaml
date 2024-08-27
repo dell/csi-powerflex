@@ -61,7 +61,7 @@ parameters:
 volumeBindingMode: WaitForFirstConsumer
 # allowedTopologies helps scheduling pods on worker nodes which match all of below expressions.
 allowedTopologies:
-- matchLabelExpressions:
-  - key: csi-vxflexos.dellemc.com/<SYSTEM_ID> # Insert System ID
-    values:
-    - csi-vxflexos.dellemc.com    
+  - matchLabelExpressions:
+      - key: csi-vxflexos.dellemc.com/<SYSTEM_ID> # Insert System ID
+        values:
+          - csi-vxflexos.dellemc.com

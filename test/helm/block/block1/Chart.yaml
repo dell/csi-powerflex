@@ -4,7 +4,7 @@ appVersion: 2.6.0
 description: |
   Tests VxFlexOS CSI deployments.
 keywords:
-- vxflexos-csi
-- storage
-- block
+  - vxflexos-csi
+  - storage
+  - block
 engine: gotpl

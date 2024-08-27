@@ -5,7 +5,7 @@ metadata:
   namespace: helmtest-vxflexos
 spec:
   accessModes:
-  - ReadWriteOnce
+    - ReadWriteOnce
   volumeMode: Filesystem
   resources:
     requests:
@@ -19,7 +19,7 @@ metadata:
   namespace: helmtest-vxflexos
 spec:
   accessModes:
-  - ReadWriteOnce
+    - ReadWriteOnce
   volumeMode: Filesystem
   resources:
     requests:
@@ -33,10 +33,9 @@ metadata:
   namespace: helmtest-vxflexos
 spec:
   accessModes:
-  - ReadWriteOnce
+    - ReadWriteOnce
   volumeMode: Filesystem
   resources:
     requests:
       storage: 16Gi
   storageClassName: vxflexos-nfs
-

@@ -16,4 +16,3 @@ jobs:
         with:
           threshold: 90
           test-folder: "./service"
-

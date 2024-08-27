@@ -5,7 +5,7 @@ metadata:
   namespace: helmtest-vxflexos
 spec:
   accessModes:
-  - ReadWriteOnce
+    - ReadWriteOnce
   volumeMode: Filesystem
   resources:
     requests:
