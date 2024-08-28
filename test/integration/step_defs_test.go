@@ -134,20 +134,20 @@ func (f *feature) getArrayConfig() (map[string]*ArrayConnectionData, error) {
 	_, err := os.Stat(configFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf(fmt.Sprintf("File %s does not exist", configFile))
+			return nil, fmt.Errorf("File %s does not exist", configFile)
 		}
 	}
 
 	config, err := os.ReadFile(filepath.Clean(configFile))
 	if err != nil {
-		return nil, fmt.Errorf(fmt.Sprintf("File %s errors: %v", configFile, err))
+		return nil, fmt.Errorf("File %s errors: %v", configFile, err)
 	}
 
 	if string(config) != "" {
 		jsonCreds := make([]ArrayConnectionData, 0)
 		err := json.Unmarshal(config, &jsonCreds)
 		if err != nil {
-			return nil, fmt.Errorf(fmt.Sprintf("Unable to parse the credentials: %v", err))
+			return nil, fmt.Errorf("Unable to parse the credentials: %v", err)
 		}
 
 		if len(jsonCreds) == 0 {
@@ -158,19 +158,19 @@ func (f *feature) getArrayConfig() (map[string]*ArrayConnectionData, error) {
 		for i, c := range jsonCreds {
 			systemID := c.SystemID
 			if _, ok := arrays[systemID]; ok {
-				return nil, fmt.Errorf(fmt.Sprintf("duplicate system ID %s found at index %d", systemID, i))
+				return nil, fmt.Errorf("duplicate system ID %s found at index %d", systemID, i)
 			}
 			if systemID == "" {
-				return nil, fmt.Errorf(fmt.Sprintf("invalid value for system name at index %d", i))
+				return nil, fmt.Errorf("invalid value for system name at index %d", i)
 			}
 			if c.Username == "" {
-				return nil, fmt.Errorf(fmt.Sprintf("invalid value for Username at index %d", i))
+				return nil, fmt.Errorf("invalid value for Username at index %d", i)
 			}
 			if c.Password == "" {
-				return nil, fmt.Errorf(fmt.Sprintf("invalid value for Password at index %d", i))
+				return nil, fmt.Errorf("invalid value for Password at index %d", i)
 			}
 			if c.Endpoint == "" {
-				return nil, fmt.Errorf(fmt.Sprintf("invalid value for Endpoint at index %d", i))
+				return nil, fmt.Errorf("invalid value for Endpoint at index %d", i)
 			}
 			// ArrayConnectionData
 			if c.AllSystemNames != "" {
@@ -1126,7 +1126,7 @@ func (f *feature) expectErrorListSnapshotResponse() error {
 	if !strings.Contains(err.Error(), expected) {
 		return fmt.Errorf("Error %s does not contain the expected message: %s", err.Error(), expected)
 	}
-	fmt.Printf("got expected error " + err.Error())
+	fmt.Printf("got expected error: %s", err.Error())
 	return nil
 }
 

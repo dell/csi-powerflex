@@ -524,7 +524,7 @@ func (s *service) CreateVolume(
 			// volume already exists, look it up by name
 			id, err = s.adminClients[systemID].FindVolumeID(name)
 			if err != nil {
-				return nil, status.Errorf(codes.Internal, err.Error())
+				return nil, status.Errorf(codes.Internal, "%s", err.Error())
 			}
 		} else {
 			id = createResp.ID
@@ -1243,9 +1243,9 @@ func (s *service) ControllerPublishVolume(
 
 		sdcIPs, err := s.getSDCIPs(nodeID, systemID)
 		if err != nil {
-			return nil, status.Errorf(codes.NotFound, err.Error())
+			return nil, status.Errorf(codes.NotFound, "%s", err.Error())
 		} else if len(sdcIPs) == 0 {
-			return nil, status.Errorf(codes.NotFound, "received empty sdcIPs")
+			return nil, status.Errorf(codes.NotFound, "%s", "received empty sdcIPs")
 		}
 
 		externalAccess := s.opts.ExternalAccess
@@ -1284,7 +1284,7 @@ func (s *service) ControllerPublishVolume(
 
 	sdcID, err := s.getSDCID(nodeID, systemID)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, err.Error())
+		return nil, status.Errorf(codes.NotFound, "%s", err.Error())
 	}
 
 	vc := req.GetVolumeCapability()
@@ -1356,7 +1356,7 @@ func (s *service) ControllerPublishVolume(
 
 		allowMultipleMappings, err = shouldAllowMultipleMappings(isBlock, am)
 		if err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, err.Error())
+			return nil, status.Errorf(codes.InvalidArgument, "%s", err.Error())
 		}
 
 		if err := validateAccessType(am, isBlock); err != nil {
@@ -1365,7 +1365,7 @@ func (s *service) ControllerPublishVolume(
 	} else {
 		allowMultipleMappings, err = shouldAllowMultipleMappings(isBlock, am)
 		if err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, err.Error())
+			return nil, status.Errorf(codes.InvalidArgument, "%s", err.Error())
 		}
 	}
 
@@ -1566,9 +1566,9 @@ func (s *service) ControllerUnpublishVolume(
 
 		sdcIPs, err := s.getSDCIPs(nodeID, systemID)
 		if err != nil {
-			return nil, status.Errorf(codes.NotFound, err.Error())
+			return nil, status.Errorf(codes.NotFound, "%s", err.Error())
 		} else if len(sdcIPs) == 0 {
-			return nil, status.Errorf(codes.NotFound, "received empty sdcIPs")
+			return nil, status.Errorf(codes.NotFound, "%s", "received empty sdcIPs")
 		}
 
 		// unexport for NFS
@@ -1594,7 +1594,7 @@ func (s *service) ControllerUnpublishVolume(
 
 	sdcID, err := s.getSDCID(nodeID, systemID)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, err.Error())
+		return nil, status.Errorf(codes.NotFound, "%s", err.Error())
 	}
 
 	// check if volume is attached to node at all
