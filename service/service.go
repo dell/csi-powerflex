@@ -819,7 +819,7 @@ func getArrayConfig(_ context.Context) (map[string]*ArrayConnectionData, error) 
 		}
 
 		if len(creds) == 0 {
-			return nil, fmt.Errorf("no arrays are provided in vxflexos-creds secret")
+			return nil, fmt.Errorf("%s", "no arrays are provided in vxflexos-creds secret")
 		}
 
 		noOfDefaultArray := 0

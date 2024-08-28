@@ -1126,7 +1126,9 @@ func (f *feature) expectErrorListSnapshotResponse() error {
 	if !strings.Contains(err.Error(), expected) {
 		return fmt.Errorf("Error %s does not contain the expected message: %s", err.Error(), expected)
 	}
-	fmt.Printf("got expected error %s", err.Error())
+
+	fmt.Printf("got expected error: %s", err.Error())
+
 	return nil
 }
 

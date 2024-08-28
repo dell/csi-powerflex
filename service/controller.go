@@ -1245,7 +1245,7 @@ func (s *service) ControllerPublishVolume(
 		if err != nil {
 			return nil, status.Errorf(codes.NotFound, "%s", err.Error())
 		} else if len(sdcIPs) == 0 {
-			return nil, status.Errorf(codes.NotFound, "received empty sdcIPs")
+			return nil, status.Errorf(codes.NotFound, "%s", "received empty sdcIPs")
 		}
 
 		externalAccess := s.opts.ExternalAccess
@@ -1568,7 +1568,7 @@ func (s *service) ControllerUnpublishVolume(
 		if err != nil {
 			return nil, status.Errorf(codes.NotFound, "%s", err.Error())
 		} else if len(sdcIPs) == 0 {
-			return nil, status.Errorf(codes.NotFound, "received empty sdcIPs")
+			return nil, status.Errorf(codes.NotFound, "%s", "received empty sdcIPs")
 		}
 
 		// unexport for NFS
