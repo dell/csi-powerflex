@@ -2145,6 +2145,8 @@ func (f *feature) iCallListVolumesWith(maxEntriesString, startingToken string) e
 			return fmt.Errorf(`want start token of "next", "none", "invalid", "larger", got %q`, st)
 		}
 
+		// ignoring integer overflow issue, will not be an issue if maxEntries is less than 2147483647
+		// #nosec G115
 		req = f.getControllerListVolumesRequest(int32(maxEntries), startingToken)
 
 		f.listVolumesRequest = req
@@ -3670,6 +3672,8 @@ func (f *feature) iCallListSnapshotsWithMaxentriesAndStartingtoken(maxEntriesStr
 	}
 	ctx := new(context.Context)
 
+	// ignoring integer overflow issue, will not be an issue if maxEntries is less than 2147483647
+	// #nosec G115
 	req := &csi.ListSnapshotsRequest{MaxEntries: int32(maxEntries), StartingToken: startingTokenString}
 
 	f.listSnapshotsRequest = req
