@@ -2,10 +2,10 @@ kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
   name: pvol0-copy1
-  namespace: {{ .Values.namespace }}
+  namespace: { { .Values.namespace } }
 spec:
   accessModes:
-  - ReadWriteOnce
+    - ReadWriteOnce
   dataSource:
     apiGroup: snapshot.storage.k8s.io
     kind: VolumeSnapshot
@@ -13,37 +13,37 @@ spec:
   resources:
     requests:
       storage: 8Gi
-  storageClassName: {{ .Values.storageclass }}
+  storageClassName: { { .Values.storageclass } }
   volumeMode: Block
 ---
 kind: StatefulSet
 apiVersion: apps/v1
 metadata:
-    name: copy
-    namespace: {{ .Values.namespace }}
+  name: copy
+  namespace: { { .Values.namespace } }
 spec:
-    selector:
-        matchLabels:
-          app: copy
-    serviceName: copy
-    template:
-      metadata:
-        labels:
-          app: copy
-      spec:
-        serviceAccount: vol
-        containers:
-          - name: copy
-            image: docker.io/centos:latest
-            command: [ "/bin/sleep", "3600" ]
-            securityContext:
-              capabilities:
-                add:
-                  - SYS_ADMIN
-            volumeDevices:
-              - devicePath: "/data0"
-                name: pvol0-copy1
-        volumes:
-          - name: pvol0-copy1
-            persistentVolumeClaim:
-              claimName: pvol0-copy1
+  selector:
+    matchLabels:
+      app: copy
+  serviceName: copy
+  template:
+    metadata:
+      labels:
+        app: copy
+    spec:
+      serviceAccount: vol
+      containers:
+        - name: copy
+          image: docker.io/centos:latest
+          command: ["/bin/sleep", "3600"]
+          securityContext:
+            capabilities:
+              add:
+                - SYS_ADMIN
+          volumeDevices:
+            - devicePath: "/data0"
+              name: pvol0-copy1
+      volumes:
+        - name: pvol0-copy1
+          persistentVolumeClaim:
+            claimName: pvol0-copy1

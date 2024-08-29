@@ -2245,8 +2245,8 @@ func cacheMaximumVolumeSize(key string, value int64) {
 }
 
 func (s *service) ControllerGetCapabilities(
-	ctx context.Context,
-	req *csi.ControllerGetCapabilitiesRequest) (
+	_ context.Context,
+	_ *csi.ControllerGetCapabilitiesRequest) (
 	*csi.ControllerGetCapabilitiesResponse, error,
 ) {
 	capabilities := []*csi.ControllerServiceCapability{
@@ -2363,7 +2363,7 @@ func (s *service) systemProbeAll(ctx context.Context) error {
 }
 
 // systemProbe will probe the given array
-func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) error {
+func (s *service) systemProbe(_ context.Context, array *ArrayConnectionData) error {
 	// Check that we have the details needed to login to the Gateway
 	if array.Endpoint == "" {
 		return status.Error(codes.FailedPrecondition,
@@ -2821,8 +2821,8 @@ func (s *service) DeleteSnapshot(
 // DeleteSnapshotConsistencyGroup is called when we wish to delete an entire CG
 // of snapshots. We retrieve all the volumes and determine if any are in use.
 func (s *service) DeleteSnapshotConsistencyGroup(
-	ctx context.Context, snapVol *siotypes.Volume,
-	req *csi.DeleteSnapshotRequest, adminClient *goscaleio.Client) (
+	_ context.Context, snapVol *siotypes.Volume,
+	_ *csi.DeleteSnapshotRequest, adminClient *goscaleio.Client) (
 	*csi.DeleteSnapshotResponse, error,
 ) {
 	cgVols := make([]*siotypes.Volume, 0)
@@ -3192,7 +3192,7 @@ func (s *service) Clone(req *csi.CreateVolumeRequest,
 
 // ControllerGetVolume fetch current information about a volume
 // returns volume condition if found else returns not found
-func (s *service) ControllerGetVolume(ctx context.Context, req *csi.ControllerGetVolumeRequest) (*csi.ControllerGetVolumeResponse, error) {
+func (s *service) ControllerGetVolume(_ context.Context, req *csi.ControllerGetVolumeRequest) (*csi.ControllerGetVolumeResponse, error) {
 	abnormal := false
 	csiVolID := req.GetVolumeId()
 	if csiVolID == "" {

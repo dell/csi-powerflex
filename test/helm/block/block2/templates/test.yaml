@@ -1,42 +1,42 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-    name: {{ .Values.name }}
-    namespace: {{ .Values.namespace }}
+  name: { { .Values.name } }
+  namespace: { { .Values.namespace } }
 ---
 kind: StatefulSet
 apiVersion: apps/v1
 metadata:
-    name: {{ .Values.name }}
-    namespace: {{ .Values.namespace }}
+  name: { { .Values.name } }
+  namespace: { { .Values.namespace } }
 spec:
-    selector:
-        matchLabels:
-          app: {{ .Values.name }}
-    serviceName: test2vols
-    template:
-      metadata:
-        labels:
-          app: {{ .Values.name }}
-      spec:
-        serviceAccount: {{ .Values.name }}
-        containers:
-          - name: test
-            image: docker.io/centos:latest
-            command: [ "/bin/sleep", "3600" ]
-            volumeDevices:
-              - devicePath: "/dev/data0"
-                name: pvol0
-              - devicePath: "/dev/data1"
-                name: pvol1
-    volumeClaimTemplates:
+  selector:
+    matchLabels:
+      app: { { .Values.name } }
+  serviceName: test2vols
+  template:
+    metadata:
+      labels:
+        app: { { .Values.name } }
+    spec:
+      serviceAccount: { { .Values.name } }
+      containers:
+        - name: test
+          image: docker.io/centos:latest
+          command: ["/bin/sleep", "3600"]
+          volumeDevices:
+            - devicePath: "/dev/data0"
+              name: pvol0
+            - devicePath: "/dev/data1"
+              name: pvol1
+  volumeClaimTemplates:
     - metadata:
         name: pvol0
       spec:
         accessModes:
-        - ReadWriteOnce
+          - ReadWriteOnce
         volumeMode: Block
-        storageClassName: {{ .Values.storageclass }}
+        storageClassName: { { .Values.storageclass } }
         resources:
           requests:
             storage: 8Gi
@@ -44,10 +44,9 @@ spec:
         name: pvol1
       spec:
         accessModes:
-        - ReadWriteOnce
+          - ReadWriteOnce
         volumeMode: Block
-        storageClassName: {{ .Values.storageclass }}
+        storageClassName: { { .Values.storageclass } }
         resources:
           requests:
             storage: 12Gi
-

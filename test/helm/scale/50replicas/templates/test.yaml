@@ -1,522 +1,572 @@
 kind: StatefulSet
 apiVersion: apps/v1
 metadata:
-    name: {{ required "name required " .Values.name }}
-    namespace: helmtest-vxflexos
+  name: { { required "name required " .Values.name } }
+  namespace: helmtest-vxflexos
 spec:
-    replicas: {{ required "replicas required" .Values.replicas }}
-    selector:
-        matchLabels:
-          app: vxflextest
-    template:
-      metadata:
-        labels:
-          app: vxflextest
-      spec:
-        serviceAccount: vxflextest
-        containers:
-          - name: test
-            image: docker.io/centos:latest
-            command: [ "/bin/sleep", "3600" ]
-            volumeMounts:
-              - mountPath: "/data0"
-                name: pvolx0
-              - mountPath: "/data1"
-                name: pvolx1
-              - mountPath: "/data2"
-                name: pvolx2
-              - mountPath: "/data3"
-                name: pvolx3
-              - mountPath: "/data4"
-                name: pvolx4
-              - mountPath: "/data5"
-                name: pvolx5
-              - mountPath: "/data6"
-                name: pvolx6
-              - mountPath: "/data7"
-                name: pvolx7
-              - mountPath: "/data8"
-                name: pvolx8
-              - mountPath: "/data9"
-                name: pvolx9
-              - mountPath: "/data10"
-                name: pvolx10
-              - mountPath: "/data11"
-                name: pvolx11
-              - mountPath: "/data12"
-                name: pvolx12
-              - mountPath: "/data13"
-                name: pvolx13
-              - mountPath: "/data14"
-                name: pvolx14
-              - mountPath: "/data15"
-                name: pvolx15
-              - mountPath: "/data16"
-                name: pvolx16
-              - mountPath: "/data17"
-                name: pvolx17
-              - mountPath: "/data18"
-                name: pvolx18
-              - mountPath: "/data19"
-                name: pvolx19
-              - mountPath: "/data20"
-                name: pvolx20
-              - mountPath: "/data21"
-                name: pvolx21
-              - mountPath: "/data22"
-                name: pvolx22
-              - mountPath: "/data23"
-                name: pvolx23
-              - mountPath: "/data24"
-                name: pvolx24
-              - mountPath: "/data25"
-                name: pvolx25
-              - mountPath: "/data26"
-                name: pvolx26
-              - mountPath: "/data27"
-                name: pvolx27
-              - mountPath: "/data28"
-                name: pvolx28
-              - mountPath: "/data29"
-                name: pvolx29
-              - mountPath: "/data30"
-                name: pvolx30
-              - mountPath: "/data31"
-                name: pvolx31
-              - mountPath: "/data32"
-                name: pvolx32
-              - mountPath: "/data33"
-                name: pvolx33
-              - mountPath: "/data34"
-                name: pvolx34
-              - mountPath: "/data35"
-                name: pvolx35
-              - mountPath: "/data36"
-                name: pvolx36
-              - mountPath: "/data37"
-                name: pvolx37
-              - mountPath: "/data38"
-                name: pvolx38
-              - mountPath: "/data39"
-                name: pvolx39
-              - mountPath: "/data40"
-                name: pvolx40
-              - mountPath: "/data41"
-                name: pvolx41
-              - mountPath: "/data42"
-                name: pvolx42
-              - mountPath: "/data43"
-                name: pvolx43
-              - mountPath: "/data44"
-                name: pvolx44
-              - mountPath: "/data45"
-                name: pvolx45
-              - mountPath: "/data46"
-                name: pvolx46
-              - mountPath: "/data47"
-                name: pvolx47
-              - mountPath: "/data48"
-                name: pvolx48
-              - mountPath: "/data49"
-                name: pvolx49
-    volumeClaimTemplates:
+  replicas: { { required "replicas required" .Values.replicas } }
+  selector:
+    matchLabels:
+      app: vxflextest
+  template:
+    metadata:
+      labels:
+        app: vxflextest
+    spec:
+      serviceAccount: vxflextest
+      containers:
+        - name: test
+          image: docker.io/centos:latest
+          command: ["/bin/sleep", "3600"]
+          volumeMounts:
+            - mountPath: "/data0"
+              name: pvolx0
+            - mountPath: "/data1"
+              name: pvolx1
+            - mountPath: "/data2"
+              name: pvolx2
+            - mountPath: "/data3"
+              name: pvolx3
+            - mountPath: "/data4"
+              name: pvolx4
+            - mountPath: "/data5"
+              name: pvolx5
+            - mountPath: "/data6"
+              name: pvolx6
+            - mountPath: "/data7"
+              name: pvolx7
+            - mountPath: "/data8"
+              name: pvolx8
+            - mountPath: "/data9"
+              name: pvolx9
+            - mountPath: "/data10"
+              name: pvolx10
+            - mountPath: "/data11"
+              name: pvolx11
+            - mountPath: "/data12"
+              name: pvolx12
+            - mountPath: "/data13"
+              name: pvolx13
+            - mountPath: "/data14"
+              name: pvolx14
+            - mountPath: "/data15"
+              name: pvolx15
+            - mountPath: "/data16"
+              name: pvolx16
+            - mountPath: "/data17"
+              name: pvolx17
+            - mountPath: "/data18"
+              name: pvolx18
+            - mountPath: "/data19"
+              name: pvolx19
+            - mountPath: "/data20"
+              name: pvolx20
+            - mountPath: "/data21"
+              name: pvolx21
+            - mountPath: "/data22"
+              name: pvolx22
+            - mountPath: "/data23"
+              name: pvolx23
+            - mountPath: "/data24"
+              name: pvolx24
+            - mountPath: "/data25"
+              name: pvolx25
+            - mountPath: "/data26"
+              name: pvolx26
+            - mountPath: "/data27"
+              name: pvolx27
+            - mountPath: "/data28"
+              name: pvolx28
+            - mountPath: "/data29"
+              name: pvolx29
+            - mountPath: "/data30"
+              name: pvolx30
+            - mountPath: "/data31"
+              name: pvolx31
+            - mountPath: "/data32"
+              name: pvolx32
+            - mountPath: "/data33"
+              name: pvolx33
+            - mountPath: "/data34"
+              name: pvolx34
+            - mountPath: "/data35"
+              name: pvolx35
+            - mountPath: "/data36"
+              name: pvolx36
+            - mountPath: "/data37"
+              name: pvolx37
+            - mountPath: "/data38"
+              name: pvolx38
+            - mountPath: "/data39"
+              name: pvolx39
+            - mountPath: "/data40"
+              name: pvolx40
+            - mountPath: "/data41"
+              name: pvolx41
+            - mountPath: "/data42"
+              name: pvolx42
+            - mountPath: "/data43"
+              name: pvolx43
+            - mountPath: "/data44"
+              name: pvolx44
+            - mountPath: "/data45"
+              name: pvolx45
+            - mountPath: "/data46"
+              name: pvolx46
+            - mountPath: "/data47"
+              name: pvolx47
+            - mountPath: "/data48"
+              name: pvolx48
+            - mountPath: "/data49"
+              name: pvolx49
+  volumeClaimTemplates:
     - metadata:
         name: pvolx0
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx1
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx2
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx3
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx4
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx5
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx6
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx7
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx8
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx9
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx10
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx11
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx12
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx13
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx14
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx15
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx16
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx17
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx18
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx19
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx20
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx21
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx22
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx23
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx24
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx25
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx26
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx27
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx28
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx29
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx30
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx31
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx32
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx33
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx34
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx35
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx36
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx37
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx38
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx39
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx40
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx41
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx42
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx43
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx44
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx45
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx46
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx47
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx48
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi
     - metadata:
         name: pvolx49
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi

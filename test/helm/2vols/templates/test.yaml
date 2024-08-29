@@ -1,38 +1,38 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-    name: vxflextest
-    namespace: helmtest-vxflexos
+  name: vxflextest
+  namespace: helmtest-vxflexos
 ---
 kind: StatefulSet
 apiVersion: apps/v1
 metadata:
-    name: vxflextest
-    namespace: helmtest-vxflexos
+  name: vxflextest
+  namespace: helmtest-vxflexos
 spec:
-    selector:
-        matchLabels:
-          app: vxflextest
-    serviceName: 2vols
-    template:
-      metadata:
-        labels:
-          app: vxflextest
-      spec:
-        serviceAccount: vxflextest
-        containers:
-          - name: test
-            image: docker.io/centos:latest
-            command: [ "/bin/sleep", "3600" ]
-            volumeMounts:
-              - mountPath: "/data0"
-                name: pvol0
-              - mountPath: "/data1"
-                name: pvol1
-        volumes:
-          - name: pvol0
-            persistentVolumeClaim:
-              claimName: pvol0
-          - name: pvol1
-            persistentVolumeClaim:
-              claimName: pvol1
+  selector:
+    matchLabels:
+      app: vxflextest
+  serviceName: 2vols
+  template:
+    metadata:
+      labels:
+        app: vxflextest
+    spec:
+      serviceAccount: vxflextest
+      containers:
+        - name: test
+          image: docker.io/centos:latest
+          command: ["/bin/sleep", "3600"]
+          volumeMounts:
+            - mountPath: "/data0"
+              name: pvol0
+            - mountPath: "/data1"
+              name: pvol1
+      volumes:
+        - name: pvol0
+          persistentVolumeClaim:
+            claimName: pvol0
+        - name: pvol1
+          persistentVolumeClaim:
+            claimName: pvol1

@@ -1126,7 +1126,9 @@ func (f *feature) expectErrorListSnapshotResponse() error {
 	if !strings.Contains(err.Error(), expected) {
 		return fmt.Errorf("Error %s does not contain the expected message: %s", err.Error(), expected)
 	}
+
 	fmt.Printf("got expected error: %s", err.Error())
+
 	return nil
 }
 
@@ -2470,7 +2472,7 @@ func (f *feature) iCallDeleteSnapshotForFS() error {
 	return nil
 }
 
-func (f *feature) checkNFS(ctx context.Context, systemID string) (bool, error) {
+func (f *feature) checkNFS(_ context.Context, systemID string) (bool, error) {
 	c, err := f.getGoscaleioClient()
 	if err != nil {
 		return false, errors.New("Geting goscaleio client failed " + err.Error())

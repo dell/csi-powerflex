@@ -12,5 +12,5 @@ spec:
     volumeHandle: 184e2e5300000000
   volumeMode: Filesystem
   accessModes:
-  - ReadWriteOnce
-  storageClassName: vxflexos  
+    - ReadWriteOnce
+  storageClassName: vxflexos

@@ -2,27 +2,27 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: vxflextest
-  namespace: {{ .Values.namespace }}
+  namespace: { { .Values.namespace } }
 ---
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
   name: pvol0
-  namespace: {{ .Values.namespace }}
+  namespace: { { .Values.namespace } }
 spec:
   accessModes:
-  - ReadWriteMany
+    - ReadWriteMany
   volumeMode: Block
   resources:
     requests:
       storage: 8Gi
-  storageClassName: {{ .Values.storageclass }}
+  storageClassName: { { .Values.storageclass } }
 ---
 kind: Deployment
 apiVersion: apps/v1
 metadata:
   name: vxflextest
-  namespace: {{ .Values.namespace }}
+  namespace: { { .Values.namespace } }
 spec:
   replicas: 2
   selector:
@@ -37,11 +37,11 @@ spec:
       containers:
         - name: test
           image: docker.io/centos:latest
-          command: [ "/bin/sleep", "3600" ]
+          command: ["/bin/sleep", "3600"]
           volumeDevices:
             - devicePath: "/dev/data0"
               name: pvol0
       volumes:
         - name: pvol0
-          persistentVolumeClaim: 
+          persistentVolumeClaim:
             claimName: pvol0

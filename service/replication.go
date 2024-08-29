@@ -42,7 +42,7 @@ var (
 	snapshotMaxRetries = 10
 )
 
-func (s *service) GetReplicationCapabilities(ctx context.Context, req *replication.GetReplicationCapabilityRequest) (*replication.GetReplicationCapabilityResponse, error) {
+func (s *service) GetReplicationCapabilities(_ context.Context, _ *replication.GetReplicationCapabilityRequest) (*replication.GetReplicationCapabilityResponse, error) {
 	rep := new(replication.GetReplicationCapabilityResponse)
 	rep.Capabilities = []*replication.ReplicationCapability{
 		{
@@ -408,7 +408,7 @@ func (s *service) CreateStorageProtectionGroup(ctx context.Context, req *replica
 	}, nil
 }
 
-func (s *service) GetStorageProtectionGroupStatus(ctx context.Context, req *replication.GetStorageProtectionGroupStatusRequest) (*replication.GetStorageProtectionGroupStatusResponse, error) {
+func (s *service) GetStorageProtectionGroupStatus(_ context.Context, req *replication.GetStorageProtectionGroupStatusRequest) (*replication.GetStorageProtectionGroupStatusResponse, error) {
 	Log.Printf("[GetStorageProtectionGroupStatus] - req %+v", req)
 
 	localParams := req.GetProtectionGroupAttributes()
@@ -461,7 +461,7 @@ func (s *service) GetStorageProtectionGroupStatus(ctx context.Context, req *repl
 	}, nil
 }
 
-func (s *service) DeleteStorageProtectionGroup(ctx context.Context, req *replication.DeleteStorageProtectionGroupRequest) (*replication.DeleteStorageProtectionGroupResponse, error) {
+func (s *service) DeleteStorageProtectionGroup(_ context.Context, req *replication.DeleteStorageProtectionGroupRequest) (*replication.DeleteStorageProtectionGroupResponse, error) {
 	Log.Printf("[DeleteStorageProtectionGroup] %+v", req)
 	localParams := req.GetProtectionGroupAttributes()
 

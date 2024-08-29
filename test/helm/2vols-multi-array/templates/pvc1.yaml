@@ -8,14 +8,14 @@ provisioner: csi-vxflexos.dellemc.com
 reclaimPolicy: Delete
 allowVolumeExpansion: true
 parameters:
-  storagepool: <STORAGE_POOL>   #Insert Storage pool.
-  systemID: <SYSTEM_ID>          #Insert System ID
+  storagepool: <STORAGE_POOL>
+  systemID: <SYSTEM_ID>
 volumeBindingMode: WaitForFirstConsumer
 allowedTopologies:
-- matchLabelExpressions:
-  - key: csi-vxflexos.dellemc.com/<SYSTEM_ID>   #Insert System ID
-    values:
-    - csi-vxflexos.dellemc.com
+  - matchLabelExpressions:
+      - key: csi-vxflexos.dellemc.com/<SYSTEM_ID>
+        values:
+          - csi-vxflexos.dellemc.com
 ---
 kind: PersistentVolumeClaim
 apiVersion: v1
@@ -24,7 +24,7 @@ metadata:
   namespace: helmtest-vxflexos
 spec:
   accessModes:
-  - ReadWriteOnce
+    - ReadWriteOnce
   volumeMode: Filesystem
   resources:
     requests:

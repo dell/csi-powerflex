@@ -1,33 +1,33 @@
 kind: StatefulSet
 apiVersion: apps/v1
 metadata:
-    name: vxflextest
-    namespace: helmtest-vxflexos
+  name: vxflextest
+  namespace: helmtest-vxflexos
 spec:
-    replicas: {{ required "replicas required" .Values.replicas }}
-    selector:
-        matchLabels:
-          app: vxflextest
-    template:
-      metadata:
-        labels:
-          app: vxflextest
-      spec:
-        serviceAccount: vxflextest
-        containers:
-          - name: test
-            image: docker.io/centos:latest
-            command: [ "/bin/sleep", "3600" ]
-            volumeMounts:
-              - mountPath: "/data0"
-                name: pvol0
-              - mountPath: "/data1"
-                name: pvol1
-    volumeClaimTemplates:
+  replicas: { { required "replicas required" .Values.replicas } }
+  selector:
+    matchLabels:
+      app: vxflextest
+  template:
+    metadata:
+      labels:
+        app: vxflextest
+    spec:
+      serviceAccount: vxflextest
+      containers:
+        - name: test
+          image: docker.io/centos:latest
+          command: ["/bin/sleep", "3600"]
+          volumeMounts:
+            - mountPath: "/data0"
+              name: pvol0
+            - mountPath: "/data1"
+              name: pvol1
+  volumeClaimTemplates:
     - metadata:
         name: pvol0
       spec:
-        accessModes: [ "ReadWriteOnce" ]
+        accessModes: ["ReadWriteOnce"]
         storageClassName: vxflexos
         resources:
           requests:
@@ -35,8 +35,9 @@ spec:
     - metadata:
         name: pvol1
       spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: {{ required "storageClass required" .Values.storageClass }}
+        accessModes: ["ReadWriteOnce"]
+        storageClassName:
+          { { required "storageClass required" .Values.storageClass } }
         resources:
           requests:
             storage: 8Gi

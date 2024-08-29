@@ -793,7 +793,7 @@ func (s *service) logStatistics() {
 	}
 }
 
-func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error) {
+func getArrayConfig(_ context.Context) (map[string]*ArrayConnectionData, error) {
 	arrays := make(map[string]*ArrayConnectionData)
 
 	_, err := os.Stat(ArrayConfigFile)
@@ -1096,7 +1096,7 @@ func externalAccessAlreadyAdded(export *siotypes.NFSExport, externalAccess strin
 	return false
 }
 
-func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnpublishVolumeRequest, client *goscaleio.Client, fs *siotypes.FileSystem, volumeContextID string, nodeIPs []string, nodeID string) error {
+func (s *service) unexportFilesystem(_ context.Context, _ *csi.ControllerUnpublishVolumeRequest, client *goscaleio.Client, fs *siotypes.FileSystem, volumeContextID string, nodeIPs []string, nodeID string) error {
 	nfsExportName := NFSExportNamePrefix + fs.Name
 	nfsExportExists := false
 	var nfsExportID string
@@ -1176,7 +1176,7 @@ func (s *service) unexportFilesystem(ctx context.Context, req *csi.ControllerUnp
 }
 
 // exportFilesystem - Method to export filesystem with idempotency
-func (s *service) exportFilesystem(ctx context.Context, req *csi.ControllerPublishVolumeRequest, client *goscaleio.Client, fs *siotypes.FileSystem, nodeIPs []string, externalAccess string, nodeID string, pContext map[string]string, am *csi.VolumeCapability_AccessMode) (*csi.ControllerPublishVolumeResponse, error) {
+func (s *service) exportFilesystem(_ context.Context, _ *csi.ControllerPublishVolumeRequest, client *goscaleio.Client, fs *siotypes.FileSystem, nodeIPs []string, externalAccess string, nodeID string, pContext map[string]string, am *csi.VolumeCapability_AccessMode) (*csi.ControllerPublishVolumeResponse, error) {
 	for i, nodeIP := range nodeIPs {
 		nodeIPs[i] = nodeIP + "/255.255.255.255"
 	}
@@ -1616,7 +1616,7 @@ func (s *service) GetNfsTopology(systemID string) []*csi.Topology {
 	return []*csi.Topology{nfsTopology}
 }
 
-func (s *service) GetNodeLabels(ctx context.Context) (map[string]string, error) {
+func (s *service) GetNodeLabels(_ context.Context) (map[string]string, error) {
 	if K8sClientset == nil {
 		err := k8sutils.CreateKubeClientSet()
 		if err != nil {

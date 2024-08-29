@@ -6,29 +6,28 @@ spec:
   containers:
     - name: my-frontend
       image: busybox
-      command: [ "sleep", "100000" ]
+      command: ["sleep", "100000"]
       volumeMounts:
-      - mountPath: "/data0"
-        name: my-csi-volume
-      - mountPath: "/data1"
-        name: my-csi-volume-xfs
+        - mountPath: "/data0"
+          name: my-csi-volume
+        - mountPath: "/data1"
+          name: my-csi-volume-xfs
   volumes:
-  - name: my-csi-volume
-    csi:
-      driver: csi-vxflexos.dellemc.com
-      fsType: "ext4"
-      volumeAttributes:
-        volumeName: "my-csi-volume"
-        size: "8Gi"
-        storagepool: sample
-        systemID: sample
-  - name: my-csi-volume-xfs
-    csi:
-      driver: csi-vxflexos.dellemc.com
-      fsType: "xfs"
-      volumeAttributes:
-        volumeName: "my-csi-volume-xfs"
-        size: "10Gi"
-        storagepool: sample
-        systemID: sample
- 
+    - name: my-csi-volume
+      csi:
+        driver: csi-vxflexos.dellemc.com
+        fsType: "ext4"
+        volumeAttributes:
+          volumeName: "my-csi-volume"
+          size: "8Gi"
+          storagepool: sample
+          systemID: sample
+    - name: my-csi-volume-xfs
+      csi:
+        driver: csi-vxflexos.dellemc.com
+        fsType: "xfs"
+        volumeAttributes:
+          volumeName: "my-csi-volume-xfs"
+          size: "10Gi"
+          storagepool: sample
+          systemID: sample
