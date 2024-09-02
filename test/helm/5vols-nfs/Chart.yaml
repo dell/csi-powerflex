@@ -7,6 +7,6 @@ description: |
   Tests VxFlexOS CSI deployments.
 icon: https://avatars1.githubusercontent.com/u/20958494?s=200&v=4
 keywords:
-- vxflexos-csi
-- storage
+  - vxflexos-csi
+  - storage
 engine: gotpl

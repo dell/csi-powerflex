@@ -23,7 +23,7 @@ allowVolumeExpansion: true
 parameters:
   # Storage pool to use on system
   # Optional: false
-  storagepool: <STORAGE_POOL> # Insert Storage pool
+  storagepool: <STORAGE_POOL>
   # Protection domain that storage pool above belongs to
   # Needed if array has two storagepools that share the same name, but belong to different protection domains
   # Optional: true
@@ -32,7 +32,7 @@ parameters:
   # System you would like this storage class to use
   # Allowed values: one string for system ID
   # Optional: false
-  systemID: <SYSTEM_ID> # Insert System ID
+  systemID: <SYSTEM_ID>
   # format options to pass to mkfs
   # Allowed values: A string dictating the fs options you want passed
   # Optional: true
@@ -56,15 +56,15 @@ parameters:
   # Uncomment the line below if you want to use iopsLimit
   # iopsLimit: <IOPS_LIMIT> # Insert iops limit
 # volumeBindingMode determines how volume binding and dynamic provisioning should occur
-# Allowed values: 
+# Allowed values:
 #  Immediate: volume binding and dynamic provisioning occurs once PVC is created
 #  WaitForFirstConsumer: delay the binding and provisioning of PV until a pod using the PVC is created.
 #  Optional: false
-# Default value: WaitForFirstConsumer (required for topology section below) 
+# Default value: WaitForFirstConsumer (required for topology section below)
 volumeBindingMode: WaitForFirstConsumer
 # allowedTopologies helps scheduling pods on worker nodes which match all of below expressions.
 allowedTopologies:
-- matchLabelExpressions:
-  - key: csi-vxflexos.dellemc.com/<SYSTEM_ID> # Insert System ID
-    values:
-    - csi-vxflexos.dellemc.com
+  - matchLabelExpressions:
+      - key: csi-vxflexos.dellemc.com/<SYSTEM_ID>
+        values:
+          - csi-vxflexos.dellemc.com

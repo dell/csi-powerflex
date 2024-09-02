@@ -2,46 +2,46 @@ kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
   name: pvol0
-  namespace: {{ .Values.namespace }}
+  namespace: { { .Values.namespace } }
 spec:
   accessModes:
-  - ReadWriteOnce
+    - ReadWriteOnce
   volumeMode: Filesystem
   resources:
     requests:
       storage: 8Gi
-  storageClassName: {{ .Values.storageclass }}
+  storageClassName: { { .Values.storageclass } }
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-    name: vol
-    namespace: {{ .Values.namespace }}
+  name: vol
+  namespace: { { .Values.namespace } }
 ---
 kind: StatefulSet
 apiVersion: apps/v1
 metadata:
-    name: vol
-    namespace: {{ .Values.namespace }}
+  name: vol
+  namespace: { { .Values.namespace } }
 spec:
-    selector:
-        matchLabels:
-          app: vol
-    serviceName: 1vol
-    template:
-      metadata:
-        labels:
-          app: vol
-      spec:
-        serviceAccount: vol
-        containers:
-          - name: test
-            image: docker.io/centos:latest
-            command: [ "/bin/sleep", "3600" ]
-            volumeMounts:
-              - mountPath: "/data0"
-                name: pvol0
-        volumes:
-          - name: pvol0
-            persistentVolumeClaim:
-              claimName: pvol0
+  selector:
+    matchLabels:
+      app: vol
+  serviceName: 1vol
+  template:
+    metadata:
+      labels:
+        app: vol
+    spec:
+      serviceAccount: vol
+      containers:
+        - name: test
+          image: docker.io/centos:latest
+          command: ["/bin/sleep", "3600"]
+          volumeMounts:
+            - mountPath: "/data0"
+              name: pvol0
+      volumes:
+        - name: pvol0
+          persistentVolumeClaim:
+            claimName: pvol0
