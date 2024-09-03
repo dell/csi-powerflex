@@ -20,6 +20,16 @@ docker:
 	@echo "Building: $(REGISTRY)/$(IMAGENAME):$(IMAGETAG)"
 	$(BUILDER) build -t "$(REGISTRY)/$(IMAGENAME):$(IMAGETAG)" --target $(BUILDSTAGE) --build-arg GOPROXY --build-arg BASEIMAGE=$(BASEIMAGE) --build-arg GOIMAGE=$(DEFAULT_GOIMAGE)  .
 
+docker-no-cache:
+	@echo "Base Images is set to: $(BASEIMAGE)"
+	@echo "Building: $(REGISTRY)/$(IMAGENAME):$(IMAGETAG)"
+	$(BUILDER) build --no-cache -t "$(REGISTRY)/$(IMAGENAME):$(IMAGETAG)" --target $(BUILDSTAGE) --build-arg GOPROXY --build-arg BASEIMAGE=$(BASEIMAGE) --build-arg GOIMAGE=$(DEFAULT_GOIMAGE)  .
+
+docker-no-cache:
+	@echo "Base Images is set to: $(BASEIMAGE)"
+	@echo "Building: $(REGISTRY)/$(IMAGENAME):$(IMAGETAG)"
+	$(BUILDER) build --no-cache -t "$(REGISTRY)/$(IMAGENAME):$(IMAGETAG)" --target $(BUILDSTAGE) --build-arg GOPROXY --build-arg BASEIMAGE=$(BASEIMAGE) --build-arg GOIMAGE=$(DEFAULT_GOIMAGE)  .
+
 push:   
 	@echo "Pushing: $(REGISTRY)/$(IMAGENAME):$(IMAGETAG)"
 	$(BUILDER) push "$(REGISTRY)/$(IMAGENAME):$(IMAGETAG)"
