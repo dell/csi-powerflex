@@ -40,6 +40,10 @@ build: dependencies
 docker: dependencies
 	make -f docker.mk build-base-image docker
 
+# Generates the docker container with no cache (but does not push)
+docker-no-cache: dependencies
+	make -f docker.mk build-base-image docker-no-cache
+
 # Pushes container to the repository
 push: docker
 	make -f docker.mk push

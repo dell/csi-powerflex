@@ -18,9 +18,13 @@ endif
 docker:
 	@echo "Base Images is set to: $(BASEIMAGE)"
 	@echo "Building: $(REGISTRY)/$(IMAGENAME):$(IMAGETAG)"
-	$(BUILDER) build -t "$(REGISTRY)/$(IMAGENAME):$(IMAGETAG)" --target $(BUILDSTAGE) --build-arg GOPROXY --build-arg BASEIMAGE=$(BASEIMAGE) --build-arg GOIMAGE=$(DEFAULT_GOIMAGE)  .
+	$(BUILDER) build $(NOCACHE) -t "$(REGISTRY)/$(IMAGENAME):$(IMAGETAG)" --target $(BUILDSTAGE) --build-arg GOPROXY --build-arg BASEIMAGE=$(BASEIMAGE) --build-arg GOIMAGE=$(DEFAULT_GOIMAGE)  .
 
-push:   
+docker-no-cache:
+	@echo "Building with --no-cache ..."
+	@make docker NOCACHE=--no-cache
+
+push:
 	@echo "Pushing: $(REGISTRY)/$(IMAGENAME):$(IMAGETAG)"
 	$(BUILDER) push "$(REGISTRY)/$(IMAGENAME):$(IMAGETAG)"
 
