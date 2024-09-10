@@ -542,7 +542,8 @@ func (s *service) doProbe(ctx context.Context) error {
 		}
 
 		if err := s.nodeProbe(ctx); err != nil {
-			return err
+			Log.Infof("nodeProbe failed: %s", err.Error())
+			//return err
 		}
 	}
 	return nil
@@ -1610,6 +1611,28 @@ func (s *service) getNASServerIDFromName(systemID, nasName string) (string, erro
 	return nas.ID, nil
 }
 
+func (s *service) pingNAS(systemID string) error {
+
+	Log.Infof("Debug: [pingNAS] - Start: %s", systemID)
+	Log.Infof("Debug: [System] - %+v", s.adminClients[systemID])
+	system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
+
+	if system == nil {
+		return errors.New("system not found: %s" + systemID)
+	}
+	if err != nil {
+		return err
+	}
+
+	err = system.PingNAS()
+	if err != nil {
+		return err
+	}
+
+	Log.Infof("Debug: Ping successful on NAS server")
+	return nil
+}
+
 func (s *service) GetNfsTopology(systemID string) []*csi.Topology {
 	nfsTopology := new(csi.Topology)
 	nfsTopology.Segments = map[string]string{Name + "/" + systemID + "-nfs": "true"}
@@ -1632,6 +1655,24 @@ func (s *service) GetNodeLabels(_ context.Context) (map[string]string, error) {
 	}
 	Log.Debugf("Node labels: %v\n", node.Labels)
 	return node.Labels, nil
+}
+
+func (s *service) GetNodeUID(_ context.Context) (string, error) {
+	if K8sClientset == nil {
+		err := k8sutils.CreateKubeClientSet()
+		if err != nil {
+			return "", status.Error(codes.Internal, GetMessage("init client failed with error: %v", err))
+		}
+		K8sClientset = k8sutils.Clientset
+	}
+
+	// access the API to fetch node object
+	node, err := K8sClientset.CoreV1().Nodes().Get(context.TODO(), s.opts.KubeNodeName, v1.GetOptions{})
+	if err != nil {
+		return "", status.Error(codes.Internal, GetMessage("Unable to fetch the node details. Error: %v", err))
+	}
+	Log.Infof("Node UID: %v\n", node.UID)
+	return string(node.UID), nil
 }
 
 // GetMessage - Get message
