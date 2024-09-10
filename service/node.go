@@ -16,7 +16,6 @@ package service
 import (
 	"bufio"
 	"bytes"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -454,7 +453,6 @@ func (s *service) getSystemName(_ context.Context, systems []string) bool {
 // nodeProbe fetchs the SDC GUID by drv_cfg and the systemIDs/names by getSystemName method.
 // It also makes sure private directory(privDir) is created
 func (s *service) nodeProbe(ctx context.Context) error {
-	Log.Infof("DEBUG: s = %+v", s)
 
 	// make sure the kernel module is loaded
 	if kmodLoaded(s.opts) {
@@ -514,17 +512,14 @@ func (s *service) nodeProbe(ctx context.Context) error {
 		}
 	} else {
 		Log.Infof("scini module not loaded, perhaps it was intentional")
-		Log.Infof("Debug: s.opts = %+v", s.opts)
-		for key := range s.opts.arrays {
-
-			Log.Infof("Debug: systemId = %s", key)
-			err := s.pingNAS(key)
-			if err != nil {
-				return errors.New("Cound not ping NAS servers")
-			}
-		}
-
 	}
+
+	// for nasserver := range s.opts.arrays {
+	// 	err := s.pingNAS(nasserver)
+	// 	if err != nil {
+	// 		return errors.New("Cound not ping NAS servers")
+	// 	}
+	// }
 
 	return nil
 }
@@ -748,21 +743,6 @@ func (s *service) NodeGetInfo(
 		}
 	}
 
-	// Create the topology keys
-	// csi-vxflexos.dellemc.com/<systemID>: <provisionerName>
-	Log.Infof("Connected System IDs: %v", connectedSystemID)
-	topology := map[string]string{}
-	for _, sysID := range connectedSystemID {
-		isNFS, err := s.checkNFS(ctx, sysID)
-		if err != nil {
-			return nil, err
-		}
-		if isNFS {
-			topology[Name+"/"+sysID+"-nfs"] = "true"
-		}
-		topology[Name+"/"+sysID] = SystemTopologySystemValue
-	}
-
 	var maxVxflexosVolumesPerNode int64
 	if len(connectedSystemID) != 0 {
 		// Check for node label 'max-vxflexos-volumes-per-node'. If present set 'MaxVolumesPerNode' to this value.
@@ -790,6 +770,21 @@ func (s *service) NodeGetInfo(
 
 	Log.Debugf("MaxVolumesPerNode: %v\n", maxVxflexosVolumesPerNode)
 
+	// Create the topology keys
+	// csi-vxflexos.dellemc.com/<systemID>: <provisionerName>
+	Log.Infof("Arrays: %+v", s.opts.arrays)
+	topology := map[string]string{}
+	for _, array := range s.opts.arrays {
+		isNFS, err := s.checkNFS(ctx, array.SystemID)
+		if err != nil {
+			return nil, err
+		}
+		if isNFS {
+			topology[Name+"/"+array.SystemID+"-nfs"] = "true"
+		}
+		topology[Name+"/"+array.SystemID] = SystemTopologySystemValue
+	}
+
 	nodeUID, err := getNodeUID(ctx, s)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, GetMessage("Could not fetch node UID"))
@@ -797,9 +792,10 @@ func (s *service) NodeGetInfo(
 
 	nodeId := nodeUID
 	if s.opts.SdcGUID != "" {
-		nodeId = "-" + s.opts.SdcGUID
+		nodeId = fmt.Sprintf("-%s", s.opts.SdcGUID)
 	}
 
+	Log.Infof("NodeId: %v\n", nodeId)
 	return &csi.NodeGetInfoResponse{
 		//NodeId: s.opts.SdcGUID,
 		NodeId: nodeId,

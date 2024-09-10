@@ -515,6 +515,16 @@ func (s *service) checkNFS(ctx context.Context, systemID string) (bool, error) {
 		array := arrayConData[systemID]
 		if strings.TrimSpace(array.NasName) == "" {
 			Log.Warnf("nasName value not found in secret, it is mandatory parameter for NFS volume operations")
+		} else {
+			nasserver, err := s.getNASServerIDFromName(systemID, array.NasName)
+			if err != nil {
+				return false, err
+			}
+
+			err = s.pingNAS(systemID, nasserver) 
+			if err != nil {
+				return false, err
+			}
 		}
 		// Even though NasName is not present in secret but PowerFlex version is >=4.0; we support NFS.
 		return true, nil
@@ -1611,20 +1621,15 @@ func (s *service) getNASServerIDFromName(systemID, nasName string) (string, erro
 	return nas.ID, nil
 }
 
-func (s *service) pingNAS(systemID string) error {
+func (s *service) pingNAS(systemID string, id string) error {
 
-	Log.Infof("Debug: [pingNAS] - Start: %s", systemID)
-	Log.Infof("Debug: [System] - %+v", s.adminClients[systemID])
 	system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
 
-	if system == nil {
+	if err != nil {
 		return errors.New("system not found: %s" + systemID)
 	}
-	if err != nil {
-		return err
-	}
 
-	err = system.PingNAS()
+	err = system.PingNAS(id)
 	if err != nil {
 		return err
 	}
