@@ -516,12 +516,13 @@ func (s *service) checkNFS(ctx context.Context, systemID string) (bool, error) {
 		if strings.TrimSpace(array.NasName) == "" {
 			Log.Warnf("nasName value not found in secret, it is mandatory parameter for NFS volume operations")
 		} else {
+			Log.Infof("Debug: Finding NASServerIDFromName for %s", array.NasName)
 			nasserver, err := s.getNASServerIDFromName(systemID, array.NasName)
 			if err != nil {
 				return false, err
 			}
 
-			err = s.pingNAS(systemID, nasserver) 
+			err = s.pingNAS(systemID, nasserver)
 			if err != nil {
 				return false, err
 			}
