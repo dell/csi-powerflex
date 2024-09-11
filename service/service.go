@@ -46,7 +46,6 @@ import (
 	"github.com/spf13/viper"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	"sigs.k8s.io/yaml"
 
 	"google.golang.org/grpc"
@@ -179,8 +178,7 @@ type service struct {
 	connectedSystemNameToID map[string]string
 }
 
-// InterfaceNames represents the structure of the YAML config file
-type InterfaceNames struct {
+type Config struct {
 	InterfaceNames map[string]string `yaml:"interfaceNames"`
 }
 
@@ -499,94 +497,95 @@ func (s *service) BeforeServe(
 }
 
 func (s *service) updateConfigMap() {
+
 	configFilePath := "/vxflexos-config-params/driver-config-params.yaml" // Path to the mounted ConfigMap file
 
-	configData, err := os.ReadFile(configFilePath)
+	configFileData, err := os.ReadFile(configFilePath)
 	if err != nil {
-		panic(fmt.Sprintf("Failed to read the ConfigMap file: %v", err))
+		Log.Errorf("Failed to read ConfigMap file: %v", err)
+		return
 	}
 
-	var interfacesData InterfaceNames
-	err = yaml.Unmarshal(configData, &interfacesData)
+	var config Config
+	err = yaml.Unmarshal(configFileData, &config)
 	if err != nil {
-		panic(fmt.Sprintf("Failed to parse the YAML file: %v", err))
+		Log.Errorf("Failed to unmarshal config YAML file: %v", err)
+		return
 	}
-	interfaceNames := interfacesData.InterfaceNames
 
-	updateInterfaceNameswithIPs := map[string]string{}
-	for node, ifaceList := range interfaceNames {
+	updateInterfaceNamesWithIPs := map[string]string{}
+	for node, interfaceList := range config.InterfaceNames {
+
 		if !strings.EqualFold(node, s.opts.KubeNodeName) {
 			continue
 		}
+		interfaces := strings.Split(interfaceList, ",")
+		var ipAddresses []string
 
-		interfaces := strings.Split(ifaceList, ",")
-		var ips []string
-		for _, iface := range interfaces {
-			iface = strings.TrimSpace(iface)
-			ip, err := s.getIPAddress(iface)
+		for _, interfaceName := range interfaces {
+			interfaceName = strings.TrimSpace(interfaceName)
+
+			ipAddress, err := s.getIPAddressByInterface(interfaceName)
 			if err != nil {
-				fmt.Printf("Error fetching IP for interface %s: %v\n", iface, err)
+				Log.Printf("Error while getting IP address for interface %s: %v\n", interfaceName, err)
 				continue
 			}
-			ips = append(ips, ip)
+			ipAddresses = append(ipAddresses, ipAddress)
+		}
+		if len(ipAddresses) > 0 {
+			updateInterfaceNamesWithIPs[node] = strings.Join(ipAddresses, ",")
+		}
+	}
+
+	clientSet, err := k8sutils.ReturnKubeClientSet()
+	if err != nil {
+		Log.Errorf("Failed to get Kubernetes client: %v", err)
+		return
+	}
+
+	// Get the vxflexos-config-params ConfigMap
+	cm, err := clientSet.CoreV1().ConfigMaps("vxflexos").Get(context.TODO(), "vxflexos-config-params", metav1.GetOptions{})
+	if err != nil {
+		Log.Errorf("Failed to get ConfigMap: %v", err)
+		return
+	}
+
+	var configData map[string]interface{}
+	if existingYaml, ok := cm.Data["driver-config-params.yaml"]; ok {
+
+		err := yaml.Unmarshal([]byte(existingYaml), &configData)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to parse ConfigMap data: %v", err))
 		}
 
-		if len(ips) > 0 {
-			updateInterfaceNameswithIPs[node] = strings.Join(ips, ",")
-		}
-	}
-
-	// Create a Kubernetes client
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		panic(fmt.Sprintf("Failed to create Kubernetes client config: %v", err))
-	}
-
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to create Kubernetes client: %v", err))
-	}
-
-	// Get the ConfigMap
-	cm, err := clientset.CoreV1().ConfigMaps("vxflexos").Get(context.TODO(), "vxflexos-config-params", metav1.GetOptions{})
-	if err != nil {
-		panic(fmt.Sprintf("Failed to get ConfigMap: %v", err))
-	}
-
-	for node, ipList := range updateInterfaceNameswithIPs {
-		if existingYaml, ok := cm.Data["driver-config-params.yaml"]; ok {
-			var configData map[string]interface{}
-			err := yaml.Unmarshal([]byte(existingYaml), &configData)
-			if err != nil {
-				panic(fmt.Sprintf("Failed to parse ConfigMap data: %v", err))
-			}
+		for node, ipAddressList := range updateInterfaceNamesWithIPs {
 
 			// Check and update interfaceNames
 			if interfaceNames, ok := configData["interfaceNames"].(map[string]interface{}); ok {
-				interfaceNames[node] = ipList
+				interfaceNames[node] = ipAddressList
 			} else {
 				panic("interfaceNames key missing or not in expected format")
 			}
-
-			updatedYaml, err := yaml.Marshal(configData)
-			if err != nil {
-				panic(fmt.Sprintf("Failed to marshal updated data: %v", err))
-			}
-
-			cm.Data["driver-config-params.yaml"] = string(updatedYaml)
 		}
+
+		updatedYaml, err := yaml.Marshal(configData)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to marshal updated data: %v", err))
+		}
+		cm.Data["driver-config-params.yaml"] = string(updatedYaml)
 	}
 
 	// Update the ConfigMap in Kubernetes
-	_, err = clientset.CoreV1().ConfigMaps("vxflexos").Update(context.TODO(), cm, metav1.UpdateOptions{})
+	_, err = clientSet.CoreV1().ConfigMaps("vxflexos").Update(context.TODO(), cm, metav1.UpdateOptions{})
 	if err != nil {
-		panic(fmt.Sprintf("Failed to update ConfigMap: %v", err))
+		Log.Errorf("Failed to update ConfigMap: %v", err)
+		return
 	}
 
 	fmt.Println("ConfigMap updated successfully")
 }
 
-func (s *service) getIPAddress(interfaceName string) (string, error) {
+func (s *service) getIPAddressByInterface(interfaceName string) (string, error) {
 	interfaceObj, err := net.InterfaceByName(interfaceName)
 	if err != nil {
 		return "", err
