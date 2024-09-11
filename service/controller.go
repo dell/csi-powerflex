@@ -16,8 +16,11 @@ package service
 import (
 	"errors"
 	"fmt"
+	"github.com/dell/csi-vxflexos/v2/k8sutils"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"math"
 	"net/http"
+	"sigs.k8s.io/yaml"
 	"strconv"
 	"strings"
 	"sync"
@@ -1166,6 +1169,43 @@ func (s *service) DeleteVolume(
 	return &csi.DeleteVolumeResponse{}, nil
 }
 
+func (s *service) findNetworkInterfaceIPs() ([]string, error) {
+
+	clientSet, err := k8sutils.ReturnKubeClientSet()
+	if err != nil {
+		Log.Errorf("Failed to get clientset: %v", err)
+		return []string{}, err
+	}
+
+	// Get the ConfigMap
+	configMap, err := clientSet.CoreV1().ConfigMaps("vxflexos").Get(context.TODO(), "vxflexos-config-params", metav1.GetOptions{})
+	if err != nil {
+		Log.Errorf("Failed to get the ConfigMap: %v", err)
+		return []string{}, err
+	}
+
+	var configData map[string]interface{}
+	var allNetworkInterfaceIPs []string
+
+	if configParamsYaml, ok := configMap.Data["driver-config-params.yaml"]; ok {
+		err := yaml.Unmarshal([]byte(configParamsYaml), &configData)
+		if err != nil {
+			Log.Errorf("Failed to unmarshal the ConfigMap params: %v", err)
+			return []string{}, err
+		}
+
+		if interfaceNames, ok := configData["interfaceNames"].(map[string]interface{}); ok {
+			for _, ipAddressList := range interfaceNames {
+
+				ipAddresses := strings.Split(ipAddressList.(string), ",")
+				allNetworkInterfaceIPs = append(allNetworkInterfaceIPs, ipAddresses...)
+			}
+			return allNetworkInterfaceIPs, nil
+		}
+	}
+	return []string{}, fmt.Errorf("failed to get the Network Interface IPs")
+}
+
 func (s *service) ControllerPublishVolume(
 	ctx context.Context,
 	req *csi.ControllerPublishVolumeRequest) (
@@ -1241,15 +1281,21 @@ func (s *service) ControllerPublishVolume(
 				err.Error())
 		}
 
-		sdcIPs, err := s.getSDCIPs(nodeID, systemID)
-		if err != nil {
-			return nil, status.Errorf(codes.NotFound, "%s", err.Error())
-		} else if len(sdcIPs) == 0 {
-			return nil, status.Errorf(codes.NotFound, "%s", "received empty sdcIPs")
+		var ipAddresses []string
+		ipAddresses, err = s.findNetworkInterfaceIPs()
+		if err != nil || len(ipAddresses) == 0 {
+			// get sdc IPs
+			ipAddresses, err := s.getSDCIPs(nodeID, systemID)
+			if err != nil {
+				return nil, status.Errorf(codes.NotFound, "%s", err.Error())
+			} else if len(ipAddresses) == 0 {
+				return nil, status.Errorf(codes.NotFound, "%s", "received empty sdcIPs")
+			}
 		}
+		Log.Printf("ControllerPublish - Network Interface IPs for NFS: %v", ipAddresses)
 
 		externalAccess := s.opts.ExternalAccess
-		publishContext["host"] = sdcIPs[0]
+		publishContext["host"] = ipAddresses[0]
 
 		fsc := req.GetVolumeCapability()
 		if fsc == nil {
@@ -1267,7 +1313,7 @@ func (s *service) ControllerPublishVolume(
 				errUnknownAccessMode)
 		}
 		// Export for NFS
-		resp, err := s.exportFilesystem(ctx, req, adminClient, fs, sdcIPs, externalAccess, nodeID, publishContext, am)
+		resp, err := s.exportFilesystem(ctx, req, adminClient, fs, ipAddresses, externalAccess, nodeID, publishContext, am)
 		return resp, err
 	}
 	volID := getVolumeIDFromCsiVolumeID(csiVolID)
@@ -1564,15 +1610,20 @@ func (s *service) ControllerUnpublishVolume(
 				err.Error())
 		}
 
-		sdcIPs, err := s.getSDCIPs(nodeID, systemID)
-		if err != nil {
-			return nil, status.Errorf(codes.NotFound, "%s", err.Error())
-		} else if len(sdcIPs) == 0 {
-			return nil, status.Errorf(codes.NotFound, "%s", "received empty sdcIPs")
+		var ipAddresses []string
+		ipAddresses, err = s.findNetworkInterfaceIPs()
+		if err != nil || len(ipAddresses) == 0 {
+
+			ipAddresses, err = s.getSDCIPs(nodeID, systemID)
+			if err != nil {
+				return nil, status.Errorf(codes.NotFound, "%s", err.Error())
+			} else if len(ipAddresses) == 0 {
+				return nil, status.Errorf(codes.NotFound, "%s", "received empty sdcIPs")
+			}
 		}
 
 		// unexport for NFS
-		err = s.unexportFilesystem(ctx, req, adminClient, fs, req.GetVolumeId(), sdcIPs, nodeID)
+		err = s.unexportFilesystem(ctx, req, adminClient, fs, req.GetVolumeId(), ipAddresses, nodeID)
 		if err != nil {
 			return nil, err
 		}
