@@ -76,6 +76,8 @@ const (
 
 	// ParamCSILogLevel csi driver log level
 	ParamCSILogLevel = "CSI_LOG_LEVEL"
+	DriverNamespace  = "vxflexos"
+	DriverConfigMap  = "vxflexos-config-params"
 )
 
 var (
@@ -499,7 +501,6 @@ func (s *service) BeforeServe(
 func (s *service) updateConfigMap() {
 
 	configFilePath := "/vxflexos-config-params/driver-config-params.yaml" // Path to the mounted ConfigMap file
-
 	configFileData, err := os.ReadFile(configFilePath)
 	if err != nil {
 		Log.Errorf("Failed to read ConfigMap file: %v", err)
@@ -509,7 +510,7 @@ func (s *service) updateConfigMap() {
 	var config Config
 	err = yaml.Unmarshal(configFileData, &config)
 	if err != nil {
-		Log.Errorf("Failed to unmarshal config YAML file: %v", err)
+		Log.Errorf("Failed to parse configMap data: %v", err)
 		return
 	}
 
@@ -544,7 +545,7 @@ func (s *service) updateConfigMap() {
 	}
 
 	// Get the vxflexos-config-params ConfigMap
-	cm, err := clientSet.CoreV1().ConfigMaps("vxflexos").Get(context.TODO(), "vxflexos-config-params", metav1.GetOptions{})
+	cm, err := clientSet.CoreV1().ConfigMaps(DriverNamespace).Get(context.TODO(), DriverConfigMap, metav1.GetOptions{})
 	if err != nil {
 		Log.Errorf("Failed to get ConfigMap: %v", err)
 		return
@@ -558,14 +559,13 @@ func (s *service) updateConfigMap() {
 			panic(fmt.Sprintf("Failed to parse ConfigMap data: %v", err))
 		}
 
-		for node, ipAddressList := range updateInterfaceNamesWithIPs {
-
-			// Check and update interfaceNames
-			if interfaceNames, ok := configData["interfaceNames"].(map[string]interface{}); ok {
+		// Check and update Interfaces with the IPs
+		if interfaceNames, ok := configData["interfaceNames"].(map[string]interface{}); ok {
+			for node, ipAddressList := range updateInterfaceNamesWithIPs {
 				interfaceNames[node] = ipAddressList
-			} else {
-				panic("interfaceNames key missing or not in expected format")
 			}
+		} else {
+			panic("interfaceNames key missing or not in expected format")
 		}
 
 		updatedYaml, err := yaml.Marshal(configData)
@@ -575,7 +575,7 @@ func (s *service) updateConfigMap() {
 		cm.Data["driver-config-params.yaml"] = string(updatedYaml)
 	}
 
-	// Update the ConfigMap in Kubernetes
+	// Update the vxflexos-config-params ConfigMap
 	_, err = clientSet.CoreV1().ConfigMaps("vxflexos").Update(context.TODO(), cm, metav1.UpdateOptions{})
 	if err != nil {
 		Log.Errorf("Failed to update ConfigMap: %v", err)

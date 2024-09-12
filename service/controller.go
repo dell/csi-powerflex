@@ -1178,7 +1178,7 @@ func (s *service) findNetworkInterfaceIPs() ([]string, error) {
 	}
 
 	// Get the ConfigMap
-	configMap, err := clientSet.CoreV1().ConfigMaps("vxflexos").Get(context.TODO(), "vxflexos-config-params", metav1.GetOptions{})
+	configMap, err := clientSet.CoreV1().ConfigMaps(DriverNamespace).Get(context.TODO(), DriverConfigMap, metav1.GetOptions{})
 	if err != nil {
 		Log.Errorf("Failed to get the ConfigMap: %v", err)
 		return []string{}, err
@@ -1282,9 +1282,11 @@ func (s *service) ControllerPublishVolume(
 		}
 
 		var ipAddresses []string
+
 		ipAddresses, err = s.findNetworkInterfaceIPs()
 		if err != nil || len(ipAddresses) == 0 {
-			// get sdc IPs
+
+			// get SDC IPs if Network Interface IPs not found
 			ipAddresses, err := s.getSDCIPs(nodeID, systemID)
 			if err != nil {
 				return nil, status.Errorf(codes.NotFound, "%s", err.Error())
