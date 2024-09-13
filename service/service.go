@@ -241,7 +241,7 @@ func (s *service) logCsiNodeTopologyKeys() error {
 		K8sClientset = k8sutils.Clientset
 	}
 
-	csiNodes, err := K8sClientset.StorageV1().CSINodes().List(context.TODO(), metav1.ListOptions{})
+	csiNodes, _ := K8sClientset.StorageV1().CSINodes().List(context.TODO(), metav1.ListOptions{})
 	node, err := s.NodeGetInfo(context.Background(), nil)
 	if node != nil {
 		Log.WithField("node info", node.NodeId).Info("NodeInfo ID")
@@ -513,10 +513,10 @@ func (s *service) checkNFS(ctx context.Context, systemID string) (bool, error) {
 			return false, err
 		}
 		array := arrayConData[systemID]
+		Log.Infof("Debug : arrayConData for %s = %+v", systemID, array)
 		if strings.TrimSpace(array.NasName) == "" {
 			Log.Warnf("nasName value not found in secret, it is mandatory parameter for NFS volume operations")
 		} else {
-			Log.Infof("Debug: Finding NASServerIDFromName for %s", array.NasName)
 			nasserver, err := s.getNASServerIDFromName(systemID, array.NasName)
 			if err != nil {
 				return false, err
@@ -812,13 +812,13 @@ func getArrayConfig(_ context.Context) (map[string]*ArrayConnectionData, error) 
 	if err != nil {
 		Log.Errorf("Found error %v while checking stat of file %s ", err, ArrayConfigFile)
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("File %s does not exist", ArrayConfigFile)
+			return nil, fmt.Errorf("file %s does not exist", ArrayConfigFile)
 		}
 	}
 
 	config, err := os.ReadFile(filepath.Clean(ArrayConfigFile))
 	if err != nil {
-		return nil, fmt.Errorf("File %s errors: %v", ArrayConfigFile, err)
+		return nil, fmt.Errorf("file %s errors: %v", ArrayConfigFile, err)
 	}
 
 	if string(config) != "" {
@@ -827,7 +827,7 @@ func getArrayConfig(_ context.Context) (map[string]*ArrayConnectionData, error) 
 		config, _ = yaml.JSONToYAML(config)
 		err = yaml.Unmarshal(config, &creds)
 		if err != nil {
-			return nil, fmt.Errorf("Unable to parse the credentials: %v", err)
+			return nil, fmt.Errorf("unable to parse the credentials: %v", err)
 		}
 
 		if len(creds) == 0 {
@@ -1022,15 +1022,15 @@ func Contains(slice []string, element string) bool {
 // parseMask converts the subnet mask from CIDR notation to the dotted-decimal format
 // An input of x.x.x.x/32 will return 255.255.255.255
 func parseMask(ipaddr string) (mask string, err error) {
-	removeExtra := regexp.MustCompile("^(.*[\\/])")
+	removeExtra := regexp.MustCompile(`^(.*[\\/])`)
 	asd := ipaddr[len(ipaddr)-3:]
 	findSubnet := removeExtra.ReplaceAll([]byte(asd), []byte(""))
 	subnet, err := strconv.ParseInt(string(findSubnet), 10, 64)
 	if err != nil {
-		return "", errors.New("Parse Mask: Error parsing mask")
+		return "", errors.New("parse mask: error parsing mask")
 	}
 	if subnet < 0 || subnet > 32 {
-		return "", errors.New("Invalid subnet mask")
+		return "", errors.New("invalid subnet mask")
 	}
 	var buff bytes.Buffer
 	for i := 0; i < int(subnet); i++ {
@@ -1411,8 +1411,8 @@ func (s *service) checkVolumesMap(volumeID string) error {
 				for _, vol := range vols {
 					if vol.ID == volumeID {
 						// legacy volume found on non-default system, this is an error
-						Log.WithError(err).Errorf("Found volume id %s on non-default system %s. Expecting this volume id only on default system.  Aborting operation ", volumeID, systemID)
-						return fmt.Errorf("Found volume id %s on non-default system %s. Expecting this volume id only on default system.  Aborting operation ", volumeID, systemID)
+						Log.WithError(err).Errorf("found volume id %s on non-default system %s. expecting this volume id only on default system. aborting operation ", volumeID, systemID)
+						return fmt.Errorf("found volume id %s on non-default system %s. expecting this volume id only on default system. aborting operation ", volumeID, systemID)
 					}
 				}
 			}
@@ -1467,7 +1467,7 @@ func (s *service) getSystem(systemID string) (*siotypes.System, error) {
 			return system, nil
 		}
 	}
-	return nil, fmt.Errorf("System %s not found", systemID)
+	return nil, fmt.Errorf("system %s not found", systemID)
 }
 
 func (s *service) getPeerMdms(systemID string) ([]*siotypes.PeerMDM, error) {
@@ -1622,20 +1622,28 @@ func (s *service) getNASServerIDFromName(systemID, nasName string) (string, erro
 	return nas.ID, nil
 }
 
-func (s *service) pingNAS(systemID string, id string) error {
+func (s *service) pingNAS(systemID string, nasid string) error {
 
 	system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
-
 	if err != nil {
-		return errors.New("system not found: %s" + systemID)
+		return errors.New("system not found: " + systemID)
 	}
 
-	err = system.PingNAS(id)
+	nasserver, err := system.GetNASByIDName(nasid, "")
 	if err != nil {
-		return err
+		return errors.New("NAS server not found: " + nasid)
 	}
 
-	Log.Infof("Debug: Ping successful on NAS server")
+	fileInterface, err := system.GetFileInterface(nasserver.CurrentPreferredIPv4InterfaceID)
+	if fileInterface.IPAddress == "" || err != nil {
+		return errors.New("file interface not found for NAS server " + nasid)
+	}
+
+	err = system.PingNAS(nasid, fileInterface.IPAddress)
+	if err != nil {
+		return errors.New("could not ping NAS server" + nasid)
+	}
+
 	return nil
 }
 

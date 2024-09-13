@@ -514,13 +514,6 @@ func (s *service) nodeProbe(ctx context.Context) error {
 		Log.Infof("scini module not loaded, perhaps it was intentional")
 	}
 
-	// for nasserver := range s.opts.arrays {
-	// 	err := s.pingNAS(nasserver)
-	// 	if err != nil {
-	// 		return errors.New("Cound not ping NAS servers")
-	// 	}
-	// }
-
 	return nil
 }
 
@@ -719,7 +712,7 @@ func (s *service) NodeGetCapabilities(
 }
 
 // NodeGetInfo returns Node information
-// NodeId is the identifier of the node and will match the SDC GUID
+// TODO: (Update this comment) NodeId is the identifier of the node and will match the SDC GUID
 // MaxVolumesPerNode (optional) is left as 0 which means unlimited
 // AccessibleTopology will be set with the VxFlex OS SystemID
 func (s *service) NodeGetInfo(
@@ -731,7 +724,6 @@ func (s *service) NodeGetInfo(
 	if s.opts.SdcGUID == "" {
 		if err := s.nodeProbe(ctx); err != nil {
 			Log.Infof("failed to probe node: %s", err)
-			//return nil, err
 		}
 	}
 
@@ -739,7 +731,6 @@ func (s *service) NodeGetInfo(
 	if len(connectedSystemID) == 0 {
 		if err := s.nodeProbe(ctx); err != nil {
 			Log.Infof("failed to probe node: %s", err)
-			//return nil, err
 		}
 	}
 
@@ -790,15 +781,13 @@ func (s *service) NodeGetInfo(
 		return nil, status.Error(codes.InvalidArgument, GetMessage("Could not fetch node UID"))
 	}
 
-	nodeId := nodeUID
 	if s.opts.SdcGUID != "" {
-		nodeId = fmt.Sprintf("-%s", s.opts.SdcGUID)
+		nodeUID = fmt.Sprintf("%s-%s", nodeUID, s.opts.SdcGUID)
 	}
 
-	Log.Infof("NodeId: %v\n", nodeId)
+	Log.Infof("NodeId: %v\n", nodeUID)
 	return &csi.NodeGetInfoResponse{
-		//NodeId: s.opts.SdcGUID,
-		NodeId: nodeId,
+		NodeId: nodeUID,
 		AccessibleTopology: &csi.Topology{
 			Segments: topology,
 		},
