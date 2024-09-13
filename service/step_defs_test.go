@@ -3068,6 +3068,53 @@ func (f *feature) thereAreNoRemainingMounts() error {
 	return nil
 }
 
+func (f *feature) theConfigMapIsUpdated() error {
+
+	// Initializing a fake Kubernetes ClientSet
+	clientSet := fake.NewSimpleClientset()
+	K8sClientset = clientSet
+
+	data := `interfaceNames:
+  worker1: "eth1"
+  worker2: "eth2"`
+
+	configMapData := map[string]string{
+		"driver-config-params.yaml": data,
+	}
+
+	configMap := &v1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      DriverConfigMap,
+			Namespace: DriverNamespace,
+		},
+		Data: configMapData,
+	}
+
+	tmpFile, err := os.Create("driver-config-params.yaml")
+	if err != nil {
+		Log.Errorf("Error creating temp file: %v", err)
+	}
+	if _, err := tmpFile.Write([]byte(data)); err != nil {
+		Log.Errorf("Error writing to temp file: %v", err)
+	}
+
+	// Create a ConfigMap using fake ClientSet
+	_, err = clientSet.CoreV1().ConfigMaps(DriverNamespace).Create(context.TODO(), configMap, metav1.CreateOptions{})
+	if err != nil {
+		Log.Errorf("failed to create configmap: %v", err)
+	}
+
+	// Mocking the GetIPAddressByInterface function
+	GetIPAddressByInterface := func(interfaceName string) (string, error) {
+		return "10.0.0.1", nil
+	}
+
+	s := &service{}
+	s.opts.KubeNodeName = "worker1"
+	s.updateConfigMap(GetIPAddressByInterface, "driver-config-params.yaml")
+	return nil
+}
+
 func (f *feature) iCallBeforeServe() error {
 	ctxOSEnviron := interface{}("os.Environ")
 	stringSlice := make([]string, 0)
@@ -4623,6 +4670,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call NodeUnpublishVolume "([^"]*)"$`, f.iCallNodeUnpublishVolume)
 	s.Step(`^there are no remaining mounts$`, f.thereAreNoRemainingMounts)
 	s.Step(`^I call BeforeServe$`, f.iCallBeforeServe)
+	s.Step(`^configMap is updated$`, f.theConfigMapIsUpdated)
 	s.Step(`^I call NodeStageVolume$`, f.iCallNodeStageVolume)
 	s.Step(`^I call NodeUnstageVolume with "([^"]*)"$`, f.iCallNodeUnstageVolumeWith)
 	s.Step(`^I call NodeGetCapabilities "([^"]*)"$`, f.iCallNodeGetCapabilities)

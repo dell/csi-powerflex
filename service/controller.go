@@ -1287,7 +1287,7 @@ func (s *service) ControllerPublishVolume(
 		if err != nil || len(ipAddresses) == 0 {
 
 			// get SDC IPs if Network Interface IPs not found
-			ipAddresses, err := s.getSDCIPs(nodeID, systemID)
+			ipAddresses, err = s.getSDCIPs(nodeID, systemID)
 			if err != nil {
 				return nil, status.Errorf(codes.NotFound, "%s", err.Error())
 			} else if len(ipAddresses) == 0 {

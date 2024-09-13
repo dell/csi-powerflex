@@ -23,10 +23,12 @@ Feature: VxFlex OS CSI interface
       | "14dbbf5617523654"             | "none"   |
       | "15dbbf5617523655"             | "none"   |
 
+
   Scenario: Identity GetPluginInfo good call
     Given a VxFlexOS service
     When I call GetPluginInfo
     When I call BeforeServe
+    Then configMap is updated
     Then a valid GetPlugInfoResponse is returned
 
   Scenario Outline: Dynamic log config change
