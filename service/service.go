@@ -75,9 +75,10 @@ const (
 	DefaultLogLevel = logrus.DebugLevel
 
 	// ParamCSILogLevel csi driver log level
-	ParamCSILogLevel = "CSI_LOG_LEVEL"
-	DriverNamespace  = "vxflexos"
-	DriverConfigMap  = "vxflexos-config-params"
+	ParamCSILogLevel  = "CSI_LOG_LEVEL"
+	DriverNamespace   = "vxflexos"
+	DriverConfigMap   = "vxflexos-config-params"
+	ConfigMapFilePath = "/vxflexos-config-params/driver-config-params.yaml"
 )
 
 var (
@@ -183,6 +184,8 @@ type service struct {
 type Config struct {
 	InterfaceNames map[string]string `yaml:"interfaceNames"`
 }
+
+type GetIPAddressByInterfacefunc func(string) (string, error)
 
 // Process dynamic changes to configMap or Secret.
 func (s *service) ProcessMapSecretChange() error {
@@ -489,8 +492,8 @@ func (s *service) BeforeServe(
 	s.adminClients = make(map[string]*sio.Client)
 	s.systems = make(map[string]*sio.System)
 
-	// Update ConfigMap with the interfaces/IPs
-	s.updateConfigMap()
+	// Update the ConfigMap with the Interface IPs
+	s.updateConfigMap(s.getIPAddressByInterface, ConfigMapFilePath)
 
 	if _, ok := csictx.LookupEnv(ctx, "X_CSI_VXFLEXOS_NO_PROBE_ON_START"); !ok {
 		return s.doProbe(ctx)
@@ -498,9 +501,8 @@ func (s *service) BeforeServe(
 	return nil
 }
 
-func (s *service) updateConfigMap() {
+func (s *service) updateConfigMap(getIPAddressByInterfacefunc GetIPAddressByInterfacefunc, configFilePath string) {
 
-	configFilePath := "/vxflexos-config-params/driver-config-params.yaml" // Path to the mounted ConfigMap file
 	configFileData, err := os.ReadFile(configFilePath)
 	if err != nil {
 		Log.Errorf("Failed to read ConfigMap file: %v", err)
@@ -526,7 +528,8 @@ func (s *service) updateConfigMap() {
 		for _, interfaceName := range interfaces {
 			interfaceName = strings.TrimSpace(interfaceName)
 
-			ipAddress, err := s.getIPAddressByInterface(interfaceName)
+			// Find the IP of the Interfaces
+			ipAddress, err := getIPAddressByInterfacefunc(interfaceName)
 			if err != nil {
 				Log.Printf("Error while getting IP address for interface %s: %v\n", interfaceName, err)
 				continue
@@ -538,14 +541,17 @@ func (s *service) updateConfigMap() {
 		}
 	}
 
-	clientSet, err := k8sutils.ReturnKubeClientSet()
-	if err != nil {
-		Log.Errorf("Failed to get Kubernetes client: %v", err)
-		return
+	// Get the Kubernetes ClientSet
+	if K8sClientset == nil {
+		err = k8sutils.CreateKubeClientSet()
+		if err != nil {
+			return
+		}
+		K8sClientset = k8sutils.Clientset
 	}
 
 	// Get the vxflexos-config-params ConfigMap
-	cm, err := clientSet.CoreV1().ConfigMaps(DriverNamespace).Get(context.TODO(), DriverConfigMap, metav1.GetOptions{})
+	cm, err := K8sClientset.CoreV1().ConfigMaps(DriverNamespace).Get(context.TODO(), DriverConfigMap, metav1.GetOptions{})
 	if err != nil {
 		Log.Errorf("Failed to get ConfigMap: %v", err)
 		return
@@ -576,7 +582,7 @@ func (s *service) updateConfigMap() {
 	}
 
 	// Update the vxflexos-config-params ConfigMap
-	_, err = clientSet.CoreV1().ConfigMaps("vxflexos").Update(context.TODO(), cm, metav1.UpdateOptions{})
+	_, err = K8sClientset.CoreV1().ConfigMaps("vxflexos").Update(context.TODO(), cm, metav1.UpdateOptions{})
 	if err != nil {
 		Log.Errorf("Failed to update ConfigMap: %v", err)
 		return
