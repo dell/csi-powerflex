@@ -513,7 +513,6 @@ func (s *service) checkNFS(ctx context.Context, systemID string) (bool, error) {
 			return false, err
 		}
 		array := arrayConData[systemID]
-		Log.Infof("Debug : arrayConData for %s = %+v", systemID, array)
 		if strings.TrimSpace(array.NasName) == "" {
 			Log.Warnf("nasName value not found in secret, it is mandatory parameter for NFS volume operations")
 		} else {
@@ -1685,7 +1684,7 @@ func (s *service) GetNodeUID(_ context.Context) (string, error) {
 	if err != nil {
 		return "", status.Error(codes.Internal, GetMessage("Unable to fetch the node details. Error: %v", err))
 	}
-	Log.Infof("Node UID: %v\n", node.UID)
+	Log.Debugf("Node UID: %v\n", node.UID)
 	return string(node.UID), nil
 }
 
