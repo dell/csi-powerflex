@@ -1,4 +1,4 @@
-// Copyright © 2019-2022 Dell Inc. or its subsidiaries. All Rights Reserved.
+// Copyright © 2019-2024 Dell Inc. or its subsidiaries. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -364,7 +364,6 @@ func (s *service) NodeUnpublishVolume(
 				Log.Errorf("ephemeralNodeUnpublish returned error: %s", err.Error())
 				return nil, err
 			}
-
 		}
 
 		// Idempotent need to return ok if not published
@@ -456,9 +455,6 @@ func (s *service) nodeProbe(ctx context.Context) error {
 
 	// make sure the kernel module is loaded
 	if kmodLoaded(s.opts) {
-		//return status.Error(codes.FailedPrecondition,
-		//	"scini kernel module not loaded")
-
 		// fetch the SDC GUID
 		if s.opts.SdcGUID == "" {
 			// try to query the SDC GUID
@@ -481,11 +477,10 @@ func (s *service) nodeProbe(ctx context.Context) error {
 			}
 		}
 
-		// rename SDC
-		/*
-			case1: if IsSdcRenameEnabled=true and prefix given then set the prefix+worker_node_name for sdc name.
-			case2: if IsSdcRenameEnabled=true and prefix not given then set worker_node_name for sdc name.
-		*/
+		// 	rename SDC
+		//	case1: if IsSdcRenameEnabled=true and prefix given then set the prefix+worker_node_name for sdc name.
+		//	case2: if IsSdcRenameEnabled=true and prefix not given then set worker_node_name for sdc name.
+		//
 		if s.opts.IsSdcRenameEnabled {
 			err = s.renameSDC(s.opts)
 			if err != nil {
@@ -549,7 +544,6 @@ func (s *service) approveSDC(opts Opts) error {
 			}
 			Log.Warnf("Array RestrictedSdcMode is %s, driver only supports GUID RestrictedSdcMode If SDC becomes restricted again, driver will not be able to approve",
 				system.System.RestrictedSdcMode)
-
 		}
 
 	}
@@ -870,7 +864,7 @@ func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolume
 				}
 			}
 		}
-		if len(mounts) == 0 || mounted == false || err != nil {
+		if len(mounts) == 0 || !mounted || err != nil {
 			healthy = false
 			message = fmt.Sprintf("volPath: %s is not mounted: %v", volPath, err)
 		}
