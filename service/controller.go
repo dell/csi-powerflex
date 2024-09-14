@@ -1171,14 +1171,17 @@ func (s *service) DeleteVolume(
 
 func (s *service) findNetworkInterfaceIPs() ([]string, error) {
 
-	clientSet, err := k8sutils.ReturnKubeClientSet()
-	if err != nil {
-		Log.Errorf("Failed to get clientset: %v", err)
-		return []string{}, err
+	if K8sClientset == nil {
+		err := k8sutils.CreateKubeClientSet()
+		if err != nil {
+			Log.Errorf("Failed to create Kubernetes clientset: %v", err)
+			return []string{}, err
+		}
+		K8sClientset = k8sutils.Clientset
 	}
 
 	// Get the ConfigMap
-	configMap, err := clientSet.CoreV1().ConfigMaps(DriverNamespace).Get(context.TODO(), DriverConfigMap, metav1.GetOptions{})
+	configMap, err := K8sClientset.CoreV1().ConfigMaps(DriverNamespace).Get(context.TODO(), DriverConfigMap, metav1.GetOptions{})
 	if err != nil {
 		Log.Errorf("Failed to get the ConfigMap: %v", err)
 		return []string{}, err
