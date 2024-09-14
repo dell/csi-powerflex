@@ -117,7 +117,7 @@ Feature: VxFlex OS CSI interface
     Then a valid PublishVolumeResponse is returned
     And I call NFS PublishVolume with "single-node-multi-writer"
     Then a valid PublishVolumeResponse is returned
-    
+
     Scenario: a Basic NFS controller Publish incompatible access mode error
     Given a VxFlexOS service
     When I specify CreateVolumeMountRequest "nfs"

@@ -545,6 +545,7 @@ func (s *service) updateConfigMap(getIPAddressByInterfacefunc GetIPAddressByInte
 	if K8sClientset == nil {
 		err = k8sutils.CreateKubeClientSet()
 		if err != nil {
+			Log.Errorf("Failed to create Kubernetes ClientSet: %v", err)
 			return
 		}
 		K8sClientset = k8sutils.Clientset

@@ -1641,6 +1641,26 @@ func (f *feature) iCallPublishVolumeWithNFS(arg1 string) error {
 		req.VolumeCapability.AccessMode = accessMode
 	}
 
+	clientSet := fake.NewSimpleClientset()
+	K8sClientset = clientSet
+
+	configMapData := map[string]string{
+		"driver-config-params.yaml": `interfaceNames:
+  worker1: 127.1.1.11`,
+	}
+	configMap := &v1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      DriverConfigMap,
+			Namespace: DriverNamespace,
+		},
+		Data: configMapData,
+	}
+	// Create a ConfigMap using fake ClientSet
+	_, err := clientSet.CoreV1().ConfigMaps(DriverNamespace).Create(context.TODO(), configMap, metav1.CreateOptions{})
+	if err != nil {
+		log.Fatalf("failed to create configMap: %v", err)
+	}
+
 	log.Printf("Calling controllerPublishVolume")
 	f.publishVolumeResponse, f.err = f.service.ControllerPublishVolume(*ctx, req)
 	if f.err != nil {
@@ -1786,6 +1806,27 @@ func (f *feature) iCallUnpublishVolumeNFS() error {
 		req = f.getControllerUnpublishVolumeRequestNFS()
 		f.unpublishVolumeRequest = req
 	}
+
+	clientSet := fake.NewSimpleClientset()
+	K8sClientset = clientSet
+
+	configMapData := map[string]string{
+		"driver-config-params.yaml": `interfaceNames:
+  worker1: 127.1.1.12`,
+	}
+	configMap := &v1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      DriverConfigMap,
+			Namespace: DriverNamespace,
+		},
+		Data: configMapData,
+	}
+	// Create a ConfigMap using fake ClientSet
+	_, err := clientSet.CoreV1().ConfigMaps(DriverNamespace).Create(context.TODO(), configMap, metav1.CreateOptions{})
+	if err != nil {
+		Log.Fatalf("failed to create configMaps: %v", err)
+	}
+
 	log.Printf("Calling controllerUnpublishVolume: %s", req.VolumeId)
 	f.unpublishVolumeResponse, f.err = f.service.ControllerUnpublishVolume(*ctx, req)
 	if f.err != nil {
