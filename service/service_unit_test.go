@@ -17,13 +17,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"testing"
+
 	v1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
-	"net"
-	"testing"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	siotypes "github.com/dell/goscaleio/types/v1"
