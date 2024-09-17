@@ -31,6 +31,19 @@ Feature: VxFlex OS CSI interface
     Then configMap is updated
     Then a valid GetPlugInfoResponse is returned
 
+  Scenario Outline: Identity GetPluginInfo bad call
+    Given a VxFlexOS service
+    When I call GetPluginInfo
+    When I call BeforeServe
+    And I induce error <error>
+    Then configMap is updated
+    Then a valid GetPlugInfoResponse is returned
+    Examples:
+      | error                           |
+      | "UpdateConfigMapUnmarshalError" |
+      | "GetIPAddressByInterfaceError"  |
+      | "UpdateConfigK8sClientError"    |
+
   Scenario Outline: Dynamic log config change
     Given a VxFlexOS service
     When I call DynamicLogChange <file>

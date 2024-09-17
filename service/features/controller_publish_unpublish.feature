@@ -42,6 +42,18 @@ Feature: VxFlex OS CSI interface
     And I call UnpublishVolume nfs
     And no error was received
     Then a valid UnpublishVolumeResponse is returned
+
+  Scenario: a Basic NFS controller Publish and unpublish no error with SDC dependency
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I induce SDC dependency
+    And I call NFS PublishVolume with "single-writer"
+    Then a valid PublishVolumeResponse is returned
+    And I call UnpublishVolume nfs
+    And no error was received
+    Then a valid UnpublishVolumeResponse is returned
     
     Scenario: a Basic NFS controller Publish and unpublish NFS export not found error
     Given a VxFlexOS service

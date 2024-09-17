@@ -1342,9 +1342,20 @@ func (f *feature) iInduceError(errtype string) error {
 		f.service.adminClients[arrayID2] = nil
 		f.service.systems[arrayID2] = nil
 		stepHandlersErrors.PodmonControllerProbeError = true
+	case "UpdateConfigMapUnmarshalError":
+		stepHandlersErrors.UpdateConfigMapUnmarshalError = true
+	case "GetIPAddressByInterfaceError":
+		stepHandlersErrors.GetIPAddressByInterfaceError = true
+	case "UpdateConfigK8sClientError":
+		stepHandlersErrors.UpdateConfigK8sClientError = true
 	default:
 		fmt.Println("Ensure that the error is handled in the handlers section.")
 	}
+	return nil
+}
+
+func (f *feature) iInduceSDCDependency() error {
+	sdcDependencyOnNFS = true
 	return nil
 }
 
@@ -1648,6 +1659,12 @@ func (f *feature) iCallPublishVolumeWithNFS(arg1 string) error {
 		"driver-config-params.yaml": `interfaceNames:
   worker1: 127.1.1.11`,
 	}
+
+	if sdcDependencyOnNFS {
+		configMapData = map[string]string{}
+		K8sClientset = nil
+	}
+
 	configMap := &v1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      DriverConfigMap,
@@ -1814,6 +1831,12 @@ func (f *feature) iCallUnpublishVolumeNFS() error {
 		"driver-config-params.yaml": `interfaceNames:
   worker1: 127.1.1.12`,
 	}
+
+	if sdcDependencyOnNFS {
+		configMapData = map[string]string{}
+		K8sClientset = nil
+	}
+
 	configMap := &v1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      DriverConfigMap,
@@ -3114,11 +3137,17 @@ func (f *feature) theConfigMapIsUpdated() error {
 	// Initializing a fake Kubernetes ClientSet
 	clientSet := fake.NewSimpleClientset()
 	K8sClientset = clientSet
+	if stepHandlersErrors.UpdateConfigK8sClientError {
+		K8sClientset = nil
+	}
 
 	data := `interfaceNames:
   worker1: "eth1"
   worker2: "eth2"`
 
+	if stepHandlersErrors.UpdateConfigMapUnmarshalError {
+		data = `interfaceName:`
+	}
 	configMapData := map[string]string{
 		"driver-config-params.yaml": data,
 	}
@@ -3146,8 +3175,13 @@ func (f *feature) theConfigMapIsUpdated() error {
 	}
 
 	// Mocking the GetIPAddressByInterface function
-	GetIPAddressByInterface := func(interfaceName string) (string, error) {
+	GetIPAddressByInterface := func(interfaceName string, networkInterface NetworkInterface) (string, error) {
 		return "10.0.0.1", nil
+	}
+	if stepHandlersErrors.GetIPAddressByInterfaceError {
+		GetIPAddressByInterface = func(interfaceName string, networkInterface NetworkInterface) (string, error) {
+			return "", fmt.Errorf("error geting the IP address of the interface")
+		}
 	}
 
 	s := &service{}
@@ -4712,6 +4746,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^there are no remaining mounts$`, f.thereAreNoRemainingMounts)
 	s.Step(`^I call BeforeServe$`, f.iCallBeforeServe)
 	s.Step(`^configMap is updated$`, f.theConfigMapIsUpdated)
+	s.Step(`^I induce SDC dependency$`, f.iInduceSDCDependency)
 	s.Step(`^I call NodeStageVolume$`, f.iCallNodeStageVolume)
 	s.Step(`^I call NodeUnstageVolume with "([^"]*)"$`, f.iCallNodeUnstageVolumeWith)
 	s.Step(`^I call NodeGetCapabilities "([^"]*)"$`, f.iCallNodeGetCapabilities)

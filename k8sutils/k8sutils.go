@@ -55,17 +55,3 @@ func LeaderElection(clientset *kubernetes.Interface, lockName string, namespace 
 		os.Exit(1)
 	}
 }
-
-// ReturnKubeClientSet - Returns the KubeClient Set
-func ReturnKubeClientSet() (kubernetes.Interface, error) {
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		return nil, err
-	}
-
-	clientSet, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return nil, err
-	}
-	return clientSet, nil
-}

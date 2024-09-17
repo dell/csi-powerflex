@@ -136,6 +136,11 @@ type Service interface {
 	ProcessMapSecretChange() error
 }
 
+type NetworkInterface interface {
+	InterfaceByName(name string) (*net.Interface, error)
+	Addrs(interfaceObj *net.Interface) ([]net.Addr, error)
+}
+
 // Opts defines service configuration options.
 type Opts struct {
 	// map from system name to ArrayConnectionData
@@ -185,7 +190,15 @@ type Config struct {
 	InterfaceNames map[string]string `yaml:"interfaceNames"`
 }
 
-type GetIPAddressByInterfacefunc func(string) (string, error)
+type GetIPAddressByInterfacefunc func(string, NetworkInterface) (string, error)
+
+func (s *service) InterfaceByName(name string) (*net.Interface, error) {
+	return net.InterfaceByName(name)
+}
+
+func (s *service) Addrs(interfaceObj *net.Interface) ([]net.Addr, error) {
+	return interfaceObj.Addrs()
+}
 
 // Process dynamic changes to configMap or Secret.
 func (s *service) ProcessMapSecretChange() error {
@@ -529,7 +542,7 @@ func (s *service) updateConfigMap(getIPAddressByInterfacefunc GetIPAddressByInte
 			interfaceName = strings.TrimSpace(interfaceName)
 
 			// Find the IP of the Interfaces
-			ipAddress, err := getIPAddressByInterfacefunc(interfaceName)
+			ipAddress, err := getIPAddressByInterfacefunc(interfaceName, &service{})
 			if err != nil {
 				Log.Printf("Error while getting IP address for interface %s: %v\n", interfaceName, err)
 				continue
@@ -563,7 +576,8 @@ func (s *service) updateConfigMap(getIPAddressByInterfacefunc GetIPAddressByInte
 
 		err := yaml.Unmarshal([]byte(existingYaml), &configData)
 		if err != nil {
-			panic(fmt.Sprintf("Failed to parse ConfigMap data: %v", err))
+			Log.Errorf("Failed to parse ConfigMap data: %v", err)
+			return
 		}
 
 		// Check and update Interfaces with the IPs
@@ -572,12 +586,14 @@ func (s *service) updateConfigMap(getIPAddressByInterfacefunc GetIPAddressByInte
 				interfaceNames[node] = ipAddressList
 			}
 		} else {
-			panic("interfaceNames key missing or not in expected format")
+			Log.Errorf("interfaceNames key missing or not in expected format")
+			return
 		}
 
 		updatedYaml, err := yaml.Marshal(configData)
 		if err != nil {
-			panic(fmt.Sprintf("Failed to marshal updated data: %v", err))
+			Log.Errorf("Failed to marshal updated data: %v", err)
+			return
 		}
 		cm.Data["driver-config-params.yaml"] = string(updatedYaml)
 	}
@@ -592,13 +608,13 @@ func (s *service) updateConfigMap(getIPAddressByInterfacefunc GetIPAddressByInte
 	fmt.Println("ConfigMap updated successfully")
 }
 
-func (s *service) getIPAddressByInterface(interfaceName string) (string, error) {
-	interfaceObj, err := net.InterfaceByName(interfaceName)
+func (s *service) getIPAddressByInterface(interfaceName string, networkInterface NetworkInterface) (string, error) {
+	interfaceObj, err := networkInterface.InterfaceByName(interfaceName)
 	if err != nil {
 		return "", err
 	}
 
-	addrs, err := interfaceObj.Addrs()
+	addrs, err := networkInterface.Addrs(interfaceObj)
 	if err != nil {
 		return "", err
 	}
