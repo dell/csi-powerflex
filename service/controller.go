@@ -16,15 +16,17 @@ package service
 import (
 	"errors"
 	"fmt"
-	"github.com/dell/csi-vxflexos/v2/k8sutils"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"math"
 	"net/http"
-	"sigs.k8s.io/yaml"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/dell/csi-vxflexos/v2/k8sutils"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"sigs.k8s.io/yaml"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
@@ -1170,7 +1172,6 @@ func (s *service) DeleteVolume(
 }
 
 func (s *service) findNetworkInterfaceIPs() ([]string, error) {
-
 	if K8sClientset == nil {
 		err := k8sutils.CreateKubeClientSet()
 		if err != nil {

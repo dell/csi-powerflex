@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	v1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
@@ -27,27 +28,23 @@ import (
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	siotypes "github.com/dell/goscaleio/types/v1"
 	"github.com/stretchr/testify/assert"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
-type mockService struct {
-}
+type mockService struct{}
 
 func (s *mockService) InterfaceByName(interfaceName string) (*net.Interface, error) {
-
 	if interfaceName == "" {
 		return nil, fmt.Errorf("invalid interface name")
-
 	} else if interfaceName != "eth0" {
 		return nil, nil
 	}
 	return &net.Interface{
-			Name: interfaceName},
+			Name: interfaceName,
+		},
 		nil
 }
 
 func (s *mockService) Addrs(interfaceObj *net.Interface) ([]net.Addr, error) {
-
 	if interfaceObj == nil {
 		return nil, fmt.Errorf("invalid interface object")
 	}
@@ -483,7 +480,6 @@ func TestValidateQoSParameters(t *testing.T) {
 }
 
 func TestGetIPAddressByInterface(t *testing.T) {
-
 	tests := []struct {
 		name          string
 		interfaceName string
@@ -548,7 +544,8 @@ func TestFindNetworkInterfaceIPs(t *testing.T) {
 						Kind: "configmaps",
 					},
 					Code: 404,
-				}},
+				},
+			},
 			client:        fake.NewSimpleClientset(),
 			configMapData: nil,
 			createConfigMap: func(map[string]string, kubernetes.Interface) {
