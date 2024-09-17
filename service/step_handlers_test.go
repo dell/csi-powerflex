@@ -32,12 +32,13 @@ import (
 )
 
 var (
-	debug             bool
-	sdcMappings       []types.MappedSdcInfo
-	sdcMappingsID     string
-	setSdcNameSuccess bool
-	sdcIDToName       map[string]string
-	isQuotaEnabled    bool
+	debug              bool
+	sdcMappings        []types.MappedSdcInfo
+	sdcMappingsID      string
+	setSdcNameSuccess  bool
+	sdcIDToName        map[string]string
+	isQuotaEnabled     bool
+	sdcDependencyOnNFS bool
 
 	stepHandlersErrors struct {
 		FindVolumeIDError             bool
@@ -105,6 +106,9 @@ var (
 		NoVolIDSDCError               bool
 		NoVolError                    bool
 		SetSdcNameError               bool
+		UpdateConfigMapUnmarshalError bool
+		GetIPAddressByInterfaceError  bool
+		UpdateConfigK8sClientError    bool
 	}
 )
 
@@ -159,6 +163,7 @@ func getHandler() http.Handler {
 	treeQuotaIDToGracePeriod = make(map[string]string)
 	treeQuotaIDToHardLimit = make(map[string]string)
 	debug = false
+	sdcDependencyOnNFS = false
 	stepHandlersErrors.FindVolumeIDError = false
 	stepHandlersErrors.GetVolByIDError = false
 	stepHandlersErrors.SIOGatewayVolumeNotFoundError = false
@@ -224,6 +229,9 @@ func getHandler() http.Handler {
 	stepHandlersErrors.NoVolError = false
 	stepHandlersErrors.SetSdcNameError = false
 	stepHandlersErrors.ApproveSdcError = false
+	stepHandlersErrors.UpdateConfigMapUnmarshalError = false
+	stepHandlersErrors.GetIPAddressByInterfaceError = false
+	stepHandlersErrors.UpdateConfigK8sClientError = false
 	sdcMappings = sdcMappings[:0]
 	sdcMappingsID = ""
 	return handler
