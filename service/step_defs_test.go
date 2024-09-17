@@ -3133,7 +3133,6 @@ func (f *feature) thereAreNoRemainingMounts() error {
 }
 
 func (f *feature) theConfigMapIsUpdated() error {
-
 	// Initializing a fake Kubernetes ClientSet
 	clientSet := fake.NewSimpleClientset()
 	K8sClientset = clientSet
