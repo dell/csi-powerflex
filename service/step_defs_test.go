@@ -3175,11 +3175,11 @@ func (f *feature) theConfigMapIsUpdated() error {
 	}
 
 	// Mocking the GetIPAddressByInterface function
-	GetIPAddressByInterface := func(interfaceName string, networkInterface NetworkInterface) (string, error) {
+	GetIPAddressByInterface := func(string, NetworkInterface) (string, error) {
 		return "10.0.0.1", nil
 	}
 	if stepHandlersErrors.GetIPAddressByInterfaceError {
-		GetIPAddressByInterface = func(interfaceName string, networkInterface NetworkInterface) (string, error) {
+		GetIPAddressByInterface = func(string, NetworkInterface) (string, error) {
 			return "", fmt.Errorf("error geting the IP address of the interface")
 		}
 	}
