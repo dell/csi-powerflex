@@ -6,7 +6,7 @@
       "insecure": true,
       "isDefault": true,
       "systemID": "14dbbf5617523654",
-      "nasName": "dummy-name"
+      "nasName": "dummy-nas-server"
    },
    {
       "endpoint": "http://127.0.0.2",
@@ -16,6 +16,6 @@
       "isDefault": false,
       "systemID": "15dbbf5617523655",
       "AllSystemNames" : "15dbbf5617523655-previous-name",
-      "nasName": "dummy-name"
+      "nasName": "dummy-nas-server"
    }
 ]

@@ -1621,26 +1621,26 @@ func (s *service) getNASServerIDFromName(systemID, nasName string) (string, erro
 	return nas.ID, nil
 }
 
-func (s *service) pingNAS(systemID string, nasid string) error {
+func (s *service) pingNAS(systemID string, nasName string) error {
 
 	system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
 	if err != nil {
 		return errors.New("system not found: " + systemID)
 	}
 
-	nasserver, err := system.GetNASByIDName(nasid, "")
+	nas, err := system.GetNASByIDName("", nasName)
 	if err != nil {
-		return errors.New("NAS server not found: " + nasid)
+		return errors.New("NAS server not found: " + nasName)
 	}
 
-	fileInterface, err := system.GetFileInterface(nasserver.CurrentPreferredIPv4InterfaceID)
+	fileInterface, err := system.GetFileInterface(nas.CurrentPreferredIPv4InterfaceID)
 	if fileInterface.IPAddress == "" || err != nil {
-		return errors.New("file interface not found for NAS server " + nasid)
+		return errors.New("file interface not found for NAS server " + nasName)
 	}
 
-	err = system.PingNAS(nasid, fileInterface.IPAddress)
+	err = system.PingNAS(nas.ID, fileInterface.IPAddress)
 	if err != nil {
-		return errors.New("could not ping NAS server" + nasid)
+		return errors.New("could not ping NAS server " + nas.ID)
 	}
 
 	return nil
@@ -1681,10 +1681,10 @@ func (s *service) GetNodeUID(_ context.Context) (string, error) {
 
 	// access the API to fetch node object
 	node, err := K8sClientset.CoreV1().Nodes().Get(context.TODO(), s.opts.KubeNodeName, v1.GetOptions{})
+
 	if err != nil {
 		return "", status.Error(codes.Internal, GetMessage("Unable to fetch the node details. Error: %v", err))
 	}
-	Log.Debugf("Node UID: %v\n", node.UID)
 	return string(node.UID), nil
 }
 

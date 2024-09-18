@@ -147,6 +147,8 @@ type feature struct {
 	nodeLabels                            map[string]string
 	maxVolSize                            int64
 	nfsExport                             types.NFSExport
+	//nodeUID                               string
+	//nas                                   types.NAS
 }
 
 func (f *feature) checkGoRoutines(tag string) {
@@ -1816,6 +1818,7 @@ func (f *feature) iCallNodeGetInfo() error {
 }
 
 func (f *feature) iCallNodeGetInfoWithValidVolumeLimitNodeLabels() error {
+	f.setFakeNode()
 	ctx := new(context.Context)
 	req := new(csi.NodeGetInfoRequest)
 	f.service.opts.SdcGUID = "9E56672F-2F4B-4A42-BFF4-88B6846FBFDA"
@@ -1831,6 +1834,16 @@ func (f *feature) iCallNodeGetInfoWithInvalidVolumeLimitNodeLabels() error {
 	f.service.opts.SdcGUID = "9E56672F-2F4B-4A42-BFF4-88B6846FBFDA"
 	GetNodeLabels = mockGetNodeLabelsWithInvalidVolumeLimits
 	f.nodeGetInfoResponse, f.err = f.service.NodeGetInfo(*ctx, req)
+	return nil
+}
+
+func (f *feature) iCallNodeGetInfoWithValidNodeUID() error {
+	ctx := new(context.Context)
+	req := new(csi.NodeGetInfoRequest)
+	GetNodeUID = mockGetNodeUID
+	f.service.opts.SdcGUID = ""
+	f.nodeGetInfoResponse, f.err = f.service.NodeGetInfo(*ctx, req)
+	fmt.Printf("NodeGetInfoResponse: %v", f.nodeGetInfoResponse)
 	return nil
 }
 
@@ -1852,12 +1865,18 @@ func mockGetNodeLabelsWithInvalidVolumeLimits(ctx context.Context, s *service) (
 	return labels, nil
 }
 
+//nolint:revive
+func mockGetNodeUID(ctx context.Context, s *service) (string, error) {
+	return "1aa4c285-d41b-4911-bf3e-621253bfbade", nil
+}
+
 func (f *feature) setFakeNode() (*v1.Node, error) {
 	f.service.opts.KubeNodeName = "node1"
 	fakeNode := &v1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   "node1",
 			Labels: map[string]string{"label1": "value1", "label2": "value2"},
+			UID:    "1aa4c285-d41b-4911-bf3e-621253bfbade",
 		},
 	}
 	return K8sClientset.CoreV1().Nodes().Create(context.TODO(), fakeNode, metav1.CreateOptions{})
@@ -1927,6 +1946,17 @@ func (f *feature) aValidNodeGetInfoResponseIsReturned() error {
 	}
 	if f.nodeGetInfoResponse.MaxVolumesPerNode != 0 {
 		return errors.New("expected NodeGetInfoResponse MaxVolumesPerNode to be 0")
+	}
+	fmt.Printf("NodeID %s\n", f.nodeGetInfoResponse.NodeId)
+	return nil
+}
+
+func (f *feature) aValidNodeGetInfoResponseWithNodeUIDIsReturned() error {
+	if f.err != nil {
+		return f.err
+	}
+	if f.nodeGetInfoResponse.NodeId == "" {
+		return errors.New("expected NodeGetInfoResponse to contain NodeID but it was null")
 	}
 	fmt.Printf("NodeID %s\n", f.nodeGetInfoResponse.NodeId)
 	return nil
@@ -4466,6 +4496,18 @@ func (f *feature) iSpecifyExternalAccess(externalAccess string) error {
 	return nil
 }
 
+func (f *feature) iCallGetNASServerIDFromName(systemID string, name string) error {
+	id := ""
+	id, f.err = f.service.getNASServerIDFromName(systemID, name)
+	fmt.Printf("NAS server id for %s is : %s\n", name, id)
+	return nil
+}
+
+func (f *feature) iCallPingNASServer(systemID string, name string) error {
+	f.err = f.service.pingNAS(systemID, name)
+	return nil
+}
+
 func FeatureContext(s *godog.ScenarioContext) {
 	f := &feature{}
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
@@ -4529,9 +4571,11 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call NodeGetInfo$`, f.iCallNodeGetInfo)
 	s.Step(`^I call Node Probe$`, f.iCallNodeProbe)
 	s.Step(`^a valid NodeGetInfoResponse is returned$`, f.aValidNodeGetInfoResponseIsReturned)
+	s.Step(`^a valid NodeGetInfoResponse with node UID is returned$`, f.aValidNodeGetInfoResponseWithNodeUIDIsReturned)
 	s.Step(`^the Volume limit is set$`, f.theVolumeLimitIsSet)
 	s.Step(`^an invalid MaxVolumesPerNode$`, f.anInvalidMaxVolumesPerNode)
 	s.Step(`^I call GetNodeLabels$`, f.iCallGetNodeLabels)
+	s.Step(`^I call NodeGetInfo with a valid Node UID$`, f.iCallNodeGetInfoWithValidNodeUID)
 	s.Step(`^a valid label is returned$`, f.aValidLabelIsReturned)
 	s.Step(`^I set invalid EnvMaxVolumesPerNode$`, f.iSetInvalidEnvMaxVolumesPerNode)
 	s.Step(`^I call GetNodeLabels with invalid node$`, f.iCallGetNodeLabelsWithInvalidNode)
@@ -4679,6 +4723,8 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call externalAccessAlreadyAdded with externalAccess "([^"]*)"`, f.iCallexternalAccessAlreadyAdded)
 	s.Step(`^an NFSExport instance with nfsexporthost "([^"]*)"`, f.iCallGivenNFSExport)
 	s.Step(`^I specify External Access "([^"]*)"`, f.iSpecifyExternalAccess)
+	s.Step(`^I call Get NAS server from name "([^"]*)" "([^"]*)"$`, f.iCallGetNASServerIDFromName)
+	s.Step(`^I call ping NAS server "([^"]*)" "([^"]*)"$`, f.iCallPingNASServer)
 
 	s.After(func(ctx context.Context, _ *godog.Scenario, _ error) (context.Context, error) {
 		if f.server != nil {

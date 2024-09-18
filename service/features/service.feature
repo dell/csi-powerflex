@@ -413,11 +413,6 @@ Feature: VxFlex OS CSI interface
     And I call CreateVolumeSize nfs "volume3" "16"
     Then the error contains "'Volume name' already exists and size is different"
 
-  Scenario: Call NodeGetInfo and validate NodeId
-    Given a VxFlexOS service
-    When I call NodeGetInfo
-    Then a valid NodeGetInfoResponse is returned
-
   Scenario: Call NodeGetInfo with invalid MaxVolumesPerNode
     Given a VxFlexOS service
     And an invalid MaxVolumesPerNode
@@ -443,6 +438,11 @@ Feature: VxFlex OS CSI interface
     Given a VxFlexOS service
     When I call NodeGetInfo with valid volume limit node labels
     Then the Volume limit is set
+
+  Scenario: Call NodeGetInfo and validate Node UID
+    Given a VxFlexOS service
+    When I call NodeGetInfo with a valid Node UID
+    Then a valid NodeGetInfoResponse with node UID is returned  
 
   Scenario: Call ParseInt64FromContext to validate EnvMaxVolumesPerNode
     Given a VxFlexOS service
@@ -1487,7 +1487,7 @@ Feature: VxFlex OS CSI interface
 
   Scenario: Parse IP with no Mask
     When I call parseMask with ip "192.168.1.34"
-    Then the error contains "Parse Mask: Error parsing mask"
+    Then the error contains "parse mask: error parsing mask"
 
   Scenario: External Access Already Added
     Given an NFSExport instance with nfsexporthost <nfsexporthost>
@@ -1497,3 +1497,22 @@ Feature: VxFlex OS CSI interface
       |  nfsexporthost                  | externalAccess                | errorMsg                              |
       |  "127.0.0.1/255.255.255.255"    | "127.0.0.1/255.255.255.255"   | "external access exists"              |
       |  "127.1.1.0/255.255.255.255"    | "127.0.0.1/255.255.255.255"   | "external access does not exist"      |
+
+  @TestSDC
+  Scenario: Get NAS server by name
+    Given a VxFlexOS service
+    And I call Probe
+    When I call Get NAS server from name "15dbbf5617523655" "dummy-nas-server"
+    Then the error contains "none"
+
+  @TestSDC
+  Scenario: Ping a NAS server by name
+    Given a VxFlexOS service
+    And I call Probe
+    When I call ping NAS server <systemid> <nasserver>
+    Then the error contains <errorMsg>
+    Examples:
+      |  systemid                  | nasserver                | errorMsg                 |
+      |  "15dbbf5617523655"        | "dummy-nas-server"       | "none"                   |
+      |  "15dbbf5617523655"        | "invalid-nas-server"     | "NAS server not found"   |
+      |  "15dbbf5617523000"        | "dummy-nas-server"       | "system not found"       |
