@@ -34,8 +34,8 @@ Feature: VxFlex OS CSI interface
   Scenario Outline: Identity GetPluginInfo bad call
     Given a VxFlexOS service
     When I call GetPluginInfo
-    When I call BeforeServe
     And I induce error <error>
+    When I call BeforeServe
     Then configMap is updated
     Then a valid GetPlugInfoResponse is returned
     Examples:
@@ -43,6 +43,8 @@ Feature: VxFlex OS CSI interface
       | "UpdateConfigMapUnmarshalError" |
       | "GetIPAddressByInterfaceError"  |
       | "UpdateConfigK8sClientError"    |
+      | "UpdateConfigFormatError"       |
+      | "ConfigMapNotFoundError"        |
 
   Scenario Outline: Dynamic log config change
     Given a VxFlexOS service
