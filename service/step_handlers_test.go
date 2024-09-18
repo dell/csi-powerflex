@@ -258,6 +258,7 @@ func getRouter() http.Handler {
 	scaleioRouter.HandleFunc("/rest/v1/file-tree-quotas", handleFileTreeQuotas)
 	scaleioRouter.HandleFunc("/rest/v1/file-tree-quotas/{id}", handleGetFileTreeQuotas)
 	scaleioRouter.HandleFunc("/api/instances/System/action/querySystemLimits", handleGetSystemLimits)
+	scaleioRouter.HandleFunc("/rest/v1/nas-servers/{id}/ping", handleNasServerPing)
 	return scaleioRouter
 }
 
@@ -390,6 +391,16 @@ func handleNasInstances(w http.ResponseWriter, _ *http.Request) {
 	}
 
 	returnJSONFile("features", "get_nas_servers.json", w, nil)
+}
+
+// handleSystemInstances implements POST /rest/v1/nas-servers/{id}/ping
+func handleNasServerPing(w http.ResponseWriter, _ *http.Request) {
+	if stepHandlersErrors.NasServerNotFoundError {
+		writeError(w, "nas server not found", http.StatusNotFound, codes.NotFound)
+		return
+	}
+
+	//returnJSONFile("features", "get_nas_servers.json", w, nil)
 }
 
 func handleGetNasInstances(w http.ResponseWriter, _ *http.Request) {

@@ -42,6 +42,7 @@ var (
 
 	// GetNodeLabels - Get the node labels
 	GetNodeLabels = getNodelabels
+	GetNodeUID    = getNodeUID
 )
 
 const (
@@ -706,7 +707,7 @@ func (s *service) NodeGetCapabilities(
 }
 
 // NodeGetInfo returns Node information
-// TODO: (Update this comment) NodeId is the identifier of the node and will match the SDC GUID
+// NodeId is the identifier of the node. If SDC is installed, SDC GUID will be appended to NodeId
 // MaxVolumesPerNode (optional) is left as 0 which means unlimited
 // AccessibleTopology will be set with the VxFlex OS SystemID
 func (s *service) NodeGetInfo(
@@ -770,7 +771,7 @@ func (s *service) NodeGetInfo(
 		topology[Name+"/"+array.SystemID] = SystemTopologySystemValue
 	}
 
-	nodeUID, err := getNodeUID(ctx, s)
+	nodeUID, err := GetNodeUID(ctx, s)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, GetMessage("Could not fetch node UID"))
 	}
@@ -779,7 +780,7 @@ func (s *service) NodeGetInfo(
 		nodeUID = fmt.Sprintf("%s-%s", nodeUID, s.opts.SdcGUID)
 	}
 
-	Log.Infof("NodeId: %v\n", nodeUID)
+	Log.Debugf("NodeId: %v\n", nodeUID)
 	return &csi.NodeGetInfoResponse{
 		NodeId: nodeUID,
 		AccessibleTopology: &csi.Topology{
