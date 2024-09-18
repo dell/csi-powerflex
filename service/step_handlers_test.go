@@ -109,6 +109,8 @@ var (
 		UpdateConfigMapUnmarshalError bool
 		GetIPAddressByInterfaceError  bool
 		UpdateConfigK8sClientError    bool
+		UpdateConfigFormatError       bool
+		ConfigMapNotFoundError        bool
 	}
 )
 
@@ -232,6 +234,8 @@ func getHandler() http.Handler {
 	stepHandlersErrors.UpdateConfigMapUnmarshalError = false
 	stepHandlersErrors.GetIPAddressByInterfaceError = false
 	stepHandlersErrors.UpdateConfigK8sClientError = false
+	stepHandlersErrors.UpdateConfigFormatError = false
+	stepHandlersErrors.ConfigMapNotFoundError = false
 	sdcMappings = sdcMappings[:0]
 	sdcMappingsID = ""
 	return handler

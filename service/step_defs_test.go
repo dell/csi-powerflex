@@ -1348,6 +1348,10 @@ func (f *feature) iInduceError(errtype string) error {
 		stepHandlersErrors.GetIPAddressByInterfaceError = true
 	case "UpdateConfigK8sClientError":
 		stepHandlersErrors.UpdateConfigK8sClientError = true
+	case "UpdateConfigFormatError":
+		stepHandlersErrors.UpdateConfigFormatError = true
+	case "ConfigMapNotFoundError":
+		stepHandlersErrors.ConfigMapNotFoundError = true
 	default:
 		fmt.Println("Ensure that the error is handled in the handlers section.")
 	}
@@ -3143,14 +3147,15 @@ func (f *feature) theConfigMapIsUpdated() error {
 	data := `interfaceNames:
   worker1: "eth1"
   worker2: "eth2"`
-
 	if stepHandlersErrors.UpdateConfigMapUnmarshalError {
+		data = `[interfaces:`
+	} else if stepHandlersErrors.UpdateConfigFormatError {
 		data = `interfaceName:`
 	}
+
 	configMapData := map[string]string{
 		"driver-config-params.yaml": data,
 	}
-
 	configMap := &v1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      DriverConfigMap,
@@ -3167,10 +3172,12 @@ func (f *feature) theConfigMapIsUpdated() error {
 		Log.Errorf("Error writing to temp file: %v", err)
 	}
 
-	// Create a ConfigMap using fake ClientSet
-	_, err = clientSet.CoreV1().ConfigMaps(DriverNamespace).Create(context.TODO(), configMap, metav1.CreateOptions{})
-	if err != nil {
-		Log.Errorf("failed to create configmap: %v", err)
+	if !stepHandlersErrors.ConfigMapNotFoundError {
+		// Create a ConfigMap using fake ClientSet
+		_, err = clientSet.CoreV1().ConfigMaps(DriverNamespace).Create(context.TODO(), configMap, metav1.CreateOptions{})
+		if err != nil {
+			Log.Errorf("failed to create configmap: %v", err)
+		}
 	}
 
 	// Mocking the GetIPAddressByInterface function
@@ -3218,6 +3225,9 @@ func (f *feature) iCallBeforeServe() error {
 	fmt.Printf("ProbeController resp %#v \n", presp)
 	if perr != nil {
 		f.err = perr
+	}
+	if stepHandlersErrors.UpdateConfigK8sClientError {
+		K8sClientset = nil
 	}
 	f.err = f.service.BeforeServe(ctx, nil, listener)
 	listener.Close()

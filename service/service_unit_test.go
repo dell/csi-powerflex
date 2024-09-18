@@ -575,6 +575,50 @@ func TestFindNetworkInterfaceIPs(t *testing.T) {
 				}
 			},
 		},
+		{
+			name:          "Error unmarshalling ConfigMap params",
+			expectedError: errors.New("error converting YAML to JSON: yaml: line 1: did not find expected node content"),
+			client:        fake.NewSimpleClientset(),
+			configMapData: map[string]string{
+				"driver-config-params.yaml": `[interfaces:`,
+			},
+			createConfigMap: func(data map[string]string, clientSet kubernetes.Interface) {
+				configMap := &v1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      DriverConfigMap,
+						Namespace: DriverNamespace,
+					},
+					Data: data,
+				}
+				// Create a ConfigMap using fake ClientSet
+				_, err := clientSet.CoreV1().ConfigMaps(DriverNamespace).Create(context.TODO(), configMap, metav1.CreateOptions{})
+				if err != nil {
+					Log.Fatalf("failed to create configMaps: %v", err)
+				}
+			},
+		},
+		{
+			name:          "Error getting the Network Interface IPs",
+			expectedError: fmt.Errorf("failed to get the Network Interface IPs"),
+			client:        fake.NewSimpleClientset(),
+			configMapData: map[string]string{
+				"params-yaml": ``,
+			},
+			createConfigMap: func(data map[string]string, clientSet kubernetes.Interface) {
+				configMap := &v1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      DriverConfigMap,
+						Namespace: DriverNamespace,
+					},
+					Data: data,
+				}
+				// Create a ConfigMap using fake ClientSet
+				_, err := clientSet.CoreV1().ConfigMaps(DriverNamespace).Create(context.TODO(), configMap, metav1.CreateOptions{})
+				if err != nil {
+					Log.Fatalf("failed to create configMaps: %v", err)
+				}
+			},
+		},
 	}
 
 	for _, tt := range tests {
