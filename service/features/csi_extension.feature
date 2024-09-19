@@ -111,7 +111,7 @@ Examples:
     When I call Probe
     And I induce error "LegacyVolumeConflictError"
     And I call CreateVolumeSnapshotGroup
-    Then the error contains "Expecting this volume id only on default system"
+    Then the error contains "expecting this volume id only on default system"
 
   @vg
   Scenario: Snapshot a block volume consistency group with wrong system

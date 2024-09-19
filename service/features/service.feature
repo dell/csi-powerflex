@@ -1227,7 +1227,7 @@ Feature: VxFlex OS CSI interface
     Examples:
       | configPath                                  | errorMsg                                                              |
       | "features/array-config/DO_NOT_EXIST"        | "does not exist"                                                      |
-      | "features/array-config/unable_to_parse"     | "Unable to parse the credentials"                                     |
+      | "features/array-config/unable_to_parse"     | "unable to parse the credentials"                                     |
       | "features/array-config/zero_length"         | "no arrays are provided in vxflexos-creds secret"                     |
       | "features/array-config/duplicate_system_ID" | "duplicate system ID"                                                 |
       | "features/array-config/invalid_system_name" | "invalid value for system name"                                       |
@@ -1505,9 +1505,10 @@ Feature: VxFlex OS CSI interface
     And I induce error <error>
     Then the error contains <errorMsg>
      Examples:
-      |  systemid                  | nasservername                            |   error               |  errorMsg                                   |
-      |  "15dbbf5617523655"        | "dummy-nas-server"                       |   ""                  |  "none"                                     | 
-      |  "15dbbf5617523655"        | "invalid-nas-server-id"                  |   "NasNotFoundError"  |  "could not find given NAS server by name"  |     
+      |  systemid                  | nasservername                      |   error               |  errorMsg                                   |
+      |  "15dbbf5617523655"        | "dummy-nas-server"                 |   ""                  |  "none"                                     | 
+      |  "15dbbf5617523655"        | "invalid-nas-server-id"            |   "NasNotFoundError"  |  "could not find given NAS server by name"  | 
+      |  "15dbbf5617523655"        | ""                                 |   ""                  |  "NAS server not provided"                  |     
 
   Scenario: Ping a NAS server by name
     Given a VxFlexOS service
