@@ -399,8 +399,6 @@ func handleNasServerPing(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, "nas server not found", http.StatusNotFound, codes.NotFound)
 		return
 	}
-
-	//returnJSONFile("features", "get_nas_servers.json", w, nil)
 }
 
 func handleGetNasInstances(w http.ResponseWriter, _ *http.Request) {

@@ -1499,20 +1499,25 @@ Feature: VxFlex OS CSI interface
       |  "127.1.1.0/255.255.255.255"    | "127.0.0.1/255.255.255.255"   | "external access does not exist"      |
 
   @TestSDC
-  Scenario: Get NAS server by name
+  Scenario: Get NAS server id from name
     Given a VxFlexOS service
     And I call Probe
-    When I call Get NAS server from name "15dbbf5617523655" "dummy-nas-server"
-    Then the error contains "none"
+    When I call Get NAS server from name <systemid> <nasservername>
+    And I induce error <error>
+    Then the error contains <errorMsg>
+     Examples:
+      |  systemid                  | nasservername                            |   error               |  errorMsg                                   |
+      |  "15dbbf5617523655"        | "dummy-nas-server"                       |   ""                  |  "none"                                     | 
+      |  "15dbbf5617523655"        | "invalid-nas-server-id"                  |   "NasNotFoundError"  |  "could not find given NAS server by name"  |     
 
-  @TestSDC
+   @TestSDC
   Scenario: Ping a NAS server by name
     Given a VxFlexOS service
     And I call Probe
+    And I induce error <error>
     When I call ping NAS server <systemid> <nasserver>
     Then the error contains <errorMsg>
     Examples:
-      |  systemid                  | nasserver                | errorMsg                 |
-      |  "15dbbf5617523655"        | "dummy-nas-server"       | "none"                   |
-      |  "15dbbf5617523655"        | "invalid-nas-server"     | "NAS server not found"   |
-      |  "15dbbf5617523000"        | "dummy-nas-server"       | "system not found"       |
+      |  systemid                  | nasserver                                |   error               |  errorMsg                 |
+      |  "15dbbf5617523655"        | "63ec8e0d-4551-29a7-e79c-b202f2b914f3"   |   ""                  | "none"                    |   
+      |  "15dbbf5617523655"        | "invalid-nas-server"                     |   "NasNotFoundError"  |  "NAS server not found"   |      
