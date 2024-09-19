@@ -1608,7 +1608,7 @@ func (s *service) expandReplicationPair(ctx context.Context, req *csi.Controller
 func (s *service) getNASServerIDFromName(systemID, nasName string) (string, error) {
 	if nasName == "" {
 		Log.Printf("NAS server not provided.")
-		return "", nil
+		return "", errors.New("NAS server not provided")
 	}
 	system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
 	if err != nil {

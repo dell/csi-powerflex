@@ -259,7 +259,7 @@ Feature: VxFlex OS CSI interface
     And a valid volume
     When I call Probe
     And I call PublishVolume with <access>
-    Then the error contains "Expecting this volume id only on default system.  Aborting operation"
+    Then the error contains "expecting this volume id only on default system. aborting operation"
 
     Examples:
       | access                      |
