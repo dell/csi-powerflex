@@ -1498,7 +1498,6 @@ Feature: VxFlex OS CSI interface
       |  "127.0.0.1/255.255.255.255"    | "127.0.0.1/255.255.255.255"   | "external access exists"              |
       |  "127.1.1.0/255.255.255.255"    | "127.0.0.1/255.255.255.255"   | "external access does not exist"      |
 
-  @TestSDC
   Scenario: Get NAS server id from name
     Given a VxFlexOS service
     And I call Probe
@@ -1510,7 +1509,6 @@ Feature: VxFlex OS CSI interface
       |  "15dbbf5617523655"        | "dummy-nas-server"                       |   ""                  |  "none"                                     | 
       |  "15dbbf5617523655"        | "invalid-nas-server-id"                  |   "NasNotFoundError"  |  "could not find given NAS server by name"  |     
 
-   @TestSDC
   Scenario: Ping a NAS server by name
     Given a VxFlexOS service
     And I call Probe
