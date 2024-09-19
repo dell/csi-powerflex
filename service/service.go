@@ -1621,21 +1621,21 @@ func (s *service) getNASServerIDFromName(systemID, nasName string) (string, erro
 	return nas.ID, nil
 }
 
-func (s *service) pingNAS(systemID string, nasName string) error {
+func (s *service) pingNAS(systemID string, nasID string) error {
 
 	system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
 	if err != nil {
 		return errors.New("system not found: " + systemID)
 	}
 
-	nas, err := system.GetNASByIDName("", nasName)
+	nas, err := system.GetNASByIDName(nasID, "")
 	if err != nil {
-		return errors.New("NAS server not found: " + nasName)
+		return errors.New("NAS server not found: " + nasID)
 	}
 
 	fileInterface, err := system.GetFileInterface(nas.CurrentPreferredIPv4InterfaceID)
 	if fileInterface.IPAddress == "" || err != nil {
-		return errors.New("file interface not found for NAS server " + nasName)
+		return errors.New("file interface not found for NAS server " + nasID)
 	}
 
 	err = system.PingNAS(nas.ID, fileInterface.IPAddress)
