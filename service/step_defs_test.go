@@ -1928,7 +1928,7 @@ func (f *feature) iCallGetNodeUID() error {
 	return nil
 }
 
-func (f *feature) aValidNodeUidIsReturned() error {
+func (f *feature) aValidNodeUIDIsReturned() error {
 	if f.nodeUID == "" {
 		return errors.New("Unable to fetch the node UID")
 	}
@@ -4880,7 +4880,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call Get NAS server from name "([^"]*)" "([^"]*)"$`, f.iCallGetNASServerIDFromName)
 	s.Step(`^I call ping NAS server "([^"]*)" "([^"]*)"$`, f.iCallPingNASServer)
 	s.Step(`^I call GetNodeUID$`, f.iCallGetNodeUID)
-	s.Step(`^a valid node uid is returned$`, f.aValidNodeUidIsReturned)
+	s.Step(`^a valid node uid is returned$`, f.aValidNodeUIDIsReturned)
 
 	s.After(func(ctx context.Context, _ *godog.Scenario, _ error) (context.Context, error) {
 		if f.server != nil {
