@@ -459,7 +459,12 @@ Feature: VxFlex OS CSI interface
   Scenario: Call NodeGetInfo and validate Node UID
     Given a VxFlexOS service
     When I call NodeGetInfo with a valid Node UID
-    Then a valid NodeGetInfoResponse with node UID is returned  
+    Then a valid NodeGetInfoResponse with node UID is returned
+
+  Scenario: Call GetNodeUID
+    Given a VxFlexOS service
+    When I call GetNodeUID
+    Then a valid node uid is returned   
 
   Scenario: Call ParseInt64FromContext to validate EnvMaxVolumesPerNode
     Given a VxFlexOS service

@@ -147,8 +147,7 @@ type feature struct {
 	nodeLabels                            map[string]string
 	maxVolSize                            int64
 	nfsExport                             types.NFSExport
-	//nodeUID                               string
-	//nas                                   types.NAS
+	nodeUID                               string
 }
 
 func (f *feature) checkGoRoutines(tag string) {
@@ -1912,6 +1911,28 @@ func (f *feature) iCallNodeGetInfoWithValidNodeUID() error {
 	f.service.opts.SdcGUID = ""
 	f.nodeGetInfoResponse, f.err = f.service.NodeGetInfo(*ctx, req)
 	fmt.Printf("NodeGetInfoResponse: %v", f.nodeGetInfoResponse)
+	return nil
+}
+
+func (f *feature) iCallGetNodeUID() error {
+	f.setFakeNode()
+	ctx := new(context.Context)
+	nodeUID := ""
+	nodeUID, err := f.service.GetNodeUID(*ctx)
+
+	fmt.Printf("Node UID: %v", nodeUID)
+	if err != nil {
+		return err
+	}
+	f.nodeUID = nodeUID
+	return nil
+}
+
+func (f *feature) aValidNodeUIDIsReturned() error {
+	if f.nodeUID == "" {
+		return errors.New("Unable to fetch the node UID")
+	}
+	fmt.Printf("Node UID: %v", f.nodeUID)
 	return nil
 }
 
@@ -4858,6 +4879,8 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I specify External Access "([^"]*)"`, f.iSpecifyExternalAccess)
 	s.Step(`^I call Get NAS server from name "([^"]*)" "([^"]*)"$`, f.iCallGetNASServerIDFromName)
 	s.Step(`^I call ping NAS server "([^"]*)" "([^"]*)"$`, f.iCallPingNASServer)
+	s.Step(`^I call GetNodeUID$`, f.iCallGetNodeUID)
+	s.Step(`^a valid node uid is returned$`, f.aValidNodeUIDIsReturned)
 
 	s.After(func(ctx context.Context, _ *godog.Scenario, _ error) (context.Context, error) {
 		if f.server != nil {
