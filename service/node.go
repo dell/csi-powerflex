@@ -771,18 +771,18 @@ func (s *service) NodeGetInfo(
 		topology[Name+"/"+array.SystemID] = SystemTopologySystemValue
 	}
 
-	nodeUID, err := GetNodeUID(ctx, s)
+	nodeID, err := GetNodeUID(ctx, s)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, GetMessage("Could not fetch node UID"))
 	}
 
 	if s.opts.SdcGUID != "" {
-		nodeUID = fmt.Sprintf("%s-%s", nodeUID, s.opts.SdcGUID)
+		nodeID = s.opts.SdcGUID
 	}
 
-	Log.Debugf("NodeId: %v\n", nodeUID)
+	Log.Debugf("NodeId: %v\n", nodeID)
 	return &csi.NodeGetInfoResponse{
-		NodeId: nodeUID,
+		NodeId: nodeID,
 		AccessibleTopology: &csi.Topology{
 			Segments: topology,
 		},
