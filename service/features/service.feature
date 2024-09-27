@@ -446,6 +446,11 @@ Feature: VxFlex OS CSI interface
     When I call GetNodeLabels with invalid node
     Then the error contains "Unable to fetch the node labels"
 
+  Scenario: Call GetNodeUID with invalid node
+    Given a VxFlexOS service
+    When I call GetNodeUID with invalid node
+    Then the error contains "Unable to fetch the node details"
+
   Scenario: Call NodeGetInfo with invalid volume limit node labels
     Given a VxFlexOS service
     When I call NodeGetInfo with invalid volume limit node labels
@@ -474,6 +479,11 @@ Feature: VxFlex OS CSI interface
   Scenario: Call GetNodeLabels with invalid KubernetesClient
     Given a VxFlexOS service
     When I call GetNodeLabels with unset KubernetesClient
+    Then the error contains "init client failed with error"
+
+ Scenario: Call GetNodeUID with invalid KubernetesClient
+    Given a VxFlexOS service
+    When I call GetNodeUID with unset KubernetesClient
     Then the error contains "init client failed with error"
 
   Scenario: Call GetCapacity without specifying Storage Pool Name (this returns overall capacity)
@@ -1539,6 +1549,7 @@ Feature: VxFlex OS CSI interface
     When I call ping NAS server <systemid> <nasserver>
     Then the error contains <errorMsg>
     Examples:
-      |  systemid                  | nasserver                                |   error               |  errorMsg                 |
-      |  "15dbbf5617523655"        | "63ec8e0d-4551-29a7-e79c-b202f2b914f3"   |   ""                  | "none"                    |   
-      |  "15dbbf5617523655"        | "invalid-nas-server"                     |   "NasNotFoundError"  |  "NAS server not found"   |      
+      |  systemid                  | nasserver                                |   error                         |  errorMsg                   |
+      |  "15dbbf5617523655"        | "63ec8e0d-4551-29a7-e79c-b202f2b914f3"   |   ""                            | "none"                      |   
+      |  "15dbbf5617523655"        | "invalid-nas-server"                     |   "NasNotFoundError"            |  "NAS server not found"     |      
+     

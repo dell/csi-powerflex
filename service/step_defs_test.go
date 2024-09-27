@@ -148,6 +148,7 @@ type feature struct {
 	maxVolSize                            int64
 	nfsExport                             types.NFSExport
 	nodeUID                               string
+	nas                                   types.NAS
 }
 
 func (f *feature) checkGoRoutines(tag string) {
@@ -2012,6 +2013,19 @@ func (f *feature) iCallGetNodeLabelsWithUnsetKubernetesClient() error {
 	K8sClientset = nil
 	ctx := new(context.Context)
 	f.nodeLabels, f.err = f.service.GetNodeLabels(*ctx)
+	return nil
+}
+
+func (f *feature) iCallGetNodeUIDWithInvalidNode() error {
+	f.service.opts.KubeNodeName = "node2"
+	_, f.err = f.service.GetNodeUID(f.context)
+	return nil
+}
+
+func (f *feature) iCallGetNodeUIDWithUnsetKubernetesClient() error {
+	K8sClientset = nil
+	ctx := new(context.Context)
+	f.nodeUID, f.err = f.service.GetNodeUID(*ctx)
 	return nil
 }
 
@@ -4881,6 +4895,8 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call ping NAS server "([^"]*)" "([^"]*)"$`, f.iCallPingNASServer)
 	s.Step(`^I call GetNodeUID$`, f.iCallGetNodeUID)
 	s.Step(`^a valid node uid is returned$`, f.aValidNodeUIDIsReturned)
+	s.Step(`^I call GetNodeUID with invalid node$`, f.iCallGetNodeUIDWithInvalidNode)
+	s.Step(`^I call GetNodeUID with unset KubernetesClient$`, f.iCallGetNodeUIDWithUnsetKubernetesClient)
 
 	s.After(func(ctx context.Context, _ *godog.Scenario, _ error) (context.Context, error) {
 		if f.server != nil {
