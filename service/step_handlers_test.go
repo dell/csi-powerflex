@@ -407,7 +407,6 @@ func handleNasInstances(w http.ResponseWriter, _ *http.Request) {
 
 // handleSystemInstances implements POST /rest/v1/nas-servers/{id}/ping
 func handleNasServerPing(w http.ResponseWriter, r *http.Request) {
-
 	handleGetFileInterface(w, r)
 
 	if inducedError.Error() == "NasNotFoundError" {

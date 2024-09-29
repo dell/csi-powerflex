@@ -695,7 +695,7 @@ func (s *service) doProbe(ctx context.Context) error {
 
 		if err := s.nodeProbe(ctx); err != nil {
 			Log.Infof("nodeProbe failed: %s", err.Error())
-			//return err
+			// return err
 		}
 	}
 	return nil
@@ -1764,7 +1764,6 @@ func (s *service) getNASServerIDFromName(systemID, nasName string) (string, erro
 }
 
 func (s *service) pingNAS(systemID string, nasID string) error {
-
 	system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
 	if err != nil {
 		return errors.New("system not found: " + systemID)
@@ -1823,7 +1822,6 @@ func (s *service) GetNodeUID(_ context.Context) (string, error) {
 
 	// access the API to fetch node object
 	node, err := K8sClientset.CoreV1().Nodes().Get(context.TODO(), s.opts.KubeNodeName, v1.GetOptions{})
-
 	if err != nil {
 		return "", status.Error(codes.Internal, GetMessage("Unable to fetch the node details. Error: %v", err))
 	}

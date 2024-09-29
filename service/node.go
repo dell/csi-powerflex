@@ -453,7 +453,6 @@ func (s *service) getSystemName(_ context.Context, systems []string) bool {
 // nodeProbe fetchs the SDC GUID by drv_cfg and the systemIDs/names by getSystemName method.
 // It also makes sure private directory(privDir) is created
 func (s *service) nodeProbe(ctx context.Context) error {
-
 	// make sure the kernel module is loaded
 	if kmodLoaded(s.opts) {
 		// fetch the SDC GUID
@@ -943,7 +942,7 @@ func (s *service) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolum
 	err = s.nodeProbe(ctx)
 	if err != nil {
 		Log.Error("nodeProbe failed with error :" + err.Error())
-		//return nil, err
+		// return nil, err
 	}
 
 	volumePath := req.GetVolumePath()
