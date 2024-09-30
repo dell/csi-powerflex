@@ -263,7 +263,11 @@ func (s *service) logCsiNodeTopologyKeys() error {
 		K8sClientset = k8sutils.Clientset
 	}
 
-	csiNodes, _ := K8sClientset.StorageV1().CSINodes().List(context.TODO(), metav1.ListOptions{})
+	csiNodes, err := K8sClientset.StorageV1().CSINodes().List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		Log.WithError(err).Error("unable to get node list")
+		return err
+	}
 	node, err := s.NodeGetInfo(context.Background(), nil)
 	if node != nil {
 		Log.WithField("node info", node.NodeId).Info("NodeInfo ID")

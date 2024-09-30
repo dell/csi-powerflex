@@ -1288,6 +1288,7 @@ func (s *service) ControllerPublishVolume(
 		var ipAddresses []string
 
 		ipAddresses, err = s.findNetworkInterfaceIPs()
+		Log.Printf("ControllerPublish - No network interfaces found, trying to get SDC IPs")
 		if err != nil || len(ipAddresses) == 0 {
 
 			// get SDC IPs if Network Interface IPs not found
@@ -1298,7 +1299,7 @@ func (s *service) ControllerPublishVolume(
 				return nil, status.Errorf(codes.NotFound, "%s", "received empty sdcIPs")
 			}
 		}
-		Log.Printf("ControllerPublish - Network Interface IPs for NFS: %v", ipAddresses)
+		Log.Printf("ControllerPublish - ipAddresses %v", ipAddresses)
 
 		externalAccess := s.opts.ExternalAccess
 		publishContext["host"] = ipAddresses[0]

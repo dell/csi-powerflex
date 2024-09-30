@@ -942,7 +942,6 @@ func (s *service) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolum
 	err = s.nodeProbe(ctx)
 	if err != nil {
 		Log.Error("nodeProbe failed with error :" + err.Error())
-		// return nil, err
 	}
 
 	volumePath := req.GetVolumePath()
