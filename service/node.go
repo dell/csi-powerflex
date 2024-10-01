@@ -1,4 +1,4 @@
-// Copyright © 2019-2022 Dell Inc. or its subsidiaries. All Rights Reserved.
+// Copyright © 2019-2024 Dell Inc. or its subsidiaries. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,6 +42,7 @@ var (
 
 	// GetNodeLabels - Get the node labels
 	GetNodeLabels = getNodelabels
+	GetNodeUID    = getNodeUID
 )
 
 const (
@@ -364,7 +365,6 @@ func (s *service) NodeUnpublishVolume(
 				Log.Errorf("ephemeralNodeUnpublish returned error: %s", err.Error())
 				return nil, err
 			}
-
 		}
 
 		// Idempotent need to return ok if not published
@@ -454,61 +454,59 @@ func (s *service) getSystemName(_ context.Context, systems []string) bool {
 // It also makes sure private directory(privDir) is created
 func (s *service) nodeProbe(ctx context.Context) error {
 	// make sure the kernel module is loaded
-	if !kmodLoaded(s.opts) {
-		return status.Error(codes.FailedPrecondition,
-			"scini kernel module not loaded")
-	}
+	if kmodLoaded(s.opts) {
+		// fetch the SDC GUID
+		if s.opts.SdcGUID == "" {
+			// try to query the SDC GUID
+			guid, err := goscaleio.DrvCfgQueryGUID()
+			if err != nil {
+				return status.Errorf(codes.FailedPrecondition,
+					"unable to get SDC GUID via config or automatically, error: %s", err.Error())
+			}
 
-	// fetch the SDC GUID
-	if s.opts.SdcGUID == "" {
-		// try to query the SDC GUID
-		guid, err := goscaleio.DrvCfgQueryGUID()
-		if err != nil {
-			return status.Errorf(codes.FailedPrecondition,
-				"unable to get SDC GUID via config or automatically, error: %s", err.Error())
+			s.opts.SdcGUID = guid
+			Log.WithField("guid", s.opts.SdcGUID).Info("set SDC GUID")
 		}
 
-		s.opts.SdcGUID = guid
-		Log.WithField("guid", s.opts.SdcGUID).Info("set SDC GUID")
-	}
-
-	// fetch the systemIDs
-	var err error
-	if len(connectedSystemID) == 0 {
-		connectedSystemID, err = getSystemsKnownToSDC()
-		if err != nil {
-			return status.Errorf(codes.FailedPrecondition, "%s", err.Error())
+		// fetch the systemIDs
+		var err error
+		if len(connectedSystemID) == 0 {
+			connectedSystemID, err = getSystemsKnownToSDC()
+			if err != nil {
+				return status.Errorf(codes.FailedPrecondition, "%s", err.Error())
+			}
 		}
-	}
 
-	// rename SDC
-	/*
-		case1: if IsSdcRenameEnabled=true and prefix given then set the prefix+worker_node_name for sdc name.
-		case2: if IsSdcRenameEnabled=true and prefix not given then set worker_node_name for sdc name.
-	*/
-	if s.opts.IsSdcRenameEnabled {
-		err = s.renameSDC(s.opts)
-		if err != nil {
-			return err
+		// 	rename SDC
+		//	case1: if IsSdcRenameEnabled=true and prefix given then set the prefix+worker_node_name for sdc name.
+		//	case2: if IsSdcRenameEnabled=true and prefix not given then set worker_node_name for sdc name.
+		//
+		if s.opts.IsSdcRenameEnabled {
+			err = s.renameSDC(s.opts)
+			if err != nil {
+				return err
+			}
 		}
-	}
 
-	// support for pre-approved guid
-	if s.opts.IsApproveSDCEnabled {
-		Log.Infof("Approve SDC enabled")
-		if err := s.approveSDC(s.opts); err != nil {
-			return err
+		// support for pre-approved guid
+		if s.opts.IsApproveSDCEnabled {
+			Log.Infof("Approve SDC enabled")
+			if err := s.approveSDC(s.opts); err != nil {
+				return err
+			}
 		}
-	}
 
-	// get all the system names and IDs.
-	s.getSystemName(ctx, connectedSystemID)
+		// get all the system names and IDs.
+		s.getSystemName(ctx, connectedSystemID)
 
-	// make sure privDir is pre-created
-	if _, err := mkdir(s.privDir); err != nil {
-		return status.Errorf(codes.Internal,
-			"plugin private dir: %s creation error: %s",
-			s.privDir, err.Error())
+		// make sure privDir is pre-created
+		if _, err := mkdir(s.privDir); err != nil {
+			return status.Errorf(codes.Internal,
+				"plugin private dir: %s creation error: %s",
+				s.privDir, err.Error())
+		}
+	} else {
+		Log.Infof("scini module not loaded, perhaps it was intentional")
 	}
 
 	return nil
@@ -546,7 +544,6 @@ func (s *service) approveSDC(opts Opts) error {
 			}
 			Log.Warnf("Array RestrictedSdcMode is %s, driver only supports GUID RestrictedSdcMode If SDC becomes restricted again, driver will not be able to approve",
 				system.System.RestrictedSdcMode)
-
 		}
 
 	}
@@ -709,7 +706,7 @@ func (s *service) NodeGetCapabilities(
 }
 
 // NodeGetInfo returns Node information
-// NodeId is the identifier of the node and will match the SDC GUID
+// NodeId is the identifier of the node. If SDC is installed, SDC GUID will be appended to NodeId
 // MaxVolumesPerNode (optional) is left as 0 which means unlimited
 // AccessibleTopology will be set with the VxFlex OS SystemID
 func (s *service) NodeGetInfo(
@@ -720,29 +717,15 @@ func (s *service) NodeGetInfo(
 	// Fetch SDC GUID
 	if s.opts.SdcGUID == "" {
 		if err := s.nodeProbe(ctx); err != nil {
-			return nil, err
+			Log.Infof("failed to probe node: %s", err)
 		}
 	}
 
 	// Fetch Node ID
 	if len(connectedSystemID) == 0 {
 		if err := s.nodeProbe(ctx); err != nil {
-			return nil, err
+			Log.Infof("failed to probe node: %s", err)
 		}
-	}
-
-	// Create the topology keys
-	// csi-vxflexos.dellemc.com/<systemID>: <provisionerName>
-	topology := map[string]string{}
-	for _, sysID := range connectedSystemID {
-		isNFS, err := s.checkNFS(ctx, sysID)
-		if err != nil {
-			return nil, err
-		}
-		if isNFS {
-			topology[Name+"/"+sysID+"-nfs"] = "true"
-		}
-		topology[Name+"/"+sysID] = SystemTopologySystemValue
 	}
 
 	var maxVxflexosVolumesPerNode int64
@@ -772,8 +755,33 @@ func (s *service) NodeGetInfo(
 
 	Log.Debugf("MaxVolumesPerNode: %v\n", maxVxflexosVolumesPerNode)
 
+	// Create the topology keys
+	// csi-vxflexos.dellemc.com/<systemID>: <provisionerName>
+	Log.Infof("Arrays: %+v", s.opts.arrays)
+	topology := map[string]string{}
+	for _, array := range s.opts.arrays {
+		isNFS, err := s.checkNFS(ctx, array.SystemID)
+		if err != nil {
+			return nil, err
+		}
+		if isNFS {
+			topology[Name+"/"+array.SystemID+"-nfs"] = "true"
+		}
+		topology[Name+"/"+array.SystemID] = SystemTopologySystemValue
+	}
+
+	nodeID, err := GetNodeUID(ctx, s)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, GetMessage("Could not fetch node UID"))
+	}
+
+	if s.opts.SdcGUID != "" {
+		nodeID = s.opts.SdcGUID
+	}
+
+	Log.Debugf("NodeId: %v\n", nodeID)
 	return &csi.NodeGetInfoResponse{
-		NodeId: s.opts.SdcGUID,
+		NodeId: nodeID,
 		AccessibleTopology: &csi.Topology{
 			Segments: topology,
 		},
@@ -856,7 +864,7 @@ func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolume
 				}
 			}
 		}
-		if len(mounts) == 0 || mounted == false || err != nil {
+		if len(mounts) == 0 || !mounted || err != nil {
 			healthy = false
 			message = fmt.Sprintf("volPath: %s is not mounted: %v", volPath, err)
 		}
@@ -934,7 +942,6 @@ func (s *service) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolum
 	err = s.nodeProbe(ctx)
 	if err != nil {
 		Log.Error("nodeProbe failed with error :" + err.Error())
-		return nil, err
 	}
 
 	volumePath := req.GetVolumePath()
@@ -1038,4 +1045,8 @@ func (s *service) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolum
 
 func getNodelabels(ctx context.Context, s *service) (map[string]string, error) {
 	return s.GetNodeLabels(ctx)
+}
+
+func getNodeUID(ctx context.Context, s *service) (string, error) {
+	return s.GetNodeUID(ctx)
 }

@@ -75,7 +75,10 @@ const (
 	DefaultLogLevel = logrus.DebugLevel
 
 	// ParamCSILogLevel csi driver log level
-	ParamCSILogLevel = "CSI_LOG_LEVEL"
+	ParamCSILogLevel  = "CSI_LOG_LEVEL"
+	DriverNamespace   = "vxflexos"
+	DriverConfigMap   = "vxflexos-config-params"
+	ConfigMapFilePath = "/vxflexos-config-params/driver-config-params.yaml"
 )
 
 var (
@@ -133,6 +136,11 @@ type Service interface {
 	ProcessMapSecretChange() error
 }
 
+type NetworkInterface interface {
+	InterfaceByName(name string) (*net.Interface, error)
+	Addrs(interfaceObj *net.Interface) ([]net.Addr, error)
+}
+
 // Opts defines service configuration options.
 type Opts struct {
 	// map from system name to ArrayConnectionData
@@ -176,6 +184,20 @@ type service struct {
 	// maps the first 24 bits of a volume ID to the volume's systemID
 	volumePrefixToSystems   map[string][]string
 	connectedSystemNameToID map[string]string
+}
+
+type Config struct {
+	InterfaceNames map[string]string `yaml:"interfaceNames"`
+}
+
+type GetIPAddressByInterfacefunc func(string, NetworkInterface) (string, error)
+
+func (s *service) InterfaceByName(name string) (*net.Interface, error) {
+	return net.InterfaceByName(name)
+}
+
+func (s *service) Addrs(interfaceObj *net.Interface) ([]net.Addr, error) {
+	return interfaceObj.Addrs()
 }
 
 // Process dynamic changes to configMap or Secret.
@@ -242,6 +264,10 @@ func (s *service) logCsiNodeTopologyKeys() error {
 	}
 
 	csiNodes, err := K8sClientset.StorageV1().CSINodes().List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		Log.WithError(err).Error("unable to get node list")
+		return err
+	}
 	node, err := s.NodeGetInfo(context.Background(), nil)
 	if node != nil {
 		Log.WithField("node info", node.NodeId).Info("NodeInfo ID")
@@ -483,10 +509,130 @@ func (s *service) BeforeServe(
 	s.adminClients = make(map[string]*sio.Client)
 	s.systems = make(map[string]*sio.System)
 
+	// Update the ConfigMap with the Interface IPs
+	s.updateConfigMap(s.getIPAddressByInterface, ConfigMapFilePath)
+
 	if _, ok := csictx.LookupEnv(ctx, "X_CSI_VXFLEXOS_NO_PROBE_ON_START"); !ok {
 		return s.doProbe(ctx)
 	}
 	return nil
+}
+
+func (s *service) updateConfigMap(getIPAddressByInterfacefunc GetIPAddressByInterfacefunc, configFilePath string) {
+	configFileData, err := os.ReadFile(configFilePath)
+	if err != nil {
+		Log.Errorf("Failed to read ConfigMap file: %v", err)
+		return
+	}
+
+	var config Config
+	err = yaml.Unmarshal(configFileData, &config)
+	if err != nil {
+		Log.Errorf("Failed to parse configMap data: %v", err)
+		return
+	}
+
+	updateInterfaceNamesWithIPs := map[string]string{}
+	for node, interfaceList := range config.InterfaceNames {
+
+		if !strings.EqualFold(node, s.opts.KubeNodeName) {
+			continue
+		}
+		interfaces := strings.Split(interfaceList, ",")
+		var ipAddresses []string
+
+		for _, interfaceName := range interfaces {
+			interfaceName = strings.TrimSpace(interfaceName)
+
+			// Find the IP of the Interfaces
+			ipAddress, err := getIPAddressByInterfacefunc(interfaceName, &service{})
+			if err != nil {
+				Log.Printf("Error while getting IP address for interface %s: %v\n", interfaceName, err)
+				continue
+			}
+			ipAddresses = append(ipAddresses, ipAddress)
+		}
+		if len(ipAddresses) > 0 {
+			updateInterfaceNamesWithIPs[node] = strings.Join(ipAddresses, ",")
+		}
+	}
+
+	// Get the Kubernetes ClientSet
+	if K8sClientset == nil {
+		err = k8sutils.CreateKubeClientSet()
+		if err != nil {
+			Log.Errorf("Failed to create Kubernetes ClientSet: %v", err)
+			return
+		}
+		K8sClientset = k8sutils.Clientset
+	}
+
+	// Get the vxflexos-config-params ConfigMap
+	cm, err := K8sClientset.CoreV1().ConfigMaps(DriverNamespace).Get(context.TODO(), DriverConfigMap, metav1.GetOptions{})
+	if err != nil {
+		Log.Errorf("Failed to get ConfigMap: %v", err)
+		return
+	}
+
+	var configData map[string]interface{}
+	if existingYaml, ok := cm.Data["driver-config-params.yaml"]; ok {
+
+		err := yaml.Unmarshal([]byte(existingYaml), &configData)
+		if err != nil {
+			Log.Errorf("Failed to parse ConfigMap data: %v", err)
+			return
+		}
+
+		// Check and update Interfaces with the IPs
+		if interfaceNames, ok := configData["interfaceNames"].(map[string]interface{}); ok {
+			for node, ipAddressList := range updateInterfaceNamesWithIPs {
+				interfaceNames[node] = ipAddressList
+			}
+		} else {
+			Log.Errorf("interfaceNames key missing or not in expected format")
+			return
+		}
+
+		updatedYaml, err := yaml.Marshal(configData)
+		if err != nil {
+			Log.Errorf("Failed to marshal updated data: %v", err)
+			return
+		}
+		cm.Data["driver-config-params.yaml"] = string(updatedYaml)
+	}
+
+	// Update the vxflexos-config-params ConfigMap
+	_, err = K8sClientset.CoreV1().ConfigMaps("vxflexos").Update(context.TODO(), cm, metav1.UpdateOptions{})
+	if err != nil {
+		Log.Errorf("Failed to update ConfigMap: %v", err)
+		return
+	}
+
+	Log.Infof("ConfigMap updated successfully")
+}
+
+func (s *service) getIPAddressByInterface(interfaceName string, networkInterface NetworkInterface) (string, error) {
+	interfaceObj, err := networkInterface.InterfaceByName(interfaceName)
+	if err != nil {
+		return "", err
+	}
+
+	addrs, err := networkInterface.Addrs(interfaceObj)
+	if err != nil {
+		return "", err
+	}
+
+	for _, addr := range addrs {
+		ipNet, ok := addr.(*net.IPNet)
+		if !ok {
+			continue
+		}
+		if ipNet.IP.To4() != nil {
+			return ipNet.IP.String(), nil
+		}
+	}
+
+	return "", fmt.Errorf("no IPv4 address found for interface %s", interfaceName)
 }
 
 func (s *service) checkNFS(ctx context.Context, systemID string) (bool, error) {
@@ -515,6 +661,16 @@ func (s *service) checkNFS(ctx context.Context, systemID string) (bool, error) {
 		array := arrayConData[systemID]
 		if strings.TrimSpace(array.NasName) == "" {
 			Log.Warnf("nasName value not found in secret, it is mandatory parameter for NFS volume operations")
+		} else {
+			nasserver, err := s.getNASServerIDFromName(systemID, array.NasName)
+			if err != nil {
+				return false, err
+			}
+
+			err = s.pingNAS(systemID, nasserver)
+			if err != nil {
+				return false, err
+			}
 		}
 		// Even though NasName is not present in secret but PowerFlex version is >=4.0; we support NFS.
 		return true, nil
@@ -542,7 +698,7 @@ func (s *service) doProbe(ctx context.Context) error {
 		}
 
 		if err := s.nodeProbe(ctx); err != nil {
-			return err
+			Log.Infof("nodeProbe failed: %s", err.Error())
 		}
 	}
 	return nil
@@ -800,13 +956,13 @@ func getArrayConfig(_ context.Context) (map[string]*ArrayConnectionData, error) 
 	if err != nil {
 		Log.Errorf("Found error %v while checking stat of file %s ", err, ArrayConfigFile)
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("File %s does not exist", ArrayConfigFile)
+			return nil, fmt.Errorf("file %s does not exist", ArrayConfigFile)
 		}
 	}
 
 	config, err := os.ReadFile(filepath.Clean(ArrayConfigFile))
 	if err != nil {
-		return nil, fmt.Errorf("File %s errors: %v", ArrayConfigFile, err)
+		return nil, fmt.Errorf("file %s errors: %v", ArrayConfigFile, err)
 	}
 
 	if string(config) != "" {
@@ -815,7 +971,7 @@ func getArrayConfig(_ context.Context) (map[string]*ArrayConnectionData, error) 
 		config, _ = yaml.JSONToYAML(config)
 		err = yaml.Unmarshal(config, &creds)
 		if err != nil {
-			return nil, fmt.Errorf("Unable to parse the credentials: %v", err)
+			return nil, fmt.Errorf("unable to parse the credentials: %v", err)
 		}
 
 		if len(creds) == 0 {
@@ -1010,15 +1166,15 @@ func Contains(slice []string, element string) bool {
 // parseMask converts the subnet mask from CIDR notation to the dotted-decimal format
 // An input of x.x.x.x/32 will return 255.255.255.255
 func parseMask(ipaddr string) (mask string, err error) {
-	removeExtra := regexp.MustCompile("^(.*[\\/])")
+	removeExtra := regexp.MustCompile(`^(.*[\\/])`)
 	asd := ipaddr[len(ipaddr)-3:]
 	findSubnet := removeExtra.ReplaceAll([]byte(asd), []byte(""))
 	subnet, err := strconv.ParseInt(string(findSubnet), 10, 64)
 	if err != nil {
-		return "", errors.New("Parse Mask: Error parsing mask")
+		return "", errors.New("parse mask: error parsing mask")
 	}
 	if subnet < 0 || subnet > 32 {
-		return "", errors.New("Invalid subnet mask")
+		return "", errors.New("invalid subnet mask")
 	}
 	var buff bytes.Buffer
 	for i := 0; i < int(subnet); i++ {
@@ -1399,8 +1555,8 @@ func (s *service) checkVolumesMap(volumeID string) error {
 				for _, vol := range vols {
 					if vol.ID == volumeID {
 						// legacy volume found on non-default system, this is an error
-						Log.WithError(err).Errorf("Found volume id %s on non-default system %s. Expecting this volume id only on default system.  Aborting operation ", volumeID, systemID)
-						return fmt.Errorf("Found volume id %s on non-default system %s. Expecting this volume id only on default system.  Aborting operation ", volumeID, systemID)
+						Log.WithError(err).Errorf("found volume id %s on non-default system %s. expecting this volume id only on default system. aborting operation ", volumeID, systemID)
+						return fmt.Errorf("found volume id %s on non-default system %s. expecting this volume id only on default system. aborting operation ", volumeID, systemID)
 					}
 				}
 			}
@@ -1455,7 +1611,7 @@ func (s *service) getSystem(systemID string) (*siotypes.System, error) {
 			return system, nil
 		}
 	}
-	return nil, fmt.Errorf("System %s not found", systemID)
+	return nil, fmt.Errorf("system %s not found", systemID)
 }
 
 func (s *service) getPeerMdms(systemID string) ([]*siotypes.PeerMDM, error) {
@@ -1597,7 +1753,7 @@ func (s *service) expandReplicationPair(ctx context.Context, req *csi.Controller
 func (s *service) getNASServerIDFromName(systemID, nasName string) (string, error) {
 	if nasName == "" {
 		Log.Printf("NAS server not provided.")
-		return "", nil
+		return "", errors.New("NAS server not provided")
 	}
 	system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
 	if err != nil {
@@ -1608,6 +1764,30 @@ func (s *service) getNASServerIDFromName(systemID, nasName string) (string, erro
 		return "", err
 	}
 	return nas.ID, nil
+}
+
+func (s *service) pingNAS(systemID string, nasID string) error {
+	system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
+	if err != nil {
+		return errors.New("system not found: " + systemID)
+	}
+
+	nas, err := system.GetNASByIDName(nasID, "")
+	if err != nil {
+		return errors.New("NAS server not found: " + nasID)
+	}
+
+	fileInterface, err := system.GetFileInterface(nas.CurrentPreferredIPv4InterfaceID)
+	if fileInterface.IPAddress == "" || err != nil {
+		return errors.New("file interface not found for NAS server " + nasID)
+	}
+
+	err = system.PingNAS(nas.ID, fileInterface.IPAddress)
+	if err != nil {
+		return errors.New("could not ping NAS server " + nas.ID)
+	}
+
+	return nil
 }
 
 func (s *service) GetNfsTopology(systemID string) []*csi.Topology {
@@ -1632,6 +1812,23 @@ func (s *service) GetNodeLabels(_ context.Context) (map[string]string, error) {
 	}
 	Log.Debugf("Node labels: %v\n", node.Labels)
 	return node.Labels, nil
+}
+
+func (s *service) GetNodeUID(_ context.Context) (string, error) {
+	if K8sClientset == nil {
+		err := k8sutils.CreateKubeClientSet()
+		if err != nil {
+			return "", status.Error(codes.Internal, GetMessage("init client failed with error: %v", err))
+		}
+		K8sClientset = k8sutils.Clientset
+	}
+
+	// access the API to fetch node object
+	node, err := K8sClientset.CoreV1().Nodes().Get(context.TODO(), s.opts.KubeNodeName, v1.GetOptions{})
+	if err != nil {
+		return "", status.Error(codes.Internal, GetMessage("Unable to fetch the node details. Error: %v", err))
+	}
+	return string(node.UID), nil
 }
 
 // GetMessage - Get message

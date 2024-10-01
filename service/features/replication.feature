@@ -31,7 +31,7 @@ Scenario Outline: Test CreateRemoteVolume
   | "sourcevol" | "PeerMdmError"               | "PeerMdmError"                      |
   | "sourcevol" | "CreateVolumeError"          | "create volume induced error"       |
   | "sourcevol" | "BadVolIDError"              | "failed to provide"                 |
-  | "sourcevol" | "BadRemoteSystemIDError"     | "System 15dbbf5617523655 not found" |
+  | "sourcevol" | "BadRemoteSystemIDError"     | "system 15dbbf5617523655 not found" |
   | "sourcevol" | "ProbePrimaryError"          | "PodmonControllerProbeError"        |
   | "sourcevol" | "ProbeSecondaryError"        | "PodmonControllerProbeError"        |
 

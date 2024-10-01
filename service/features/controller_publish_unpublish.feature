@@ -42,6 +42,18 @@ Feature: VxFlex OS CSI interface
     And I call UnpublishVolume nfs
     And no error was received
     Then a valid UnpublishVolumeResponse is returned
+
+  Scenario: a Basic NFS controller Publish and unpublish no error with SDC dependency
+    Given a VxFlexOS service
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then a valid CreateVolumeResponse is returned
+    And I induce SDC dependency
+    And I call NFS PublishVolume with "single-writer"
+    Then a valid PublishVolumeResponse is returned
+    And I call UnpublishVolume nfs
+    And no error was received
+    Then a valid UnpublishVolumeResponse is returned
     
     Scenario: a Basic NFS controller Publish and unpublish NFS export not found error
     Given a VxFlexOS service
@@ -117,7 +129,7 @@ Feature: VxFlex OS CSI interface
     Then a valid PublishVolumeResponse is returned
     And I call NFS PublishVolume with "single-node-multi-writer"
     Then a valid PublishVolumeResponse is returned
-    
+
     Scenario: a Basic NFS controller Publish incompatible access mode error
     Given a VxFlexOS service
     When I specify CreateVolumeMountRequest "nfs"
@@ -259,7 +271,7 @@ Feature: VxFlex OS CSI interface
     And a valid volume
     When I call Probe
     And I call PublishVolume with <access>
-    Then the error contains "Expecting this volume id only on default system.  Aborting operation"
+    Then the error contains "expecting this volume id only on default system. aborting operation"
 
     Examples:
       | access                      |

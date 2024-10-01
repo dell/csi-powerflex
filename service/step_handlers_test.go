@@ -32,12 +32,13 @@ import (
 )
 
 var (
-	debug             bool
-	sdcMappings       []types.MappedSdcInfo
-	sdcMappingsID     string
-	setSdcNameSuccess bool
-	sdcIDToName       map[string]string
-	isQuotaEnabled    bool
+	debug              bool
+	sdcMappings        []types.MappedSdcInfo
+	sdcMappingsID      string
+	setSdcNameSuccess  bool
+	sdcIDToName        map[string]string
+	isQuotaEnabled     bool
+	sdcDependencyOnNFS bool
 
 	stepHandlersErrors struct {
 		FindVolumeIDError             bool
@@ -105,6 +106,11 @@ var (
 		NoVolIDSDCError               bool
 		NoVolError                    bool
 		SetSdcNameError               bool
+		UpdateConfigMapUnmarshalError bool
+		GetIPAddressByInterfaceError  bool
+		UpdateConfigK8sClientError    bool
+		UpdateConfigFormatError       bool
+		ConfigMapNotFoundError        bool
 	}
 )
 
@@ -159,6 +165,7 @@ func getHandler() http.Handler {
 	treeQuotaIDToGracePeriod = make(map[string]string)
 	treeQuotaIDToHardLimit = make(map[string]string)
 	debug = false
+	sdcDependencyOnNFS = false
 	stepHandlersErrors.FindVolumeIDError = false
 	stepHandlersErrors.GetVolByIDError = false
 	stepHandlersErrors.SIOGatewayVolumeNotFoundError = false
@@ -224,6 +231,11 @@ func getHandler() http.Handler {
 	stepHandlersErrors.NoVolError = false
 	stepHandlersErrors.SetSdcNameError = false
 	stepHandlersErrors.ApproveSdcError = false
+	stepHandlersErrors.UpdateConfigMapUnmarshalError = false
+	stepHandlersErrors.GetIPAddressByInterfaceError = false
+	stepHandlersErrors.UpdateConfigK8sClientError = false
+	stepHandlersErrors.UpdateConfigFormatError = false
+	stepHandlersErrors.ConfigMapNotFoundError = false
 	sdcMappings = sdcMappings[:0]
 	sdcMappingsID = ""
 	return handler
@@ -258,6 +270,7 @@ func getRouter() http.Handler {
 	scaleioRouter.HandleFunc("/rest/v1/file-tree-quotas", handleFileTreeQuotas)
 	scaleioRouter.HandleFunc("/rest/v1/file-tree-quotas/{id}", handleGetFileTreeQuotas)
 	scaleioRouter.HandleFunc("/api/instances/System/action/querySystemLimits", handleGetSystemLimits)
+	scaleioRouter.HandleFunc("/rest/v1/nas-servers/{id}/ping", handleNasServerPing)
 	return scaleioRouter
 }
 
@@ -390,6 +403,16 @@ func handleNasInstances(w http.ResponseWriter, _ *http.Request) {
 	}
 
 	returnJSONFile("features", "get_nas_servers.json", w, nil)
+}
+
+// handleSystemInstances implements POST /rest/v1/nas-servers/{id}/ping
+func handleNasServerPing(w http.ResponseWriter, r *http.Request) {
+	handleGetFileInterface(w, r)
+
+	if inducedError.Error() == "NasNotFoundError" {
+		writeError(w, "nas server not found", http.StatusNotFound, codes.NotFound)
+		return
+	}
 }
 
 func handleGetNasInstances(w http.ResponseWriter, _ *http.Request) {

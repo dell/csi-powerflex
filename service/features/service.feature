@@ -23,11 +23,28 @@ Feature: VxFlex OS CSI interface
       | "14dbbf5617523654"             | "none"   |
       | "15dbbf5617523655"             | "none"   |
 
+
   Scenario: Identity GetPluginInfo good call
     Given a VxFlexOS service
     When I call GetPluginInfo
     When I call BeforeServe
+    Then configMap is updated
     Then a valid GetPlugInfoResponse is returned
+
+  Scenario Outline: Identity GetPluginInfo bad call
+    Given a VxFlexOS service
+    When I call GetPluginInfo
+    And I induce error <error>
+    When I call BeforeServe
+    Then configMap is updated
+    Then a valid GetPlugInfoResponse is returned
+    Examples:
+      | error                           |
+      | "UpdateConfigMapUnmarshalError" |
+      | "GetIPAddressByInterfaceError"  |
+      | "UpdateConfigK8sClientError"    |
+      | "UpdateConfigFormatError"       |
+      | "ConfigMapNotFoundError"        |
 
   Scenario Outline: Dynamic log config change
     Given a VxFlexOS service
@@ -413,11 +430,6 @@ Feature: VxFlex OS CSI interface
     And I call CreateVolumeSize nfs "volume3" "16"
     Then the error contains "'Volume name' already exists and size is different"
 
-  Scenario: Call NodeGetInfo and validate NodeId
-    Given a VxFlexOS service
-    When I call NodeGetInfo
-    Then a valid NodeGetInfoResponse is returned
-
   Scenario: Call NodeGetInfo with invalid MaxVolumesPerNode
     Given a VxFlexOS service
     And an invalid MaxVolumesPerNode
@@ -434,6 +446,11 @@ Feature: VxFlex OS CSI interface
     When I call GetNodeLabels with invalid node
     Then the error contains "Unable to fetch the node labels"
 
+  Scenario: Call GetNodeUID with invalid node
+    Given a VxFlexOS service
+    When I call GetNodeUID with invalid node
+    Then the error contains "Unable to fetch the node details"
+
   Scenario: Call NodeGetInfo with invalid volume limit node labels
     Given a VxFlexOS service
     When I call NodeGetInfo with invalid volume limit node labels
@@ -444,6 +461,16 @@ Feature: VxFlex OS CSI interface
     When I call NodeGetInfo with valid volume limit node labels
     Then the Volume limit is set
 
+  Scenario: Call NodeGetInfo and validate Node UID
+    Given a VxFlexOS service
+    When I call NodeGetInfo with a valid Node UID
+    Then a valid NodeGetInfoResponse with node UID is returned
+
+  Scenario: Call GetNodeUID
+    Given a VxFlexOS service
+    When I call GetNodeUID
+    Then a valid node uid is returned   
+
   Scenario: Call ParseInt64FromContext to validate EnvMaxVolumesPerNode
     Given a VxFlexOS service
     When I set invalid EnvMaxVolumesPerNode
@@ -452,6 +479,11 @@ Feature: VxFlex OS CSI interface
   Scenario: Call GetNodeLabels with invalid KubernetesClient
     Given a VxFlexOS service
     When I call GetNodeLabels with unset KubernetesClient
+    Then the error contains "init client failed with error"
+
+ Scenario: Call GetNodeUID with invalid KubernetesClient
+    Given a VxFlexOS service
+    When I call GetNodeUID with unset KubernetesClient
     Then the error contains "init client failed with error"
 
   Scenario: Call GetCapacity without specifying Storage Pool Name (this returns overall capacity)
@@ -1227,7 +1259,7 @@ Feature: VxFlex OS CSI interface
     Examples:
       | configPath                                  | errorMsg                                                              |
       | "features/array-config/DO_NOT_EXIST"        | "does not exist"                                                      |
-      | "features/array-config/unable_to_parse"     | "Unable to parse the credentials"                                     |
+      | "features/array-config/unable_to_parse"     | "unable to parse the credentials"                                     |
       | "features/array-config/zero_length"         | "no arrays are provided in vxflexos-creds secret"                     |
       | "features/array-config/duplicate_system_ID" | "duplicate system ID"                                                 |
       | "features/array-config/invalid_system_name" | "invalid value for system name"                                       |
@@ -1487,7 +1519,7 @@ Feature: VxFlex OS CSI interface
 
   Scenario: Parse IP with no Mask
     When I call parseMask with ip "192.168.1.34"
-    Then the error contains "Parse Mask: Error parsing mask"
+    Then the error contains "parse mask: error parsing mask"
 
   Scenario: External Access Already Added
     Given an NFSExport instance with nfsexporthost <nfsexporthost>
@@ -1497,3 +1529,27 @@ Feature: VxFlex OS CSI interface
       |  nfsexporthost                  | externalAccess                | errorMsg                              |
       |  "127.0.0.1/255.255.255.255"    | "127.0.0.1/255.255.255.255"   | "external access exists"              |
       |  "127.1.1.0/255.255.255.255"    | "127.0.0.1/255.255.255.255"   | "external access does not exist"      |
+
+  Scenario: Get NAS server id from name
+    Given a VxFlexOS service
+    And I call Probe
+    When I call Get NAS server from name <systemid> <nasservername>
+    And I induce error <error>
+    Then the error contains <errorMsg>
+     Examples:
+      |  systemid                  | nasservername                      |   error               |  errorMsg                                   |
+      |  "15dbbf5617523655"        | "dummy-nas-server"                 |   ""                  |  "none"                                     | 
+      |  "15dbbf5617523655"        | "invalid-nas-server-id"            |   "NasNotFoundError"  |  "could not find given NAS server by name"  | 
+      |  "15dbbf5617523655"        | ""                                 |   ""                  |  "NAS server not provided"                  |     
+
+  Scenario: Ping a NAS server by name
+    Given a VxFlexOS service
+    And I call Probe
+    And I induce error <error>
+    When I call ping NAS server <systemid> <nasserver>
+    Then the error contains <errorMsg>
+    Examples:
+      |  systemid                  | nasserver                                |   error                         |  errorMsg                   |
+      |  "15dbbf5617523655"        | "63ec8e0d-4551-29a7-e79c-b202f2b914f3"   |   ""                            | "none"                      |   
+      |  "15dbbf5617523655"        | "invalid-nas-server"                     |   "NasNotFoundError"            |  "NAS server not found"     |      
+     

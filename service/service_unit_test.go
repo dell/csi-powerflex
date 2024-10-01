@@ -14,14 +14,47 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"net"
 	"testing"
+
+	v1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/fake"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	siotypes "github.com/dell/goscaleio/types/v1"
 	"github.com/stretchr/testify/assert"
 )
+
+type mockService struct{}
+
+func (s *mockService) InterfaceByName(interfaceName string) (*net.Interface, error) {
+	if interfaceName == "" {
+		return nil, fmt.Errorf("invalid interface name")
+	} else if interfaceName != "eth0" {
+		return nil, nil
+	}
+	return &net.Interface{
+			Name: interfaceName,
+		},
+		nil
+}
+
+func (s *mockService) Addrs(interfaceObj *net.Interface) ([]net.Addr, error) {
+	if interfaceObj == nil {
+		return nil, fmt.Errorf("invalid interface object")
+	}
+	return []net.Addr{
+		&net.IPNet{
+			IP: net.IPv4(10, 0, 0, 1),
+		},
+	}, nil
+}
 
 func TestGetVolSize(t *testing.T) {
 	tests := []struct {
@@ -443,6 +476,158 @@ func TestValidateQoSParameters(t *testing.T) {
 						err, tt.expectedError)
 				}
 			}
+		})
+	}
+}
+
+func TestGetIPAddressByInterface(t *testing.T) {
+	tests := []struct {
+		name          string
+		interfaceName string
+		expectedIP    string
+		expectedError error
+	}{
+		{
+			name:          "Valid Interface Name",
+			interfaceName: "eth0",
+			expectedIP:    "10.0.0.1",
+			expectedError: nil,
+		},
+		{
+			name:          "Wrong Interface Name",
+			interfaceName: "eth1",
+			expectedIP:    "",
+			expectedError: fmt.Errorf("invalid interface object"),
+		},
+		{
+			name:          "Empty Interface Name",
+			interfaceName: "",
+			expectedIP:    "",
+			expectedError: fmt.Errorf("invalid interface name"),
+		},
+	}
+
+	for _, tt := range tests {
+		s := &service{}
+		t.Run(tt.name, func(t *testing.T) {
+			interfaceIP, err := s.getIPAddressByInterface(tt.interfaceName, &mockService{})
+			assert.Equal(t, err, tt.expectedError)
+			assert.Equal(t, interfaceIP, tt.expectedIP)
+		})
+	}
+}
+
+func TestFindNetworkInterfaceIPs(t *testing.T) {
+	tests := []struct {
+		name            string
+		expectedError   error
+		client          kubernetes.Interface
+		configMapData   map[string]string
+		createConfigMap func(map[string]string, kubernetes.Interface)
+	}{
+		{
+			name:          "Error getting K8sClient",
+			expectedError: fmt.Errorf("unable to load in-cluster configuration, KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT must be defined"),
+			client:        nil,
+			configMapData: nil,
+			createConfigMap: func(map[string]string, kubernetes.Interface) {
+			},
+		},
+		{
+			name: "Error getting ConfigMap",
+			expectedError: &k8serrors.StatusError{
+				ErrStatus: metav1.Status{
+					Status:  metav1.StatusFailure,
+					Message: "configmaps \"vxflexos-config-params\" not found",
+					Reason:  metav1.StatusReasonNotFound,
+					Details: &metav1.StatusDetails{
+						Name: "vxflexos-config-params",
+						Kind: "configmaps",
+					},
+					Code: 404,
+				},
+			},
+			client:        fake.NewSimpleClientset(),
+			configMapData: nil,
+			createConfigMap: func(map[string]string, kubernetes.Interface) {
+			},
+		},
+		{
+			name:          "No Error",
+			expectedError: nil,
+			client:        fake.NewSimpleClientset(),
+			configMapData: map[string]string{
+				"driver-config-params.yaml": `interfaceNames:
+  worker1: 127.1.1.12`,
+			},
+			createConfigMap: func(data map[string]string, clientSet kubernetes.Interface) {
+				configMap := &v1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      DriverConfigMap,
+						Namespace: DriverNamespace,
+					},
+					Data: data,
+				}
+				// Create a ConfigMap using fake ClientSet
+				_, err := clientSet.CoreV1().ConfigMaps(DriverNamespace).Create(context.TODO(), configMap, metav1.CreateOptions{})
+				if err != nil {
+					Log.Fatalf("failed to create configMaps: %v", err)
+				}
+			},
+		},
+		{
+			name:          "Error unmarshalling ConfigMap params",
+			expectedError: errors.New("error converting YAML to JSON: yaml: line 1: did not find expected node content"),
+			client:        fake.NewSimpleClientset(),
+			configMapData: map[string]string{
+				"driver-config-params.yaml": `[interfaces:`,
+			},
+			createConfigMap: func(data map[string]string, clientSet kubernetes.Interface) {
+				configMap := &v1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      DriverConfigMap,
+						Namespace: DriverNamespace,
+					},
+					Data: data,
+				}
+				// Create a ConfigMap using fake ClientSet
+				_, err := clientSet.CoreV1().ConfigMaps(DriverNamespace).Create(context.TODO(), configMap, metav1.CreateOptions{})
+				if err != nil {
+					Log.Fatalf("failed to create configMaps: %v", err)
+				}
+			},
+		},
+		{
+			name:          "Error getting the Network Interface IPs",
+			expectedError: fmt.Errorf("failed to get the Network Interface IPs"),
+			client:        fake.NewSimpleClientset(),
+			configMapData: map[string]string{
+				"params-yaml": ``,
+			},
+			createConfigMap: func(data map[string]string, clientSet kubernetes.Interface) {
+				configMap := &v1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      DriverConfigMap,
+						Namespace: DriverNamespace,
+					},
+					Data: data,
+				}
+				// Create a ConfigMap using fake ClientSet
+				_, err := clientSet.CoreV1().ConfigMaps(DriverNamespace).Create(context.TODO(), configMap, metav1.CreateOptions{})
+				if err != nil {
+					Log.Fatalf("failed to create configMaps: %v", err)
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		s := &service{}
+		t.Run(tt.name, func(t *testing.T) {
+			K8sClientset = tt.client
+			tt.createConfigMap(tt.configMapData, tt.client)
+			_, err := s.findNetworkInterfaceIPs()
+			assert.Equal(t, err, tt.expectedError)
 		})
 	}
 }

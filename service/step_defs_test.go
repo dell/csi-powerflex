@@ -147,6 +147,8 @@ type feature struct {
 	nodeLabels                            map[string]string
 	maxVolSize                            int64
 	nfsExport                             types.NFSExport
+	nodeUID                               string
+	nas                                   types.NAS
 }
 
 func (f *feature) checkGoRoutines(tag string) {
@@ -1340,9 +1342,24 @@ func (f *feature) iInduceError(errtype string) error {
 		f.service.adminClients[arrayID2] = nil
 		f.service.systems[arrayID2] = nil
 		stepHandlersErrors.PodmonControllerProbeError = true
+	case "UpdateConfigMapUnmarshalError":
+		stepHandlersErrors.UpdateConfigMapUnmarshalError = true
+	case "GetIPAddressByInterfaceError":
+		stepHandlersErrors.GetIPAddressByInterfaceError = true
+	case "UpdateConfigK8sClientError":
+		stepHandlersErrors.UpdateConfigK8sClientError = true
+	case "UpdateConfigFormatError":
+		stepHandlersErrors.UpdateConfigFormatError = true
+	case "ConfigMapNotFoundError":
+		stepHandlersErrors.ConfigMapNotFoundError = true
 	default:
 		fmt.Println("Ensure that the error is handled in the handlers section.")
 	}
+	return nil
+}
+
+func (f *feature) iInduceSDCDependency() error {
+	sdcDependencyOnNFS = true
 	return nil
 }
 
@@ -1639,6 +1656,32 @@ func (f *feature) iCallPublishVolumeWithNFS(arg1 string) error {
 		req.VolumeCapability.AccessMode = accessMode
 	}
 
+	clientSet := fake.NewSimpleClientset()
+	K8sClientset = clientSet
+
+	configMapData := map[string]string{
+		"driver-config-params.yaml": `interfaceNames:
+  worker1: 127.1.1.11`,
+	}
+
+	if sdcDependencyOnNFS {
+		configMapData = map[string]string{}
+		K8sClientset = nil
+	}
+
+	configMap := &v1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      DriverConfigMap,
+			Namespace: DriverNamespace,
+		},
+		Data: configMapData,
+	}
+	// Create a ConfigMap using fake ClientSet
+	_, err := clientSet.CoreV1().ConfigMaps(DriverNamespace).Create(context.TODO(), configMap, metav1.CreateOptions{})
+	if err != nil {
+		log.Fatalf("failed to create configMap: %v", err)
+	}
+
 	log.Printf("Calling controllerPublishVolume")
 	f.publishVolumeResponse, f.err = f.service.ControllerPublishVolume(*ctx, req)
 	if f.err != nil {
@@ -1784,6 +1827,33 @@ func (f *feature) iCallUnpublishVolumeNFS() error {
 		req = f.getControllerUnpublishVolumeRequestNFS()
 		f.unpublishVolumeRequest = req
 	}
+
+	clientSet := fake.NewSimpleClientset()
+	K8sClientset = clientSet
+
+	configMapData := map[string]string{
+		"driver-config-params.yaml": `interfaceNames:
+  worker1: 127.1.1.12`,
+	}
+
+	if sdcDependencyOnNFS {
+		configMapData = map[string]string{}
+		K8sClientset = nil
+	}
+
+	configMap := &v1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      DriverConfigMap,
+			Namespace: DriverNamespace,
+		},
+		Data: configMapData,
+	}
+	// Create a ConfigMap using fake ClientSet
+	_, err := clientSet.CoreV1().ConfigMaps(DriverNamespace).Create(context.TODO(), configMap, metav1.CreateOptions{})
+	if err != nil {
+		Log.Fatalf("failed to create configMaps: %v", err)
+	}
+
 	log.Printf("Calling controllerUnpublishVolume: %s", req.VolumeId)
 	f.unpublishVolumeResponse, f.err = f.service.ControllerUnpublishVolume(*ctx, req)
 	if f.err != nil {
@@ -1816,6 +1886,7 @@ func (f *feature) iCallNodeGetInfo() error {
 }
 
 func (f *feature) iCallNodeGetInfoWithValidVolumeLimitNodeLabels() error {
+	f.setFakeNode()
 	ctx := new(context.Context)
 	req := new(csi.NodeGetInfoRequest)
 	f.service.opts.SdcGUID = "9E56672F-2F4B-4A42-BFF4-88B6846FBFDA"
@@ -1831,6 +1902,38 @@ func (f *feature) iCallNodeGetInfoWithInvalidVolumeLimitNodeLabels() error {
 	f.service.opts.SdcGUID = "9E56672F-2F4B-4A42-BFF4-88B6846FBFDA"
 	GetNodeLabels = mockGetNodeLabelsWithInvalidVolumeLimits
 	f.nodeGetInfoResponse, f.err = f.service.NodeGetInfo(*ctx, req)
+	return nil
+}
+
+func (f *feature) iCallNodeGetInfoWithValidNodeUID() error {
+	ctx := new(context.Context)
+	req := new(csi.NodeGetInfoRequest)
+	GetNodeUID = mockGetNodeUID
+	f.service.opts.SdcGUID = ""
+	f.nodeGetInfoResponse, f.err = f.service.NodeGetInfo(*ctx, req)
+	fmt.Printf("NodeGetInfoResponse: %v", f.nodeGetInfoResponse)
+	return nil
+}
+
+func (f *feature) iCallGetNodeUID() error {
+	f.setFakeNode()
+	ctx := new(context.Context)
+	nodeUID := ""
+	nodeUID, err := f.service.GetNodeUID(*ctx)
+
+	fmt.Printf("Node UID: %v", nodeUID)
+	if err != nil {
+		return err
+	}
+	f.nodeUID = nodeUID
+	return nil
+}
+
+func (f *feature) aValidNodeUIDIsReturned() error {
+	if f.nodeUID == "" {
+		return errors.New("Unable to fetch the node UID")
+	}
+	fmt.Printf("Node UID: %v", f.nodeUID)
 	return nil
 }
 
@@ -1852,12 +1955,18 @@ func mockGetNodeLabelsWithInvalidVolumeLimits(ctx context.Context, s *service) (
 	return labels, nil
 }
 
+//nolint:revive
+func mockGetNodeUID(ctx context.Context, s *service) (string, error) {
+	return "1aa4c285-d41b-4911-bf3e-621253bfbade", nil
+}
+
 func (f *feature) setFakeNode() (*v1.Node, error) {
 	f.service.opts.KubeNodeName = "node1"
 	fakeNode := &v1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   "node1",
 			Labels: map[string]string{"label1": "value1", "label2": "value2"},
+			UID:    "1aa4c285-d41b-4911-bf3e-621253bfbade",
 		},
 	}
 	return K8sClientset.CoreV1().Nodes().Create(context.TODO(), fakeNode, metav1.CreateOptions{})
@@ -1907,6 +2016,19 @@ func (f *feature) iCallGetNodeLabelsWithUnsetKubernetesClient() error {
 	return nil
 }
 
+func (f *feature) iCallGetNodeUIDWithInvalidNode() error {
+	f.service.opts.KubeNodeName = "node2"
+	_, f.err = f.service.GetNodeUID(f.context)
+	return nil
+}
+
+func (f *feature) iCallGetNodeUIDWithUnsetKubernetesClient() error {
+	K8sClientset = nil
+	ctx := new(context.Context)
+	f.nodeUID, f.err = f.service.GetNodeUID(*ctx)
+	return nil
+}
+
 func (f *feature) iCallNodeProbe() error {
 	ctx := new(context.Context)
 	req := new(csi.ProbeRequest)
@@ -1927,6 +2049,17 @@ func (f *feature) aValidNodeGetInfoResponseIsReturned() error {
 	}
 	if f.nodeGetInfoResponse.MaxVolumesPerNode != 0 {
 		return errors.New("expected NodeGetInfoResponse MaxVolumesPerNode to be 0")
+	}
+	fmt.Printf("NodeID %s\n", f.nodeGetInfoResponse.NodeId)
+	return nil
+}
+
+func (f *feature) aValidNodeGetInfoResponseWithNodeUIDIsReturned() error {
+	if f.err != nil {
+		return f.err
+	}
+	if f.nodeGetInfoResponse.NodeId == "" {
+		return errors.New("expected NodeGetInfoResponse to contain NodeID but it was null")
 	}
 	fmt.Printf("NodeID %s\n", f.nodeGetInfoResponse.NodeId)
 	return nil
@@ -3038,6 +3171,66 @@ func (f *feature) thereAreNoRemainingMounts() error {
 	return nil
 }
 
+func (f *feature) theConfigMapIsUpdated() error {
+	// Initializing a fake Kubernetes ClientSet
+	clientSet := fake.NewSimpleClientset()
+	K8sClientset = clientSet
+	if stepHandlersErrors.UpdateConfigK8sClientError {
+		K8sClientset = nil
+	}
+
+	data := `interfaceNames:
+  worker1: "eth1"
+  worker2: "eth2"`
+	if stepHandlersErrors.UpdateConfigMapUnmarshalError {
+		data = `[interfaces:`
+	} else if stepHandlersErrors.UpdateConfigFormatError {
+		data = `interfaceName:`
+	}
+
+	configMapData := map[string]string{
+		"driver-config-params.yaml": data,
+	}
+	configMap := &v1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      DriverConfigMap,
+			Namespace: DriverNamespace,
+		},
+		Data: configMapData,
+	}
+
+	tmpFile, err := os.Create("driver-config-params.yaml")
+	if err != nil {
+		Log.Errorf("Error creating temp file: %v", err)
+	}
+	if _, err := tmpFile.Write([]byte(data)); err != nil {
+		Log.Errorf("Error writing to temp file: %v", err)
+	}
+
+	if !stepHandlersErrors.ConfigMapNotFoundError {
+		// Create a ConfigMap using fake ClientSet
+		_, err = clientSet.CoreV1().ConfigMaps(DriverNamespace).Create(context.TODO(), configMap, metav1.CreateOptions{})
+		if err != nil {
+			Log.Errorf("failed to create configmap: %v", err)
+		}
+	}
+
+	// Mocking the GetIPAddressByInterface function
+	GetIPAddressByInterface := func(string, NetworkInterface) (string, error) {
+		return "10.0.0.1", nil
+	}
+	if stepHandlersErrors.GetIPAddressByInterfaceError {
+		GetIPAddressByInterface = func(string, NetworkInterface) (string, error) {
+			return "", fmt.Errorf("error geting the IP address of the interface")
+		}
+	}
+
+	s := &service{}
+	s.opts.KubeNodeName = "worker1"
+	s.updateConfigMap(GetIPAddressByInterface, "driver-config-params.yaml")
+	return nil
+}
+
 func (f *feature) iCallBeforeServe() error {
 	ctxOSEnviron := interface{}("os.Environ")
 	stringSlice := make([]string, 0)
@@ -3067,6 +3260,9 @@ func (f *feature) iCallBeforeServe() error {
 	fmt.Printf("ProbeController resp %#v \n", presp)
 	if perr != nil {
 		f.err = perr
+	}
+	if stepHandlersErrors.UpdateConfigK8sClientError {
+		K8sClientset = nil
 	}
 	f.err = f.service.BeforeServe(ctx, nil, listener)
 	listener.Close()
@@ -4466,6 +4662,18 @@ func (f *feature) iSpecifyExternalAccess(externalAccess string) error {
 	return nil
 }
 
+func (f *feature) iCallGetNASServerIDFromName(systemID string, name string) error {
+	id := ""
+	id, f.err = f.service.getNASServerIDFromName(systemID, name)
+	fmt.Printf("NAS server id for %s is : %s\n", name, id)
+	return nil
+}
+
+func (f *feature) iCallPingNASServer(systemID string, name string) error {
+	f.err = f.service.pingNAS(systemID, name)
+	return nil
+}
+
 func FeatureContext(s *godog.ScenarioContext) {
 	f := &feature{}
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
@@ -4529,9 +4737,11 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call NodeGetInfo$`, f.iCallNodeGetInfo)
 	s.Step(`^I call Node Probe$`, f.iCallNodeProbe)
 	s.Step(`^a valid NodeGetInfoResponse is returned$`, f.aValidNodeGetInfoResponseIsReturned)
+	s.Step(`^a valid NodeGetInfoResponse with node UID is returned$`, f.aValidNodeGetInfoResponseWithNodeUIDIsReturned)
 	s.Step(`^the Volume limit is set$`, f.theVolumeLimitIsSet)
 	s.Step(`^an invalid MaxVolumesPerNode$`, f.anInvalidMaxVolumesPerNode)
 	s.Step(`^I call GetNodeLabels$`, f.iCallGetNodeLabels)
+	s.Step(`^I call NodeGetInfo with a valid Node UID$`, f.iCallNodeGetInfoWithValidNodeUID)
 	s.Step(`^a valid label is returned$`, f.aValidLabelIsReturned)
 	s.Step(`^I set invalid EnvMaxVolumesPerNode$`, f.iSetInvalidEnvMaxVolumesPerNode)
 	s.Step(`^I call GetNodeLabels with invalid node$`, f.iCallGetNodeLabelsWithInvalidNode)
@@ -4579,6 +4789,8 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call NodeUnpublishVolume "([^"]*)"$`, f.iCallNodeUnpublishVolume)
 	s.Step(`^there are no remaining mounts$`, f.thereAreNoRemainingMounts)
 	s.Step(`^I call BeforeServe$`, f.iCallBeforeServe)
+	s.Step(`^configMap is updated$`, f.theConfigMapIsUpdated)
+	s.Step(`^I induce SDC dependency$`, f.iInduceSDCDependency)
 	s.Step(`^I call NodeStageVolume$`, f.iCallNodeStageVolume)
 	s.Step(`^I call NodeUnstageVolume with "([^"]*)"$`, f.iCallNodeUnstageVolumeWith)
 	s.Step(`^I call NodeGetCapabilities "([^"]*)"$`, f.iCallNodeGetCapabilities)
@@ -4679,6 +4891,12 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call externalAccessAlreadyAdded with externalAccess "([^"]*)"`, f.iCallexternalAccessAlreadyAdded)
 	s.Step(`^an NFSExport instance with nfsexporthost "([^"]*)"`, f.iCallGivenNFSExport)
 	s.Step(`^I specify External Access "([^"]*)"`, f.iSpecifyExternalAccess)
+	s.Step(`^I call Get NAS server from name "([^"]*)" "([^"]*)"$`, f.iCallGetNASServerIDFromName)
+	s.Step(`^I call ping NAS server "([^"]*)" "([^"]*)"$`, f.iCallPingNASServer)
+	s.Step(`^I call GetNodeUID$`, f.iCallGetNodeUID)
+	s.Step(`^a valid node uid is returned$`, f.aValidNodeUIDIsReturned)
+	s.Step(`^I call GetNodeUID with invalid node$`, f.iCallGetNodeUIDWithInvalidNode)
+	s.Step(`^I call GetNodeUID with unset KubernetesClient$`, f.iCallGetNodeUIDWithUnsetKubernetesClient)
 
 	s.After(func(ctx context.Context, _ *godog.Scenario, _ error) (context.Context, error) {
 		if f.server != nil {
