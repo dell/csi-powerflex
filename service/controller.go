@@ -134,6 +134,8 @@ const (
 
 	sioReplicationGroupExists = "The Replication Consistency Group already exists"
 	sioReplicationPairExists  = "A Replication Pair for the specified local volume already exists"
+
+	DriverConfigParamsYaml = "driver-config-params.yaml"
 )
 
 // Extra metadata field names for propagating to goscaleio and beyond.
@@ -327,6 +329,7 @@ func (s *service) CreateVolume(
 			Log.Printf("Size %d is less than 3GB, rounding to 3GB", size/bytesInGiB)
 			size = minNfsSize
 		}
+
 		contentSource := req.GetVolumeContentSource()
 		if contentSource != nil {
 			snapshotSource := contentSource.GetSnapshot()
@@ -1191,7 +1194,7 @@ func (s *service) findNetworkInterfaceIPs() ([]string, error) {
 	var configData map[string]interface{}
 	var allNetworkInterfaceIPs []string
 
-	if configParamsYaml, ok := configMap.Data["driver-config-params.yaml"]; ok {
+	if configParamsYaml, ok := configMap.Data[DriverConfigParamsYaml]; ok {
 		err := yaml.Unmarshal([]byte(configParamsYaml), &configData)
 		if err != nil {
 			Log.Errorf("Failed to unmarshal the ConfigMap params: %v", err)
