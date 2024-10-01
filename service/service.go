@@ -608,7 +608,7 @@ func (s *service) updateConfigMap(getIPAddressByInterfacefunc GetIPAddressByInte
 		return
 	}
 
-	fmt.Println("ConfigMap updated successfully")
+	Log.Infof("ConfigMap updated successfully")
 }
 
 func (s *service) getIPAddressByInterface(interfaceName string, networkInterface NetworkInterface) (string, error) {
@@ -699,7 +699,6 @@ func (s *service) doProbe(ctx context.Context) error {
 
 		if err := s.nodeProbe(ctx); err != nil {
 			Log.Infof("nodeProbe failed: %s", err.Error())
-			// return err
 		}
 	}
 	return nil
