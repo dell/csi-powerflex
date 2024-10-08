@@ -24,6 +24,10 @@ export SDC_GUID=$(/bin/emc/scaleio/drv_cfg --query_guid)
 # Alternate GUID is for another system for testing expose volume to multiple hosts
 export ALT_GUID=
 
+export KUBE_NODE_NAME=""
+export KUBE_CONFIG="/root/.kube/config"
+export NODE_INTERFACES="worker1: interfaceIP1, worker2:interfaceIP2"
+
 #Debug variables for goscaleio library
 export GOSCALEIO_SHOWHTTP="true"
 
@@ -32,11 +36,13 @@ export GOSCALEIO_SHOWHTTP="true"
 #leave this variable blank. 
 export ALT_SYSTEM_ID=""
 
-MDM=`grep mdm ../../config.json | awk -F":" '{print $2}'`
-for i in $MDM
-do
-IP=$i
-IP=$(echo "$i" | sed "s/\"//g")
-echo $IP
- /opt/emc/scaleio/sdc/bin/drv_cfg --add_mdm --ip $IP
-done
+if /sbin/lsmod | grep scini > /dev/null; then
+  MDM=`grep mdm ../../config.json | awk -F":" '{print $2}'`
+  for i in $MDM
+  do
+  IP=$i
+  IP=$(echo "$i" | sed "s/\"//g")
+  echo $IP
+   /opt/emc/scaleio/sdc/bin/drv_cfg --add_mdm --ip $IP
+  done
+fi
