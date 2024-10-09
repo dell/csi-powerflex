@@ -20,13 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/dell/csi-vxflexos/v2/service"
 	"io"
-	apiv1 "k8s.io/api/core/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/fake"
-	"k8s.io/client-go/tools/clientcmd"
 	"log"
 	"math"
 	"net"
@@ -39,6 +33,14 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/dell/csi-vxflexos/v2/service"
+
+	apiv1 "k8s.io/api/core/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/tools/clientcmd"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -55,8 +57,8 @@ const (
 	MaxRetries      = 10
 	RetrySleepTime  = 10 * time.Second
 	SleepTime       = 100 * time.Millisecond
-	Pool1           = "poo11"
-	NfsPool         = "Env8-SP-SW_SSD-1"
+	Pool1           = "SP-SW_SSD-1"
+	NfsPool         = "SP-SW_SSD-1"
 	DriverConfigMap = "vxflexos-config-params"
 	DriverNamespace = "vxflexos"
 )
@@ -225,7 +227,6 @@ func (f *feature) getArrayConfig() (map[string]*ArrayConnectionData, error) {
 }
 
 func (f *feature) GetNodeUID() (string, error) {
-
 	kubeConfig := os.Getenv("KUBE_CONFIG")
 	config, err := clientcmd.BuildConfigFromFlags("", kubeConfig)
 	if err != nil {

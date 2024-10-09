@@ -5,8 +5,6 @@ module github.com/dell/csi-vxflexos/v2
 
 go 1.22.0
 
-toolchain go1.22.5
-
 require (
 	github.com/akutz/memconn v0.1.0
 	github.com/apparentlymart/go-cidr v1.1.0
