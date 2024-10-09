@@ -24,6 +24,11 @@ export SDC_GUID=$(/bin/emc/scaleio/drv_cfg --query_guid)
 # Alternate GUID is for another system for testing expose volume to multiple hosts
 export ALT_GUID=
 
+# Kubernetes variables
+export KUBE_CONFIG=/root/.kube/config
+export KUBE_NODE_NAME=""
+export NODE_INTERFACES="worker1:InterfaceIP1, worker2:InterfaceIP2"
+
 #Debug variables for goscaleio library
 export GOSCALEIO_SHOWHTTP="true"
 

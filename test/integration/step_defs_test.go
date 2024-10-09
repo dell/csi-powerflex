@@ -20,7 +20,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/dell/csi-vxflexos/v2/service"
 	"io"
+	apiv1 "k8s.io/api/core/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/tools/clientcmd"
 	"log"
 	"math"
 	"net/http"
@@ -45,11 +51,13 @@ import (
 )
 
 const (
-	MaxRetries     = 10
-	RetrySleepTime = 10 * time.Second
-	SleepTime      = 100 * time.Millisecond
-	Pool1          = "pool1"
-	NfsPool        = "Env8-SP-SW_SSD-1"
+	MaxRetries      = 10
+	RetrySleepTime  = 10 * time.Second
+	SleepTime       = 100 * time.Millisecond
+	Pool1           = "poo11"
+	NfsPool         = "Env8-SP-SW_SSD-1"
+	DriverConfigMap = "vxflexos-config-params"
+	DriverNamespace = "vxflexos"
 )
 
 // ArrayConnectionData contains data required to connect to array
@@ -213,6 +221,26 @@ func (f *feature) getArrayConfig() (map[string]*ArrayConnectionData, error) {
 		return nil, fmt.Errorf("arrays details are not provided in configFile %s", configFile)
 	}
 	return arrays, nil
+}
+
+func (f *feature) GetNodeUID() (string, error) {
+
+	kubeConfig := os.Getenv("KUBE_CONFIG")
+	config, err := clientcmd.BuildConfigFromFlags("", kubeConfig)
+	if err != nil {
+		return "", fmt.Errorf("error building kubeconfig: %s", err.Error())
+	}
+
+	clientSet, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return "", fmt.Errorf("error building kubernetes clientset: %s", err.Error())
+	}
+
+	node, err := clientSet.CoreV1().Nodes().Get(context.TODO(), os.Getenv("KUBE_NODE_NAME"), v1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("error getting node: %s", err.Error())
+	}
+	return string(node.UID), nil
 }
 
 func (f *feature) addError(err error) {
@@ -2170,6 +2198,21 @@ func (f *feature) aNfsVolumeRequest(name string, size int64) error {
 	return nil
 }
 
+func (f *feature) whenICallPublishVolumeForNfsWithoutSDC() error {
+	if f.createVolumeRequest == nil {
+		return nil
+	}
+	err := f.controllerPublishVolumeForNfsWithoutSDC(f.volID)
+	if err != nil {
+		fmt.Printf("ControllerPublishVolume %s:\n", err.Error())
+		f.addError(err)
+	} else {
+		fmt.Printf("ControllerPublishVolume completed successfully\n")
+	}
+	time.Sleep(SleepTime)
+	return nil
+}
+
 func (f *feature) whenICallPublishVolumeForNfs(nodeIDEnvVar string) error {
 	if f.createVolumeRequest == nil {
 		return nil
@@ -2182,6 +2225,64 @@ func (f *feature) whenICallPublishVolumeForNfs(nodeIDEnvVar string) error {
 		fmt.Printf("ControllerPublishVolume completed successfully\n")
 	}
 	time.Sleep(SleepTime)
+	return nil
+}
+
+func (f *feature) controllerPublishVolumeForNfsWithoutSDC(id string) error {
+	if f.createVolumeRequest == nil {
+		return nil
+	}
+	req := f.getControllerPublishVolumeRequest()
+	req.VolumeId = id
+	req.NodeId, _ = f.GetNodeUID()
+
+	clientSet := fake.NewSimpleClientset()
+	service.K8sClientset = clientSet
+	var configYAMLContent strings.Builder
+
+	for _, iface := range strings.Split(os.Getenv("NODE_INTERFACES"), ",") {
+		interfaceData := strings.Split(strings.TrimSpace(iface), ":")
+		configYAMLContent.WriteString(fmt.Sprintf(" %s: %s\n", interfaceData[0], interfaceData[1]))
+	}
+
+	configMapData := map[string]string{
+		"driver-config-params.yaml": fmt.Sprintf(`interfaceNames:
+%s`, configYAMLContent.String()),
+	}
+
+	configMap := &apiv1.ConfigMap{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      DriverConfigMap,
+			Namespace: DriverNamespace,
+		},
+		Data: configMapData,
+	}
+
+	_, err := clientSet.CoreV1().ConfigMaps(DriverNamespace).Create(context.TODO(), configMap, v1.CreateOptions{})
+	if err != nil {
+		fmt.Printf("Failed to create configMap: %v\n", err)
+		return err
+	}
+
+	if f.arrays == nil {
+		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
+		var err error
+		f.arrays, err = f.getArrayConfig()
+		if err != nil {
+			return errors.New("Get multi array config failed " + err.Error())
+		}
+	}
+
+	for _, a := range f.arrays {
+		req.VolumeContext = make(map[string]string)
+		req.VolumeContext["nasName"] = a.NasName
+		req.VolumeContext["fsType"] = "nfs"
+		ctx := context.Background()
+		client := csi.NewControllerClient(grpcClient)
+		_, err := client.ControllerPublishVolume(ctx, req)
+		return err
+	}
+
 	return nil
 }
 
@@ -2242,6 +2343,21 @@ func (f *feature) getNodePublishVolumeRequestForNfs() *csi.NodePublishVolumeRequ
 	return req
 }
 
+func (f *feature) whenICallNodePublishVolumeForNfsWithoutSDC() error {
+	if f.createVolumeRequest == nil {
+		return nil
+	}
+	err := f.nodePublishVolumeForNfs(f.volID, "")
+	if err != nil {
+		fmt.Printf("NodePublishVolume failed: %s\n", err.Error())
+		f.addError(err)
+	} else {
+		fmt.Printf("NodePublishVolume completed successfully\n")
+	}
+	time.Sleep(SleepTime)
+	return nil
+}
+
 //nolint:revive
 func (f *feature) whenICallNodePublishVolumeForNfs(arg1 string) error {
 	if f.createVolumeRequest == nil {
@@ -2280,6 +2396,21 @@ func (f *feature) nodePublishVolumeForNfs(id string, path string) error {
 	return err
 }
 
+func (f *feature) whenICallNodeUnpublishVolumeForNfsWithoutSDC() error {
+	if f.createVolumeRequest == nil {
+		return nil
+	}
+	err := f.nodeUnpublishVolumeForNfs(f.volID, f.nodePublishVolumeRequest.TargetPath)
+	if err != nil {
+		fmt.Printf("NodeUnpublishVolume failed: %s\n", err.Error())
+		f.addError(err)
+	} else {
+		fmt.Printf("NodeUnpublishVolume completed successfully\n")
+	}
+	time.Sleep(SleepTime)
+	return nil
+}
+
 //nolint:revive
 func (f *feature) whenICallNodeUnpublishVolumeForNfs(arg1 string) error {
 	if f.createVolumeRequest == nil {
@@ -2307,6 +2438,21 @@ func (f *feature) nodeUnpublishVolumeForNfs(id string, path string) error {
 	return err
 }
 
+func (f *feature) whenICallUnpublishVolumeForNfsWithoutSDC() error {
+	if f.createVolumeRequest == nil {
+		return nil
+	}
+	err := f.controllerUnpublishVolumeForNfsWithoutSDC(f.publishVolumeRequest.VolumeId)
+	if err != nil {
+		fmt.Printf("ControllerUnpublishVolume failed: %s\n", err.Error())
+		f.addError(err)
+	} else {
+		fmt.Printf("ControllerUnpublishVolume completed successfully\n")
+	}
+	time.Sleep(SleepTime)
+	return nil
+}
+
 func (f *feature) whenICallUnpublishVolumeForNfs(nodeIDEnvVar string) error {
 	if f.createVolumeRequest == nil {
 		return nil
@@ -2320,6 +2466,19 @@ func (f *feature) whenICallUnpublishVolumeForNfs(nodeIDEnvVar string) error {
 	}
 	time.Sleep(SleepTime)
 	return nil
+}
+
+func (f *feature) controllerUnpublishVolumeForNfsWithoutSDC(id string) error {
+	if f.createVolumeRequest == nil {
+		return nil
+	}
+	req := new(csi.ControllerUnpublishVolumeRequest)
+	req.VolumeId = id
+	req.NodeId, _ = f.GetNodeUID()
+	ctx := context.Background()
+	client := csi.NewControllerClient(grpcClient)
+	_, err := client.ControllerUnpublishVolume(ctx, req)
+	return err
 }
 
 func (f *feature) controllerUnpublishVolumeForNfs(id string, nodeIDEnvVar string) error {
@@ -2572,6 +2731,10 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^when I call NodePublishVolume for nfs "([^"]*)"$`, f.whenICallNodePublishVolumeForNfs)
 	s.Step(`^when I call NodeUnpublishVolume for nfs "([^"]*)"$`, f.whenICallNodeUnpublishVolumeForNfs)
 	s.Step(`^when I call UnpublishVolume for nfs "([^"]*)"$`, f.whenICallUnpublishVolumeForNfs)
+	s.Step(`^when I call PublishVolume for nfs$`, f.whenICallPublishVolumeForNfsWithoutSDC)
+	s.Step(`^when I call NodePublishVolume for nfs$`, f.whenICallNodePublishVolumeForNfsWithoutSDC)
+	s.Step(`^when I call NodeUnpublishVolume for nfs$`, f.whenICallNodeUnpublishVolumeForNfsWithoutSDC)
+	s.Step(`^when I call UnpublishVolume for nfs$`, f.whenICallUnpublishVolumeForNfsWithoutSDC)
 	s.Step(`^when I call NfsExpandVolume to "([^"]*)"$`, f.whenICallNfsExpandVolumeTo)
 	s.Step(`^I call ListFileSystemSnapshot$`, f.ICallListFileSystemSnapshot)
 	s.Step(`^I call CreateSnapshotForFS$`, f.iCallCreateSnapshotForFS)

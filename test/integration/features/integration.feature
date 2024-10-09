@@ -565,7 +565,25 @@ Feature: VxFlex OS CSI interface
     Then there are no errors
     Examples:
       | voltype | access          | fstype | errormsg |
-      | "mount" | "single-writer" | "nfs"  | "none"   | 
+      | "mount" | "single-writer" | "nfs"  | "none"   |
+
+  Scenario Outline: Create publish, node-publish, node-unpublish, unpublish, and delete nfs volume without SDC dependency
+    Given a VxFlexOS service
+    And a nfs capability with voltype <voltype> access <access> fstype <fstype>
+    And a nfs volume request "nfsinttestvol" "8"
+    When I call CreateVolume
+    And there are no errors
+    And when I call PublishVolume for nfs
+    And when I call NodePublishVolume for nfs
+    And there are no errors
+    And when I call NodeUnpublishVolume for nfs
+    And when I call UnpublishVolume for nfs
+    And there are no errors
+    And when I call DeleteVolume
+    Then there are no errors
+    Examples:
+      | voltype | access          | fstype | errormsg |
+      | "mount" | "single-writer" | "nfs"  | "none"   |
 
   Scenario: Expand Nfs Volume
     Given a VxFlexOS service

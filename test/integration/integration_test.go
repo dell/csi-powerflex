@@ -105,7 +105,7 @@ func TestMain(m *testing.M) {
 		Format: "junit",
 		Output: outputfile,
 		Paths:  []string{"features"},
-		// Tags:   "wip",
+		Tags:   "wip",
 	}
 
 	exitVal := godog.TestSuite{

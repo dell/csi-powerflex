@@ -1291,9 +1291,9 @@ func (s *service) ControllerPublishVolume(
 		var ipAddresses []string
 
 		ipAddresses, err = s.findNetworkInterfaceIPs()
-		Log.Printf("ControllerPublish - No network interfaces found, trying to get SDC IPs")
 		if err != nil || len(ipAddresses) == 0 {
 
+			Log.Printf("ControllerPublish - No network interfaces found, trying to get SDC IPs")
 			// get SDC IPs if Network Interface IPs not found
 			ipAddresses, err = s.getSDCIPs(nodeID, systemID)
 			if err != nil {
