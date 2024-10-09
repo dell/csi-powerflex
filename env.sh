@@ -27,7 +27,7 @@ export ALT_GUID=
 # Kubernetes variables
 export KUBE_CONFIG=/root/.kube/config
 export KUBE_NODE_NAME=""
-export NODE_INTERFACES="worker1:InterfaceIP1, worker2:InterfaceIP2"
+export NODE_INTERFACES="nodeName:interfaceName"
 
 #Debug variables for goscaleio library
 export GOSCALEIO_SHOWHTTP="true"

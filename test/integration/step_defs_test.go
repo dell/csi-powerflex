@@ -29,6 +29,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"log"
 	"math"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -241,6 +242,29 @@ func (f *feature) GetNodeUID() (string, error) {
 		return "", fmt.Errorf("error getting node: %s", err.Error())
 	}
 	return string(node.UID), nil
+}
+
+func (f *feature) getIPAddressByInterface(interfaceName string) (string, error) {
+	interfaceObj, err := net.InterfaceByName(interfaceName)
+	if err != nil {
+		return "", err
+	}
+
+	addrs, err := interfaceObj.Addrs()
+	if err != nil {
+		return "", err
+	}
+
+	for _, addr := range addrs {
+		ipNet, ok := addr.(*net.IPNet)
+		if !ok {
+			continue
+		}
+		if ipNet.IP.To4() != nil {
+			return ipNet.IP.String(), nil
+		}
+	}
+	return "", fmt.Errorf("no IPv4 address found for interface %s", interfaceName)
 }
 
 func (f *feature) addError(err error) {
@@ -2241,8 +2265,14 @@ func (f *feature) controllerPublishVolumeForNfsWithoutSDC(id string) error {
 	var configYAMLContent strings.Builder
 
 	for _, iface := range strings.Split(os.Getenv("NODE_INTERFACES"), ",") {
+
 		interfaceData := strings.Split(strings.TrimSpace(iface), ":")
-		configYAMLContent.WriteString(fmt.Sprintf(" %s: %s\n", interfaceData[0], interfaceData[1]))
+		interfaceIP, err := f.getIPAddressByInterface(interfaceData[1])
+		if err != nil {
+			fmt.Printf("Error while getting IP address for interface %s: %v\n", interfaceData[1], err)
+			continue
+		}
+		configYAMLContent.WriteString(fmt.Sprintf(" %s: %s\n", interfaceData[0], interfaceIP))
 	}
 
 	configMapData := map[string]string{
