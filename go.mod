@@ -5,8 +5,6 @@ module github.com/dell/csi-vxflexos/v2
 
 go 1.22.0
 
-toolchain go1.22.5
-
 require (
 	github.com/akutz/memconn v0.1.0
 	github.com/apparentlymart/go-cidr v1.1.0
@@ -55,6 +53,7 @@ require (
 	github.com/hashicorp/go-memdb v1.3.0 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
+	github.com/imdario/mergo v0.3.5 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/magiconair/properties v1.8.5 // indirect
 	github.com/mitchellh/mapstructure v1.4.3 // indirect
