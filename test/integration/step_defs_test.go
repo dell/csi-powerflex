@@ -56,8 +56,6 @@ const (
 	MaxRetries      = 10
 	RetrySleepTime  = 10 * time.Second
 	SleepTime       = 100 * time.Millisecond
-	Pool1           = "pool1"
-	NfsPool         = "Env8-SP-SW_SSD-1"
 	NodeName        = "node1"
 	DriverConfigMap = "vxflexos-config-params"
 	DriverNamespace = "vxflexos"
@@ -335,8 +333,9 @@ func (f *feature) aVxFlexOSService() error {
 
 func (f *feature) aBasicBlockVolumeRequest(name string, size int64) error {
 	req := new(csi.CreateVolumeRequest)
+	storagePool := os.Getenv("STORAGE_POOL")
 	params := make(map[string]string)
-	params["storagepool"] = Pool1
+	params["storagepool"] = storagePool
 	params["thickprovisioning"] = "false"
 	if len(f.anotherSystemID) > 0 {
 		params["systemID"] = f.anotherSystemID
@@ -368,6 +367,7 @@ func (f *feature) aBasicNfsVolumeRequest(name string, size int64) error {
 	params := make(map[string]string)
 
 	ctx := context.Background()
+	nfsPool := os.Getenv("NFS_STORAGE_POOL")
 
 	fmt.Println("f.arrays,len", f.arrays, f.arrays)
 
@@ -388,7 +388,7 @@ func (f *feature) aBasicNfsVolumeRequest(name string, size int64) error {
 		}
 
 		if val {
-			params["storagepool"] = NfsPool
+			params["storagepool"] = nfsPool
 			params["thickprovisioning"] = "false"
 			if os.Getenv("X_CSI_QUOTA_ENABLED") == "true" {
 				params["isQuotaEnabled"] = "true"
@@ -432,6 +432,7 @@ func (f *feature) aBasicNfsVolumeRequestWithSizeLessThan3Gi(name string, size in
 	params := make(map[string]string)
 
 	ctx := context.Background()
+	nfsPool := os.Getenv("NFS_STORAGE_POOL")
 
 	fmt.Println("f.arrays,len", f.arrays, f.arrays)
 
@@ -452,7 +453,7 @@ func (f *feature) aBasicNfsVolumeRequestWithSizeLessThan3Gi(name string, size in
 		}
 
 		if val {
-			params["storagepool"] = NfsPool
+			params["storagepool"] = nfsPool
 			params["thickprovisioning"] = "false"
 			if os.Getenv("X_CSI_QUOTA_ENABLED") == "true" {
 				params["isQuotaEnabled"] = "true"
@@ -496,6 +497,7 @@ func (f *feature) aNfsVolumeRequestWithQuota(volname string, volsize int64, path
 	params := make(map[string]string)
 
 	ctx := context.Background()
+	nfsPool := os.Getenv("NFS_STORAGE_POOL")
 
 	fmt.Println("f.arrays,len", f.arrays, f.arrays)
 
@@ -519,7 +521,7 @@ func (f *feature) aNfsVolumeRequestWithQuota(volname string, volsize int64, path
 			if a.NasName != "" {
 				params["nasName"] = a.NasName
 			}
-			params["storagepool"] = NfsPool
+			params["storagepool"] = nfsPool
 			params["thickprovisioning"] = "false"
 			params["isQuotaEnabled"] = "true"
 			params["softLimit"] = softlimit
@@ -675,7 +677,8 @@ func (f *feature) aMountVolumeRequest(name string) error {
 func (f *feature) getMountVolumeRequest(name string) *csi.CreateVolumeRequest {
 	req := new(csi.CreateVolumeRequest)
 	params := make(map[string]string)
-	params["storagepool"] = Pool1
+	storagePool := os.Getenv("STORAGE_POOL")
+	params["storagepool"] = storagePool
 	if len(f.anotherSystemID) > 0 {
 		params["systemID"] = f.anotherSystemID
 	}
@@ -804,7 +807,8 @@ func (f *feature) aCapabilityWithVoltypeAccessFstype(voltype, access, fstype str
 func (f *feature) aVolumeRequest(name string, size int64) error {
 	req := new(csi.CreateVolumeRequest)
 	params := make(map[string]string)
-	params["storagepool"] = Pool1
+	storagePool := os.Getenv("STORAGE_POOL")
+	params["storagepool"] = storagePool
 	params["thickprovisioning"] = "true"
 	if len(f.anotherSystemID) > 0 {
 		params["systemID"] = f.anotherSystemID
@@ -2089,6 +2093,7 @@ func (f *feature) aBasicNfsVolumeRequestWithWrongNasName(name string, size int64
 	params := make(map[string]string)
 
 	ctx := context.Background()
+	nfsPool := os.Getenv("NFS_STORAGE_POOL")
 
 	fmt.Println("f.arrays,len", f.arrays, f.arrays)
 
@@ -2115,7 +2120,7 @@ func (f *feature) aBasicNfsVolumeRequestWithWrongNasName(name string, size int64
 				params["nasName"] = wrongNasName
 			}
 
-			params["storagepool"] = NfsPool
+			params["storagepool"] = nfsPool
 			params["thickprovisioning"] = "false"
 			if len(f.anotherSystemID) > 0 {
 				params["systemID"] = f.anotherSystemID
@@ -2215,6 +2220,7 @@ func (f *feature) aNfsCapabilityWithVoltypeAccessFstype(voltype, access, fstype 
 
 func (f *feature) aNfsVolumeRequest(name string, size int64) error {
 	ctx := context.Background()
+	nfsPool := os.Getenv("NFS_STORAGE_POOL")
 
 	fmt.Println("f.arrays,len", f.arrays, f.arrays)
 
@@ -2240,7 +2246,7 @@ func (f *feature) aNfsVolumeRequest(name string, size int64) error {
 			if a.NasName != "" {
 				params["nasName"] = a.NasName
 			}
-			params["storagepool"] = NfsPool
+			params["storagepool"] = nfsPool
 			params["thickprovisioning"] = "false"
 			if os.Getenv("X_CSI_QUOTA_ENABLED") == "true" {
 				params["isQuotaEnabled"] = "true"
