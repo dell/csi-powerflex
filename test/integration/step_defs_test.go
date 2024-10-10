@@ -34,16 +34,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/dell/csi-vxflexos/v2/service"
+	"github.com/dell/csi-vxflexos/v2/k8sutils"
 
-	apiv1 "k8s.io/api/core/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/fake"
-	"k8s.io/client-go/tools/clientcmd"
+	"github.com/dell/csi-vxflexos/v2/service"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	apiv1 "k8s.io/api/core/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/fake"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/cucumber/godog"
@@ -57,8 +56,9 @@ const (
 	MaxRetries      = 10
 	RetrySleepTime  = 10 * time.Second
 	SleepTime       = 100 * time.Millisecond
-	Pool1           = "SP-SW_SSD-1"
-	NfsPool         = "SP-SW_SSD-1"
+	Pool1           = "pool1"
+	NfsPool         = "Env8-SP-SW_SSD-1"
+	NodeName        = "node1"
 	DriverConfigMap = "vxflexos-config-params"
 	DriverNamespace = "vxflexos"
 )
@@ -226,21 +226,65 @@ func (f *feature) getArrayConfig() (map[string]*ArrayConnectionData, error) {
 	return arrays, nil
 }
 
+func (f *feature) createConfigMap() error {
+	var configYAMLContent strings.Builder
+
+	for _, iface := range strings.Split(os.Getenv("NODE_INTERFACES"), ",") {
+
+		interfaceData := strings.Split(strings.TrimSpace(iface), ":")
+		interfaceIP, err := f.getIPAddressByInterface(interfaceData[1])
+		if err != nil {
+			fmt.Printf("Error while getting IP address for interface %s: %v\n", interfaceData[1], err)
+			continue
+		}
+		configYAMLContent.WriteString(fmt.Sprintf(" %s: %s\n", interfaceData[0], interfaceIP))
+	}
+
+	configMapData := map[string]string{
+		"driver-config-params.yaml": fmt.Sprintf(`interfaceNames:
+%s`, configYAMLContent.String()),
+	}
+
+	configMap := &apiv1.ConfigMap{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      DriverConfigMap,
+			Namespace: DriverNamespace,
+		},
+		Data: configMapData,
+	}
+
+	_, err := service.K8sClientset.CoreV1().ConfigMaps(DriverNamespace).Create(context.TODO(), configMap, v1.CreateOptions{})
+	if err != nil {
+		fmt.Printf("Failed to create configMap: %v\n", err)
+		return err
+	}
+	return nil
+}
+
+func (f *feature) setFakeNode() (*apiv1.Node, error) {
+	fakeNode := &apiv1.Node{
+		ObjectMeta: v1.ObjectMeta{
+			Name:   NodeName,
+			Labels: map[string]string{"label1": "value1", "label2": "value2"},
+			UID:    "1aa4c285-d41b-4911-bf3e-621253bfbade",
+		},
+	}
+	return service.K8sClientset.CoreV1().Nodes().Create(context.TODO(), fakeNode, v1.CreateOptions{})
+}
+
 func (f *feature) GetNodeUID() (string, error) {
-	kubeConfig := os.Getenv("KUBE_CONFIG")
-	config, err := clientcmd.BuildConfigFromFlags("", kubeConfig)
-	if err != nil {
-		return "", fmt.Errorf("error building kubeconfig: %s", err.Error())
+	if service.K8sClientset == nil {
+		err := k8sutils.CreateKubeClientSet()
+		if err != nil {
+			return "", fmt.Errorf("init client failed with error: %v", err)
+		}
+		service.K8sClientset = k8sutils.Clientset
 	}
 
-	clientSet, err := kubernetes.NewForConfig(config)
+	// access the API to fetch node object
+	node, err := service.K8sClientset.CoreV1().Nodes().Get(context.TODO(), NodeName, v1.GetOptions{})
 	if err != nil {
-		return "", fmt.Errorf("error building kubernetes clientset: %s", err.Error())
-	}
-
-	node, err := clientSet.CoreV1().Nodes().Get(context.TODO(), os.Getenv("KUBE_NODE_NAME"), v1.GetOptions{})
-	if err != nil {
-		return "", fmt.Errorf("error getting node: %s", err.Error())
+		return "", fmt.Errorf("unable to fetch the node details. Error: %v", err)
 	}
 	return string(node.UID), nil
 }
@@ -2257,42 +2301,21 @@ func (f *feature) controllerPublishVolumeForNfsWithoutSDC(id string) error {
 	if f.createVolumeRequest == nil {
 		return nil
 	}
+
+	clientSet := fake.NewSimpleClientset()
+	service.K8sClientset = clientSet
+	_, err := f.setFakeNode()
+	if err != nil {
+		return fmt.Errorf("setFakeNode failed with error: %v", err)
+	}
+
 	req := f.getControllerPublishVolumeRequest()
 	req.VolumeId = id
 	req.NodeId, _ = f.GetNodeUID()
 
-	clientSet := fake.NewSimpleClientset()
-	service.K8sClientset = clientSet
-	var configYAMLContent strings.Builder
-
-	for _, iface := range strings.Split(os.Getenv("NODE_INTERFACES"), ",") {
-
-		interfaceData := strings.Split(strings.TrimSpace(iface), ":")
-		interfaceIP, err := f.getIPAddressByInterface(interfaceData[1])
-		if err != nil {
-			fmt.Printf("Error while getting IP address for interface %s: %v\n", interfaceData[1], err)
-			continue
-		}
-		configYAMLContent.WriteString(fmt.Sprintf(" %s: %s\n", interfaceData[0], interfaceIP))
-	}
-
-	configMapData := map[string]string{
-		"driver-config-params.yaml": fmt.Sprintf(`interfaceNames:
-%s`, configYAMLContent.String()),
-	}
-
-	configMap := &apiv1.ConfigMap{
-		ObjectMeta: v1.ObjectMeta{
-			Name:      DriverConfigMap,
-			Namespace: DriverNamespace,
-		},
-		Data: configMapData,
-	}
-
-	_, err := clientSet.CoreV1().ConfigMaps(DriverNamespace).Create(context.TODO(), configMap, v1.CreateOptions{})
+	err = f.createConfigMap()
 	if err != nil {
-		fmt.Printf("Failed to create configMap: %v\n", err)
-		return err
+		return fmt.Errorf("createConfigMap failed with error: %v", err)
 	}
 
 	if f.arrays == nil {
@@ -2503,12 +2526,25 @@ func (f *feature) controllerUnpublishVolumeForNfsWithoutSDC(id string) error {
 	if f.createVolumeRequest == nil {
 		return nil
 	}
+
+	clientSet := fake.NewSimpleClientset()
+	service.K8sClientset = clientSet
+	_, err := f.setFakeNode()
+	if err != nil {
+		return fmt.Errorf("setFakeNode failed with error: %v", err)
+	}
+
 	req := new(csi.ControllerUnpublishVolumeRequest)
 	req.VolumeId = id
 	req.NodeId, _ = f.GetNodeUID()
+	err = f.createConfigMap()
+	if err != nil {
+		return fmt.Errorf("createConfigMap failed with error: %v", err)
+	}
+
 	ctx := context.Background()
 	client := csi.NewControllerClient(grpcClient)
-	_, err := client.ControllerUnpublishVolume(ctx, req)
+	_, err = client.ControllerUnpublishVolume(ctx, req)
 	return err
 }
 

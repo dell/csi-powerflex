@@ -1624,6 +1624,7 @@ func (s *service) ControllerUnpublishVolume(
 		ipAddresses, err = s.findNetworkInterfaceIPs()
 		if err != nil || len(ipAddresses) == 0 {
 
+			Log.Printf("ControllerUnPublish - No network interfaces found, trying to get SDC IPs")
 			ipAddresses, err = s.getSDCIPs(nodeID, systemID)
 			if err != nil {
 				return nil, status.Errorf(codes.NotFound, "%s", err.Error())
@@ -1631,6 +1632,7 @@ func (s *service) ControllerUnpublishVolume(
 				return nil, status.Errorf(codes.NotFound, "%s", "received empty sdcIPs")
 			}
 		}
+		Log.Printf("ControllerUnPublish - ipAddresses %v", ipAddresses)
 
 		// unexport for NFS
 		err = s.unexportFilesystem(ctx, req, adminClient, fs, req.GetVolumeId(), ipAddresses, nodeID)
