@@ -35,11 +35,14 @@ export GOSCALEIO_SHOWHTTP="true"
 #leave this variable blank. 
 export ALT_SYSTEM_ID=""
 
-MDM=`grep mdm ../../config.json | awk -F":" '{print $2}'`
-for i in $MDM
-do
-IP=$i
-IP=$(echo "$i" | sed "s/\"//g")
-echo $IP
- /opt/emc/scaleio/sdc/bin/drv_cfg --add_mdm --ip $IP
-done
+if /sbin/lsmod | grep -q scini; then
+  echo "scini module is present, Proceeding to add MDM..."
+  MDM=`grep mdm ../../config.json | awk -F":" '{print $2}'`
+  for i in $MDM
+  do
+    IP=$i
+    IP=$(echo "$i" | sed "s/\"//g")
+    echo "Adding MDM wth IP: $IP"
+    /opt/emc/scaleio/sdc/bin/drv_cfg --add_mdm --ip $IP
+  done
+fi
