@@ -23,6 +23,7 @@ import (
 	"io"
 	"log"
 	"math"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -33,8 +34,15 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dell/csi-vxflexos/v2/k8sutils"
+
+	"github.com/dell/csi-vxflexos/v2/service"
+
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	apiv1 "k8s.io/api/core/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/fake"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/cucumber/godog"
@@ -45,11 +53,12 @@ import (
 )
 
 const (
-	MaxRetries     = 10
-	RetrySleepTime = 10 * time.Second
-	SleepTime      = 100 * time.Millisecond
-	Pool1          = "pool1"
-	NfsPool        = "Env8-SP-SW_SSD-1"
+	MaxRetries      = 10
+	RetrySleepTime  = 10 * time.Second
+	SleepTime       = 100 * time.Millisecond
+	NodeName        = "node1"
+	DriverConfigMap = "vxflexos-config-params"
+	DriverNamespace = "vxflexos"
 )
 
 // ArrayConnectionData contains data required to connect to array
@@ -215,6 +224,92 @@ func (f *feature) getArrayConfig() (map[string]*ArrayConnectionData, error) {
 	return arrays, nil
 }
 
+func (f *feature) createConfigMap() error {
+	var configYAMLContent strings.Builder
+
+	for _, iface := range strings.Split(os.Getenv("NODE_INTERFACES"), ",") {
+
+		interfaceData := strings.Split(strings.TrimSpace(iface), ":")
+		interfaceIP, err := f.getIPAddressByInterface(interfaceData[1])
+		if err != nil {
+			fmt.Printf("Error while getting IP address for interface %s: %v\n", interfaceData[1], err)
+			continue
+		}
+		configYAMLContent.WriteString(fmt.Sprintf(" %s: %s\n", interfaceData[0], interfaceIP))
+	}
+
+	configMapData := map[string]string{
+		"driver-config-params.yaml": fmt.Sprintf(`interfaceNames:
+%s`, configYAMLContent.String()),
+	}
+
+	configMap := &apiv1.ConfigMap{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      DriverConfigMap,
+			Namespace: DriverNamespace,
+		},
+		Data: configMapData,
+	}
+
+	_, err := service.K8sClientset.CoreV1().ConfigMaps(DriverNamespace).Create(context.TODO(), configMap, v1.CreateOptions{})
+	if err != nil {
+		fmt.Printf("Failed to create configMap: %v\n", err)
+		return err
+	}
+	return nil
+}
+
+func (f *feature) setFakeNode() (*apiv1.Node, error) {
+	fakeNode := &apiv1.Node{
+		ObjectMeta: v1.ObjectMeta{
+			Name:   NodeName,
+			Labels: map[string]string{"label1": "value1", "label2": "value2"},
+			UID:    "1aa4c285-d41b-4911-bf3e-621253bfbade",
+		},
+	}
+	return service.K8sClientset.CoreV1().Nodes().Create(context.TODO(), fakeNode, v1.CreateOptions{})
+}
+
+func (f *feature) GetNodeUID() (string, error) {
+	if service.K8sClientset == nil {
+		err := k8sutils.CreateKubeClientSet()
+		if err != nil {
+			return "", fmt.Errorf("init client failed with error: %v", err)
+		}
+		service.K8sClientset = k8sutils.Clientset
+	}
+
+	// access the API to fetch node object
+	node, err := service.K8sClientset.CoreV1().Nodes().Get(context.TODO(), NodeName, v1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("unable to fetch the node details. Error: %v", err)
+	}
+	return string(node.UID), nil
+}
+
+func (f *feature) getIPAddressByInterface(interfaceName string) (string, error) {
+	interfaceObj, err := net.InterfaceByName(interfaceName)
+	if err != nil {
+		return "", err
+	}
+
+	addrs, err := interfaceObj.Addrs()
+	if err != nil {
+		return "", err
+	}
+
+	for _, addr := range addrs {
+		ipNet, ok := addr.(*net.IPNet)
+		if !ok {
+			continue
+		}
+		if ipNet.IP.To4() != nil {
+			return ipNet.IP.String(), nil
+		}
+	}
+	return "", fmt.Errorf("no IPv4 address found for interface %s", interfaceName)
+}
+
 func (f *feature) addError(err error) {
 	f.errs = append(f.errs, err)
 }
@@ -238,8 +333,9 @@ func (f *feature) aVxFlexOSService() error {
 
 func (f *feature) aBasicBlockVolumeRequest(name string, size int64) error {
 	req := new(csi.CreateVolumeRequest)
+	storagePool := os.Getenv("STORAGE_POOL")
 	params := make(map[string]string)
-	params["storagepool"] = Pool1
+	params["storagepool"] = storagePool
 	params["thickprovisioning"] = "false"
 	if len(f.anotherSystemID) > 0 {
 		params["systemID"] = f.anotherSystemID
@@ -271,6 +367,7 @@ func (f *feature) aBasicNfsVolumeRequest(name string, size int64) error {
 	params := make(map[string]string)
 
 	ctx := context.Background()
+	nfsPool := os.Getenv("NFS_STORAGE_POOL")
 
 	fmt.Println("f.arrays,len", f.arrays, f.arrays)
 
@@ -291,7 +388,7 @@ func (f *feature) aBasicNfsVolumeRequest(name string, size int64) error {
 		}
 
 		if val {
-			params["storagepool"] = NfsPool
+			params["storagepool"] = nfsPool
 			params["thickprovisioning"] = "false"
 			if os.Getenv("X_CSI_QUOTA_ENABLED") == "true" {
 				params["isQuotaEnabled"] = "true"
@@ -335,6 +432,7 @@ func (f *feature) aBasicNfsVolumeRequestWithSizeLessThan3Gi(name string, size in
 	params := make(map[string]string)
 
 	ctx := context.Background()
+	nfsPool := os.Getenv("NFS_STORAGE_POOL")
 
 	fmt.Println("f.arrays,len", f.arrays, f.arrays)
 
@@ -355,7 +453,7 @@ func (f *feature) aBasicNfsVolumeRequestWithSizeLessThan3Gi(name string, size in
 		}
 
 		if val {
-			params["storagepool"] = NfsPool
+			params["storagepool"] = nfsPool
 			params["thickprovisioning"] = "false"
 			if os.Getenv("X_CSI_QUOTA_ENABLED") == "true" {
 				params["isQuotaEnabled"] = "true"
@@ -399,6 +497,7 @@ func (f *feature) aNfsVolumeRequestWithQuota(volname string, volsize int64, path
 	params := make(map[string]string)
 
 	ctx := context.Background()
+	nfsPool := os.Getenv("NFS_STORAGE_POOL")
 
 	fmt.Println("f.arrays,len", f.arrays, f.arrays)
 
@@ -422,7 +521,7 @@ func (f *feature) aNfsVolumeRequestWithQuota(volname string, volsize int64, path
 			if a.NasName != "" {
 				params["nasName"] = a.NasName
 			}
-			params["storagepool"] = NfsPool
+			params["storagepool"] = nfsPool
 			params["thickprovisioning"] = "false"
 			params["isQuotaEnabled"] = "true"
 			params["softLimit"] = softlimit
@@ -578,7 +677,8 @@ func (f *feature) aMountVolumeRequest(name string) error {
 func (f *feature) getMountVolumeRequest(name string) *csi.CreateVolumeRequest {
 	req := new(csi.CreateVolumeRequest)
 	params := make(map[string]string)
-	params["storagepool"] = Pool1
+	storagePool := os.Getenv("STORAGE_POOL")
+	params["storagepool"] = storagePool
 	if len(f.anotherSystemID) > 0 {
 		params["systemID"] = f.anotherSystemID
 	}
@@ -707,7 +807,8 @@ func (f *feature) aCapabilityWithVoltypeAccessFstype(voltype, access, fstype str
 func (f *feature) aVolumeRequest(name string, size int64) error {
 	req := new(csi.CreateVolumeRequest)
 	params := make(map[string]string)
-	params["storagepool"] = Pool1
+	storagePool := os.Getenv("STORAGE_POOL")
+	params["storagepool"] = storagePool
 	params["thickprovisioning"] = "true"
 	if len(f.anotherSystemID) > 0 {
 		params["systemID"] = f.anotherSystemID
@@ -1992,6 +2093,7 @@ func (f *feature) aBasicNfsVolumeRequestWithWrongNasName(name string, size int64
 	params := make(map[string]string)
 
 	ctx := context.Background()
+	nfsPool := os.Getenv("NFS_STORAGE_POOL")
 
 	fmt.Println("f.arrays,len", f.arrays, f.arrays)
 
@@ -2018,7 +2120,7 @@ func (f *feature) aBasicNfsVolumeRequestWithWrongNasName(name string, size int64
 				params["nasName"] = wrongNasName
 			}
 
-			params["storagepool"] = NfsPool
+			params["storagepool"] = nfsPool
 			params["thickprovisioning"] = "false"
 			if len(f.anotherSystemID) > 0 {
 				params["systemID"] = f.anotherSystemID
@@ -2118,6 +2220,7 @@ func (f *feature) aNfsCapabilityWithVoltypeAccessFstype(voltype, access, fstype 
 
 func (f *feature) aNfsVolumeRequest(name string, size int64) error {
 	ctx := context.Background()
+	nfsPool := os.Getenv("NFS_STORAGE_POOL")
 
 	fmt.Println("f.arrays,len", f.arrays, f.arrays)
 
@@ -2143,7 +2246,7 @@ func (f *feature) aNfsVolumeRequest(name string, size int64) error {
 			if a.NasName != "" {
 				params["nasName"] = a.NasName
 			}
-			params["storagepool"] = NfsPool
+			params["storagepool"] = nfsPool
 			params["thickprovisioning"] = "false"
 			if os.Getenv("X_CSI_QUOTA_ENABLED") == "true" {
 				params["isQuotaEnabled"] = "true"
@@ -2170,6 +2273,21 @@ func (f *feature) aNfsVolumeRequest(name string, size int64) error {
 	return nil
 }
 
+func (f *feature) whenICallPublishVolumeForNfsWithoutSDC() error {
+	if f.createVolumeRequest == nil {
+		return nil
+	}
+	err := f.controllerPublishVolumeForNfsWithoutSDC(f.volID)
+	if err != nil {
+		fmt.Printf("ControllerPublishVolume %s:\n", err.Error())
+		f.addError(err)
+	} else {
+		fmt.Printf("ControllerPublishVolume completed successfully\n")
+	}
+	time.Sleep(SleepTime)
+	return nil
+}
+
 func (f *feature) whenICallPublishVolumeForNfs(nodeIDEnvVar string) error {
 	if f.createVolumeRequest == nil {
 		return nil
@@ -2182,6 +2300,49 @@ func (f *feature) whenICallPublishVolumeForNfs(nodeIDEnvVar string) error {
 		fmt.Printf("ControllerPublishVolume completed successfully\n")
 	}
 	time.Sleep(SleepTime)
+	return nil
+}
+
+func (f *feature) controllerPublishVolumeForNfsWithoutSDC(id string) error {
+	if f.createVolumeRequest == nil {
+		return nil
+	}
+
+	clientSet := fake.NewSimpleClientset()
+	service.K8sClientset = clientSet
+	_, err := f.setFakeNode()
+	if err != nil {
+		return fmt.Errorf("setFakeNode failed with error: %v", err)
+	}
+
+	req := f.getControllerPublishVolumeRequest()
+	req.VolumeId = id
+	req.NodeId, _ = f.GetNodeUID()
+
+	err = f.createConfigMap()
+	if err != nil {
+		return fmt.Errorf("createConfigMap failed with error: %v", err)
+	}
+
+	if f.arrays == nil {
+		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
+		var err error
+		f.arrays, err = f.getArrayConfig()
+		if err != nil {
+			return errors.New("Get multi array config failed " + err.Error())
+		}
+	}
+
+	for _, a := range f.arrays {
+		req.VolumeContext = make(map[string]string)
+		req.VolumeContext["nasName"] = a.NasName
+		req.VolumeContext["fsType"] = "nfs"
+		ctx := context.Background()
+		client := csi.NewControllerClient(grpcClient)
+		_, err := client.ControllerPublishVolume(ctx, req)
+		return err
+	}
+
 	return nil
 }
 
@@ -2242,6 +2403,21 @@ func (f *feature) getNodePublishVolumeRequestForNfs() *csi.NodePublishVolumeRequ
 	return req
 }
 
+func (f *feature) whenICallNodePublishVolumeForNfsWithoutSDC() error {
+	if f.createVolumeRequest == nil {
+		return nil
+	}
+	err := f.nodePublishVolumeForNfs(f.volID, "")
+	if err != nil {
+		fmt.Printf("NodePublishVolume failed: %s\n", err.Error())
+		f.addError(err)
+	} else {
+		fmt.Printf("NodePublishVolume completed successfully\n")
+	}
+	time.Sleep(SleepTime)
+	return nil
+}
+
 //nolint:revive
 func (f *feature) whenICallNodePublishVolumeForNfs(arg1 string) error {
 	if f.createVolumeRequest == nil {
@@ -2280,6 +2456,21 @@ func (f *feature) nodePublishVolumeForNfs(id string, path string) error {
 	return err
 }
 
+func (f *feature) whenICallNodeUnpublishVolumeForNfsWithoutSDC() error {
+	if f.createVolumeRequest == nil {
+		return nil
+	}
+	err := f.nodeUnpublishVolumeForNfs(f.volID, f.nodePublishVolumeRequest.TargetPath)
+	if err != nil {
+		fmt.Printf("NodeUnpublishVolume failed: %s\n", err.Error())
+		f.addError(err)
+	} else {
+		fmt.Printf("NodeUnpublishVolume completed successfully\n")
+	}
+	time.Sleep(SleepTime)
+	return nil
+}
+
 //nolint:revive
 func (f *feature) whenICallNodeUnpublishVolumeForNfs(arg1 string) error {
 	if f.createVolumeRequest == nil {
@@ -2307,6 +2498,21 @@ func (f *feature) nodeUnpublishVolumeForNfs(id string, path string) error {
 	return err
 }
 
+func (f *feature) whenICallUnpublishVolumeForNfsWithoutSDC() error {
+	if f.createVolumeRequest == nil {
+		return nil
+	}
+	err := f.controllerUnpublishVolumeForNfsWithoutSDC(f.publishVolumeRequest.VolumeId)
+	if err != nil {
+		fmt.Printf("ControllerUnpublishVolume failed: %s\n", err.Error())
+		f.addError(err)
+	} else {
+		fmt.Printf("ControllerUnpublishVolume completed successfully\n")
+	}
+	time.Sleep(SleepTime)
+	return nil
+}
+
 func (f *feature) whenICallUnpublishVolumeForNfs(nodeIDEnvVar string) error {
 	if f.createVolumeRequest == nil {
 		return nil
@@ -2320,6 +2526,32 @@ func (f *feature) whenICallUnpublishVolumeForNfs(nodeIDEnvVar string) error {
 	}
 	time.Sleep(SleepTime)
 	return nil
+}
+
+func (f *feature) controllerUnpublishVolumeForNfsWithoutSDC(id string) error {
+	if f.createVolumeRequest == nil {
+		return nil
+	}
+
+	clientSet := fake.NewSimpleClientset()
+	service.K8sClientset = clientSet
+	_, err := f.setFakeNode()
+	if err != nil {
+		return fmt.Errorf("setFakeNode failed with error: %v", err)
+	}
+
+	req := new(csi.ControllerUnpublishVolumeRequest)
+	req.VolumeId = id
+	req.NodeId, _ = f.GetNodeUID()
+	err = f.createConfigMap()
+	if err != nil {
+		return fmt.Errorf("createConfigMap failed with error: %v", err)
+	}
+
+	ctx := context.Background()
+	client := csi.NewControllerClient(grpcClient)
+	_, err = client.ControllerUnpublishVolume(ctx, req)
+	return err
 }
 
 func (f *feature) controllerUnpublishVolumeForNfs(id string, nodeIDEnvVar string) error {
@@ -2572,6 +2804,10 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^when I call NodePublishVolume for nfs "([^"]*)"$`, f.whenICallNodePublishVolumeForNfs)
 	s.Step(`^when I call NodeUnpublishVolume for nfs "([^"]*)"$`, f.whenICallNodeUnpublishVolumeForNfs)
 	s.Step(`^when I call UnpublishVolume for nfs "([^"]*)"$`, f.whenICallUnpublishVolumeForNfs)
+	s.Step(`^when I call PublishVolume for nfs$`, f.whenICallPublishVolumeForNfsWithoutSDC)
+	s.Step(`^when I call NodePublishVolume for nfs$`, f.whenICallNodePublishVolumeForNfsWithoutSDC)
+	s.Step(`^when I call NodeUnpublishVolume for nfs$`, f.whenICallNodeUnpublishVolumeForNfsWithoutSDC)
+	s.Step(`^when I call UnpublishVolume for nfs$`, f.whenICallUnpublishVolumeForNfsWithoutSDC)
 	s.Step(`^when I call NfsExpandVolume to "([^"]*)"$`, f.whenICallNfsExpandVolumeTo)
 	s.Step(`^I call ListFileSystemSnapshot$`, f.ICallListFileSystemSnapshot)
 	s.Step(`^I call CreateSnapshotForFS$`, f.iCallCreateSnapshotForFS)

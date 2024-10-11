@@ -20,9 +20,13 @@ export X_CSI_QUOTA_ENABLED="true"
 # Variables for using tests
 export CSI_ENDPOINT=`pwd`/unix_sock
 export STORAGE_POOL=""
+export NFS_STORAGE_POOL=""
 export SDC_GUID=$(/bin/emc/scaleio/drv_cfg --query_guid)
 # Alternate GUID is for another system for testing expose volume to multiple hosts
 export ALT_GUID=
+
+# Interface variables
+export NODE_INTERFACES="nodeName:interfaceName"
 
 #Debug variables for goscaleio library
 export GOSCALEIO_SHOWHTTP="true"
@@ -32,11 +36,14 @@ export GOSCALEIO_SHOWHTTP="true"
 #leave this variable blank. 
 export ALT_SYSTEM_ID=""
 
-MDM=`grep mdm ../../config.json | awk -F":" '{print $2}'`
-for i in $MDM
-do
-IP=$i
-IP=$(echo "$i" | sed "s/\"//g")
-echo $IP
- /opt/emc/scaleio/sdc/bin/drv_cfg --add_mdm --ip $IP
-done
+if /sbin/lsmod | grep -q scini; then
+  echo "scini module is present, Proceeding to add MDM..."
+  MDM=`grep mdm ../../config.json | awk -F":" '{print $2}'`
+  for i in $MDM
+  do
+    IP=$i
+    IP=$(echo "$i" | sed "s/\"//g")
+    echo "Adding MDM wth IP: $IP"
+    /opt/emc/scaleio/sdc/bin/drv_cfg --add_mdm --ip $IP
+  done
+fi
