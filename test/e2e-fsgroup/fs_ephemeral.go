@@ -1,4 +1,4 @@
-// Copyright © 2022 Dell Inc. or its subsidiaries. All Rights Reserved.
+// Copyright © 2024 Dell Inc. or its subsidiaries. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,12 +19,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
+	"k8s.io/kubernetes/test/e2e/framework/kubectl"
 	fnodes "k8s.io/kubernetes/test/e2e/framework/node"
 	fpod "k8s.io/kubernetes/test/e2e/framework/pod"
+	admissionapi "k8s.io/pod-security-admission/api"
 )
 
 /*
@@ -40,27 +41,24 @@ Steps
 8. Delete PVC, PV and Storage Class.
 */
 
-var _ = ginkgo.Describe("[Serial] [csi-fsg]"+
-	"[csi-fsg] Volume Filesystem Group Test", func() {
+var _ = ginkgo.Describe("PowerFlex Volume Filesystem Group Test", ginkgo.Label("csi-fsg"), ginkgo.Label("csi-ephemeral"), ginkgo.Serial, func() {
 	//  Building a namespace api object, basename volume-fsgroup
 	f := framework.NewDefaultFramework("volume-fsgroup")
 
-	// prevent annoying psp warning
-	f.SkipPrivilegedPSPBinding = true
+	f.NamespacePodSecurityLevel = admissionapi.LevelPrivileged
 
 	framework.Logf("run e2e test default timeouts  %#v ", f.Timeouts)
 
 	ginkgo.BeforeEach(func() {
 		client = f.ClientSet
-
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 		namespace = getNamespaceToRunTests(f)
-
-		// scParameters = make(map[string]string)
 
 		// setup other exteral environment for example array server
 		bootstrap()
 
-		nodeList, err := fnodes.GetReadySchedulableNodes(f.ClientSet)
+		nodeList, err := fnodes.GetReadySchedulableNodes(ctx, f.ClientSet)
 
 		framework.ExpectNoError(err, "Unable to find ready and schedulable Node")
 
@@ -73,17 +71,16 @@ var _ = ginkgo.Describe("[Serial] [csi-fsg]"+
 	})
 
 	// in case you want to log and exit	framework.Fail("stop test")
-
-	// Test for Pod creation works when SecurityContext has CSIDriver Fs Group Policy:     ReadWriteOnceWithFSType
+	// Test for Pod creation works when SecurityContext has CSIDriver Fs Group Policy: ReadWriteOnceWithFSType
 	ginkgo.It("[csi-fsg] Verify Pod Ephemeral FSGroup", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		updateCsiDriver(client, testParameters["e2eCSIDriverName"], "fsPolicy=File")
-		doOneCycleEphemeralTest(ctx, "ReadWriteOnceWithFSType", "")
+		updateFSGroupPolicyCSIDriver(client, testParameters["e2eCSIDriverName"], "fsPolicy=File")
+		doOneCycleEphemeralTest(ctx, "ReadWriteOnceWithFSType")
 	})
 })
 
-func doOneCycleEphemeralTest(ctx context.Context, policy string, accessMode v1.PersistentVolumeAccessMode) {
+func doOneCycleEphemeralTest(ctx context.Context, policy string) {
 	ginkgo.By("Creating a PVC")
 
 	// Create a StorageClass
@@ -113,17 +110,15 @@ func doOneCycleEphemeralTest(ctx context.Context, policy string, accessMode v1.P
 		ddcmd1 + ";" + ddcmd2,
 	}
 
-	output := framework.RunKubectlOrDie(namespace, cmd...)
+	output := kubectl.RunKubectlOrDie(namespace, cmd...)
 
 	if strings.Contains(output, "container not found") {
 		framework.Failf("stop tests pod failed to start %s", output)
 	}
 
 	exists := false
-	var fsGroup int64
-	fsGroup = 54321
-	var runAsUser int64
-	runAsUser = 54321
+	fsGroup := int64(54321)
+	runAsUser := int64(54321)
 
 	switch policy {
 	case "ReadWriteOnceWithFSType":
@@ -136,6 +131,6 @@ func doOneCycleEphemeralTest(ctx context.Context, policy string, accessMode v1.P
 
 	// Delete POD
 	ginkgo.By(fmt.Sprintf("Deleting the pod %s in namespace %s", pod.Name, namespace))
-	err = fpod.DeletePodWithWait(client, pod)
+	err = fpod.DeletePodWithWait(ctx, client, pod)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 }

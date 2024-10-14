@@ -19,8 +19,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/e2e/framework/config"
@@ -52,17 +51,11 @@ func TestE2E(t *testing.T) {
 	handleFlags()
 	RegisterFailHandler(Fail)
 
-	// pass/fail/skip results summarized to this file
-
-	junitReporter := reporters.NewJUnitReporter("junit.xml")
-
 	// dont dump huge logs of node / pods on error
 	framework.TestContext.DumpLogsOnFailure = false
 
-	// framework.TestContext.DeleteNamespace = false
-
 	// runs all ginkgo tests in go files
-	RunSpecsWithDefaultAndCustomReporters(t, "CSI Driver End-to-End Tests", []Reporter{junitReporter})
+	RunSpecs(t, "CSI Driver End-to-End Tests")
 }
 
 func handleFlags() {

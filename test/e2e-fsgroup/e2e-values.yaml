@@ -7,11 +7,10 @@ e2eCSIDriverName: "csi-vxflexos.dellemc.com"
 scParamStoragePoolKey: "storagepool"
 scParamStoragePoolValue: "sample"
 
-scParamFsTypeKey: "FsType"
+scParamFsTypeKey: "csi.storage.k8s.io/fstype"
 scParamFsTypeValue: "ext4"
 
 scParamStorageSystemKey: "systemID"
-
 scParamStorageSystemValue: "sample"
 
 diskSize: "8Gi"
