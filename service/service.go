@@ -519,7 +519,7 @@ func (s *service) BeforeServe(
 }
 
 func (s *service) updateConfigMap(getIPAddressByInterfacefunc GetIPAddressByInterfacefunc, configFilePath string) {
-	configFileData, err := os.ReadFile(configFilePath)
+	configFileData, err := os.ReadFile(filepath.Clean(configFilePath))
 	if err != nil {
 		Log.Errorf("Failed to read ConfigMap file: %v", err)
 		return
