@@ -30,7 +30,7 @@ mv /root/go/bin/ginkgo /usr/bin/ginkgo
 
 ## Running Tests
 
-Install PowerFlex csi-driver and run the following command to execute FSGroup tests:
+Install PowerFlex csi-driver, update `e2e-values.yaml` and run the following command to execute FSGroup tests:
 
 ```bash
 ./run.sh
