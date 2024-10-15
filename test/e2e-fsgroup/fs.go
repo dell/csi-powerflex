@@ -1,4 +1,4 @@
-// Copyright © 2022 Dell Inc. or its subsidiaries. All Rights Reserved.
+// Copyright © 2024 Dell Inc. or its subsidiaries. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,15 +23,17 @@ import (
 
 	yaml "gopkg.in/yaml.v3"
 
-	"github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/test/e2e/framework"
+	"k8s.io/kubernetes/test/e2e/framework/kubectl"
 	fnodes "k8s.io/kubernetes/test/e2e/framework/node"
 	fpod "k8s.io/kubernetes/test/e2e/framework/pod"
 	fpv "k8s.io/kubernetes/test/e2e/framework/pv"
+	admissionapi "k8s.io/pod-security-admission/api"
 )
 
 /*
@@ -79,28 +81,23 @@ var (
 
 // testing-manifests folder. see GetStatefulSetFromManifest() in utils
 
-var _ = ginkgo.Describe("[Serial] [csi-fsg]"+
-	"[csi-fsg] Volume Filesystem Group Test", func() {
+var _ = ginkgo.Describe("Volume Filesystem Group Test", ginkgo.Label("csi-fsg"), ginkgo.Label("csi-fs"), ginkgo.Serial, func() {
 	//  Building a namespace api object, basename volume-fsgroup
 	f := framework.NewDefaultFramework("volume-fsgroup")
 
-	// prevent annoying psp warning
-	f.SkipPrivilegedPSPBinding = true
+	f.NamespacePodSecurityLevel = admissionapi.LevelPrivileged
 
 	framework.Logf("run e2e test default timeouts  %#v ", f.Timeouts)
 
 	ginkgo.BeforeEach(func() {
 		client = f.ClientSet
-
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 		namespace = getNamespaceToRunTests(f)
-
 		// setup other exteral environment for example array server
 		bootstrap()
-
-		nodeList, err := fnodes.GetReadySchedulableNodes(f.ClientSet)
-
+		nodeList, err := fnodes.GetReadySchedulableNodes(ctx, f.ClientSet)
 		framework.ExpectNoError(err, "Unable to find ready and schedulable Node")
-
 		if !(len(nodeList.Items) > 0) {
 			framework.Failf("Unable to find ready and schedulable Node")
 		}
@@ -115,15 +112,15 @@ var _ = ginkgo.Describe("[Serial] [csi-fsg]"+
 	ginkgo.It("[csi-fsg] Verify Pod FSGroup with fsPolicy=ReadWriteOnceWithFSType", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		updateCsiDriver(client, testParameters["e2eCSIDriverName"], "fsPolicy=ReadWriteOnceWithFSType")
+		updateFSGroupPolicyCSIDriver(client, testParameters["e2eCSIDriverName"], "fsPolicy=ReadWriteOnceWithFSType")
 		doOneCyclePVCTest(ctx, "ReadWriteOnceWithFSType", "")
 		doOneCyclePVCTest(ctx, "ReadWriteOnceWithFSType", v1.ReadOnlyMany)
 	})
 
-	ginkgo.It("[csi-fsg] Verify Pod FSGroup with  fsPolicy=None", func() {
+	ginkgo.It("[csi-fsg] Verify Pod FSGroup with fsPolicy=None", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		updateCsiDriver(client, testParameters["e2eCSIDriverName"], "fsPolicy=None")
+		updateFSGroupPolicyCSIDriver(client, testParameters["e2eCSIDriverName"], "fsPolicy=None")
 		doOneCyclePVCTest(ctx, "None", v1.ReadOnlyMany)
 		doOneCyclePVCTest(ctx, "None", "")
 	})
@@ -131,7 +128,7 @@ var _ = ginkgo.Describe("[Serial] [csi-fsg]"+
 	ginkgo.It("[csi-fsg] Verify Pod FSGroup with fsPolicy=File", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		updateCsiDriver(client, testParameters["e2eCSIDriverName"], "fsPolicy=File")
+		updateFSGroupPolicyCSIDriver(client, testParameters["e2eCSIDriverName"], "fsPolicy=File")
 		doOneCyclePVCTest(ctx, "File", v1.ReadOnlyMany)
 		doOneCyclePVCTest(ctx, "File", "")
 	})
@@ -140,7 +137,7 @@ var _ = ginkgo.Describe("[Serial] [csi-fsg]"+
 	ginkgo.It("[csi-fsg] Verify Pod FSGroup with fsPolicy not set (should default)", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		updateCsiDriver(client, testParameters["e2eCSIDriverName"], "fsPolicy=")
+		updateFSGroupPolicyCSIDriver(client, testParameters["e2eCSIDriverName"], "fsPolicy=")
 		doOneCyclePVCTest(ctx, "", "")
 	})
 })
@@ -166,7 +163,7 @@ func doOneCyclePVCTest(ctx context.Context, policy string, accessMode v1.Persist
 	}()
 
 	ginkgo.By("Expect claim status to be in Pending state")
-	err = fpv.WaitForPersistentVolumeClaimPhase(v1.ClaimPending, client,
+	err = fpv.WaitForPersistentVolumeClaimPhase(ctx, v1.ClaimPending, client,
 		pvclaim.Namespace, pvclaim.Name, framework.Poll, time.Minute)
 
 	gomega.Expect(err).NotTo(gomega.HaveOccurred(),
@@ -184,7 +181,7 @@ func doOneCyclePVCTest(ctx context.Context, policy string, accessMode v1.Persist
 	runAsUserInt64 := &runAsUser
 
 	pod, err := createPodForFSGroup(client, namespace, nil, []*v1.PersistentVolumeClaim{pvclaim},
-		true, testParameters["execCommand"], fsGroupInt64, runAsUserInt64)
+		admissionapi.LevelPrivileged, testParameters["execCommand"], fsGroupInt64, runAsUserInt64)
 	// in case of error help debug by showing events
 	if err != nil {
 		getEvents(client, pvclaim.Namespace, pvclaim.Name, "PersistentVolumeClaim")
@@ -197,12 +194,12 @@ func doOneCyclePVCTest(ctx context.Context, policy string, accessMode v1.Persist
 	ginkgo.By("Expect claim to provision volume bound successfully")
 
 	ginkgo.By("Expect claim to be in Bound state and provisioning volume passes")
-	err = fpv.WaitForPersistentVolumeClaimPhase(v1.ClaimBound, client,
+	err = fpv.WaitForPersistentVolumeClaimPhase(ctx, v1.ClaimBound, client,
 		pvclaim.Namespace, pvclaim.Name, framework.Poll, time.Minute)
 
 	gomega.Expect(err).NotTo(gomega.HaveOccurred(), fmt.Sprintf("Failed to provision volume with err: %v", err))
 
-	persistentvolumes, err := fpv.WaitForPVClaimBoundPhase(client,
+	persistentvolumes, err := fpv.WaitForPVClaimBoundPhase(ctx, client,
 		[]*v1.PersistentVolumeClaim{pvclaim}, framework.ClaimProvisionTimeout)
 
 	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to provision volume")
@@ -225,7 +222,7 @@ func doOneCyclePVCTest(ctx context.Context, policy string, accessMode v1.Persist
 		"ls -l /mnt/volume1",
 	}
 
-	output := framework.RunKubectlOrDie(namespace, cmd...)
+	output := kubectl.RunKubectlOrDie(namespace, cmd...)
 
 	if strings.Contains(output, "container not found") {
 		framework.Failf("stop tests pod failed to start %s", output)
@@ -251,7 +248,7 @@ func doOneCyclePVCTest(ctx context.Context, policy string, accessMode v1.Persist
 
 	// Delete POD
 	ginkgo.By(fmt.Sprintf("Deleting the pod %s in namespace %s", pod.Name, namespace))
-	err = fpod.DeletePodWithWait(client, pod)
+	err = fpod.DeletePodWithWait(ctx, client, pod)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 	// if we need a ROX volume to mount, we need to take the RWO one, alter it, then publish it to another pod
@@ -264,7 +261,7 @@ func doOneCyclePVCTest(ctx context.Context, policy string, accessMode v1.Persist
 
 		cmd := []string{"patch", "pv", pv.Name, "-p", accessChange}
 
-		output := framework.RunKubectlOrDie(namespace, cmd...)
+		output := kubectl.RunKubectlOrDie(namespace, cmd...)
 
 		fmt.Printf("output: %s\n", output)
 
@@ -276,7 +273,7 @@ func doOneCyclePVCTest(ctx context.Context, policy string, accessMode v1.Persist
 		newRunAsUserInt64 := &runAsUser
 
 		pod, err = createPodForFSGroup(client, namespace, nil, []*v1.PersistentVolumeClaim{pvclaim},
-			true, testParameters["execCommand"], newFsGroupInt64, newRunAsUserInt64)
+			admissionapi.LevelPrivileged, testParameters["execCommand"], newFsGroupInt64, newRunAsUserInt64)
 		// in case of error help debug by showing events
 		if err != nil {
 			getEvents(client, pvclaim.Namespace, pvclaim.Name, "PersistentVolumeClaim")
@@ -289,7 +286,7 @@ func doOneCyclePVCTest(ctx context.Context, policy string, accessMode v1.Persist
 			"ls -l /mnt/volume1",
 		}
 
-		output = framework.RunKubectlOrDie(namespace, cmd...)
+		output = kubectl.RunKubectlOrDie(namespace, cmd...)
 
 		fmt.Printf("output: %s\n", output)
 
@@ -310,7 +307,7 @@ func doOneCyclePVCTest(ctx context.Context, policy string, accessMode v1.Persist
 
 		// Delete POD
 		ginkgo.By(fmt.Sprintf("Deleting the pod %s in namespace %s", pod.Name, namespace))
-		err = fpod.DeletePodWithWait(client, pod)
+		err = fpod.DeletePodWithWait(ctx, client, pod)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 	}

@@ -1,4 +1,4 @@
-// Copyright © 2022 Dell Inc. or its subsidiaries. All Rights Reserved.
+// Copyright © 2024 Dell Inc. or its subsidiaries. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
@@ -32,15 +32,15 @@ import (
 	"k8s.io/kubernetes/test/e2e/framework"
 	fpod "k8s.io/kubernetes/test/e2e/framework/pod"
 	fss "k8s.io/kubernetes/test/e2e/framework/statefulset"
+	admissionapi "k8s.io/pod-security-admission/api"
 )
 
 var mountPath = "/data"
 
-var _ = ginkgo.Describe("[csi-adv-fsg] Nodes Scale-up and Scale-down", func() {
+var _ = ginkgo.Describe("Nodes Scale-up and Scale-down", ginkgo.Label("csi-fsg"), ginkgo.Label("csi-scale"), func() {
 	f := framework.NewDefaultFramework("e2e-scale-nodes")
 
-	// prevent annoying psp warning
-	f.SkipPrivilegedPSPBinding = true
+	f.NamespacePodSecurityLevel = admissionapi.LevelPrivileged
 
 	var (
 		namespace string
@@ -53,10 +53,10 @@ var _ = ginkgo.Describe("[csi-adv-fsg] Nodes Scale-up and Scale-down", func() {
 	})
 
 	ginkgo.AfterEach(func() {
-		_, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		ginkgo.By(fmt.Sprintf("Deleting all statefulsets in namespace: %v", namespace))
-		fss.DeleteAllStatefulSets(client, namespace)
+		fss.DeleteAllStatefulSets(ctx, client, namespace)
 	})
 
 	/*
@@ -106,7 +106,7 @@ var _ = ginkgo.Describe("[csi-adv-fsg] Nodes Scale-up and Scale-down", func() {
 		testParameters[testParameters["scParamFsTypeKey"]] = testParameters["scParamFsTypeValue"]
 
 		sc, err := createStorageClass(client, testParameters, nil, "",
-			storagev1.VolumeBindingWaitForFirstConsumer,
+			storagev1.VolumeBindingImmediate,
 			false, scName)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
@@ -126,16 +126,16 @@ var _ = ginkgo.Describe("[csi-adv-fsg] Nodes Scale-up and Scale-down", func() {
 
 		defer func() {
 			ginkgo.By(fmt.Sprintf("Deleting all statefulsets in namespace: %v", namespace))
-			fss.DeleteAllStatefulSets(client, namespace)
+			fss.DeleteAllStatefulSets(ctx, client, namespace)
 		}()
 
 		replicas := *(statefulset.Spec.Replicas)
 		// Waiting for pods status to be Ready
-		fss.WaitForStatusReadyReplicas(client, statefulset, replicas)
+		fss.WaitForStatusReadyReplicas(ctx, client, statefulset, replicas)
 
-		gomega.Expect(fss.CheckMount(client, statefulset, mountPath)).NotTo(gomega.HaveOccurred())
+		gomega.Expect(fss.CheckMount(ctx, client, statefulset, mountPath)).NotTo(gomega.HaveOccurred())
 
-		ssPodsBeforeScaleDown := fss.GetPodList(client, statefulset)
+		ssPodsBeforeScaleDown := fss.GetPodList(ctx, client, statefulset)
 		gomega.Expect(ssPodsBeforeScaleDown.Items).NotTo(gomega.BeEmpty(),
 			fmt.Sprintf("Unable to get list of Pods from the Statefulset: %v", statefulset.Name))
 		gomega.Expect(len(ssPodsBeforeScaleDown.Items) == int(replicas)).To(gomega.BeTrue(),
@@ -171,14 +171,14 @@ var _ = ginkgo.Describe("[csi-adv-fsg] Nodes Scale-up and Scale-down", func() {
 
 		framework.Logf("Allow pods to reschedule on different nodes")
 		// Waiting for pods status to be Ready
-		fss.WaitForStatusReadyReplicas(client, statefulset, replicas)
-		gomega.Expect(fss.CheckMount(client, statefulset, mountPath)).NotTo(gomega.HaveOccurred())
+		fss.WaitForStatusReadyReplicas(ctx, client, statefulset, replicas)
+		gomega.Expect(fss.CheckMount(ctx, client, statefulset, mountPath)).NotTo(gomega.HaveOccurred())
 
 		ginkgo.By(fmt.Sprintf("Scaling down statefulsets to number of Replica: %v", replicas-1))
-		_, scaledownErr := fss.Scale(client, statefulset, replicas-1)
+		_, scaledownErr := fss.Scale(ctx, client, statefulset, replicas-1)
 		gomega.Expect(scaledownErr).NotTo(gomega.HaveOccurred())
-		fss.WaitForStatusReadyReplicas(client, statefulset, replicas-1)
-		ssPodsAfterScaleDown := fss.GetPodList(client, statefulset)
+		fss.WaitForStatusReadyReplicas(ctx, client, statefulset, replicas-1)
+		ssPodsAfterScaleDown := fss.GetPodList(ctx, client, statefulset)
 		gomega.Expect(ssPodsAfterScaleDown.Items).NotTo(gomega.BeEmpty(),
 			fmt.Sprintf("Unable to get list of Pods from the Statefulset: %v", statefulset.Name))
 		gomega.Expect(len(ssPodsAfterScaleDown.Items) == int(replicas-1)).To(gomega.BeTrue(),
@@ -220,12 +220,13 @@ var _ = ginkgo.Describe("[csi-adv-fsg] Nodes Scale-up and Scale-down", func() {
 
 		replicas += 2
 		ginkgo.By(fmt.Sprintf("Scaling up statefulsets to number of Replica: %v", replicas))
-		_, scaleupErr := fss.Scale(client, statefulset, replicas)
+		_, scaleupErr := fss.Scale(ctx, client, statefulset, replicas)
 		gomega.Expect(scaleupErr).NotTo(gomega.HaveOccurred())
-		fss.WaitForStatusReplicas(client, statefulset, replicas)
-		fss.WaitForStatusReadyReplicas(client, statefulset, replicas)
+		fss.WaitForStatusReplicas(ctx, client, statefulset, replicas)
+		fss.WaitForStatusReadyReplicas(ctx, client, statefulset, replicas)
 
-		ssPodsAfterScaleUp := fss.GetPodList(client, statefulset)
+		fss.WaitForStatusReadyReplicas(ctx, client, statefulset, replicas)
+		ssPodsAfterScaleUp := fss.GetPodList(ctx, client, statefulset)
 		gomega.Expect(ssPodsAfterScaleUp.Items).NotTo(gomega.BeEmpty(),
 			fmt.Sprintf("Unable to get list of Pods from the Statefulset: %v", statefulset.Name))
 		gomega.Expect(len(ssPodsAfterScaleUp.Items) == int(replicas)).To(gomega.BeTrue(),
@@ -234,7 +235,7 @@ var _ = ginkgo.Describe("[csi-adv-fsg] Nodes Scale-up and Scale-down", func() {
 		// After scale up, verify all vSphere volumes are attached to node VMs.
 		ginkgo.By("Verify all volumes are attached to Nodes after Statefulsets is scaled up")
 		for _, sspod := range ssPodsAfterScaleUp.Items {
-			err := fpod.WaitForPodRunningInNamespace(client, &sspod)
+			err := fpod.WaitForPodRunningInNamespace(ctx, client, &sspod)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			pod, perr := client.CoreV1().Pods(namespace).Get(ctx, sspod.Name, metav1.GetOptions{})
 			gomega.Expect(perr).NotTo(gomega.HaveOccurred())
@@ -250,10 +251,10 @@ var _ = ginkgo.Describe("[csi-adv-fsg] Nodes Scale-up and Scale-down", func() {
 
 		replicas = 0
 		ginkgo.By(fmt.Sprintf("Scaling down statefulsets to number of Replica: %v", replicas))
-		_, scaledownErr = fss.Scale(client, statefulset, replicas)
+		_, scaledownErr = fss.Scale(ctx, client, statefulset, replicas)
 		gomega.Expect(scaledownErr).NotTo(gomega.HaveOccurred())
-		fss.WaitForStatusReplicas(client, statefulset, replicas)
-		ssPodsAfterScaleDown = fss.GetPodList(client, statefulset)
+		fss.WaitForStatusReplicas(ctx, client, statefulset, replicas)
+		ssPodsAfterScaleDown = fss.GetPodList(ctx, client, statefulset)
 		gomega.Expect(len(ssPodsAfterScaleDown.Items) == int(replicas)).To(gomega.BeTrue(),
 			"Number of Pods in the statefulset should match with number of replicas")
 	})
