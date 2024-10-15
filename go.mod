@@ -3,7 +3,7 @@ module github.com/dell/csi-vxflexos/v2
 // In order to run unit tests on Windows, you need a stubbed Windows implementation
 // of the gofsutil package. Use the following replace statements if necessary.
 
-go 1.22.0
+go 1.23.2
 
 require (
 	github.com/akutz/memconn v0.1.0
@@ -53,7 +53,6 @@ require (
 	github.com/hashicorp/go-memdb v1.3.0 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
-	github.com/imdario/mergo v0.3.5 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/magiconair/properties v1.8.5 // indirect
 	github.com/mitchellh/mapstructure v1.4.3 // indirect
