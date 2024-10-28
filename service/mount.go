@@ -688,7 +688,10 @@ func unmountPrivMount(
 		return err
 	}
 	// remove private mount if we can
-	if len(mnts) == 1 && mnts[0].Path == target {
+	for _, m := range mnts {
+		if m.Path != target {
+			continue
+		}
 		if err := gofsutil.Unmount(ctx, target); err != nil {
 			return err
 		}
