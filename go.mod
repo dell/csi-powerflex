@@ -10,13 +10,13 @@ require (
 	github.com/apparentlymart/go-cidr v1.1.0
 	github.com/container-storage-interface/spec v1.6.0
 	github.com/cucumber/godog v0.12.1
-	github.com/dell/dell-csi-extensions/common v1.5.0
-	github.com/dell/dell-csi-extensions/podmon v1.5.0
-	github.com/dell/dell-csi-extensions/replication v1.8.0
-	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.6.0
-	github.com/dell/gocsi v1.11.0
-	github.com/dell/gofsutil v1.16.1
-	github.com/dell/goscaleio v1.16.1-0.20240923113203-f072f0cb0a88
+	github.com/dell/dell-csi-extensions/common v1.6.0
+	github.com/dell/dell-csi-extensions/podmon v1.6.0
+	github.com/dell/dell-csi-extensions/replication v1.9.0
+	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.7.0
+	github.com/dell/gocsi v1.12.0
+	github.com/dell/gofsutil v1.17.0
+	github.com/dell/goscaleio v1.17.0
 	github.com/fsnotify/fsnotify v1.5.1
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.0
@@ -24,8 +24,8 @@ require (
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/viper v1.10.1
 	github.com/stretchr/testify v1.7.0
-	golang.org/x/net v0.26.0
-	google.golang.org/grpc v1.65.0
+	golang.org/x/net v0.28.0
+	google.golang.org/grpc v1.67.1
 	google.golang.org/protobuf v1.34.2
 	k8s.io/api v0.22.2
 	k8s.io/apimachinery v0.22.2
@@ -72,13 +72,13 @@ require (
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.17.0 // indirect
-	golang.org/x/oauth2 v0.20.0 // indirect
+	golang.org/x/oauth2 v0.22.0 // indirect
 	golang.org/x/sys v0.25.0 // indirect
-	golang.org/x/term v0.21.0 // indirect
-	golang.org/x/text v0.16.0 // indirect
+	golang.org/x/term v0.23.0 // indirect
+	golang.org/x/text v0.17.0 // indirect
 	golang.org/x/time v0.0.0-20210723032227-1f47c861a9ac // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20240528184218-531527333157 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20240528184218-531527333157 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20240814211410-ddb44dafa142 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240814211410-ddb44dafa142 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/ini.v1 v1.66.2 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
