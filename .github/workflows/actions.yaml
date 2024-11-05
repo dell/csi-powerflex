@@ -5,7 +5,7 @@ on:  # yamllint disable-line rule:truthy
   pull_request:
     branches: [ main ]
 jobs:
-  test:
+  unit-test:
     name: Run Go unit tests and check package coverage
     runs-on: ubuntu-latest
     steps:
@@ -16,3 +16,13 @@ jobs:
         with:
           threshold: 90
           test-folder: "./service"
+  security:
+    name: Run gosec
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v4
+      - name: Run gosec to check for security vulnerabilities
+        uses: dell/common-github-actions/gosec-runner@main
+        with:
+          directories: "./..."
