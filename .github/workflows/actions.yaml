@@ -4,18 +4,13 @@ on:  # yamllint disable-line rule:truthy
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
+
 jobs:
   unit-test:
-    name: Run Go unit tests and check package coverage
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout csi-powerflex
-        uses: actions/checkout@v2
-      - name: Run unit tests and check package coverage
-        uses: dell/common-github-actions/go-code-tester@main
-        with:
-          threshold: 90
-          test-folder: "./service"
+    name: Run unit tests and check package coverage
+    uses: dell/common-github-actions/.github/workflows/go-code-tester@add-code-tester
+
   security:
     name: Run gosec
     runs-on: ubuntu-latest
