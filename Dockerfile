@@ -1,5 +1,5 @@
 #Use rocky Linux as the base image
-FROM rockylinux:8
+FROM rockylinux/rockylinux:8.4
 # Copy the files from the host to the container
 COPY "csi-vxflexos" .
 COPY "csi-vxflexos.sh" .

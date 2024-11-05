@@ -1884,6 +1884,7 @@ func (s *service) GetNodeUID(_ context.Context) (string, error) {
 		return "", status.Error(codes.Internal, GetMessage("Unable to fetch the node details. Error: %v", err))
 	}
 	return string(node.UID), nil
+}
 
 // GetPersistentVolume retrieves a persistent volume with the given name.
 // If the Kubernetes clientset is not initialized, it will be created.

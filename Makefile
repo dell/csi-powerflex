@@ -39,7 +39,7 @@ build: dependencies
 
 # Generates the docker container (but does not push)
 docker: build
-	docker build -t csi-vxflexos .
+	docker build -t csi-vxflexos --network host .
 	
 
 # Generates the docker container with no cache (but does not push)
