@@ -109,8 +109,14 @@ var K8sClientset kubernetes.Interface
 // give default value, will be overwritten by configmap
 var Log = logrus.New()
 
+// vcsi service is the underlying driver service
+var vcsisvc Service
+
 // mdsvc points to the MD driver service plugin
 var mdsvc Service
+
+// nfssvc points to the NFS driver service plugin
+var nfssvc Service
 
 // ArrayConnectionData contains data required to connect to array
 type ArrayConnectionData struct {
@@ -335,6 +341,14 @@ func PutMDService(md Service) {
 	mdsvc = md
 }
 
+func PutNfsService(nfs Service) {
+	nfssvc = nfs
+}
+
+func PutVcsiService(vcsi Service) {
+	vcsisvc = vcsi
+}
+
 func (s *service) updateDriverConfigParams(logger *logrus.Logger, v *viper.Viper) error {
 	logFormat := v.GetString("CSI_LOG_FORMAT")
 	logFormat = strings.ToLower(logFormat)
@@ -533,6 +547,7 @@ func (s *service) BeforeServe(
 
 	// Update the ConfigMap with the Interface IPs
 	s.updateConfigMap(s.getIPAddressByInterface, ConfigMapFilePath)
+
 	// Call the md BeforeServe
 	Log.Infof("************Calling MD service BeforeServe*****************")
 	err = mdsvc.BeforeServe(ctx, sp, lis)
@@ -540,6 +555,15 @@ func (s *service) BeforeServe(
 		Log.Errorf("mdsvc.Beforeserve error: %s", err.Error())
 	} else {
 		Log.Infof("mdsvc.BeforeServe had no errors")
+	}
+
+	// Call the nfs BeforeServe
+	Log.Info("***************Calling NFS service Before Serve****************")
+	err = nfssvc.BeforeServe(ctx, sp, lis)
+	if err != nil {
+		Log.Errorf("nfs.Beforeserve error: %s", err.Error())
+	} else {
+		Log.Infof("nfs.BeforeServe had no errors")
 	}
 
 	if _, ok := csictx.LookupEnv(ctx, "X_CSI_VXFLEXOS_NO_PROBE_ON_START"); !ok {

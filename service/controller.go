@@ -75,6 +75,9 @@ const (
 	// volume create parameters map
 	KeyFsType = "fsType"
 
+	// KeyRWXNFS indicates we want all RWX volumes to be NFS. Used for the csi-nfs plugin.
+	KeyRWXNFS = "RWXNFS"
+
 	// NFSExportLocalPath is the local path for NFSExport
 	NFSExportLocalPath = "/"
 
@@ -157,7 +160,7 @@ const (
 // These parameters are copied from the StorageClass parameters to the VolumeContext. The replication ones are used by the node for identifying replicated volumes.
 var interestingParameters = [...]string{0: "FsType", 1: KeyMkfsFormatOption, 2: KeyBandwidthLimitInKbps, 3: KeyIopsLimit,
 	4: KeyReplicationPrefix + KeyReplicationConsistencyGroupName, 5: KeyReplicationPrefix + KeyReplicationEnabled, 6: KeyReplicationPrefix + KeyReplicationClusterID,
-	7: KeyReplicationPrefix + KeyReplicationRemoteSystem}
+	7: KeyReplicationPrefix + KeyReplicationRemoteSystem, 8: KeyRWXNFS}
 
 func (s *service) CreateVolume(
 	ctx context.Context,

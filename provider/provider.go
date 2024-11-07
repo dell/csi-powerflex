@@ -15,6 +15,7 @@ package provider
 
 import (
 	"github.com/dell/csi-vxflexos/v2/service"
+	nfs "github.com/dell/csi-nfs/pkg"
 	"github.com/dell/csi-md/md"
 	"github.com/dell/gocsi"
 	logrus "github.com/sirupsen/logrus"
@@ -29,6 +30,9 @@ func New() gocsi.StoragePluginProvider {
 	mdsvc := md.New(service.Name)
 	service.PutMDService(mdsvc)
 	md.PutVcsiService(svc)
+	nfssvc := nfs.New(service.Name)
+	service.PutNfsService(nfssvc)
+	nfs.PutVcsiService(svc)
 	return &gocsi.StoragePlugin{
 		Controller:                svc,
 		Identity:                  svc,
