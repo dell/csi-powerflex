@@ -728,15 +728,20 @@ func (s *service) NodeGetInfo(
 		}
 	}
 
+	labels, err := GetNodeLabels(ctx, s)
+	if err != nil {
+		return nil, err
+	}
+
 	var maxVxflexosVolumesPerNode int64
 	if len(connectedSystemID) != 0 {
 		// Check for node label 'max-vxflexos-volumes-per-node'. If present set 'MaxVolumesPerNode' to this value.
 		// If node label is not present, set 'MaxVolumesPerNode' to default value i.e., 0
 
-		labels, err := GetNodeLabels(ctx, s)
-		if err != nil {
-			return nil, err
-		}
+		// labels, err := GetNodeLabels(ctx, s)
+		// if err != nil {
+		// 	return nil, err
+		// }
 
 		if val, ok := labels[maxVxflexosVolumesPerNodeLabel]; ok {
 			maxVxflexosVolumesPerNode, err = strconv.ParseInt(val, 10, 64)
@@ -768,6 +773,10 @@ func (s *service) NodeGetInfo(
 			topology[Name+"/"+array.SystemID+"-nfs"] = "true"
 		}
 		topology[Name+"/"+array.SystemID] = SystemTopologySystemValue
+	}
+
+	if labels["zone."+Name] != "" {
+		topology["zone."+Name] = labels["zone."+Name]
 	}
 
 	nodeID, err := GetNodeUID(ctx, s)

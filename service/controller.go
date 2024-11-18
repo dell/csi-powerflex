@@ -161,14 +161,34 @@ func (s *service) CreateVolume(
 	*csi.CreateVolumeResponse, error,
 ) {
 	params := req.GetParameters()
+	var systemID string
+	var err error
 
-	systemID, err := s.getSystemIDFromParameters(params)
-	if err != nil {
-		return nil, err
+	// This is a map of zone to the arrayID and pool identifier
+	zoneTargetMap := make(map[string]string)
+	for _, array := range s.opts.arrays {
+		for _, zone := range array.ZoneMapping {
+			for key, val := range zone {
+				zoneTargetMap[key] = val
+			}
+		}
 	}
 
-	if err := s.requireProbe(ctx, systemID); err != nil {
-		return nil, err
+	Log.Infof("[CreateVolume] Zone Target Map %+v", zoneTargetMap)
+
+	if len(zoneTargetMap) == 0 {
+		sid, err := s.getSystemIDFromParameters(params)
+		if err != nil {
+			return nil, err
+		}
+
+		systemID = sid
+	}
+
+	if systemID != "" {
+		if err := s.requireProbe(ctx, systemID); err != nil {
+			return nil, err
+		}
 	}
 
 	s.logStatistics()
@@ -191,9 +211,50 @@ func (s *service) CreateVolume(
 		Log.Printf("Received CreateVolume request without accessibility keys")
 	}
 
+	// Look for zone topology
+	zoneTopology := false
+	var storagePool string
 	var volumeTopology []*csi.Topology
 	systemSegments := map[string]string{} // topology segments matching requested system for a volume
-	if accessibility != nil && len(accessibility.GetPreferred()) > 0 {
+
+	// Handle Zone topology, which happens when node is annotated with "Zone" label
+	if systemID == "" && accessibility != nil && len(accessibility.GetPreferred()) > 0 {
+		var zoneName string
+		segments := accessibility.GetPreferred()[0].GetSegments()
+		for key, value := range segments {
+			Log.Infof("accessibility preferred segment key %s value %s", key, value)
+			if strings.HasPrefix(key, "zone."+Name) {
+				zoneName = value
+				zoneTarget := zoneTargetMap[zoneName]
+				if zoneTarget == "" {
+					Log.Infof("no zone target for %s", zoneTarget)
+					continue
+				}
+				parts := strings.Split(zoneTarget, "/")
+				systemID = parts[0]
+				if len(parts) >= 2 {
+					storagePool = parts[1]
+				} else {
+					storagePool = "defaulPool"
+				}
+				systemSegments["zone."+Name] = zoneName
+				volumeTopology = append(volumeTopology, &csi.Topology{
+					Segments: systemSegments,
+				})
+				Log.Infof("Preferred topology zone %s systemID %s storageClass %s", zoneName, systemID, storagePool)
+				zoneTopology = true
+				if err := s.requireProbe(ctx, systemID); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+
+	if systemID == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "no systemID supplied or inferred from Zone")
+	}
+
+	if !zoneTopology && accessibility != nil && len(accessibility.GetPreferred()) > 0 {
 		requestedSystem := ""
 		sID := ""
 		system := s.systems[systemID]
@@ -255,6 +316,8 @@ func (s *service) CreateVolume(
 			Log.Printf("Accessible topology for volume: %s, segments: %#v", req.GetName(), systemSegments)
 		}
 	}
+
+	Log.Infof("volume topology: %+v", volumeTopology)
 
 	if len(req.VolumeCapabilities) != 0 {
 		if req.VolumeCapabilities[0].GetBlock() != nil {
@@ -451,10 +514,16 @@ func (s *service) CreateVolume(
 		params = mergeStringMaps(params, req.GetSecrets())
 
 		// We require the storagePool name for creation
-		sp, ok := params[KeyStoragePool]
-		if !ok {
-			return nil, status.Errorf(codes.InvalidArgument,
-				"%s is a required parameter", KeyStoragePool)
+		if storagePool == "" {
+			sp, ok := params[KeyStoragePool]
+			if !ok {
+				return nil, status.Errorf(codes.InvalidArgument,
+					"%s is a required parameter", KeyStoragePool)
+			}
+
+			storagePool = sp
+		} else {
+			Log.Printf("[CreateVolume] Multi-AZ Storage Pool Determined by Secret %s", storagePool)
 		}
 
 		pdID := ""
@@ -475,12 +544,12 @@ func (s *service) CreateVolume(
 			volumeSource := contentSource.GetVolume()
 			if volumeSource != nil {
 				Log.Printf("volume %s specified as volume content source", volumeSource.VolumeId)
-				return s.Clone(req, volumeSource, name, size, sp)
+				return s.Clone(req, volumeSource, name, size, storagePool)
 			}
 			snapshotSource := contentSource.GetSnapshot()
 			if snapshotSource != nil {
 				Log.Printf("snapshot %s specified as volume content source", snapshotSource.SnapshotId)
-				return s.createVolumeFromSnapshot(req, snapshotSource, name, size, sp)
+				return s.createVolumeFromSnapshot(req, snapshotSource, name, size, storagePool)
 			}
 		}
 
@@ -489,7 +558,7 @@ func (s *service) CreateVolume(
 		fields := map[string]interface{}{
 			"name":                               name,
 			"sizeInKiB":                          size,
-			"storagePool":                        sp,
+			"storagePool":                        storagePool,
 			"volType":                            volType,
 			HeaderPersistentVolumeName:           params[CSIPersistentVolumeName],
 			HeaderPersistentVolumeClaimName:      params[CSIPersistentVolumeClaimName],
@@ -517,13 +586,13 @@ func (s *service) CreateVolume(
 			Log.Println("warning: goscaleio.VolumeParam: no MetaData method exists, consider updating goscaleio library.")
 		}
 
-		createResp, err := s.adminClients[systemID].CreateVolume(volumeParam, sp, pdID)
+		createResp, err := s.adminClients[systemID].CreateVolume(volumeParam, storagePool, pdID)
 		if err != nil {
 			// handle case where volume already exists
 			if !strings.EqualFold(err.Error(), sioGatewayVolumeNameInUse) {
-				Log.Printf("error creating volume: %s pool %s error: %s", name, sp, err.Error())
+				Log.Printf("error creating volume: %s pool %s error: %s", name, storagePool, err.Error())
 				return nil, status.Errorf(codes.Internal,
-					"error when creating volume %s storagepool %s: %s", name, sp, err.Error())
+					"error when creating volume %s storagepool %s: %s", name, storagePool, err.Error())
 			}
 		}
 
@@ -548,7 +617,7 @@ func (s *service) CreateVolume(
 
 		// since the volume could have already exists, double check that the
 		// volume has the expected parameters
-		spID, err := s.getStoragePoolID(sp, systemID, pdID)
+		spID, err := s.getStoragePoolID(storagePool, systemID, pdID)
 		if err != nil {
 			return nil, status.Errorf(codes.Unavailable,
 				"volume exists, but could not verify parameters: %s",
@@ -737,6 +806,7 @@ func (s *service) getSystemIDFromParameters(params map[string]string) (string, e
 			return "", status.Errorf(codes.FailedPrecondition, "No system ID is found in parameters or as default")
 		}
 	}
+
 	Log.Printf("getSystemIDFromParameters system %s", systemID)
 
 	// if name set for array.SystemID use id instead
