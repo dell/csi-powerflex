@@ -167,11 +167,14 @@ func (s *service) CreateVolume(
 	// This is a map of zone to the arrayID and pool identifier
 	zoneTargetMap := make(map[string]string)
 	for _, array := range s.opts.arrays {
-		for _, zone := range array.ZoneMapping {
-			for key, val := range zone {
-				zoneTargetMap[key] = val
-			}
+		if array.Zone == "" {
+			continue
 		}
+
+		parts := strings.Split(array.Zone, "=")
+		zoneTargetMap[parts[0]] = parts[1]
+		systemID = s.opts.defaultSystemID
+		break
 	}
 
 	Log.Infof("[CreateVolume] Zone Target Map %+v", zoneTargetMap)
@@ -214,11 +217,12 @@ func (s *service) CreateVolume(
 	// Look for zone topology
 	zoneTopology := false
 	var storagePool string
+	var protectionDomain string
 	var volumeTopology []*csi.Topology
 	systemSegments := map[string]string{} // topology segments matching requested system for a volume
 
 	// Handle Zone topology, which happens when node is annotated with "Zone" label
-	if systemID == "" && accessibility != nil && len(accessibility.GetPreferred()) > 0 {
+	if len(zoneTargetMap) != 0 && accessibility != nil && len(accessibility.GetPreferred()) > 0 {
 		var zoneName string
 		segments := accessibility.GetPreferred()[0].GetSegments()
 		for key, value := range segments {
@@ -230,8 +234,9 @@ func (s *service) CreateVolume(
 					Log.Infof("no zone target for %s", zoneTarget)
 					continue
 				}
-				parts := strings.Split(zoneTarget, "/")
-				systemID = parts[0]
+				parts := strings.Split(zoneTarget, ".")
+
+				protectionDomain = parts[0]
 				if len(parts) >= 2 {
 					storagePool = parts[1]
 				} else {
@@ -241,7 +246,7 @@ func (s *service) CreateVolume(
 				volumeTopology = append(volumeTopology, &csi.Topology{
 					Segments: systemSegments,
 				})
-				Log.Infof("Preferred topology zone %s systemID %s storageClass %s", zoneName, systemID, storagePool)
+				Log.Infof("Preferred topology zone %s, systemID %s, protectionDomain %s, and storageClass %s", zoneName, systemID, protectionDomain, storagePool)
 				zoneTopology = true
 				if err := s.requireProbe(ctx, systemID); err != nil {
 					return nil, err
@@ -526,15 +531,19 @@ func (s *service) CreateVolume(
 			Log.Printf("[CreateVolume] Multi-AZ Storage Pool Determined by Secret %s", storagePool)
 		}
 
-		pdID := ""
-		pd, ok := params[KeyProtectionDomain]
-		if !ok {
-			Log.Printf("Protection Domain name not provided; there could be conflicts if two storage pools share a name")
-		} else {
-			pdID, err = s.getProtectionDomainIDFromName(systemID, pd)
-			if err != nil {
-				return nil, err
+		var pdID string
+		if protectionDomain == "" {
+			pd, ok := params[KeyProtectionDomain]
+			if !ok {
+				Log.Printf("Protection Domain name not provided; there could be conflicts if two storage pools share a name")
+			} else {
+				protectionDomain = pd
 			}
+		}
+
+		pdID, err = s.getProtectionDomainIDFromName(systemID, protectionDomain)
+		if err != nil {
+			return nil, err
 		}
 
 		volType := s.getVolProvisionType(params) // Thick or Thin
