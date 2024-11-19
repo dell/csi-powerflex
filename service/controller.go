@@ -155,6 +155,12 @@ const (
 
 var interestingParameters = [...]string{0: "FsType", 1: KeyMkfsFormatOption, 2: KeyBandwidthLimitInKbps, 3: KeyIopsLimit}
 
+type ZoneContent struct {
+	systemID         string
+	protectionDomain string
+	pool             string
+}
+
 func (s *service) CreateVolume(
 	ctx context.Context,
 	req *csi.CreateVolumeRequest) (
@@ -165,16 +171,26 @@ func (s *service) CreateVolume(
 	var err error
 
 	// This is a map of zone to the arrayID and pool identifier
-	zoneTargetMap := make(map[string]string)
+	zoneTargetMap := make(map[string]ZoneContent)
 	for _, array := range s.opts.arrays {
 		if array.Zone == "" {
 			continue
 		}
 
 		parts := strings.Split(array.Zone, "=")
-		zoneTargetMap[parts[0]] = parts[1]
-		systemID = s.opts.defaultSystemID
-		break
+		zone := parts[0]
+
+		parts = strings.Split(parts[1], ".")
+		pd := ""
+		pool := "defaulPool"
+		if len(parts) == 2 {
+			pd = parts[0]
+			pool = parts[1]
+		} else {
+			pool = parts[0]
+		}
+
+		zoneTargetMap[zone] = ZoneContent{systemID: array.SystemID, protectionDomain: pd, pool: pool}
 	}
 
 	Log.Infof("[CreateVolume] Zone Target Map %+v", zoneTargetMap)
@@ -229,24 +245,21 @@ func (s *service) CreateVolume(
 			Log.Infof("accessibility preferred segment key %s value %s", key, value)
 			if strings.HasPrefix(key, "zone."+Name) {
 				zoneName = value
-				zoneTarget := zoneTargetMap[zoneName]
-				if zoneTarget == "" {
+				zoneTarget, ok := zoneTargetMap[zoneName]
+				if !ok {
 					Log.Infof("no zone target for %s", zoneTarget)
 					continue
 				}
-				parts := strings.Split(zoneTarget, ".")
 
-				protectionDomain = parts[0]
-				if len(parts) >= 2 {
-					storagePool = parts[1]
-				} else {
-					storagePool = "defaulPool"
-				}
+				protectionDomain = zoneTarget.protectionDomain
+				storagePool = zoneTarget.pool
+				systemID = zoneTarget.systemID
+
 				systemSegments["zone."+Name] = zoneName
 				volumeTopology = append(volumeTopology, &csi.Topology{
 					Segments: systemSegments,
 				})
-				Log.Infof("Preferred topology zone %s, systemID %s, protectionDomain %s, and storageClass %s", zoneName, systemID, protectionDomain, storagePool)
+				Log.Infof("Preferred topology zone %s, systemID %s, protectionDomain %s, and storagePool %s", zoneName, systemID, protectionDomain, storagePool)
 				zoneTopology = true
 				if err := s.requireProbe(ctx, systemID); err != nil {
 					return nil, err
