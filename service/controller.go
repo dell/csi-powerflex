@@ -2369,6 +2369,13 @@ func (s *service) ControllerGetCapabilities(
 				},
 			},
 		},
+		{
+			Type: &csi.ControllerServiceCapability_Rpc{
+				Rpc: &csi.ControllerServiceCapability_RPC{
+					Type: csi.ControllerServiceCapability_RPC_LIST_VOLUMES,
+				},
+			},
+		},
 	}
 
 	healthMonitorCapabilities := []*csi.ControllerServiceCapability{
@@ -2391,6 +2398,8 @@ func (s *service) ControllerGetCapabilities(
 	if s.opts.IsHealthMonitorEnabled {
 		capabilities = append(capabilities, healthMonitorCapabilities...)
 	}
+
+	fmt.Printf("Capabilities: %v\n", capabilities)
 
 	return &csi.ControllerGetCapabilitiesResponse{
 		Capabilities: capabilities,
