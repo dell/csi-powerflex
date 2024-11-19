@@ -2331,11 +2331,11 @@ func (f *feature) aValidControllerGetCapabilitiesResponseIsReturned() error {
 			}
 		}
 
-		if f.service.opts.IsHealthMonitorEnabled && count != 10 {
+		if f.service.opts.IsHealthMonitorEnabled && count != 11 {
 			// Set default value
 			f.service.opts.IsHealthMonitorEnabled = false
 			return errors.New("Did not retrieve all the expected capabilities")
-		} else if !f.service.opts.IsHealthMonitorEnabled && count != 8 {
+		} else if !f.service.opts.IsHealthMonitorEnabled && count != 9 {
 			return errors.New("Did not retrieve all the expected capabilities")
 		}
 
