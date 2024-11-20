@@ -239,32 +239,43 @@ func (s *service) CreateVolume(
 
 	// Handle Zone topology, which happens when node is annotated with "Zone" label
 	if len(zoneTargetMap) != 0 && accessibility != nil && len(accessibility.GetPreferred()) > 0 {
-		var zoneName string
-		segments := accessibility.GetPreferred()[0].GetSegments()
-		for key, value := range segments {
-			Log.Infof("accessibility preferred segment key %s value %s", key, value)
-			if strings.HasPrefix(key, "zone."+Name) {
-				zoneName = value
-				zoneTarget, ok := zoneTargetMap[zoneName]
-				if !ok {
-					Log.Infof("no zone target for %s", zoneTarget)
-					continue
-				}
+		for _, topo := range accessibility.GetPreferred() {
+			for key, value := range topo.Segments {
+				Log.Infof("accessibility preferred segment key %s value %s", key, value)
+				if strings.HasPrefix(key, "zone."+Name) {
+					zoneTarget, ok := zoneTargetMap[value]
+					if !ok {
+						Log.Infof("no zone target for %s", zoneTarget)
+						continue
+					}
 
-				protectionDomain = zoneTarget.protectionDomain
-				storagePool = zoneTarget.pool
-				systemID = zoneTarget.systemID
+					protectionDomain = zoneTarget.protectionDomain
+					storagePool = zoneTarget.pool
+					systemID = zoneTarget.systemID
 
-				systemSegments["zone."+Name] = zoneName
-				volumeTopology = append(volumeTopology, &csi.Topology{
-					Segments: systemSegments,
-				})
-				Log.Infof("Preferred topology zone %s, systemID %s, protectionDomain %s, and storagePool %s", zoneName, systemID, protectionDomain, storagePool)
-				zoneTopology = true
-				if err := s.requireProbe(ctx, systemID); err != nil {
-					return nil, err
+					Log.Infof("Preferred topology zone %s, systemID %s, protectionDomain %s, and storagePool %s", value, systemID, protectionDomain, storagePool)
+
+					if err := s.requireProbe(ctx, systemID); err != nil {
+						Log.Errorln("Failed to probe system " + systemID)
+						continue
+					}
+
+					systemSegments["zone."+Name] = value
+					volumeTopology = append(volumeTopology, &csi.Topology{
+						Segments: systemSegments,
+					})
+
+					zoneTopology = true
 				}
 			}
+
+			if zoneTopology {
+				break
+			}
+		}
+
+		if !zoneTopology {
+			return nil, status.Error(codes.InvalidArgument, "no zone topology found in accessibility requirements")
 		}
 	}
 

@@ -779,6 +779,8 @@ func (s *service) NodeGetInfo(
 		topology["zone."+Name] = labels["zone."+Name]
 	}
 
+	Log.Infof("[NodeGetInfo] Topology: %v\n", topology)
+
 	nodeID, err := GetNodeUID(ctx, s)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, GetMessage("Could not fetch node UID"))
