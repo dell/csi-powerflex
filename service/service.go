@@ -107,15 +107,36 @@ var Log = logrus.New()
 
 // ArrayConnectionData contains data required to connect to array
 type ArrayConnectionData struct {
-	SystemID                  string `json:"systemID"`
-	Username                  string `json:"username"`
-	Password                  string `json:"password"`
-	Endpoint                  string `json:"endpoint"`
-	SkipCertificateValidation bool   `json:"skipCertificateValidation,omitempty"`
-	Insecure                  bool   `json:"insecure,omitempty"`
-	IsDefault                 bool   `json:"isDefault,omitempty"`
-	AllSystemNames            string `json:"allSystemNames"`
-	NasName                   string `json:"nasName"`
+	SystemID                  string      `json:"systemID"`
+	Username                  string      `json:"username"`
+	Password                  string      `json:"password"`
+	Endpoint                  string      `json:"endpoint"`
+	SkipCertificateValidation bool        `json:"skipCertificateValidation,omitempty"`
+	Insecure                  bool        `json:"insecure,omitempty"`
+	IsDefault                 bool        `json:"isDefault,omitempty"`
+	AllSystemNames            string      `json:"allSystemNames"`
+	NasName                   string      `json:"nasName"`
+	AccessZone                *AccessZone `json:"zone,omitempty"`
+}
+
+// Definitions to make AccessZone decomposition easier to read.
+type (
+	ZoneName                 string
+	ZoneTargetMap            map[ZoneName][]ProtectionDomain
+	ProtectionDomainName     string
+	ProtectionDomainPoolName string
+)
+
+// AccessZone provides a mapping between cluster zones labels and storage systems
+type AccessZone struct {
+	Name    ZoneName           `json:"name"`
+	Domains []ProtectionDomain `json:"domains"`
+}
+
+// ProtectionDomain provides protectiond domain information for an topology access zone
+type ProtectionDomain struct {
+	Name ProtectionDomainName     `json:"name"`
+	Pool ProtectionDomainPoolName `json:"pool,omitempty"`
 }
 
 // Manifest is the SP's manifest.
