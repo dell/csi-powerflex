@@ -3421,28 +3421,28 @@ func (f *feature) aCorrectNodeGetVolumeStatsResponse() error {
 	return nil
 }
 
-func (f *feature) iCallNodeUnstageVolumeWith(err string) error {
+func (f *feature) iCallNodeUnstageVolumeWith(anError string) error {
 	// Save the ephemeralStagingMountPath to restore below
 	ephemeralPath := ephemeralStagingMountPath
 	header := metadata.New(map[string]string{"csi.requestid": "1"})
-	if err == "NoRequestID" {
+	if anError == "NoRequestID" {
 		header = metadata.New(map[string]string{"csi.requestid": ""})
 	}
 	ctx := metadata.NewIncomingContext(context.Background(), header)
 	req := new(csi.NodeUnstageVolumeRequest)
 	req.VolumeId = goodVolumeID
-	if err == "NoVolumeID" {
+	if anError == "NoVolumeID" {
 		req.VolumeId = ""
 	}
 	req.StagingTargetPath = datadir
-	if err == "NoStagingTarget" {
+	if anError == "NoStagingTarget" {
 		req.StagingTargetPath = ""
 	}
-	if err == "UnmountError" {
+	if anError == "UnmountError" {
 		req.StagingTargetPath = "/tmp"
 		gofsutil.GOFSMock.InduceUnmountError = true
 	}
-	if err == "EphemeralVolume" {
+	if anError == "EphemeralVolume" {
 		// Create an ephemeral volume id
 		ephemeralStagingMountPath = "test/"
 		err := os.MkdirAll("test"+"/"+goodVolumeID+"/id", 0o777)
