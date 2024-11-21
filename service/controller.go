@@ -172,25 +172,9 @@ func (s *service) CreateVolume(
 
 	// This is a map of zone to the arrayID and pool identifier
 	zoneTargetMap := make(map[string]ZoneContent)
-	for _, array := range s.opts.arrays {
-		if array.Zone == "" {
-			continue
-		}
 
-		parts := strings.Split(array.Zone, "=")
-		zone := parts[0]
-
-		parts = strings.Split(parts[1], ".")
-		pd := ""
-		pool := "defaulPool"
-		if len(parts) == 2 {
-			pd = parts[0]
-			pool = parts[1]
-		} else {
-			pool = parts[0]
-		}
-
-		zoneTargetMap[zone] = ZoneContent{systemID: array.SystemID, protectionDomain: pd, pool: pool}
+	if _, ok := params[KeySystemID]; !ok {
+		zoneTargetMap = s.getZonesFromSecret()
 	}
 
 	Log.Infof("[CreateVolume] Zone Target Map %+v", zoneTargetMap)
@@ -848,6 +832,33 @@ func (s *service) getSystemIDFromParameters(params map[string]string) (string, e
 	}
 	Log.Printf("Use systemID as %s", systemID)
 	return systemID, nil
+}
+
+func (s *service) getZonesFromSecret() map[string]ZoneContent {
+	zoneTargetMap := make(map[string]ZoneContent)
+
+	for _, array := range s.opts.arrays {
+		if array.Zone == "" {
+			continue
+		}
+
+		parts := strings.Split(array.Zone, "=")
+		zone := parts[0]
+
+		parts = strings.Split(parts[1], ".")
+		pd := ""
+		pool := "defaulPool"
+		if len(parts) == 2 {
+			pd = parts[0]
+			pool = parts[1]
+		} else {
+			pool = parts[0]
+		}
+
+		zoneTargetMap[zone] = ZoneContent{systemID: array.SystemID, protectionDomain: pd, pool: pool}
+	}
+
+	return zoneTargetMap
 }
 
 // Create a volume (which is actually a snapshot) from an existing snapshot.
@@ -2274,9 +2285,13 @@ func (s *service) getCapacityForAllSystems(ctx context.Context, protectionDomain
 		var systemCapacity int64
 		var err error
 
-		if len(spName) > 0 {
+		Log.Printf("[getCapacityForAllSystems] SP Length: %d", len(spName))
+
+		if len(spName) > 0 && spName[0] != "" {
+			Log.Printf("[getCapacityForAllSystems] Getting system capacity for pool %s", spName[0])
 			systemCapacity, err = s.getSystemCapacity(ctx, array.SystemID, protectionDomain, spName[0])
 		} else {
+			Log.Println("[getCapacityForAllSystems] Getting system capacity for all pools")
 			systemCapacity, err = s.getSystemCapacity(ctx, array.SystemID, "")
 		}
 
@@ -2308,6 +2323,8 @@ func (s *service) GetCapacity(
 
 	systemID := ""
 	params := req.GetParameters()
+
+	Log.Printf("GetCapacity: %v", params)
 	if params == nil || len(params) == 0 {
 		// Get capacity of all systems
 		capacity, err = s.getCapacityForAllSystems(ctx, "")
@@ -2325,6 +2342,7 @@ func (s *service) GetCapacity(
 		}
 
 		if systemID == "" {
+			Log.Println("[GetCapacity] System ID not found in params")
 			// Get capacity of storage pool spname in all systems, return total capacity
 			capacity, err = s.getCapacityForAllSystems(ctx, "", spname)
 		} else {
