@@ -241,7 +241,6 @@ func (s *service) CreateVolume(
 	if len(zoneTargetMap) != 0 && accessibility != nil && len(accessibility.GetPreferred()) > 0 {
 		for _, topo := range accessibility.GetPreferred() {
 			for key, value := range topo.Segments {
-				Log.Infof("accessibility preferred segment key %s value %s", key, value)
 				if strings.HasPrefix(key, "zone."+Name) {
 					zoneTarget, ok := zoneTargetMap[value]
 					if !ok {
