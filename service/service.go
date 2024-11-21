@@ -107,36 +107,36 @@ var Log = logrus.New()
 
 // ArrayConnectionData contains data required to connect to array
 type ArrayConnectionData struct {
-	SystemID                  string      `json:"systemID"`
-	Username                  string      `json:"username"`
-	Password                  string      `json:"password"`
-	Endpoint                  string      `json:"endpoint"`
-	SkipCertificateValidation bool        `json:"skipCertificateValidation,omitempty"`
-	Insecure                  bool        `json:"insecure,omitempty"`
-	IsDefault                 bool        `json:"isDefault,omitempty"`
-	AllSystemNames            string      `json:"allSystemNames"`
-	NasName                   string      `json:"nasName"`
-	AccessZone                *AccessZone `json:"zone,omitempty"`
+	SystemID                  string            `json:"systemID"`
+	Username                  string            `json:"username"`
+	Password                  string            `json:"password"`
+	Endpoint                  string            `json:"endpoint"`
+	SkipCertificateValidation bool              `json:"skipCertificateValidation,omitempty"`
+	Insecure                  bool              `json:"insecure,omitempty"`
+	IsDefault                 bool              `json:"isDefault,omitempty"`
+	AllSystemNames            string            `json:"allSystemNames"`
+	NasName                   string            `json:"nasName"`
+	AvailabilityZone          *AvailabilityZone `json:"zone,omitempty"`
 }
 
-// Definitions to make AccessZone decomposition easier to read.
+// Definitions to make AvailabilityZone decomposition easier to read.
 type (
-	ZoneName                 string
-	ZoneTargetMap            map[ZoneName][]ProtectionDomain
-	ProtectionDomainName     string
-	ProtectionDomainPoolName string
+	ZoneName             string
+	ZoneTargetMap        map[ZoneName][]ProtectionDomain
+	ProtectionDomainName string
+	PoolName             string
 )
 
-// AccessZone provides a mapping between cluster zones labels and storage systems
-type AccessZone struct {
-	Name    ZoneName           `json:"name"`
-	Domains []ProtectionDomain `json:"domains"`
+// AvailabilityZone provides a mapping between cluster zones labels and storage systems
+type AvailabilityZone struct {
+	Name              ZoneName           `json:"name"`
+	ProtectionDomains []ProtectionDomain `json:"protectionDomains"`
 }
 
-// ProtectionDomain provides protectiond domain information for an topology access zone
+// ProtectionDomain provides protection domain information for a cluster's availability zone
 type ProtectionDomain struct {
-	Name ProtectionDomainName     `json:"name"`
-	Pool ProtectionDomainPoolName `json:"pool,omitempty"`
+	Name  ProtectionDomainName `json:"name"`
+	Pools []PoolName           `json:"pools,omitempty"`
 }
 
 // Manifest is the SP's manifest.
