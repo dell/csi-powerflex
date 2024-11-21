@@ -136,7 +136,7 @@ type AvailabilityZone struct {
 // ProtectionDomain provides protection domain information for a cluster's availability zone
 type ProtectionDomain struct {
 	Name  ProtectionDomainName `json:"name"`
-	Pools []PoolName           `json:"pools,omitempty"`
+	Pools []PoolName           `json:"pools"`
 }
 
 // Manifest is the SP's manifest.
