@@ -1850,6 +1850,7 @@ func (s *service) ListVolumes(
 
 	//we don't want to deal with too many volumes in one request- limit to 50
 	if maxEntries == 0 {
+		Log.Printf("Request had Max entries set to 0, setting it to 50")
 		maxEntries = 50
 	}
 
