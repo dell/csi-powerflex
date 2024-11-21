@@ -157,8 +157,8 @@ var interestingParameters = [...]string{0: "FsType", 1: KeyMkfsFormatOption, 2: 
 
 type ZoneContent struct {
 	systemID         string
-	protectionDomain string
-	pool             string
+	protectionDomain ProtectionDomainName
+	pool             PoolName
 }
 
 func (s *service) CreateVolume(
@@ -171,7 +171,7 @@ func (s *service) CreateVolume(
 	var err error
 
 	// This is a map of zone to the arrayID and pool identifier
-	zoneTargetMap := make(map[string]ZoneContent)
+	zoneTargetMap := make(map[ZoneName]ZoneContent)
 
 	if _, ok := params[KeySystemID]; !ok {
 		zoneTargetMap = s.getZonesFromSecret()
@@ -224,26 +224,26 @@ func (s *service) CreateVolume(
 	// Handle Zone topology, which happens when node is annotated with "Zone" label
 	if len(zoneTargetMap) != 0 && accessibility != nil && len(accessibility.GetPreferred()) > 0 {
 		for _, topo := range accessibility.GetPreferred() {
-			for key, value := range topo.Segments {
-				if strings.HasPrefix(key, "zone."+Name) {
-					zoneTarget, ok := zoneTargetMap[value]
+			for topoLabel, zoneName := range topo.Segments {
+				if strings.HasPrefix(topoLabel, "zone."+Name) {
+					zoneTarget, ok := zoneTargetMap[ZoneName(zoneName)]
 					if !ok {
 						Log.Infof("no zone target for %s", zoneTarget)
 						continue
 					}
 
-					protectionDomain = zoneTarget.protectionDomain
-					storagePool = zoneTarget.pool
+					protectionDomain = string(zoneTarget.protectionDomain)
+					storagePool = string(zoneTarget.pool)
 					systemID = zoneTarget.systemID
 
-					Log.Infof("Preferred topology zone %s, systemID %s, protectionDomain %s, and storagePool %s", value, systemID, protectionDomain, storagePool)
+					Log.Infof("Preferred topology zone %s, systemID %s, protectionDomain %s, and storagePool %s", zoneName, systemID, protectionDomain, storagePool)
 
 					if err := s.requireProbe(ctx, systemID); err != nil {
 						Log.Errorln("Failed to probe system " + systemID)
 						continue
 					}
 
-					systemSegments["zone."+Name] = value
+					systemSegments["zone."+Name] = zoneName
 					volumeTopology = append(volumeTopology, &csi.Topology{
 						Segments: systemSegments,
 					})
@@ -834,28 +834,31 @@ func (s *service) getSystemIDFromParameters(params map[string]string) (string, e
 	return systemID, nil
 }
 
-func (s *service) getZonesFromSecret() map[string]ZoneContent {
-	zoneTargetMap := make(map[string]ZoneContent)
+// getZonesFromSecret returns a map with zone names as keys to zone content
+// with zone content consisting of the PowerFlex systemID, protection domain and pool.
+func (s *service) getZonesFromSecret() map[ZoneName]ZoneContent {
+	zoneTargetMap := make(map[ZoneName]ZoneContent)
 
 	for _, array := range s.opts.arrays {
-		if array.Zone == "" {
+		availabilityZone := array.AvailabilityZone
+		if availabilityZone == nil {
 			continue
 		}
 
-		parts := strings.Split(array.Zone, "=")
-		zone := parts[0]
+		zone := availabilityZone.Name
 
-		parts = strings.Split(parts[1], ".")
-		pd := ""
-		pool := "defaulPool"
-		if len(parts) == 2 {
-			pd = parts[0]
-			pool = parts[1]
-		} else {
-			pool = parts[0]
+		var pd ProtectionDomainName = ""
+		if availabilityZone.ProtectionDomains[0].Name != "" {
+			pd = availabilityZone.ProtectionDomains[0].Name
 		}
 
-		zoneTargetMap[zone] = ZoneContent{systemID: array.SystemID, protectionDomain: pd, pool: pool}
+		pool := availabilityZone.ProtectionDomains[0].Pools[0]
+
+		zoneTargetMap[zone] = ZoneContent{
+			systemID:         array.SystemID,
+			protectionDomain: pd,
+			pool:             pool,
+		}
 	}
 
 	return zoneTargetMap
