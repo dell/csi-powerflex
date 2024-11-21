@@ -1848,6 +1848,11 @@ func (s *service) ListVolumes(
 		maxEntries = int(req.MaxEntries)
 	)
 
+	//we don't want to deal with too many volumes in one request- limit to 50
+	if maxEntries == 0 {
+		maxEntries = 50
+	}
+
 	if v := req.StartingToken; v != "" {
 		i, err := strconv.ParseInt(v, 10, 32)
 		if err != nil {
