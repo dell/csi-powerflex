@@ -1,0 +1,40 @@
+[
+   {
+      "endpoint": "http://127.0.0.1",
+      "username": "admin",
+      "password": "Password123",
+      "insecure": true,
+      "isDefault": true,
+      "systemID": "14dbbf5617523654",
+      "zone": {
+         "name": "zoneA",
+         "protectionDomains": [
+            {
+               "name": "mocksystem",
+               "pools": [
+                  "viki_pool_HDD_20181031"
+               ]
+            }
+         ]
+      }
+   },
+   {
+      "endpoint": "http://127.0.0.2",
+      "username": "admin",
+      "password": "Password123",
+      "skipCertificateValidation": true,
+      "isDefault": false,
+      "systemID": "15dbbf5617523655",
+      "zone": {
+         "name": "zoneB",
+         "protectionDomains": [
+            {
+               "name": "mocksystem",
+               "pools": [
+                  "viki_pool_HDD_20181031"
+               ]
+            }
+         ]
+      }
+   }
+]
