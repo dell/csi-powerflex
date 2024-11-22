@@ -847,7 +847,7 @@ func (s *service) getZonesFromSecret() map[ZoneName]ZoneContent {
 
 		zone := availabilityZone.Name
 
-		var pd ProtectionDomainName = ""
+		var pd ProtectionDomainName
 		if availabilityZone.ProtectionDomains[0].Name != "" {
 			pd = availabilityZone.ProtectionDomains[0].Name
 		}
