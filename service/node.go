@@ -665,6 +665,8 @@ func (s *service) NodeGetCapabilities(
 	// node.healthMonitor.enabled is set to true in values file
 	healthMonitorCapabalities := []*csi.NodeServiceCapability{
 		{
+			// Required for health monitor, optional if Health monitor is disabled
+			// Indicates driver can report on volume condition in node plugin
 			Type: &csi.NodeServiceCapability_Rpc{
 				Rpc: &csi.NodeServiceCapability_RPC{
 					Type: csi.NodeServiceCapability_RPC_VOLUME_CONDITION,
@@ -672,6 +674,7 @@ func (s *service) NodeGetCapabilities(
 			},
 		},
 		{
+			// Required for NodeGetVolumeStats, optional if health monitor is disabled
 			Type: &csi.NodeServiceCapability_Rpc{
 				Rpc: &csi.NodeServiceCapability_RPC{
 					Type: csi.NodeServiceCapability_RPC_GET_VOLUME_STATS,
@@ -682,6 +685,7 @@ func (s *service) NodeGetCapabilities(
 
 	nodeCapabalities := []*csi.NodeServiceCapability{
 		{
+			// Required for NodeExpandVolume
 			Type: &csi.NodeServiceCapability_Rpc{
 				Rpc: &csi.NodeServiceCapability_RPC{
 					Type: csi.NodeServiceCapability_RPC_EXPAND_VOLUME,
@@ -689,6 +693,7 @@ func (s *service) NodeGetCapabilities(
 			},
 		},
 		{
+			// Indicates PowerFlex supports SINGLE_NODE_SINGLE_WRITER and/or SINGLE_NODE_MULTI_WRITER access modes
 			Type: &csi.NodeServiceCapability_Rpc{
 				Rpc: &csi.NodeServiceCapability_RPC{
 					Type: csi.NodeServiceCapability_RPC_SINGLE_NODE_MULTI_WRITER,

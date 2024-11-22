@@ -1848,7 +1848,7 @@ func (s *service) ListVolumes(
 		maxEntries = int(req.MaxEntries)
 	)
 
-	//we don't want to deal with too many volumes in one request- limit to 50
+	// we don't want to deal with too many volumes in one request- limit to 50
 	if maxEntries == 0 {
 		Log.Printf("Request had Max entries set to 0, setting it to 50")
 		maxEntries = 50
@@ -2325,56 +2325,56 @@ func (s *service) ControllerGetCapabilities(
 	*csi.ControllerGetCapabilitiesResponse, error,
 ) {
 	capabilities := []*csi.ControllerServiceCapability{
-		{
+		{ // Required for Create/Delete Volume
 			Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
 				},
 			},
 		},
-		{
+		{ // Required for ControllerPublish and ControllerUnpublish Volume
 			Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_PUBLISH_UNPUBLISH_VOLUME,
 				},
 			},
 		},
-		{
+		{ // Required for GetCapacity
 			Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_GET_CAPACITY,
 				},
 			},
 		},
-		{
+		{ // Required for CreateSnapshot and DeleteSnapshot
 			Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT,
 				},
 			},
 		},
-		{
+		{ // Required for ListSnapshots
 			Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_LIST_SNAPSHOTS,
 				},
 			},
 		},
-		{
+		{ // Required for ControllerExpandVolume
 			Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
 				},
 			},
 		},
-		{
+		{ // Required for Clone
 			Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_CLONE_VOLUME,
 				},
 			},
 		},
-		{
+		{ // Indicates PowerFlex supports SINGLE_NODE_SINGLE_WRITER and/or SINGLE_NODE_MULTI_WRITER access modes
 			Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_SINGLE_NODE_MULTI_WRITER,
@@ -2385,6 +2385,8 @@ func (s *service) ControllerGetCapabilities(
 
 	healthMonitorCapabilities := []*csi.ControllerServiceCapability{
 		{
+			// Required for health monitor, optional if Health monitor is disabled
+			// Indicates driver can report on volume condition in controller plugin
 			Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_VOLUME_CONDITION,
@@ -2392,13 +2394,15 @@ func (s *service) ControllerGetCapabilities(
 			},
 		},
 		{
+			// Required for ControllerGetVolume which is only required if health monitor is enabled
+			// Optional if ListVolumes capabilty is also being returned
 			Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_GET_VOLUME,
 				},
 			},
 		},
-		{
+		{ // Required for ListVolumes which is only required if health monitor is enabled
 			Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_LIST_VOLUMES,
