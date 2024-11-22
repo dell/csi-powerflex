@@ -177,8 +177,6 @@ func (s *service) CreateVolume(
 		zoneTargetMap = s.getZonesFromSecret()
 	}
 
-	Log.Infof("[CreateVolume] Zone Target Map %+v", zoneTargetMap)
-
 	if len(zoneTargetMap) == 0 {
 		sid, err := s.getSystemIDFromParameters(params)
 		if err != nil {
@@ -262,10 +260,6 @@ func (s *service) CreateVolume(
 		}
 	}
 
-	if systemID == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "no systemID supplied or inferred from Zone")
-	}
-
 	if !zoneTopology && accessibility != nil && len(accessibility.GetPreferred()) > 0 {
 		requestedSystem := ""
 		sID := ""
@@ -328,8 +322,6 @@ func (s *service) CreateVolume(
 			Log.Printf("Accessible topology for volume: %s, segments: %#v", req.GetName(), systemSegments)
 		}
 	}
-
-	Log.Infof("volume topology: %+v", volumeTopology)
 
 	if len(req.VolumeCapabilities) != 0 {
 		if req.VolumeCapabilities[0].GetBlock() != nil {
@@ -2288,13 +2280,9 @@ func (s *service) getCapacityForAllSystems(ctx context.Context, protectionDomain
 		var systemCapacity int64
 		var err error
 
-		Log.Printf("[getCapacityForAllSystems] SP Length: %d", len(spName))
-
 		if len(spName) > 0 && spName[0] != "" {
-			Log.Printf("[getCapacityForAllSystems] Getting system capacity for pool %s", spName[0])
 			systemCapacity, err = s.getSystemCapacity(ctx, array.SystemID, protectionDomain, spName[0])
 		} else {
-			Log.Println("[getCapacityForAllSystems] Getting system capacity for all pools")
 			systemCapacity, err = s.getSystemCapacity(ctx, array.SystemID, "")
 		}
 
@@ -2326,9 +2314,7 @@ func (s *service) GetCapacity(
 
 	systemID := ""
 	params := req.GetParameters()
-
-	Log.Printf("GetCapacity: %v", params)
-	if params == nil || len(params) == 0 {
+	if len(params) == 0 {
 		// Get capacity of all systems
 		capacity, err = s.getCapacityForAllSystems(ctx, "")
 	} else {
@@ -2345,7 +2331,6 @@ func (s *service) GetCapacity(
 		}
 
 		if systemID == "" {
-			Log.Println("[GetCapacity] System ID not found in params")
 			// Get capacity of storage pool spname in all systems, return total capacity
 			capacity, err = s.getCapacityForAllSystems(ctx, "", spname)
 		} else {
