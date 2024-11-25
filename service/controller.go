@@ -1854,7 +1854,6 @@ func (s *service) ListVolumes(
 		maxEntries = 50
 	}
 
-	Log.Printf("maxEntries: %d\n", maxEntries)
 	if v := req.StartingToken; v != "" {
 		i, err := strconv.ParseInt(v, 10, 32)
 		if err != nil {
