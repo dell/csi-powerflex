@@ -1881,8 +1881,6 @@ func (s *service) ListVolumes(
 		}
 		i = i + 1
 	}
-	Log.Printf("volume count............: %d\n", i)
-	Log.Printf("entries...........: %v\n", entries)
 	return &csi.ListVolumesResponse{
 		Entries:   entries,
 		NextToken: nextToken,
@@ -2086,12 +2084,8 @@ func (s *service) listVolumes(systemID string, startToken int, maxEntries int, d
 		}
 	}
 
-	Log.Printf("len(sioVols)............: %d\n", len(sioVols))
-	Log.Printf("len(sioSnaps)............: %d\n", len(sioSnaps))
-
 	// Make aggregate volumes slice containing both
 	volumes = make([]*siotypes.Volume, len(sioVols)+len(sioSnaps))
-	Log.Printf("listVolumes() volumes............: %v\n", volumes)
 	if len(sioVols) > 0 {
 		copy(volumes[0:], sioVols)
 	}
@@ -2414,8 +2408,6 @@ func (s *service) ControllerGetCapabilities(
 	if s.opts.IsHealthMonitorEnabled {
 		capabilities = append(capabilities, healthMonitorCapabilities...)
 	}
-
-	fmt.Printf("Capabilities: %v\n", capabilities)
 
 	return &csi.ControllerGetCapabilitiesResponse{
 		Capabilities: capabilities,
