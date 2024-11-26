@@ -914,68 +914,19 @@ func (s *service) clearCache() {
 // validateVolSize uses the CapacityRange range params to determine what size
 // volume to create, and returns an error if volume size would be greater than
 // the given limit. Returned size is in KiB
-// func validateVolSize(cr *csi.CapacityRange) (int64, error) {
-// 	minSize := cr.GetRequiredBytes()
-// 	maxSize := cr.GetLimitBytes()
-// 	if minSize < 0 || maxSize < 0 {
-// 		return 0, status.Errorf(
-// 			codes.OutOfRange,
-// 			"bad capacity: volume size bytes %d and limit size bytes: %d must not be negative", minSize, maxSize)
-// 	}
-
-// 	if minSize == 0 {
-// 		minSize = DefaultVolumeSizeKiB
-// 	} else {
-// 		minSize = minSize / bytesInKiB
-// 	}
-
-// 	var (
-// 		sizeGiB int64
-// 		sizeKiB int64
-// 		sizeB   int64
-// 	)
-// 	// VxFlexOS creates volumes in multiples of 8GiB, rounding up.
-// 	// Determine what actual size of volume will be, and check that
-// 	// we do not exceed maxSize
-// 	sizeGiB = minSize / kiBytesInGiB
-// 	// if the requested size was less than 1GB, set the request to 1GB
-// 	// so it can be rounded to a 8GiB boundary correctly
-// 	if sizeGiB == 0 {
-// 		sizeGiB = 1
-// 	}
-// 	mod := sizeGiB % VolSizeMultipleGiB
-// 	if mod > 0 {
-// 		sizeGiB = sizeGiB - mod + VolSizeMultipleGiB
-// 	}
-// 	sizeB = sizeGiB * bytesInGiB
-// 	if maxSize != 0 {
-// 		if sizeB > maxSize {
-// 			return 0, status.Errorf(
-// 				codes.OutOfRange,
-// 				"bad capacity: volume size %d > limit_bytes: %d", sizeB, maxSize)
-// 		}
-// 	}
-
-// 	sizeKiB = sizeGiB * kiBytesInGiB
-// 	return sizeKiB, nil
-// }
-
 func validateVolSize(cr *csi.CapacityRange) (int64, error) {
 	minSize := cr.GetRequiredBytes()
 	maxSize := cr.GetLimitBytes()
-
-	// Check for negative sizes
 	if minSize < 0 || maxSize < 0 {
 		return 0, status.Errorf(
 			codes.OutOfRange,
 			"bad capacity: volume size bytes %d and limit size bytes: %d must not be negative", minSize, maxSize)
 	}
 
-	// Set default size if minSize is zero
 	if minSize == 0 {
 		minSize = DefaultVolumeSizeKiB
 	} else {
-		minSize = minSize / bytesInKiB // Convert to KiB
+		minSize = minSize / bytesInKiB
 	}
 
 	var (
@@ -995,24 +946,19 @@ func validateVolSize(cr *csi.CapacityRange) (int64, error) {
 	if sizeGiB < 1 {
 		sizeGiB = 1
 	}
-
-	// Round up to the nearest multiple of VolSizeMultipleGiB
 	mod := sizeGiB % VolSizeMultipleGiB
 	if mod > 0 {
 		sizeGiB = sizeGiB - mod + VolSizeMultipleGiB
 	}
-
-	// Convert size to bytes
 	sizeB = sizeGiB * bytesInGiB
-
-	// Check against maxSize
-	if maxSize != 0 && sizeB > maxSize {
-		return 0, status.Errorf(
-			codes.OutOfRange,
-			"bad capacity: volume size %d > limit_bytes: %d", sizeB, maxSize)
+	if maxSize != 0 {
+		if sizeB > maxSize {
+			return 0, status.Errorf(
+				codes.OutOfRange,
+				"bad capacity: volume size %d > limit_bytes: %d", sizeB, maxSize)
+		}
 	}
 
-	// Convert size to KiB for return
 	sizeKiB = sizeGiB * kiBytesInGiB
 	return sizeKiB, nil
 }
