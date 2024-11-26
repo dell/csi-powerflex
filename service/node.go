@@ -758,19 +758,32 @@ func (s *service) NodeGetInfo(
 	// csi-vxflexos.dellemc.com/<systemID>: <provisionerName>
 	Log.Infof("Arrays: %+v", s.opts.arrays)
 	topology := map[string]string{}
+	if zone, ok := labels["zone."+Name]; ok {
+		topology["zone."+Name] = zone
+	}
+
 	for _, array := range s.opts.arrays {
 		isNFS, err := s.checkNFS(ctx, array.SystemID)
 		if err != nil {
 			return nil, err
 		}
+
 		if isNFS {
 			topology[Name+"/"+array.SystemID+"-nfs"] = "true"
 		}
-		topology[Name+"/"+array.SystemID] = SystemTopologySystemValue
-	}
 
-	if labels["zone."+Name] != "" {
-		topology["zone."+Name] = labels["zone."+Name]
+		if zone, ok := topology["zone."+Name]; ok {
+			if zone == string(array.AvailabilityZone.Name) {
+				// Add only the secret values with the correct zone.
+				nodeID, _ := GetNodeUID(ctx, s)
+				Log.Infof("Zone found for node ID: %s, adding system ID: %s to node topology", nodeID, array.SystemID)
+				topology[Name+"/"+array.SystemID] = SystemTopologySystemValue
+			}
+		} else {
+			nodeID, _ := GetNodeUID(ctx, s)
+			Log.Infof("No zoning found for node ID: %s, adding system ID: %s", nodeID, array.SystemID)
+			topology[Name+"/"+array.SystemID] = SystemTopologySystemValue
+		}
 	}
 
 	nodeID, err := GetNodeUID(ctx, s)

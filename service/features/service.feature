@@ -1566,5 +1566,6 @@ Feature: VxFlex OS CSI interface
 
   Scenario: Call NodeGetInfo with zone label
     Given a VxFlexOS service
+    And I use config "multi_az"
     When I call NodeGetInfo with zone labels
     Then a valid NodeGetInfo is returned with node topology 
