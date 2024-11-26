@@ -979,16 +979,17 @@ func validateVolSize(cr *csi.CapacityRange) (int64, error) {
 	}
 
 	var (
-		sizeGiB float64
-		sizeKiB int64
-		sizeB   int64
+		sizeGiBFloat float64
+		sizeGiB      int64
+		sizeKiB      int64
+		sizeB        int64
 	)
 
 	// Calculate size in GiB using float for precision
-	sizeGiB = minSize / kiBytesInGiB
+	sizeGiBFloat = float64(minSize) / float64(kiBytesInGiB)
 
 	// Use math.Ceil to round up to the nearest whole GiB
-	sizeGiB := int64(math.Ceil(sizeGiBFloat))
+	sizeGiB = int64(math.Ceil(sizeGiBFloat))
 
 	// Ensure at least 1 GiB for rounding
 	if sizeGiB < 1 {
