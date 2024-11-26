@@ -936,13 +936,17 @@ func validateVolSize(cr *csi.CapacityRange) (int64, error) {
 		sizeB        int64
 	)
 
+	// VxFlexOS creates volumes in multiples of 8GiB, rounding up.
+	// Determine what actual size of volume will be, and check that
+	// we do not exceed maxSize
 	// Calculate size in GiB using float for precision
 	sizeGiBFloat = float64(minSize) / float64(kiBytesInGiB)
 
 	// Use math.Ceil to round up to the nearest whole GiB
 	sizeGiB = int64(math.Ceil(sizeGiBFloat))
 
-	// Ensure at least 1 GiB for rounding
+	// if the requested size was less than 1GB, set the request to 1GB
+	// so it can be rounded to a 8GiB boundary correctly
 	if sizeGiB < 1 {
 		sizeGiB = 1
 	}
