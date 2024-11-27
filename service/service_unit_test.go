@@ -631,3 +631,108 @@ func TestFindNetworkInterfaceIPs(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateVolSize(t *testing.T) {
+	tests := []struct {
+		cr              *csi.CapacityRange
+		expectedSizeKiB int64
+		expectError     bool
+	}{
+		{
+			// No required or limit bytes should return the default size
+			cr: &csi.CapacityRange{
+				RequiredBytes: 0,
+				LimitBytes:    0,
+			},
+			expectedSizeKiB: DefaultVolumeSizeKiB,
+			expectError:     false,
+		},
+		{
+			// Requesting a size less than 1 GiB should round up to 1 GiB
+			cr: &csi.CapacityRange{
+				RequiredBytes: 300 * bytesInKiB,
+				LimitBytes:    0,
+			},
+			expectedSizeKiB: 8 * kiBytesInGiB,
+			expectError:     false,
+		},
+		{
+			// Setting a limit below the default size should result in an error
+			cr: &csi.CapacityRange{
+				RequiredBytes: 0,
+				LimitBytes:    4 * bytesInGiB,
+			},
+			expectedSizeKiB: 0,
+			expectError:     true,
+		},
+		{
+			// Requesting a size that is not a multiple of 8 GiB should round up
+			cr: &csi.CapacityRange{
+				RequiredBytes: 10 * bytesInGiB,
+				LimitBytes:    0,
+			},
+			expectedSizeKiB: 16 * kiBytesInGiB,
+			expectError:     false,
+		},
+		{
+			// Requesting a size that exceeds the limit should result in an error
+			cr: &csi.CapacityRange{
+				RequiredBytes: 13 * bytesInGiB,
+				LimitBytes:    14 * bytesInGiB,
+			},
+			expectedSizeKiB: 0,
+			expectError:     true,
+		},
+		{
+			// Negative required bytes should return an error
+			cr: &csi.CapacityRange{
+				RequiredBytes: -1,
+				LimitBytes:    0,
+			},
+			expectedSizeKiB: 0,
+			expectError:     true,
+		},
+		{
+			// Negative limit bytes should return an error
+			cr: &csi.CapacityRange{
+				RequiredBytes: 0,
+				LimitBytes:    -1,
+			},
+			expectedSizeKiB: 0,
+			expectError:     true,
+		},
+		{
+			// Requesting a size with decimal part that rounds up to next multiple of 8 GiB
+			cr: &csi.CapacityRange{
+				RequiredBytes: int64(9.5 * float64(bytesInGiB)),
+				LimitBytes:    0,
+			},
+			expectedSizeKiB: 16 * kiBytesInGiB,
+			expectError:     false,
+		},
+		{
+			// Requesting a size of 8.5 GiB to test rounding up
+			cr: &csi.CapacityRange{
+				RequiredBytes: int64(8.5 * float64(bytesInGiB)),
+				LimitBytes:    0,
+			},
+			expectedSizeKiB: 16 * kiBytesInGiB,
+			expectError:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt // Capture range variable
+		t.Run("", func(st *testing.T) {
+			st.Parallel()
+			sizeKiB, err := validateVolSize(tt.cr)
+			if tt.expectError {
+				assert.Error(st, err)
+				assert.EqualValues(st, tt.expectedSizeKiB, sizeKiB)
+			} else {
+				assert.NoError(st, err)
+				assert.EqualValues(st, tt.expectedSizeKiB, sizeKiB)
+			}
+		})
+	}
+}
