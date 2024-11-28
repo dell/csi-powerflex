@@ -1,8 +1,8 @@
 [
     {
         "endpoint": "http://127.0.0.1",
-        "username": "admin",
-        "password": "Password123",
+        "username": "username",
+        "password": "password",
         "insecure": true,
         "isDefault": true,
         "systemID": ""

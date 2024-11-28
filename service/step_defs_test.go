@@ -4256,12 +4256,15 @@ func (f *feature) iUseConfig(filename string) error {
 	fmt.Printf("****************************************************** s.opts.arrays %v\n", f.service.opts.arrays)
 	f.service.systemProbeAll(context.Background())
 	f.adminClient = f.service.adminClients[arrayID]
-	f.adminClient2 = f.service.adminClients[arrayID2]
 	if f.adminClient == nil {
 		return fmt.Errorf("adminClient nil")
 	}
-	if f.adminClient2 == nil {
-		return fmt.Errorf("adminClient2 nil")
+
+	if len(f.service.opts.arrays) > 1 {
+		f.adminClient2 = f.service.adminClients[arrayID2]
+		if f.adminClient2 == nil {
+			return fmt.Errorf("adminClient2 nil")
+		}
 	}
 	return nil
 }
@@ -4677,6 +4680,76 @@ func (f *feature) iCallPingNASServer(systemID string, name string) error {
 	return nil
 }
 
+func getZoneEnabledRequest() *csi.CreateVolumeRequest {
+	req := new(csi.CreateVolumeRequest)
+	params := make(map[string]string)
+	req.Parameters = params
+	capacityRange := new(csi.CapacityRange)
+	capacityRange.RequiredBytes = 32 * 1024 * 1024 * 1024
+	req.CapacityRange = capacityRange
+	req.AccessibilityRequirements = new(csi.TopologyRequirement)
+	topologies := []*csi.Topology{
+		{
+			Segments: map[string]string{
+				"zone.csi-vxflexos.dellemc.com": "zoneA",
+			},
+		},
+		{
+			Segments: map[string]string{
+				"zone.csi-vxflexos.dellemc.com": "zoneB",
+			},
+		},
+	}
+	req.AccessibilityRequirements.Preferred = topologies
+	return req
+}
+
+func (f *feature) iCallCreateVolumeWithZones(name string) error {
+	ctx := new(context.Context)
+	if f.createVolumeRequest == nil {
+		req := getZoneEnabledRequest()
+		f.createVolumeRequest = req
+	}
+	req := f.createVolumeRequest
+	req.Name = name
+
+	fmt.Println("I am in iCallCreateVolume fn.....")
+
+	f.createVolumeResponse, f.err = f.service.CreateVolume(*ctx, req)
+	if f.err != nil {
+		log.Printf("CreateVolume called failed: %s\n", f.err.Error())
+	}
+
+	if f.createVolumeResponse != nil {
+		log.Printf("vol id %s\n", f.createVolumeResponse.GetVolume().VolumeId)
+	}
+	return nil
+}
+
+func mockGetNodeLabelsWithZone(_ context.Context, _ *service) (map[string]string, error) {
+	labels := map[string]string{"zone.csi-vxflexos.dellemc.com": "zoneA"}
+	return labels, nil
+}
+
+func (f *feature) iCallNodeGetInfoWithZoneLabels() error {
+	ctx := new(context.Context)
+	req := new(csi.NodeGetInfoRequest)
+	f.service.opts.SdcGUID = "9E56672F-2F4B-4A42-BFF4-88B6846FBFDA"
+	GetNodeLabels = mockGetNodeLabelsWithZone
+	GetNodeUID = mockGetNodeUID
+	f.nodeGetInfoResponse, f.err = f.service.NodeGetInfo(*ctx, req)
+	return nil
+}
+
+func (f *feature) aValidNodeGetInfoIsReturnedWithNodeTopology() error {
+	accessibility := f.nodeGetInfoResponse.GetAccessibleTopology()
+	if _, ok := accessibility.Segments["zone.csi-vxflexos.dellemc.com"]; !ok {
+		return fmt.Errorf("zone not found")
+	}
+
+	return nil
+}
+
 func FeatureContext(s *godog.ScenarioContext) {
 	f := &feature{}
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
@@ -4900,6 +4973,10 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^a valid node uid is returned$`, f.aValidNodeUIDIsReturned)
 	s.Step(`^I call GetNodeUID with invalid node$`, f.iCallGetNodeUIDWithInvalidNode)
 	s.Step(`^I call GetNodeUID with unset KubernetesClient$`, f.iCallGetNodeUIDWithUnsetKubernetesClient)
+
+	s.Step(`^I call CreateVolume "([^"]*)" with zones$`, f.iCallCreateVolumeWithZones)
+	s.Step(`^I call NodeGetInfo with zone labels$`, f.iCallNodeGetInfoWithZoneLabels)
+	s.Step(`^a valid NodeGetInfo is returned with node topology$`, f.aValidNodeGetInfoIsReturnedWithNodeTopology)
 
 	s.After(func(ctx context.Context, _ *godog.Scenario, _ error) (context.Context, error) {
 		if f.server != nil {

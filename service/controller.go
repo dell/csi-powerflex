@@ -155,20 +155,41 @@ const (
 
 var interestingParameters = [...]string{0: "FsType", 1: KeyMkfsFormatOption, 2: KeyBandwidthLimitInKbps, 3: KeyIopsLimit}
 
+type ZoneContent struct {
+	systemID         string
+	protectionDomain ProtectionDomainName
+	pool             PoolName
+}
+
 func (s *service) CreateVolume(
 	ctx context.Context,
 	req *csi.CreateVolumeRequest) (
 	*csi.CreateVolumeResponse, error,
 ) {
 	params := req.GetParameters()
+	var systemID string
+	var err error
 
-	systemID, err := s.getSystemIDFromParameters(params)
-	if err != nil {
-		return nil, err
+	// This is a map of zone to the arrayID and pool identifier
+	zoneTargetMap := make(map[ZoneName]ZoneContent)
+
+	if _, ok := params[KeySystemID]; !ok {
+		zoneTargetMap = s.getZonesFromSecret()
 	}
 
-	if err := s.requireProbe(ctx, systemID); err != nil {
-		return nil, err
+	if len(zoneTargetMap) == 0 {
+		sid, err := s.getSystemIDFromParameters(params)
+		if err != nil {
+			return nil, err
+		}
+
+		systemID = sid
+	}
+
+	if systemID != "" {
+		if err := s.requireProbe(ctx, systemID); err != nil {
+			return nil, err
+		}
 	}
 
 	s.logStatistics()
@@ -191,9 +212,55 @@ func (s *service) CreateVolume(
 		Log.Printf("Received CreateVolume request without accessibility keys")
 	}
 
+	// Look for zone topology
+	zoneTopology := false
+	var storagePool string
+	var protectionDomain string
 	var volumeTopology []*csi.Topology
 	systemSegments := map[string]string{} // topology segments matching requested system for a volume
-	if accessibility != nil && len(accessibility.GetPreferred()) > 0 {
+
+	// Handle Zone topology, which happens when node is annotated with "Zone" label
+	if len(zoneTargetMap) != 0 && accessibility != nil && len(accessibility.GetPreferred()) > 0 {
+		for _, topo := range accessibility.GetPreferred() {
+			for topoLabel, zoneName := range topo.Segments {
+				if strings.HasPrefix(topoLabel, "zone."+Name) {
+					zoneTarget, ok := zoneTargetMap[ZoneName(zoneName)]
+					if !ok {
+						Log.Infof("no zone target for %s", zoneTarget)
+						continue
+					}
+
+					protectionDomain = string(zoneTarget.protectionDomain)
+					storagePool = string(zoneTarget.pool)
+					systemID = zoneTarget.systemID
+
+					Log.Infof("Preferred topology zone %s, systemID %s, protectionDomain %s, and storagePool %s", zoneName, systemID, protectionDomain, storagePool)
+
+					if err := s.requireProbe(ctx, systemID); err != nil {
+						Log.Errorln("Failed to probe system " + systemID)
+						continue
+					}
+
+					systemSegments["zone."+Name] = zoneName
+					volumeTopology = append(volumeTopology, &csi.Topology{
+						Segments: systemSegments,
+					})
+
+					zoneTopology = true
+				}
+			}
+
+			if zoneTopology {
+				break
+			}
+		}
+
+		if !zoneTopology {
+			return nil, status.Error(codes.InvalidArgument, "no zone topology found in accessibility requirements")
+		}
+	}
+
+	if !zoneTopology && accessibility != nil && len(accessibility.GetPreferred()) > 0 {
 		requestedSystem := ""
 		sID := ""
 		system := s.systems[systemID]
@@ -451,21 +518,31 @@ func (s *service) CreateVolume(
 		params = mergeStringMaps(params, req.GetSecrets())
 
 		// We require the storagePool name for creation
-		sp, ok := params[KeyStoragePool]
-		if !ok {
-			return nil, status.Errorf(codes.InvalidArgument,
-				"%s is a required parameter", KeyStoragePool)
+		if storagePool == "" {
+			sp, ok := params[KeyStoragePool]
+			if !ok {
+				return nil, status.Errorf(codes.InvalidArgument,
+					"%s is a required parameter", KeyStoragePool)
+			}
+
+			storagePool = sp
+		} else {
+			Log.Printf("[CreateVolume] Multi-AZ Storage Pool Determined by Secret %s", storagePool)
 		}
 
-		pdID := ""
-		pd, ok := params[KeyProtectionDomain]
-		if !ok {
-			Log.Printf("Protection Domain name not provided; there could be conflicts if two storage pools share a name")
-		} else {
-			pdID, err = s.getProtectionDomainIDFromName(systemID, pd)
-			if err != nil {
-				return nil, err
+		var pdID string
+		if protectionDomain == "" {
+			pd, ok := params[KeyProtectionDomain]
+			if !ok {
+				Log.Printf("Protection Domain name not provided; there could be conflicts if two storage pools share a name")
+			} else {
+				protectionDomain = pd
 			}
+		}
+
+		pdID, err = s.getProtectionDomainIDFromName(systemID, protectionDomain)
+		if err != nil {
+			return nil, err
 		}
 
 		volType := s.getVolProvisionType(params) // Thick or Thin
@@ -475,12 +552,12 @@ func (s *service) CreateVolume(
 			volumeSource := contentSource.GetVolume()
 			if volumeSource != nil {
 				Log.Printf("volume %s specified as volume content source", volumeSource.VolumeId)
-				return s.Clone(req, volumeSource, name, size, sp)
+				return s.Clone(req, volumeSource, name, size, storagePool)
 			}
 			snapshotSource := contentSource.GetSnapshot()
 			if snapshotSource != nil {
 				Log.Printf("snapshot %s specified as volume content source", snapshotSource.SnapshotId)
-				return s.createVolumeFromSnapshot(req, snapshotSource, name, size, sp)
+				return s.createVolumeFromSnapshot(req, snapshotSource, name, size, storagePool)
 			}
 		}
 
@@ -489,7 +566,7 @@ func (s *service) CreateVolume(
 		fields := map[string]interface{}{
 			"name":                               name,
 			"sizeInKiB":                          size,
-			"storagePool":                        sp,
+			"storagePool":                        storagePool,
 			"volType":                            volType,
 			HeaderPersistentVolumeName:           params[CSIPersistentVolumeName],
 			HeaderPersistentVolumeClaimName:      params[CSIPersistentVolumeClaimName],
@@ -517,13 +594,13 @@ func (s *service) CreateVolume(
 			Log.Println("warning: goscaleio.VolumeParam: no MetaData method exists, consider updating goscaleio library.")
 		}
 
-		createResp, err := s.adminClients[systemID].CreateVolume(volumeParam, sp, pdID)
+		createResp, err := s.adminClients[systemID].CreateVolume(volumeParam, storagePool, pdID)
 		if err != nil {
 			// handle case where volume already exists
 			if !strings.EqualFold(err.Error(), sioGatewayVolumeNameInUse) {
-				Log.Printf("error creating volume: %s pool %s error: %s", name, sp, err.Error())
+				Log.Printf("error creating volume: %s pool %s error: %s", name, storagePool, err.Error())
 				return nil, status.Errorf(codes.Internal,
-					"error when creating volume %s storagepool %s: %s", name, sp, err.Error())
+					"error when creating volume %s storagepool %s: %s", name, storagePool, err.Error())
 			}
 		}
 
@@ -548,7 +625,7 @@ func (s *service) CreateVolume(
 
 		// since the volume could have already exists, double check that the
 		// volume has the expected parameters
-		spID, err := s.getStoragePoolID(sp, systemID, pdID)
+		spID, err := s.getStoragePoolID(storagePool, systemID, pdID)
 		if err != nil {
 			return nil, status.Errorf(codes.Unavailable,
 				"volume exists, but could not verify parameters: %s",
@@ -737,6 +814,7 @@ func (s *service) getSystemIDFromParameters(params map[string]string) (string, e
 			return "", status.Errorf(codes.FailedPrecondition, "No system ID is found in parameters or as default")
 		}
 	}
+
 	Log.Printf("getSystemIDFromParameters system %s", systemID)
 
 	// if name set for array.SystemID use id instead
@@ -746,6 +824,36 @@ func (s *service) getSystemIDFromParameters(params map[string]string) (string, e
 	}
 	Log.Printf("Use systemID as %s", systemID)
 	return systemID, nil
+}
+
+// getZonesFromSecret returns a map with zone names as keys to zone content
+// with zone content consisting of the PowerFlex systemID, protection domain and pool.
+func (s *service) getZonesFromSecret() map[ZoneName]ZoneContent {
+	zoneTargetMap := make(map[ZoneName]ZoneContent)
+
+	for _, array := range s.opts.arrays {
+		availabilityZone := array.AvailabilityZone
+		if availabilityZone == nil {
+			continue
+		}
+
+		zone := availabilityZone.Name
+
+		var pd ProtectionDomainName
+		if availabilityZone.ProtectionDomains[0].Name != "" {
+			pd = availabilityZone.ProtectionDomains[0].Name
+		}
+
+		pool := availabilityZone.ProtectionDomains[0].Pools[0]
+
+		zoneTargetMap[zone] = ZoneContent{
+			systemID:         array.SystemID,
+			protectionDomain: pd,
+			pool:             pool,
+		}
+	}
+
+	return zoneTargetMap
 }
 
 // Create a volume (which is actually a snapshot) from an existing snapshot.
@@ -2176,7 +2284,7 @@ func (s *service) getCapacityForAllSystems(ctx context.Context, protectionDomain
 		var systemCapacity int64
 		var err error
 
-		if len(spName) > 0 {
+		if len(spName) > 0 && spName[0] != "" {
 			systemCapacity, err = s.getSystemCapacity(ctx, array.SystemID, protectionDomain, spName[0])
 		} else {
 			systemCapacity, err = s.getSystemCapacity(ctx, array.SystemID, "")
@@ -2210,7 +2318,7 @@ func (s *service) GetCapacity(
 
 	systemID := ""
 	params := req.GetParameters()
-	if params == nil || len(params) == 0 {
+	if len(params) == 0 {
 		// Get capacity of all systems
 		capacity, err = s.getCapacityForAllSystems(ctx, "")
 	} else {
