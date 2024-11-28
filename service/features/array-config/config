@@ -1,8 +1,8 @@
 [
    {
       "endpoint": "http://127.0.0.1",
-      "username": "admin",
-      "password": "Password123",
+      "username": "username",
+      "password": "password",
       "insecure": true,
       "isDefault": true,
       "systemID": "14dbbf5617523654",
@@ -10,8 +10,8 @@
    },
    {
       "endpoint": "http://127.0.0.2",
-      "username": "admin",
-      "password": "Password123",
+      "username": "username",
+      "password": "password",
       "skipCertificateValidation": true,
       "isDefault": false,
       "systemID": "15dbbf5617523655",
