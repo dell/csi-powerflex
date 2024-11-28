@@ -1551,5 +1551,21 @@ Feature: VxFlex OS CSI interface
     Examples:
       |  systemid                  | nasserver                                |   error                         |  errorMsg                   |
       |  "15dbbf5617523655"        | "63ec8e0d-4551-29a7-e79c-b202f2b914f3"   |   ""                            | "none"                      |   
-      |  "15dbbf5617523655"        | "invalid-nas-server"                     |   "NasNotFoundError"            |  "NAS server not found"     |      
-     
+      |  "15dbbf5617523655"        | "invalid-nas-server"                     |   "NasNotFoundError"            |  "NAS server not found"     |  
+  
+  Scenario: Create Volume for multi-available zone
+    Given a VxFlexOS service
+    And I use config <config>
+    When I call Probe
+    And I call CreateVolume <name> with zones
+    Then the error contains <errorMsg>
+    Examples:
+      | name      | config             | errorMsg                                               |
+      | "volume1" | "multi_az"         | "none"                                                 |
+      | "volume1" | "invalid_multi_az" | "no zone topology found in accessibility requirements" |
+
+  Scenario: Call NodeGetInfo with zone label
+    Given a VxFlexOS service
+    And I use config "multi_az"
+    When I call NodeGetInfo with zone labels
+    Then a valid NodeGetInfo is returned with node topology 
