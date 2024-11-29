@@ -4757,7 +4757,7 @@ func (f *feature) aNodeGetInfoIsReturnedWithoutZoneTopology() error {
 	return nil
 }
 
-func ( f *feature) aNodeGetInfoIsReturnedWithoutZoneSystemTopology() error {
+func (f *feature) aNodeGetInfoIsReturnedWithoutZoneSystemTopology() error {
 	accessibility := f.nodeGetInfoResponse.GetAccessibleTopology()
 	Log.Printf("Node Accessibility %+v", accessibility)
 
