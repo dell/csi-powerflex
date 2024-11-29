@@ -1,0 +1,22 @@
+[
+   {
+      "endpoint": "https://127.0.0.1",
+      "username": "username",
+      "password": "password",
+      "insecure": true,
+      "isDefault": true,
+      "systemID": "0000000000000001",
+      "mdm": "127.0.0.2,127.0.0.3",
+      "zone": {
+         "name": "myZone",
+         "protectionDomains": [
+            {
+               "name": "myDomain",
+               "pools": [
+                  "myPool"
+               ]
+            }
+         ]
+      }
+   }
+]
