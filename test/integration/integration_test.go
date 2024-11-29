@@ -113,7 +113,7 @@ func TestIntegration(t *testing.T) {
 
 	stop()
 	if exitVal != 0 {
-		os.Exit(exitVal)
+		t.Fatalf("[TestIntegration] godog exited with %d", exitVal)
 	}
 }
 
@@ -157,7 +157,7 @@ func TestZoneIntegration(t *testing.T) {
 
 	stop()
 	if exitVal != 0 {
-		os.Exit(exitVal)
+		t.Fatalf("[TestZoneIntegration] godog exited with %d", exitVal)
 	}
 }
 
