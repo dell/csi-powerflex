@@ -1881,6 +1881,7 @@ func (f *feature) iCallNodeGetInfo() error {
 	req := new(csi.NodeGetInfoRequest)
 	f.service.opts.SdcGUID = "9E56672F-2F4B-4A42-BFF4-88B6846FBFDA"
 	GetNodeLabels = mockGetNodeLabels
+	GetNodeUID = mockGetNodeUID
 	f.nodeGetInfoResponse, f.err = f.service.NodeGetInfo(*ctx, req)
 	return nil
 }
@@ -4724,7 +4725,7 @@ func (f *feature) iCallCreateVolumeWithZones(name string) error {
 }
 
 func mockGetNodeLabelsWithZone(_ context.Context, _ *service) (map[string]string, error) {
-	labels := map[string]string{"zone.csi-vxflexos.dellemc.com": "zoneA"}
+	labels := map[string]string{"zone." + Name: "zoneA"}
 	return labels, nil
 }
 
@@ -4744,6 +4745,27 @@ func (f *feature) aValidNodeGetInfoIsReturnedWithNodeTopology() error {
 		return fmt.Errorf("zone not found")
 	}
 
+	return nil
+}
+
+func (f *feature) aNodeGetInfoIsReturnedWithoutZoneTopology() error {
+	accessibility := f.nodeGetInfoResponse.GetAccessibleTopology()
+	Log.Printf("Node Accessibility %+v", accessibility)
+	if _, ok := accessibility.Segments["zone."+Name]; ok {
+		return fmt.Errorf("zone found")
+	}
+	return nil
+}
+
+func (f *feature) aNodeGetInfoIsReturnedWithoutZoneSystemTopology() error {
+	accessibility := f.nodeGetInfoResponse.GetAccessibleTopology()
+	Log.Printf("Node Accessibility %+v", accessibility)
+
+	for _, array := range f.service.opts.arrays {
+		if _, ok := accessibility.Segments[Name+"/"+array.SystemID]; ok {
+			return fmt.Errorf("zone found")
+		}
+	}
 	return nil
 }
 
@@ -4974,6 +4996,8 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call CreateVolume "([^"]*)" with zones$`, f.iCallCreateVolumeWithZones)
 	s.Step(`^I call NodeGetInfo with zone labels$`, f.iCallNodeGetInfoWithZoneLabels)
 	s.Step(`^a valid NodeGetInfo is returned with node topology$`, f.aValidNodeGetInfoIsReturnedWithNodeTopology)
+	s.Step(`^a NodeGetInfo is returned without zone topology$`, f.aNodeGetInfoIsReturnedWithoutZoneTopology)
+	s.Step(`^a NodeGetInfo is returned without zone system topology$`, f.aNodeGetInfoIsReturnedWithoutZoneSystemTopology)
 
 	s.After(func(ctx context.Context, _ *godog.Scenario, _ error) (context.Context, error) {
 		if f.server != nil {
