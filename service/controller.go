@@ -219,11 +219,12 @@ func (s *service) CreateVolume(
 	var volumeTopology []*csi.Topology
 	systemSegments := map[string]string{} // topology segments matching requested system for a volume
 
-	// Handle Zone topology, which happens when node is annotated with "Zone" label
+	// Handle Zone topology, which happens when node is annotated with a matching zone label
 	if len(zoneTargetMap) != 0 && accessibility != nil && len(accessibility.GetPreferred()) > 0 {
 		for _, topo := range accessibility.GetPreferred() {
 			for topoLabel, zoneName := range topo.Segments {
-				if strings.HasPrefix(topoLabel, "zone."+Name) {
+				Log.Infof("Zoning based on label %s", s.opts.zoneLabelKey)
+				if strings.HasPrefix(topoLabel, s.opts.zoneLabelKey) {
 					zoneTarget, ok := zoneTargetMap[ZoneName(zoneName)]
 					if !ok {
 						Log.Infof("no zone target for %s", zoneTarget)
@@ -241,7 +242,7 @@ func (s *service) CreateVolume(
 						continue
 					}
 
-					systemSegments["zone."+Name] = zoneName
+					systemSegments[s.opts.zoneLabelKey] = zoneName
 					volumeTopology = append(volumeTopology, &csi.Topology{
 						Segments: systemSegments,
 					})
