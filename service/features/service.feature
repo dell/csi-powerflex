@@ -1564,8 +1564,20 @@ Feature: VxFlex OS CSI interface
       | "volume1" | "multi_az"         | "none"                                                 |
       | "volume1" | "invalid_multi_az" | "no zone topology found in accessibility requirements" |
 
+  Scenario: Call NodeGetInfo without zone label
+    Given a VxFlexOS service
+    And I use config "config"
+    When I call NodeGetInfo
+    Then a NodeGetInfo is returned without zone topology
+
   Scenario: Call NodeGetInfo with zone label
     Given a VxFlexOS service
     And I use config "multi_az"
     When I call NodeGetInfo with zone labels
-    Then a valid NodeGetInfo is returned with node topology 
+    Then a valid NodeGetInfo is returned with node topology
+
+  Scenario: Call NodeGetInfo with zone label with invalid config
+    Given a VxFlexOS service
+    And I use config "invalid_multi_az"
+    When I call NodeGetInfo with zone labels
+    Then a NodeGetInfo is returned without zone system topology
