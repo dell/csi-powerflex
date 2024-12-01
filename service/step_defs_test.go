@@ -4682,7 +4682,7 @@ func (f *feature) iCallPingNASServer(systemID string, name string) error {
 	return nil
 }
 
-func getZoneEnabledRequest() *csi.CreateVolumeRequest {
+func getZoneEnabledRequest(zoneLabelName string) *csi.CreateVolumeRequest {
 	req := new(csi.CreateVolumeRequest)
 	params := make(map[string]string)
 	req.Parameters = params
@@ -4693,12 +4693,12 @@ func getZoneEnabledRequest() *csi.CreateVolumeRequest {
 	topologies := []*csi.Topology{
 		{
 			Segments: map[string]string{
-				"zone.csi-vxflexos.dellemc.com": "zoneA",
+				zoneLabelName: "zoneA",
 			},
 		},
 		{
 			Segments: map[string]string{
-				"zone.csi-vxflexos.dellemc.com": "zoneB",
+				zoneLabelName: "zoneB",
 			},
 		},
 	}
@@ -4709,7 +4709,7 @@ func getZoneEnabledRequest() *csi.CreateVolumeRequest {
 func (f *feature) iCallCreateVolumeWithZones(name string) error {
 	ctx := new(context.Context)
 	if f.createVolumeRequest == nil {
-		req := getZoneEnabledRequest()
+		req := getZoneEnabledRequest(f.service.opts.zoneLabelKey)
 		f.createVolumeRequest = req
 	}
 	req := f.createVolumeRequest
@@ -4728,8 +4728,8 @@ func (f *feature) iCallCreateVolumeWithZones(name string) error {
 	return nil
 }
 
-func mockGetNodeLabelsWithZone(_ context.Context, _ *service) (map[string]string, error) {
-	labels := map[string]string{"zone." + Name: "zoneA"}
+func mockGetNodeLabelsWithZone(_ context.Context, s *service) (map[string]string, error) {
+	labels := map[string]string{s.opts.zoneLabelKey: "zoneA"}
 	return labels, nil
 }
 
@@ -4745,7 +4745,7 @@ func (f *feature) iCallNodeGetInfoWithZoneLabels() error {
 
 func (f *feature) aValidNodeGetInfoIsReturnedWithNodeTopology() error {
 	accessibility := f.nodeGetInfoResponse.GetAccessibleTopology()
-	if _, ok := accessibility.Segments["zone.csi-vxflexos.dellemc.com"]; !ok {
+	if _, ok := accessibility.Segments[f.service.opts.zoneLabelKey]; !ok {
 		return fmt.Errorf("zone not found")
 	}
 
@@ -4755,7 +4755,7 @@ func (f *feature) aValidNodeGetInfoIsReturnedWithNodeTopology() error {
 func (f *feature) aNodeGetInfoIsReturnedWithoutZoneTopology() error {
 	accessibility := f.nodeGetInfoResponse.GetAccessibleTopology()
 	Log.Printf("Node Accessibility %+v", accessibility)
-	if _, ok := accessibility.Segments["zone."+Name]; ok {
+	if _, ok := accessibility.Segments[f.service.opts.zoneLabelKey]; ok {
 		return fmt.Errorf("zone found")
 	}
 	return nil
