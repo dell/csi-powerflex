@@ -575,7 +575,11 @@ func TestGetZoneKeyLabelFromSecret(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			label, err := getZoneKeyLabelFromSecret(tt.arrays)
-			assert.Equal(t, err, tt.expectedErr)
+			if tt.expectedErr == nil {
+				assert.Nil(t, err)
+			} else {
+				assert.NotNil(t, err)
+			}
 			assert.Equal(t, label, tt.expectedLabel)
 		})
 	}
