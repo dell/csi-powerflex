@@ -212,7 +212,6 @@ func (f *feature) checkPodsStatus() error {
 	log.Println("[checkPodsStatus] checking pods status")
 
 	_, err := f.areAllPodsRunning()
-
 	if err != nil {
 		return fmt.Errorf("Pods not ready, check pods status and then try again")
 	}
@@ -302,7 +301,6 @@ func (f *feature) checkPodsForCordonRun() error {
 	log.Println("[checkPodsForCordonRun] checking pods status")
 
 	pods, err := f.areAllPodsRunning()
-
 	if err != nil {
 		return fmt.Errorf("Pods not ready, check pods status and then try again")
 	}
