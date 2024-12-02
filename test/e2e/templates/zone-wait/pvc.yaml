@@ -1,3 +1,4 @@
+---
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
@@ -5,11 +6,11 @@ metadata:
     namespace: reptest
 spec:
     accessModes:
-    - ReadWriteOnce
+        - ReadWriteOnce
     volumeMode: Filesystem
     resources:
-    requests:
-        storage: 8Gi
+        requests:
+            storage: 8Gi
     storageClassName: vxflexos-az-wait
 ---
 kind: PersistentVolumeClaim
@@ -19,11 +20,11 @@ metadata:
     namespace: reptest
 spec:
     accessModes:
-    - ReadWriteOnce
+        - ReadWriteOnce
     volumeMode: Filesystem
     resources:
-    requests:
-        storage: 8Gi
+        requests:
+            storage: 8Gi
     storageClassName: vxflexos-az-wait
 ---
 kind: PersistentVolumeClaim
@@ -33,11 +34,11 @@ metadata:
     namespace: reptest
 spec:
     accessModes:
-    - ReadWriteOnce
+        - ReadWriteOnce
     volumeMode: Filesystem
     resources:
-    requests:
-        storage: 8Gi
+        requests:
+            storage: 8Gi
     storageClassName: vxflexos-az-wait
 ---
 kind: PersistentVolumeClaim
@@ -47,11 +48,11 @@ metadata:
     namespace: reptest
 spec:
     accessModes:
-    - ReadWriteOnce
+        - ReadWriteOnce
     volumeMode: Filesystem
     resources:
-    requests:
-        storage: 8Gi
+        requests:
+            storage: 8Gi
     storageClassName: vxflexos-az-wait
 ---
 kind: PersistentVolumeClaim
@@ -61,11 +62,11 @@ metadata:
     namespace: reptest
 spec:
     accessModes:
-    - ReadWriteOnce
+        - ReadWriteOnce
     volumeMode: Filesystem
     resources:
-    requests:
-        storage: 8Gi
+        requests:
+            storage: 8Gi
     storageClassName: vxflexos-az-wait
 ---
 kind: PersistentVolumeClaim
@@ -75,11 +76,11 @@ metadata:
     namespace: reptest
 spec:
     accessModes:
-    - ReadWriteOnce
+        - ReadWriteOnce
     volumeMode: Filesystem
     resources:
-    requests:
-        storage: 8Gi
+        requests:
+            storage: 8Gi
     storageClassName: vxflexos-az-wait
 ---
 kind: PersistentVolumeClaim
@@ -89,11 +90,11 @@ metadata:
     namespace: reptest
 spec:
     accessModes:
-    - ReadWriteOnce
+        - ReadWriteOnce
     volumeMode: Filesystem
     resources:
-    requests:
-        storage: 8Gi
+        requests:
+            storage: 8Gi
     storageClassName: vxflexos-az-wait
 ---
 kind: PersistentVolumeClaim
@@ -103,9 +104,9 @@ metadata:
     namespace: reptest
 spec:
     accessModes:
-    - ReadWriteOnce
+        - ReadWriteOnce
     volumeMode: Filesystem
     resources:
-    requests:
-        storage: 8Gi
+        requests:
+            storage: 8Gi
     storageClassName: vxflexos-az-wait

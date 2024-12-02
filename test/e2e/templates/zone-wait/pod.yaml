@@ -1,191 +1,192 @@
+---
 apiVersion: v1
 kind: Pod
 metadata:
-    name: demo-pod-0-multi-wait
-    namespace: reptest
+  name: demo-pod-0-multi-wait
+  namespace: reptest
 spec:
-    containers:
+  containers:
     - name: nginx
-    image: 10.247.98.98:5000/nginx:latest
-    volumeMounts:
-    - mountPath: "/usr/share/nginx/html"
-        name: nginx-pv-storage
-    resources:
+      image: 10.247.98.98:5000/nginx:latest
+      volumeMounts:
+        - mountPath: "/usr/share/nginx/html"
+          name: nginx-pv-storage
+      resources:
         requests:
-        cpu: "100m"
-        memory: "128Mi"
+          cpu: "100m"
+          memory: "128Mi"
         limits:
-        cpu: "200m"
-        memory: "256Mi"
-    volumes:
+          cpu: "200m"
+          memory: "256Mi"
+  volumes:
     - name: nginx-pv-storage
-    persistentVolumeClaim:
+      persistentVolumeClaim:
         claimName: pvol0-multi-wait
 ---
 apiVersion: v1
 kind: Pod
 metadata:
-    name: demo-pod-1-multi-wait
-    namespace: reptest
+  name: demo-pod-1-multi-wait
+  namespace: reptest
 spec:
-    containers:
+  containers:
     - name: nginx
-    image: 10.247.98.98:5000/nginx:latest
-    volumeMounts:
-    - mountPath: "/usr/share/nginx/html"
-        name: nginx-pv-storage
-    resources:
+      image: 10.247.98.98:5000/nginx:latest
+      volumeMounts:
+        - mountPath: "/usr/share/nginx/html"
+          name: nginx-pv-storage
+      resources:
         requests:
-        cpu: "100m"
-        memory: "128Mi"
+          cpu: "100m"
+          memory: "128Mi"
         limits:
-        cpu: "200m"
-        memory: "256Mi"
-    volumes:
+          cpu: "200m"
+          memory: "256Mi"
+  volumes:
     - name: nginx-pv-storage
-    persistentVolumeClaim:
+      persistentVolumeClaim:
         claimName: pvol1-multi-wait
 ---
 apiVersion: v1
 kind: Pod
 metadata:
-    name: demo-pod-2-multi-wait
-    namespace: reptest
+  name: demo-pod-2-multi-wait
+  namespace: reptest
 spec:
-    containers:
+  containers:
     - name: nginx
-    image: 10.247.98.98:5000/nginx:latest
-    volumeMounts:
-    - mountPath: "/usr/share/nginx/html"
-        name: nginx-pv-storage
-    resources:
+      image: 10.247.98.98:5000/nginx:latest
+      volumeMounts:
+        - mountPath: "/usr/share/nginx/html"
+          name: nginx-pv-storage
+      resources:
         requests:
-        cpu: "100m"
-        memory: "128Mi"
+          cpu: "100m"
+          memory: "128Mi"
         limits:
-        cpu: "200m"
-        memory: "256Mi"
-    volumes:
+          cpu: "200m"
+          memory: "256Mi"
+  volumes:
     - name: nginx-pv-storage
-    persistentVolumeClaim:
+      persistentVolumeClaim:
         claimName: pvol2-multi-wait
 ---
 apiVersion: v1
 kind: Pod
 metadata:
-    name: demo-pod-3-multi-wait
-    namespace: reptest
+  name: demo-pod-3-multi-wait
+  namespace: reptest
 spec:
-    containers:
+  containers:
     - name: nginx
-    image: 10.247.98.98:5000/nginx:latest
-    volumeMounts:
-    - mountPath: "/usr/share/nginx/html"
-        name: nginx-pv-storage
-    resources:
+      image: 10.247.98.98:5000/nginx:latest
+      volumeMounts:
+        - mountPath: "/usr/share/nginx/html"
+          name: nginx-pv-storage
+      resources:
         requests:
-        cpu: "100m"
-        memory: "128Mi"
+          cpu: "100m"
+          memory: "128Mi"
         limits:
-        cpu: "200m"
-        memory: "256Mi"
-    volumes:
+          cpu: "200m"
+          memory: "256Mi"
+  volumes:
     - name: nginx-pv-storage
-    persistentVolumeClaim:
+      persistentVolumeClaim:
         claimName: pvol3-multi-wait
 ---
 apiVersion: v1
 kind: Pod
 metadata:
-    name: demo-pod-4-multi-wait
-    namespace: reptest
+  name: demo-pod-4-multi-wait
+  namespace: reptest
 spec:
-    containers:
+  containers:
     - name: nginx
-    image: 10.247.98.98:5000/nginx:latest
-    volumeMounts:
-    - mountPath: "/usr/share/nginx/html"
-        name: nginx-pv-storage
-    resources:
+      image: 10.247.98.98:5000/nginx:latest
+      volumeMounts:
+        - mountPath: "/usr/share/nginx/html"
+          name: nginx-pv-storage
+      resources:
         requests:
-        cpu: "100m"
-        memory: "128Mi"
+          cpu: "100m"
+          memory: "128Mi"
         limits:
-        cpu: "200m"
-        memory: "256Mi"
-    volumes:
+          cpu: "200m"
+          memory: "256Mi"
+  volumes:
     - name: nginx-pv-storage
-    persistentVolumeClaim:
+      persistentVolumeClaim:
         claimName: pvol4-multi-wait
 ---
 apiVersion: v1
 kind: Pod
 metadata:
-    name: demo-pod-5-multi-wait
-    namespace: reptest
+  name: demo-pod-5-multi-wait
+  namespace: reptest
 spec:
-    containers:
+  containers:
     - name: nginx
-    image: 10.247.98.98:5000/nginx:latest
-    volumeMounts:
-    - mountPath: "/usr/share/nginx/html"
-        name: nginx-pv-storage
-    resources:
+      image: 10.247.98.98:5000/nginx:latest
+      volumeMounts:
+        - mountPath: "/usr/share/nginx/html"
+          name: nginx-pv-storage
+      resources:
         requests:
-        cpu: "100m"
-        memory: "128Mi"
+          cpu: "100m"
+          memory: "128Mi"
         limits:
-        cpu: "200m"
-        memory: "256Mi"
-    volumes:
+          cpu: "200m"
+          memory: "256Mi"
+  volumes:
     - name: nginx-pv-storage
-    persistentVolumeClaim:
+      persistentVolumeClaim:
         claimName: pvol5-multi-wait
 ---
 apiVersion: v1
 kind: Pod
 metadata:
-    name: demo-pod-6-multi-wait
-    namespace: reptest
+  name: demo-pod-6-multi-wait
+  namespace: reptest
 spec:
-    containers:
+  containers:
     - name: nginx
-    image: 10.247.98.98:5000/nginx:latest
-    volumeMounts:
-    - mountPath: "/usr/share/nginx/html"
-        name: nginx-pv-storage
-    resources:
+      image: 10.247.98.98:5000/nginx:latest
+      volumeMounts:
+        - mountPath: "/usr/share/nginx/html"
+          name: nginx-pv-storage
+      resources:
         requests:
-        cpu: "100m"
-        memory: "128Mi"
+          cpu: "100m"
+          memory: "128Mi"
         limits:
-        cpu: "200m"
-        memory: "256Mi"
-    volumes:
+          cpu: "200m"
+          memory: "256Mi"
+  volumes:
     - name: nginx-pv-storage
-    persistentVolumeClaim:
+      persistentVolumeClaim:
         claimName: pvol6-multi-wait
 ---
 apiVersion: v1
 kind: Pod
 metadata:
-    name: demo-pod-7-multi-wait
-    namespace: reptest
+  name: demo-pod-7-multi-wait
+  namespace: reptest
 spec:
-    containers:
+  containers:
     - name: nginx
-    image: 10.247.98.98:5000/nginx:latest
-    volumeMounts:
-    - mountPath: "/usr/share/nginx/html"
-        name: nginx-pv-storage
-    resources:
+      image: 10.247.98.98:5000/nginx:latest
+      volumeMounts:
+        - mountPath: "/usr/share/nginx/html"
+          name: nginx-pv-storage
+      resources:
         requests:
-        cpu: "100m"
-        memory: "128Mi"
+          cpu: "100m"
+          memory: "128Mi"
         limits:
-        cpu: "200m"
-        memory: "256Mi"
-    volumes:
+          cpu: "200m"
+          memory: "256Mi"
+  volumes:
     - name: nginx-pv-storage
-    persistentVolumeClaim:
+      persistentVolumeClaim:
         claimName: pvol7-multi-wait
