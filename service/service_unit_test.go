@@ -116,10 +116,10 @@ func TestGetVolSize(t *testing.T) {
 		{
 			// Requesting a size of 8.5 GiB to test rounding up
 			cr: &csi.CapacityRange{
-				RequiredBytes: int64(8.5 * float64(bytesInGiB)),
+				RequiredBytes: int64(48.8 * float64(bytesInGiB)),
 				LimitBytes:    0,
 			},
-			sizeKiB: 16 * kiBytesInGiB,
+			sizeKiB: 56 * kiBytesInGiB,
 		},
 	}
 
