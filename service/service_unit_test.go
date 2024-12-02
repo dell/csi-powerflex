@@ -517,6 +517,74 @@ func TestGetIPAddressByInterface(t *testing.T) {
 	}
 }
 
+func TestGetZoneKeyLabelFromSecret(t *testing.T) {
+	tests := []struct {
+		name          string
+		arrays        map[string]*ArrayConnectionData
+		expectedLabel string
+		expectedErr   error
+	}{
+		{
+			name:          "Empty array connection data",
+			arrays:        map[string]*ArrayConnectionData{},
+			expectedLabel: "",
+			expectedErr:   nil,
+		},
+		{
+			name: "Array connection data with same zone label keys",
+			arrays: map[string]*ArrayConnectionData{
+				"array1": {
+					AvailabilityZone: &AvailabilityZone{
+						Name:     "zone1",
+						LabelKey: "custom-zone.io/area",
+					},
+				},
+				"array2": {
+					AvailabilityZone: &AvailabilityZone{
+						Name:     "zone2",
+						LabelKey: "custom-zone.io/area",
+					},
+				},
+			},
+			expectedLabel: "custom-zone.io/area",
+			expectedErr:   nil,
+		},
+		{
+			name: "Array connection data with different label keys",
+			arrays: map[string]*ArrayConnectionData{
+				"array1": {
+					SystemID: "system-1",
+					AvailabilityZone: &AvailabilityZone{
+						Name:     "zone1",
+						LabelKey: "custom-zone-1.io/area",
+					},
+				},
+				"array2": {
+					SystemID: "system-2",
+					AvailabilityZone: &AvailabilityZone{
+						Name:     "zone2",
+						LabelKey: "custom-zone-2.io/area",
+					},
+				},
+			},
+			expectedLabel: "",
+			expectedErr:   fmt.Errorf("array system-2 zone key custom-zone-2.io/area does not match custom-zone-1.io/area"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			label, err := getZoneKeyLabelFromSecret(tt.arrays)
+			if tt.expectedErr == nil {
+				assert.Nil(t, err)
+			} else {
+				assert.NotNil(t, err)
+			}
+			assert.Equal(t, label, tt.expectedLabel)
+		})
+	}
+}
+
 func TestFindNetworkInterfaceIPs(t *testing.T) {
 	tests := []struct {
 		name            string

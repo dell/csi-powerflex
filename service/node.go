@@ -758,8 +758,9 @@ func (s *service) NodeGetInfo(
 	// csi-vxflexos.dellemc.com/<systemID>: <provisionerName>
 	Log.Infof("Arrays: %+v", s.opts.arrays)
 	topology := map[string]string{}
-	if zone, ok := labels["zone."+Name]; ok {
-		topology["zone."+Name] = zone
+
+	if zone, ok := labels[s.opts.zoneLabelKey]; ok {
+		topology[s.opts.zoneLabelKey] = zone
 	}
 
 	for _, array := range s.opts.arrays {
@@ -772,7 +773,7 @@ func (s *service) NodeGetInfo(
 			topology[Name+"/"+array.SystemID+"-nfs"] = "true"
 		}
 
-		if zone, ok := topology["zone."+Name]; ok {
+		if zone, ok := topology[s.opts.zoneLabelKey]; ok {
 			if zone == string(array.AvailabilityZone.Name) {
 				// Add only the secret values with the correct zone.
 				nodeID, _ := GetNodeUID(ctx, s)
