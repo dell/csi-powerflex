@@ -1,0 +1,22 @@
+[
+   {
+      "endpoint": "http://127.0.0.1",
+      "username": "username",
+      "password": "password",
+      "insecure": true,
+      "isDefault": true,
+      "systemID": "14dbbf5617523654",
+      "zone": {
+         "name": "zone1",
+         "labelKey": "topology.k8s.io/zone",
+         "protectionDomains": [
+            {
+               "name": "pd",
+               "pools": [
+                  "pool1"
+               ]
+            }
+         ]
+      }
+   }
+]
