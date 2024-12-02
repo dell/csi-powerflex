@@ -1572,12 +1572,10 @@ Feature: VxFlex OS CSI interface
 
   Scenario: Call NodeGetInfo with zone label
     Given a VxFlexOS service
-    And I use config "multi_az"
+    And I use config <config>
     When I call NodeGetInfo with zone labels
     Then a valid NodeGetInfo is returned with node topology
-
-  Scenario: Call NodeGetInfo with zone label with invalid config
-    Given a VxFlexOS service
-    And I use config "multi_az_custom_labels"
-    When I call NodeGetInfo with zone labels
-    Then a valid NodeGetInfo is returned with node topology
+    Examples:
+      | config             |
+      | "multi_az"         |
+      | "multi_az_custom_labels" |
