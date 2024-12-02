@@ -55,7 +55,7 @@ func (f *feature) aVxFlexOSService() error {
 }
 
 func (f *feature) isEverythingWorking() error {
-	fmt.Println("Checking if everything is working...")
+	log.Println("[isEverythingWorking] Checking if everything is working...")
 	checkNamespace := "kubectl get ns -A | grep -e " + driverNamespace + " -e " + testNamespace
 	result, err := execLocalCommand(checkNamespace)
 	if err != nil {
@@ -63,7 +63,7 @@ func (f *feature) isEverythingWorking() error {
 	}
 
 	if !strings.Contains(string(result), driverNamespace) || !strings.Contains(string(result), testNamespace) {
-		return fmt.Errorf("Namespace vxflexos or reptest not found")
+		return fmt.Errorf("namespace vxflexos or reptest not found")
 	}
 
 	checkDeployment := "kubectl get deployment -n " + driverNamespace + " vxflexos-controller -o json"
@@ -79,13 +79,32 @@ func (f *feature) isEverythingWorking() error {
 	}
 
 	if deploymentInfo.Status.Replicas != deploymentInfo.Status.ReadyReplicas {
-		return fmt.Errorf("Deployment not ready, check deployment status and then try again")
+		return fmt.Errorf("deployment not ready, check deployment status and then try again")
 	}
 
 	return nil
 }
 
-func (f *feature) getNodeAndSCInformation(zoneKey string) error {
+func (f *feature) verifyZoneInfomation(secret, namespace string) error {
+	arrays, err := f.getZoneFromSecret(secret, namespace)
+	if err != nil {
+		return err
+	}
+
+	for _, array := range arrays {
+		if array.AvailabilityZone == nil {
+			continue
+		}
+
+		// Find the first zone label and assume all others are the same..
+		f.zoneKey = array.AvailabilityZone.LabelKey
+		break
+	}
+
+	if f.zoneKey == "" {
+		return fmt.Errorf("no labelKey found in secret %s", secret)
+	}
+
 	getNodeLabels := []string{"kubectl", "get", "nodes", "-A", "-o", "jsonpath='{.items}'"}
 	justString := strings.Join(getNodeLabels, " ")
 
@@ -105,16 +124,14 @@ func (f *feature) getNodeAndSCInformation(zoneKey string) error {
 			continue
 		}
 
-		if val, ok := node.ObjectMeta.Labels[zoneKey]; ok {
+		if val, ok := node.ObjectMeta.Labels[f.zoneKey]; ok {
 			f.zoneNodeMapping[node.ObjectMeta.Name] = val
 		}
 	}
 
 	if len(f.zoneNodeMapping) == 0 {
-		return fmt.Errorf("No nodes found for zone: %s", zoneKey)
+		return fmt.Errorf("no nodes found for zone: %s", f.zoneKey)
 	}
-
-	f.zoneKey = zoneKey
 
 	getStorageClassCmd := "kubectl get sc " + storageClass
 	_, err = execLocalCommand(getStorageClassCmd)
@@ -137,8 +154,8 @@ func (f *feature) getNodeAndSCInformation(zoneKey string) error {
 		return fmt.Errorf("no topologies found for storage class %s not found", storageClass)
 	}
 
-	if scInfo.AllowedTopologies[0].MatchLabelExpressions[0].Key != zoneKey {
-		return fmt.Errorf("storage class %s does not have the proper zone lablel %s", storageClass, zoneKey)
+	if scInfo.AllowedTopologies[0].MatchLabelExpressions[0].Key != f.zoneKey {
+		return fmt.Errorf("storage class %s does not have the proper zone lablel %s", storageClass, f.zoneKey)
 	}
 
 	// Add supported zones from the test storage class.
@@ -147,27 +164,27 @@ func (f *feature) getNodeAndSCInformation(zoneKey string) error {
 	return nil
 }
 
-func (f *feature) verifyZonesInSecret(secretName, namespace string) error {
+func (f *feature) getZoneFromSecret(secretName, namespace string) ([]service.ArrayConnectionData, error) {
 	getSecretInformation := []string{"kubectl", "get", "secrets", "-n", namespace, secretName, "-o", "jsonpath='{.data.config}'"}
 	justString := strings.Join(getSecretInformation, " ")
 
 	result, err := execLocalCommand(justString)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	dec, err := base64.StdEncoding.DecodeString(string(result))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	arrayConnection := make([]service.ArrayConnectionData, 0)
 	err = yaml.Unmarshal(dec, &arrayConnection)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return arrayConnection, nil
 }
 
 func (f *feature) createZoneVolumes(fileLocation string) error {
@@ -185,7 +202,7 @@ func (f *feature) createZoneVolumes(fileLocation string) error {
 
 	time.Sleep(10 * time.Second)
 
-	fmt.Printf("Created volumes and pods...\n")
+	log.Println("[createZoneVolumes] Created volumes and pods...")
 	return nil
 }
 
@@ -204,7 +221,7 @@ func (f *feature) deleteZoneVolumes(fileLocation string) error {
 
 	time.Sleep(10 * time.Second)
 
-	fmt.Println("Deleted volumes and pods...")
+	log.Println("[deleteZoneVolumes] Deleted volumes and pods...")
 	return nil
 }
 
@@ -213,7 +230,7 @@ func (f *feature) checkPodsStatus() error {
 
 	_, err := f.areAllPodsRunning()
 	if err != nil {
-		return fmt.Errorf("Pods not ready, check pods status and then try again")
+		return fmt.Errorf("pods not ready, check pods status and then try again")
 	}
 
 	return nil
@@ -251,10 +268,10 @@ func (f *feature) areAllPodsRunning() ([]v1Core.Pod, error) {
 	}
 
 	if !ready {
-		return nil, fmt.Errorf("Pods not ready, check pods status and then try again")
+		return nil, fmt.Errorf("pods not ready, check pods status and then try again")
 	}
 
-	fmt.Println("All pods are ready")
+	log.Println("[areAllPodsRunning] All pods are ready")
 
 	return podInfo, nil
 }
@@ -265,7 +282,7 @@ func (f *feature) cordonNode() error {
 
 	// Get the first node in the zone
 	for key := range f.zoneNodeMapping {
-		fmt.Printf("Cordoning node: %s\n", key)
+		log.Printf("Cordoning node: %s\n", key)
 		nodeToCordon = key
 		break
 	}
@@ -291,7 +308,7 @@ func (f *feature) cordonNode() error {
 		return fmt.Errorf("node %s not cordoned", nodeToCordon)
 	}
 
-	fmt.Println("Cordoned node correctly")
+	log.Println("Cordoned node correctly")
 	f.cordonedNode = nodeToCordon
 
 	return nil
@@ -302,16 +319,16 @@ func (f *feature) checkPodsForCordonRun() error {
 
 	pods, err := f.areAllPodsRunning()
 	if err != nil {
-		return fmt.Errorf("Pods not ready, check pods status and then try again")
+		return fmt.Errorf("pods not ready, check pods status and then try again")
 	}
 
 	for _, pod := range pods {
 		if pod.Spec.NodeName == f.cordonedNode {
-			return fmt.Errorf("Pod %s scheduled incorrectly", pod.ObjectMeta.Name)
+			return fmt.Errorf("pod %s scheduled incorrectly", pod.ObjectMeta.Name)
 		}
 	}
 
-	fmt.Println("Pods scheduled correctly, reseting node...")
+	log.Println("[checkPodsForCordonRun] Pods scheduled correctly, reseting node...")
 
 	// Reset node since scheduled correctly
 	uncordonNodeCommand := "kubectl uncordon " + f.cordonedNode
@@ -342,8 +359,7 @@ func InitializeScenario(s *godog.ScenarioContext) {
 
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
 	s.Step(`^verify driver is configured and running correctly$`, f.isEverythingWorking)
-	s.Step(`^verify that the node and storage class zone label is "([^"]*)"$`, f.getNodeAndSCInformation)
-	s.Step(`^verify that the secret "([^"]*)" in namespace "([^"]*)" is set for zoning$`, f.verifyZonesInSecret)
+	s.Step(`^verify zone information from secret "([^"]*)" in namespace "([^"]*)"$`, f.verifyZoneInfomation)
 	s.Step(`^create zone volume and pod in "([^"]*)"$`, f.createZoneVolumes)
 	s.Step(`^delete zone volume and pod in "([^"]*)"$`, f.deleteZoneVolumes)
 	s.Step(`^check pods to be running on desired zones$`, f.checkPodsStatus)
