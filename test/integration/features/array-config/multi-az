@@ -9,6 +9,7 @@
       "mdm": "127.0.0.2,127.0.0.3",
       "zone": {
          "name": "myZone",
+         "labelKey": "zone.csi-vxflexos.dellemc.com",
          "protectionDomains": [
             {
                "name": "myDomain",

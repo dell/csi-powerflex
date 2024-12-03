@@ -9,7 +9,7 @@ Feature: VxFlex OS CSI interface
     And verify driver is configured and running correctly
     And verify zone information from secret <secret> in namespace <namespace>
     Then create zone volume and pod in <location>
-    And check pods to be running on desired zones
+    And check the statefulset for zones
     Then delete zone volume and pod in <location>
     Examples:
       | secret            | namespace  | location    |
@@ -22,6 +22,7 @@ Feature: VxFlex OS CSI interface
     And verify zone information from secret <secret> in namespace <namespace>
     Then cordon one node
     Then create zone volume and pod in <location>
+    And check the statefulset for zones
     And ensure pods aren't scheduled incorrectly and still running
     Then delete zone volume and pod in <location>
     Examples:

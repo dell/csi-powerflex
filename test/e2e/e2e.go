@@ -188,14 +188,8 @@ func (f *feature) getZoneFromSecret(secretName, namespace string) ([]service.Arr
 }
 
 func (f *feature) createZoneVolumes(fileLocation string) error {
-	createPvcCmd := "kubectl apply -f templates/" + fileLocation + "/pvc.yaml"
-	_, err := execLocalCommand(createPvcCmd)
-	if err != nil {
-		return err
-	}
-
-	createPodCmd := "kubectl apply -f templates/" + fileLocation + "/pod.yaml"
-	_, err = execLocalCommand(createPodCmd)
+	createStsCmd := "kubectl apply -f templates/" + fileLocation + "/sts.yaml"
+	_, err := execLocalCommand(createStsCmd)
 	if err != nil {
 		return err
 	}
@@ -207,14 +201,8 @@ func (f *feature) createZoneVolumes(fileLocation string) error {
 }
 
 func (f *feature) deleteZoneVolumes(fileLocation string) error {
-	deletePodCmd := "kubectl delete -f templates/" + fileLocation + "/pod.yaml"
-	_, err := execLocalCommand(deletePodCmd)
-	if err != nil {
-		return err
-	}
-
-	deletePvcCmd := "kubectl delete -f templates/" + fileLocation + "/pvc.yaml"
-	_, err = execLocalCommand(deletePvcCmd)
+	deleteStsCmd := "kubectl delete -f templates/" + fileLocation + "/sts.yaml"
+	_, err := execLocalCommand(deleteStsCmd)
 	if err != nil {
 		return err
 	}
@@ -225,64 +213,75 @@ func (f *feature) deleteZoneVolumes(fileLocation string) error {
 	return nil
 }
 
-func (f *feature) checkPodsStatus() error {
-	log.Println("[checkPodsStatus] checking pods status")
+func (f *feature) checkStatfulSetStatus() error {
+	log.Println("[checkStatfulSetStatus] checking statefulset status")
 
-	_, err := f.areAllPodsRunning()
+	err := f.isStatefulSetReady()
 	if err != nil {
-		return fmt.Errorf("pods not ready, check pods status and then try again")
+		return err
 	}
 
 	return nil
 }
 
-func (f *feature) areAllPodsRunning() ([]v1Core.Pod, error) {
-	podInfo := []v1Core.Pod{}
-	attempts := 0
+func (f *feature) isStatefulSetReady() error {
 	ready := false
+	attempts := 0
 
 	for attempts < 15 {
-		getZonePods := "kubectl get pods -n " + testNamespace + " -o jsonpath='{.items}'"
-		result, err := execLocalCommand(getZonePods)
+		getStsCmd := "kubectl get sts -n " + testNamespace + " vxflextest-az -o json"
+		result, err := execLocalCommand(getStsCmd)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		pods := []v1Core.Pod{}
-		err = json.Unmarshal(result, &pods)
+		sts := v1.StatefulSet{}
+		err = json.Unmarshal(result, &sts)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		for _, pod := range pods {
-			if pod.Status.Phase != "Running" {
-				attempts++
-				time.Sleep(10 * time.Second)
-				continue
-			}
+		// Everything should be ready.
+		if *sts.Spec.Replicas == sts.Status.ReadyReplicas {
+			ready = true
+			break
 		}
 
-		ready = true
-		podInfo = pods
-		break
+		attempts++
+		time.Sleep(10 * time.Second)
 	}
 
 	if !ready {
-		return nil, fmt.Errorf("pods not ready, check pods status and then try again")
+		return fmt.Errorf("statefulset not ready, check statefulset status and then try again")
 	}
 
-	log.Println("[areAllPodsRunning] All pods are ready")
+	return nil
+}
 
-	return podInfo, nil
+func (f *feature) getStatefulSetPods() ([]v1Core.Pod, error) {
+	getZonePods := "kubectl get pods -n " + testNamespace + " -l app=vxflextest-az -o jsonpath='{.items}'"
+	result, err := execLocalCommand(getZonePods)
+	if err != nil {
+		return nil, err
+	}
+
+	pods := []v1Core.Pod{}
+	err = json.Unmarshal(result, &pods)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Println("[getStatefulSetPods] Pods found: ", len(pods))
+
+	return pods, nil
 }
 
 func (f *feature) cordonNode() error {
-	log.Println("[cordonNode] cordoning node")
 	nodeToCordon := ""
 
 	// Get the first node in the zone
 	for key := range f.zoneNodeMapping {
-		log.Printf("Cordoning node: %s\n", key)
+		log.Printf("[cordonNode] Cordoning node: %s\n", key)
 		nodeToCordon = key
 		break
 	}
@@ -308,7 +307,7 @@ func (f *feature) cordonNode() error {
 		return fmt.Errorf("node %s not cordoned", nodeToCordon)
 	}
 
-	log.Println("Cordoned node correctly")
+	log.Println("[cordonNode] Cordoned node correctly")
 	f.cordonedNode = nodeToCordon
 
 	return nil
@@ -317,7 +316,7 @@ func (f *feature) cordonNode() error {
 func (f *feature) checkPodsForCordonRun() error {
 	log.Println("[checkPodsForCordonRun] checking pods status")
 
-	pods, err := f.areAllPodsRunning()
+	pods, err := f.getStatefulSetPods()
 	if err != nil {
 		return fmt.Errorf("pods not ready, check pods status and then try again")
 	}
@@ -362,7 +361,7 @@ func InitializeScenario(s *godog.ScenarioContext) {
 	s.Step(`^verify zone information from secret "([^"]*)" in namespace "([^"]*)"$`, f.verifyZoneInfomation)
 	s.Step(`^create zone volume and pod in "([^"]*)"$`, f.createZoneVolumes)
 	s.Step(`^delete zone volume and pod in "([^"]*)"$`, f.deleteZoneVolumes)
-	s.Step(`^check pods to be running on desired zones$`, f.checkPodsStatus)
+	s.Step(`^check the statefulset for zones$`, f.checkStatfulSetStatus)
 	s.Step(`^cordon one node$`, f.cordonNode)
 	s.Step(`^ensure pods aren't scheduled incorrectly and still running$`, f.checkPodsForCordonRun)
 }
