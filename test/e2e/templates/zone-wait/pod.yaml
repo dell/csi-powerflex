@@ -6,11 +6,12 @@ metadata:
   namespace: reptest
 spec:
   containers:
-    - name: nginx
-      image: 10.247.98.98:5000/nginx:latest
+    - name: busybox
+      image: quay.io/quay/busybox:latest
+      command: ["/bin/sleep", "3600"]
       volumeMounts:
-        - mountPath: "/usr/share/nginx/html"
-          name: nginx-pv-storage
+        - mountPath: "/data0"
+          name: multi-az-pvc
       resources:
         requests:
           cpu: "100m"
@@ -19,7 +20,7 @@ spec:
           cpu: "200m"
           memory: "256Mi"
   volumes:
-    - name: nginx-pv-storage
+    - name: multi-az-pvc
       persistentVolumeClaim:
         claimName: pvol0-multi-wait
 ---
@@ -30,11 +31,12 @@ metadata:
   namespace: reptest
 spec:
   containers:
-    - name: nginx
-      image: 10.247.98.98:5000/nginx:latest
+    - name: busybox
+      image: quay.io/quay/busybox:latest
+      command: ["/bin/sleep", "3600"]
       volumeMounts:
-        - mountPath: "/usr/share/nginx/html"
-          name: nginx-pv-storage
+        - mountPath: "/data0"
+          name: multi-az-pvc
       resources:
         requests:
           cpu: "100m"
@@ -43,7 +45,7 @@ spec:
           cpu: "200m"
           memory: "256Mi"
   volumes:
-    - name: nginx-pv-storage
+    - name: multi-az-pvc
       persistentVolumeClaim:
         claimName: pvol1-multi-wait
 ---
@@ -54,11 +56,12 @@ metadata:
   namespace: reptest
 spec:
   containers:
-    - name: nginx
-      image: 10.247.98.98:5000/nginx:latest
+    - name: busybox
+      image: quay.io/quay/busybox:latest
+      command: ["/bin/sleep", "3600"]
       volumeMounts:
-        - mountPath: "/usr/share/nginx/html"
-          name: nginx-pv-storage
+        - mountPath: "/data0"
+          name: multi-az-pvc
       resources:
         requests:
           cpu: "100m"
@@ -67,7 +70,7 @@ spec:
           cpu: "200m"
           memory: "256Mi"
   volumes:
-    - name: nginx-pv-storage
+    - name: multi-az-pvc
       persistentVolumeClaim:
         claimName: pvol2-multi-wait
 ---
@@ -78,11 +81,12 @@ metadata:
   namespace: reptest
 spec:
   containers:
-    - name: nginx
-      image: 10.247.98.98:5000/nginx:latest
+    - name: busybox
+      image: quay.io/quay/busybox:latest
+      command: ["/bin/sleep", "3600"]
       volumeMounts:
-        - mountPath: "/usr/share/nginx/html"
-          name: nginx-pv-storage
+        - mountPath: "/data0"
+          name: multi-az-pvc
       resources:
         requests:
           cpu: "100m"
@@ -91,7 +95,7 @@ spec:
           cpu: "200m"
           memory: "256Mi"
   volumes:
-    - name: nginx-pv-storage
+    - name: multi-az-pvc
       persistentVolumeClaim:
         claimName: pvol3-multi-wait
 ---
@@ -102,11 +106,12 @@ metadata:
   namespace: reptest
 spec:
   containers:
-    - name: nginx
-      image: 10.247.98.98:5000/nginx:latest
+    - name: busybox
+      image: quay.io/quay/busybox:latest
+      command: ["/bin/sleep", "3600"]
       volumeMounts:
-        - mountPath: "/usr/share/nginx/html"
-          name: nginx-pv-storage
+        - mountPath: "/data0"
+          name: multi-az-pvc
       resources:
         requests:
           cpu: "100m"
@@ -115,7 +120,7 @@ spec:
           cpu: "200m"
           memory: "256Mi"
   volumes:
-    - name: nginx-pv-storage
+    - name: multi-az-pvc
       persistentVolumeClaim:
         claimName: pvol4-multi-wait
 ---
@@ -126,11 +131,12 @@ metadata:
   namespace: reptest
 spec:
   containers:
-    - name: nginx
-      image: 10.247.98.98:5000/nginx:latest
+    - name: busybox
+      image: quay.io/quay/busybox:latest
+      command: ["/bin/sleep", "3600"]
       volumeMounts:
-        - mountPath: "/usr/share/nginx/html"
-          name: nginx-pv-storage
+        - mountPath: "/data0"
+          name: multi-az-pvc
       resources:
         requests:
           cpu: "100m"
@@ -139,7 +145,7 @@ spec:
           cpu: "200m"
           memory: "256Mi"
   volumes:
-    - name: nginx-pv-storage
+    - name: multi-az-pvc
       persistentVolumeClaim:
         claimName: pvol5-multi-wait
 ---
@@ -150,11 +156,12 @@ metadata:
   namespace: reptest
 spec:
   containers:
-    - name: nginx
-      image: 10.247.98.98:5000/nginx:latest
+    - name: busybox
+      image: quay.io/quay/busybox:latest
+      command: ["/bin/sleep", "3600"]
       volumeMounts:
-        - mountPath: "/usr/share/nginx/html"
-          name: nginx-pv-storage
+        - mountPath: "/data0"
+          name: multi-az-pvc
       resources:
         requests:
           cpu: "100m"
@@ -163,7 +170,7 @@ spec:
           cpu: "200m"
           memory: "256Mi"
   volumes:
-    - name: nginx-pv-storage
+    - name: multi-az-pvc
       persistentVolumeClaim:
         claimName: pvol6-multi-wait
 ---
@@ -174,11 +181,12 @@ metadata:
   namespace: reptest
 spec:
   containers:
-    - name: nginx
-      image: 10.247.98.98:5000/nginx:latest
+    - name: busybox
+      image: quay.io/quay/busybox:latest
+      command: ["/bin/sleep", "3600"]
       volumeMounts:
-        - mountPath: "/usr/share/nginx/html"
-          name: nginx-pv-storage
+        - mountPath: "/data0"
+          name: multi-az-pvc
       resources:
         requests:
           cpu: "100m"
@@ -187,6 +195,6 @@ spec:
           cpu: "200m"
           memory: "256Mi"
   volumes:
-    - name: nginx-pv-storage
+    - name: multi-az-pvc
       persistentVolumeClaim:
         claimName: pvol7-multi-wait
