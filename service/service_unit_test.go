@@ -72,7 +72,7 @@ func TestGetVolSize(t *testing.T) {
 		{
 			// requesting a size less than 1GiB should result in a minimal size
 			cr: &csi.CapacityRange{
-				RequiredBytes: 300 * bytesInKiB,
+				RequiredBytes: 1,
 				LimitBytes:    0,
 			},
 			sizeKiB: 8 * kiBytesInGiB,
@@ -104,6 +104,22 @@ func TestGetVolSize(t *testing.T) {
 				LimitBytes:    14 * bytesInGiB,
 			},
 			sizeKiB: 0,
+		},
+		{
+			// Requesting a size with decimal part that rounds up to next multiple of 8 GiB
+			cr: &csi.CapacityRange{
+				RequiredBytes: int64(9.5 * float64(bytesInGiB)),
+				LimitBytes:    0,
+			},
+			sizeKiB: 16 * kiBytesInGiB,
+		},
+		{
+			// Requesting a size of 8.5 GiB to test rounding up
+			cr: &csi.CapacityRange{
+				RequiredBytes: int64(48.5 * float64(bytesInGiB)),
+				LimitBytes:    0,
+			},
+			sizeKiB: 56 * kiBytesInGiB,
 		},
 	}
 
