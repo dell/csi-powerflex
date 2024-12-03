@@ -30,14 +30,14 @@ spec:
             - mountPath: "/data0"
               name: multi-az-pvc
   volumeClaimTemplates:
-    metadata:
-      name: multi-az-pvc
-    spec:
-      accessModes: ["ReadWriteOnce"]
-      storageClassName: "vxflexos-az-wait"
-      resources:
-        requests:
-          storage: 8Gi
+    - metadata:
+        name: multi-az-pvc
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: "vxflexos-az-wait"
+        resources:
+          requests:
+            storage: 8Gi
   persistentVolumeClaimRetentionPolicy:
     whenDeleted: Delete
     whenScaled: Delete
