@@ -221,6 +221,21 @@ func (s *service) CreateVolume(
 
 	// Handle Zone topology, which happens when node is annotated with a matching zone label
 	if len(zoneTargetMap) != 0 && accessibility != nil && len(accessibility.GetPreferred()) > 0 {
+		contentSource := req.GetVolumeContentSource()
+		var snapshotSourceSystemID string
+		if contentSource != nil {
+			Log.Infof("[CreateVolume] Volume has a content source - we are a snapshot: %+v", contentSource)
+
+			snapshotSource := contentSource.GetSnapshot()
+			if snapshotSource != nil {
+				Log.Infof("[CreateVolume] Volume has a content source - we are a snapshot: %+v", snapshotSource)
+				snapshotSourceSystemID = s.getSystemIDFromCsiVolumeID(snapshotSource.SnapshotId)
+				Log.Infof("[CreateVolume] Snapshot source systemID: %s", snapshotSourceSystemID)
+			}
+		} else {
+			Log.Infoln("[CreateVolume] Volume does not have a content source - not a snapshot")
+		}
+
 		for _, topo := range accessibility.GetPreferred() {
 			for topoLabel, zoneName := range topo.Segments {
 				Log.Infof("Zoning based on label %s", s.opts.zoneLabelKey)
@@ -228,6 +243,11 @@ func (s *service) CreateVolume(
 					zoneTarget, ok := zoneTargetMap[ZoneName(zoneName)]
 					if !ok {
 						Log.Infof("no zone target for %s", zoneTarget)
+						continue
+					}
+
+					if snapshotSourceSystemID != "" && zoneTarget.systemID != snapshotSourceSystemID {
+						Log.Infof("systemID %s does not match snapshot source systemID %s", zoneTarget.systemID, snapshotSourceSystemID)
 						continue
 					}
 
@@ -558,7 +578,15 @@ func (s *service) CreateVolume(
 			snapshotSource := contentSource.GetSnapshot()
 			if snapshotSource != nil {
 				Log.Printf("snapshot %s specified as volume content source", snapshotSource.SnapshotId)
-				return s.createVolumeFromSnapshot(req, snapshotSource, name, size, storagePool)
+				snapshotVolumeResponse, err := s.createVolumeFromSnapshot(req, snapshotSource, name, size, storagePool)
+				if err != nil {
+					return nil, err
+				}
+
+				snapshotVolumeResponse.Volume.AccessibleTopology = volumeTopology
+
+				Log.Printf("[FERNANDO] Snapshot Volume Response: %+v", snapshotVolumeResponse)
+				return snapshotVolumeResponse, nil
 			}
 		}
 
