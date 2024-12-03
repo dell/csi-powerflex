@@ -33,7 +33,7 @@ import (
 
 const (
 	driverNamespace = "vxflexos"
-	testNamespace   = "reptest"
+	testNamespace   = "vxflexos-test"
 	storageClass    = "vxflexos-az-wait"
 )
 
@@ -63,7 +63,7 @@ func (f *feature) isEverythingWorking() error {
 	}
 
 	if !strings.Contains(string(result), driverNamespace) || !strings.Contains(string(result), testNamespace) {
-		return fmt.Errorf("namespace vxflexos or reptest not found")
+		return fmt.Errorf("namespace %s or %s not found", driverNamespace, testNamespace)
 	}
 
 	checkDeployment := "kubectl get deployment -n " + driverNamespace + " vxflexos-controller -o json"
