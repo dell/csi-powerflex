@@ -37,6 +37,15 @@ Feature: VxFlex OS CSI interface
     And when I call DeleteVolume
     Then there are no errors
 
+  Scenario: Create and delete basic volume with float size
+    Given a VxFlexOS service
+    And a basic block volume request "integration1" "48.1"
+    When I call CreateVolume
+    When I call ListVolume
+    Then a valid ListVolumeResponse is returned
+    And when I call DeleteVolume
+    Then there are no errors
+
   Scenario: Idempotent create and delete basic volume
     Given a VxFlexOS service
     And a basic block volume request "integration2" "8"
