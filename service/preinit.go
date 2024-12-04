@@ -13,6 +13,14 @@
 
 package service
 
+import (
+	"os"
+)
+
+const (
+	nodeMdmList = "/data/node_mdms.txt"
+)
+
 func NewPreInitService() *service {
 	return &service{}
 }
@@ -20,5 +28,10 @@ func NewPreInitService() *service {
 func (s *service) PreInit() error {
 
 	Log.Infof("PreInit running")
-	return nil
+
+	// Temp for work in progress.
+	mdmData := []byte("MDM=10.247.38.50,10.247.38.53")
+	Log.Infof("Saving MDM list to %s", nodeMdmList)
+	err := os.WriteFile(nodeMdmList, mdmData, 0644)
+	return err
 }
