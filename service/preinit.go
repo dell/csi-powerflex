@@ -30,7 +30,7 @@ func (s *service) PreInit() error {
 	Log.Infof("PreInit running")
 
 	// Temp for work in progress.
-	mdmData := []byte("MDM=10.247.38.50,10.247.38.53")
+	mdmData := []byte("MDM=192.168.0.10,192.168.0.20")
 	Log.Infof("Saving MDM list to %s", nodeMdmList)
 	err := os.WriteFile(nodeMdmList, mdmData, 0644)
 	return err
