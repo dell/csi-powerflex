@@ -222,15 +222,19 @@ func (s *service) CreateVolume(
 	// Handle Zone topology, which happens when node is annotated with a matching zone label
 	if len(zoneTargetMap) != 0 && accessibility != nil && len(accessibility.GetPreferred()) > 0 {
 		contentSource := req.GetVolumeContentSource()
-		var snapshotSourceSystemID string
+		var sourceSystemID string
 		if contentSource != nil {
-			Log.Infof("[CreateVolume] Volume has a content source - we are a snapshot: %+v", contentSource)
+			Log.Infof("[CreateVolume] Volume has a content source - we are a snapshot or clone: %+v", contentSource)
 
 			snapshotSource := contentSource.GetSnapshot()
+			cloneSource := contentSource.GetVolume()
+
 			if snapshotSource != nil {
-				Log.Infof("[CreateVolume] Volume has a content source - we are a snapshot: %+v", snapshotSource)
-				snapshotSourceSystemID = s.getSystemIDFromCsiVolumeID(snapshotSource.SnapshotId)
-				Log.Infof("[CreateVolume] Snapshot source systemID: %s", snapshotSourceSystemID)
+				sourceSystemID = s.getSystemIDFromCsiVolumeID(snapshotSource.SnapshotId)
+				Log.Infof("[CreateVolume] Snapshot source systemID: %s", sourceSystemID)
+			} else if cloneSource != nil {
+				sourceSystemID = s.getSystemIDFromCsiVolumeID(cloneSource.VolumeId)
+				Log.Infof("[CreateVolume] Clone source systemID: %s", sourceSystemID)
 			}
 		} else {
 			Log.Infoln("[CreateVolume] Volume does not have a content source - not a snapshot")
@@ -246,8 +250,8 @@ func (s *service) CreateVolume(
 						continue
 					}
 
-					if snapshotSourceSystemID != "" && zoneTarget.systemID != snapshotSourceSystemID {
-						Log.Infof("systemID %s does not match snapshot source systemID %s", zoneTarget.systemID, snapshotSourceSystemID)
+					if sourceSystemID != "" && zoneTarget.systemID != sourceSystemID {
+						Log.Infof("systemID %s does not match snapshot/clone source systemID %s", zoneTarget.systemID, sourceSystemID)
 						continue
 					}
 
@@ -572,8 +576,14 @@ func (s *service) CreateVolume(
 		if contentSource != nil {
 			volumeSource := contentSource.GetVolume()
 			if volumeSource != nil {
-				Log.Printf("volume %s specified as volume content source", volumeSource.VolumeId)
-				return s.Clone(req, volumeSource, name, size, storagePool)
+				cloneResponse, err := s.Clone(req, volumeSource, name, size, storagePool)
+				if err != nil {
+					return nil, err
+				}
+
+				cloneResponse.Volume.AccessibleTopology = volumeTopology
+
+				return cloneResponse, nil
 			}
 			snapshotSource := contentSource.GetSnapshot()
 			if snapshotSource != nil {
