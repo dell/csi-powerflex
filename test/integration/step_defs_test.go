@@ -2734,6 +2734,75 @@ func (f *feature) checkNFS(_ context.Context, systemID string) (bool, error) {
 	return false, nil
 }
 
+func (f *feature) iCreateZoneRequest(name string) error {
+	req := f.createGenericZoneRequest(name)
+	req.AccessibilityRequirements = new(csi.TopologyRequirement)
+	req.AccessibilityRequirements.Preferred = []*csi.Topology{
+		{
+			Segments: map[string]string{
+				"zone.csi-vxflexos.dellemc.com": "zoneA",
+			},
+		},
+		{
+			Segments: map[string]string{
+				"zone.csi-vxflexos.dellemc.com": "zoneB",
+			},
+		},
+	}
+
+	f.createVolumeRequest = req
+
+	return nil
+}
+
+func (f *feature) iCreateInvalidZoneRequest() error {
+	req := f.createGenericZoneRequest("invalid-zone-volume")
+	req.AccessibilityRequirements = new(csi.TopologyRequirement)
+	topologies := []*csi.Topology{
+		{
+			Segments: map[string]string{
+				"zone.csi-vxflexos.dellemc.com": "invalidZoneInfo",
+			},
+		},
+	}
+	req.AccessibilityRequirements.Preferred = topologies
+	f.createVolumeRequest = req
+
+	return nil
+}
+
+func (f *feature) createGenericZoneRequest(name string) *csi.CreateVolumeRequest {
+	req := new(csi.CreateVolumeRequest)
+	storagePool := os.Getenv("STORAGE_POOL")
+	params := make(map[string]string)
+	params["storagepool"] = storagePool
+	params["thickprovisioning"] = "false"
+	if len(f.anotherSystemID) > 0 {
+		params["systemID"] = f.anotherSystemID
+	}
+	req.Parameters = params
+	makeAUniqueName(&name)
+	req.Name = name
+	capacityRange := new(csi.CapacityRange)
+	capacityRange.RequiredBytes = 8 * 1024 * 1024 * 1024
+	req.CapacityRange = capacityRange
+
+	capability := new(csi.VolumeCapability)
+	block := new(csi.VolumeCapability_BlockVolume)
+	blockType := new(csi.VolumeCapability_Block)
+	blockType.Block = block
+	capability.AccessType = blockType
+	accessMode := new(csi.VolumeCapability_AccessMode)
+	accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER
+	capability.AccessMode = accessMode
+	f.capability = capability
+	capabilities := make([]*csi.VolumeCapability, 0)
+	capabilities = append(capabilities, capability)
+	req.VolumeCapabilities = capabilities
+
+	return req
+}
+
 func FeatureContext(s *godog.ScenarioContext) {
 	f := &feature{}
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
@@ -2812,4 +2881,6 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call ListFileSystemSnapshot$`, f.ICallListFileSystemSnapshot)
 	s.Step(`^I call CreateSnapshotForFS$`, f.iCallCreateSnapshotForFS)
 	s.Step(`^I call DeleteSnapshotForFS$`, f.iCallDeleteSnapshotForFS)
+	s.Step(`^I create a zone volume request "([^"]*)"$`, f.iCreateZoneRequest)
+	s.Step(`^I create an invalid zone volume request$`, f.iCreateInvalidZoneRequest)
 }

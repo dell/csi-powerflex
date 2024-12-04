@@ -17,19 +17,16 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"net"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/akutz/memconn"
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/cucumber/godog"
 	"github.com/dell/csi-vxflexos/v2/provider"
 	"github.com/dell/csi-vxflexos/v2/service"
 	"github.com/dell/gocsi/utils"
-	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 )
 
@@ -72,11 +69,11 @@ func init() {
 	}
 }
 
-func TestMain(m *testing.M) {
+func TestIntegration(t *testing.T) {
 	var stop func()
 	ctx := context.Background()
 	fmt.Printf("calling startServer")
-	grpcClient, stop = startServer(ctx)
+	grpcClient, stop = startServer(ctx, "")
 	fmt.Printf("back from startServer")
 	time.Sleep(5 * time.Second)
 
@@ -114,11 +111,54 @@ func TestMain(m *testing.M) {
 		Options:             &opts,
 	}.Run()
 
-	if st := m.Run(); st > exitVal {
-		exitVal = st
-	}
 	stop()
-	os.Exit(exitVal)
+	if exitVal != 0 {
+		t.Fatalf("[TestIntegration] godog exited with %d", exitVal)
+	}
+}
+
+func TestZoneIntegration(t *testing.T) {
+	var stop func()
+	ctx := context.Background()
+	fmt.Printf("calling startServer")
+	grpcClient, stop = startServer(ctx, "features/array-config/multi-az")
+	fmt.Printf("back from startServer")
+	time.Sleep(5 * time.Second)
+
+	fmt.Printf("Checking %s\n", datadir)
+	err := os.Mkdir(datadir, 0o777)
+	if err != nil && !os.IsExist(err) {
+		fmt.Printf("%s: %s\n", datadir, err)
+	}
+
+	fmt.Printf("Checking %s\n", datafile)
+	file, err := os.Create(datafile)
+	if err != nil && !os.IsExist(err) {
+		fmt.Printf("%s %s\n", datafile, err)
+	}
+
+	if file != nil {
+		file.Close()
+	}
+
+	godogOptions := godog.Options{
+		Format:        "pretty,junit:zone-volumes-test-report.xml",
+		Paths:         []string{"features"},
+		Tags:          "zone-integration",
+		TestingT:      t,
+		StopOnFailure: true,
+	}
+
+	exitVal := godog.TestSuite{
+		Name:                "zone-integration",
+		ScenarioInitializer: FeatureContext,
+		Options:             &godogOptions,
+	}.Run()
+
+	stop()
+	if exitVal != 0 {
+		t.Fatalf("[TestZoneIntegration] godog exited with %d", exitVal)
+	}
 }
 
 func TestIdentityGetPluginInfo(t *testing.T) {
@@ -134,9 +174,12 @@ func TestIdentityGetPluginInfo(t *testing.T) {
 	}
 }
 
-func startServer(ctx context.Context) (*grpc.ClientConn, func()) {
+func startServer(ctx context.Context, cFile string) (*grpc.ClientConn, func()) {
+	if cFile == "" {
+		cFile = configFile
+	}
 	// Create a new SP instance and serve it with a piped connection.
-	service.ArrayConfigFile = configFile
+	service.ArrayConfigFile = cFile
 	sp := provider.New()
 	lis, err := utils.GetCSIEndpointListener()
 	if err != nil {
@@ -167,36 +210,6 @@ func startServer(ctx context.Context) (*grpc.ClientConn, func()) {
 		fmt.Printf("DialContext returned error: %s", err.Error())
 	}
 	fmt.Printf("grpc.DialContext returned ok\n")
-
-	return client, func() {
-		client.Close()
-		sp.GracefulStop(ctx)
-	}
-}
-
-func startServerX(ctx context.Context, t *testing.T) (*grpc.ClientConn, func()) {
-	// Create a new SP instance and serve it with a piped connection.
-	sp := provider.New()
-	lis, err := memconn.Listen("memu", "csi-test")
-	assert.NoError(t, err)
-	go func() {
-		if err := sp.Serve(ctx, lis); err != nil {
-			assert.EqualError(t, err, "http: Server closed")
-		}
-	}()
-
-	clientOpts := []grpc.DialOption{
-		grpc.WithInsecure(),
-		grpc.WithDialer(func(string, time.Duration) (net.Conn, error) {
-			return memconn.Dial("memu", "csi-test")
-		}),
-	}
-
-	// Create a client for the piped connection.
-	client, err := grpc.DialContext(ctx, "unix:./unix_sock", clientOpts...)
-	if err != nil {
-		fmt.Printf("DialContext error: %s\n", err.Error())
-	}
 
 	return client, func() {
 		client.Close()

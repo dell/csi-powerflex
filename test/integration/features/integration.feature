@@ -981,3 +981,26 @@ Scenario: Custom file system format options (mkfsFormatOption)
     | "mount" | "-T largefile4"    |"single-node-multi-writer"   | "ext4" | "none"                           |
     | "mount" | ":-L MyVolume"     | "single-writer"             | "xfs"  | "error performing private mount" |
     | "mount" | "abc"              | "single-node-single-writer" | "ext4" | "error performing private mount" |
+
+@zone-integration
+Scenario: Create publish, unpublish, and delete zone volume
+  Given a VxFlexOS service
+  And I create a zone volume request "zone-integration-vol"
+  When I call CreateVolume
+  And there are no errors
+  And when I call PublishVolume "SDC_GUID"
+  And there are no errors
+  And when I call UnpublishVolume "SDC_GUID"
+  And there are no errors
+  And when I call DeleteVolume
+  Then there are no errors
+
+@zone-integration
+Scenario: Create zone volume with invalid zone information
+  Given a VxFlexOS service
+  And I create an invalid zone volume request
+  When I call CreateVolume
+  Then the error message should contain <errormsg>
+  Examples:
+    | errormsg                                               |
+    | "no zone topology found in accessibility requirements" |
