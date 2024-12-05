@@ -14,7 +14,8 @@
 package service
 
 import (
-	"os"
+	"errors"
+	"strings"
 )
 
 const (
@@ -29,9 +30,39 @@ func (s *service) PreInit() error {
 
 	Log.Infof("PreInit running")
 
-	// Temp for work in progress.
-	mdmData := []byte("MDM=192.168.0.10,192.168.0.20")
-	Log.Infof("Saving MDM list to %s", nodeMdmList)
-	err := os.WriteFile(nodeMdmList, mdmData, 0644)
-	return err
+	// arrayConfig, err := getArrayConfig(context.Background())
+	// if err != nil {
+	// 	return err
+	// }
+
+	// // Temp for work in progress.
+	// mdmData := []byte("MDM=192.168.0.10,192.168.0.20")
+	// Log.Infof("Saving MDM list to %s", nodeMdmList)
+	// err = os.WriteFile(nodeMdmList, mdmData, 0644)
+	return nil
+}
+
+// Returns a string with the unique comma separated list of MDM addresses given a
+// key and zone. The ordering of the MDM addresses is not guaranteed. An error is
+// returned if either the key or zone are empty.
+func getMdmList(connectionInfo []*ArrayConnectionData, key, zone string) (string, error) {
+
+	if key == "" {
+		return "", errors.New("key is empty")
+	}
+	if zone == "" {
+		return "", errors.New("zone is empty")
+	}
+
+	sb := &strings.Builder{}
+	for _, connectionData := range connectionInfo {
+		if connectionData.Mdm != "" && connectionData.Zone.LabelKey == key && connectionData.Zone.Name == zone {
+			if sb.Len() > 0 {
+				sb.WriteString(",")
+			}
+			sb.WriteString(connectionData.Mdm)
+		}
+	}
+
+	return sb.String(), nil
 }
