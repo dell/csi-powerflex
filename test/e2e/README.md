@@ -22,3 +22,4 @@ The following tests are implemented and run during the `zone-e2e` test.
 
 1. Creates a stateful set of 7 replicas and ensures that everything is up and ready with the zone configuration.
 2. Cordons a node (marks it as unschedulable), creates 7 volumes/pods, and ensures that none gets scheduled on the cordoned node.
+3. Creates a stateful set of 7 replicas, creates a snapshot and restore pod for each and ensure that they are all running.
