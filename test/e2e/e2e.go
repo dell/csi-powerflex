@@ -350,8 +350,8 @@ func (f *feature) createZoneSnapshotsAndRestore(location string) error {
 	for i := 0; i < int(f.zoneReplicaCount); i++ {
 		time.Sleep(10 * time.Second)
 
-		copyFile := exec.Command("cp", templateFile, updatedTemplateFile)
-		b, err := copyFile.CombinedOutput()
+		cpCmd := "cp " + templateFile + " " + updatedTemplateFile
+		b, err := execLocalCommand(cpCmd)
 		if err != nil {
 			return fmt.Errorf("failed to copy template file: %v\nErrMessage:\n%s", err, string(b))
 		}
@@ -382,8 +382,8 @@ func (f *feature) deleteZoneSnapshotsAndRestore(location string) error {
 	for i := 0; i < int(f.zoneReplicaCount); i++ {
 		time.Sleep(10 * time.Second)
 
-		copyFile := exec.Command("cp", templateFile, updatedTemplateFile)
-		b, err := copyFile.CombinedOutput()
+		cpCmd := "cp " + templateFile + " " + updatedTemplateFile
+		b, err := execLocalCommand(cpCmd)
 		if err != nil {
 			return fmt.Errorf("failed to copy template file: %v\nErrMessage:\n%s", err, string(b))
 		}
@@ -438,10 +438,11 @@ func (f *feature) areAllRestoresRunning() error {
 		if runningCount != int(f.zoneReplicaCount) {
 			time.Sleep(10 * time.Second)
 			continue
-		} else {
-			complete = true
-			break
 		}
+
+		complete = true
+		break
+
 	}
 
 	if !complete {
@@ -451,12 +452,12 @@ func (f *feature) areAllRestoresRunning() error {
 	return nil
 }
 
-func replaceInFile(old, new, templateFile string) error {
-	cmdString := "s|" + old + "|" + new + "|g"
-	cmd := exec.Command("sed", "-i", cmdString, templateFile)
-	err := cmd.Run()
+func replaceInFile(oldString, newString, templateFile string) error {
+	cmdString := "s|" + oldString + "|" + newString + "|g"
+	replaceCmd := fmt.Sprintf("sed -i '%s' %s", cmdString, templateFile)
+	_, err := execLocalCommand(replaceCmd)
 	if err != nil {
-		return fmt.Errorf("failed to substitute %s with %s in file %s: %s", old, new, templateFile, err.Error())
+		return fmt.Errorf("failed to substitute %s with %s in file %s: %s", oldString, newString, templateFile, err.Error())
 	}
 	return nil
 }
