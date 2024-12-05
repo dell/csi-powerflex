@@ -2739,7 +2739,6 @@ func (f *feature) checkNFS(_ context.Context, systemID string) (bool, error) {
 }
 
 func (f *feature) createFakeNodeLabels(zoneLabelKey string) error {
-
 	if zoneLabelKey == "" {
 		zoneLabelKey = os.Getenv("ZONE_LABEL_KEY")
 	}
