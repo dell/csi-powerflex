@@ -14,12 +14,15 @@
 package service
 
 import (
-	"errors"
+	"fmt"
+	"os"
 	"strings"
+
+	"golang.org/x/net/context"
 )
 
 const (
-	nodeMdmList = "/data/node_mdms.txt"
+	nodeMdmsFile = "/data/node_mdms.txt"
 )
 
 func NewPreInitService() *service {
@@ -30,32 +33,73 @@ func (s *service) PreInit() error {
 
 	Log.Infof("PreInit running")
 
-	// arrayConfig, err := getArrayConfig(context.Background())
-	// if err != nil {
-	// 	return err
-	// }
+	arrayConfig, err := getArrayConfig(context.Background())
+	if err != nil {
+		return err
+	}
 
-	// // Temp for work in progress.
-	// mdmData := []byte("MDM=192.168.0.10,192.168.0.20")
-	// Log.Infof("Saving MDM list to %s", nodeMdmList)
-	// err = os.WriteFile(nodeMdmList, mdmData, 0644)
-	return nil
+	connectionData := make([]*ArrayConnectionData, 0)
+	for _, v := range arrayConfig {
+		connectionData = append(connectionData, v)
+	}
+
+	labelKey, err := getLabelKey(connectionData)
+	if err != nil {
+		return err
+	}
+
+	var mdmData string
+
+	if labelKey == "" {
+		Log.Debug("No zone key found, will configure all MDMs")
+		sb := strings.Builder{}
+		for _, connectionData := range connectionData {
+			if connectionData.Mdm != "" {
+				if sb.Len() > 0 {
+					sb.WriteString(",")
+				}
+				sb.WriteString(connectionData.Mdm)
+			}
+		}
+		mdmData = sb.String()
+	} else {
+		Log.Infof("Zone key detected, will configure MDMs for this node, key: %s", labelKey)
+		nodeLabels, err := s.GetNodeLabels(context.Background())
+		if err != nil {
+			return err
+		}
+		zone := nodeLabels[labelKey]
+
+		if zone == "" {
+			return fmt.Errorf("No zone found, cannot configure this node")
+		} else {
+			Log.Infof("Zone found, will configure MDMs for this node, zone: %s", zone)
+			mdmData, err = getMdmList(connectionData, labelKey, zone)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	Log.Infof("Saving MDM list to %s", nodeMdmsFile)
+	err = os.WriteFile(nodeMdmsFile, []byte(fmt.Sprintf("MDM=%s\n", mdmData)), 0644)
+	return err
 }
 
-// Returns a string with the unique comma separated list of MDM addresses given a
+// Returns a string with the comma separated list of MDM addresses given a
 // key and zone. The ordering of the MDM addresses is not guaranteed. An error is
 // returned if either the key or zone are empty.
-func getMdmList(connectionInfo []*ArrayConnectionData, key, zone string) (string, error) {
+func getMdmList(connectionData []*ArrayConnectionData, key, zone string) (string, error) {
 
 	if key == "" {
-		return "", errors.New("key is empty")
+		return "", fmt.Errorf("key is empty")
 	}
 	if zone == "" {
-		return "", errors.New("zone is empty")
+		return "", fmt.Errorf("zone is empty")
 	}
 
 	sb := &strings.Builder{}
-	for _, connectionData := range connectionInfo {
+	for _, connectionData := range connectionData {
 		if connectionData.Mdm != "" && connectionData.Zone.LabelKey == key && connectionData.Zone.Name == zone {
 			if sb.Len() > 0 {
 				sb.WriteString(",")
@@ -65,4 +109,25 @@ func getMdmList(connectionInfo []*ArrayConnectionData, key, zone string) (string
 	}
 
 	return sb.String(), nil
+}
+
+// Returns the label key for the given set of array configurations.
+// It is expected that the value for labelKey is the same for all arrays.
+// An empty string is returned if the labelKey is not present in all arrays.
+// An error is returned if the key cannot be determined.
+func getLabelKey(connectionData []*ArrayConnectionData) (string, error) {
+
+	if len(connectionData) == 0 {
+		return "", fmt.Errorf("array connection data is empty")
+	}
+
+	labelKey := connectionData[0].Zone.LabelKey
+
+	for _, v := range connectionData {
+		if v.Zone.LabelKey != labelKey {
+			return "", fmt.Errorf("zone label key is not the same for all arrays")
+		}
+	}
+
+	return labelKey, nil
 }
