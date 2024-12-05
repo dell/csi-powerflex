@@ -79,6 +79,8 @@ type feature struct {
 	createVolumeRequest         *csi.CreateVolumeRequest
 	publishVolumeRequest        *csi.ControllerPublishVolumeRequest
 	nodePublishVolumeRequest    *csi.NodePublishVolumeRequest
+	nodeGetInfoRequest          *csi.NodeGetInfoRequest
+	nodeGetInfoResponse         *csi.NodeGetInfoResponse
 	listVolumesResponse         *csi.ListVolumesResponse
 	listSnapshotsResponse       *csi.ListSnapshotsResponse
 	capability                  *csi.VolumeCapability
@@ -103,7 +105,7 @@ func (f *feature) getGoscaleioClient() (client *goscaleio.Client, err error) {
 	if f.arrays == nil {
 		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
 		var err error
-		f.arrays, err = f.getArrayConfig()
+		f.arrays, err = f.getArrayConfig(configFile)
 		if err != nil {
 			return nil, errors.New("Get multi array config failed " + err.Error())
 		}
@@ -137,19 +139,19 @@ func (f *feature) getGoscaleioClient() (client *goscaleio.Client, err error) {
 // there is no way to call service.go methods from here
 // hence copy same method over there , this is used to get all arrays and pick different
 // systemID to test with see  method iSetAnotherSystemID
-func (f *feature) getArrayConfig() (map[string]*ArrayConnectionData, error) {
+func (f *feature) getArrayConfig(configurationFile string) (map[string]*ArrayConnectionData, error) {
 	arrays := make(map[string]*ArrayConnectionData)
 
-	_, err := os.Stat(configFile)
+	_, err := os.Stat(configurationFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("File %s does not exist", configFile)
+			return nil, fmt.Errorf("File %s does not exist", configurationFile)
 		}
 	}
 
-	config, err := os.ReadFile(filepath.Clean(configFile))
+	config, err := os.ReadFile(filepath.Clean(configurationFile))
 	if err != nil {
-		return nil, fmt.Errorf("File %s errors: %v", configFile, err)
+		return nil, fmt.Errorf("File %s errors: %v", configurationFile, err)
 	}
 
 	if string(config) != "" {
@@ -160,7 +162,7 @@ func (f *feature) getArrayConfig() (map[string]*ArrayConnectionData, error) {
 		}
 
 		if len(jsonCreds) == 0 {
-			return nil, fmt.Errorf("no arrays are provided in configFile %s", configFile)
+			return nil, fmt.Errorf("no arrays are provided in configFile %s", configurationFile)
 		}
 
 		noOfDefaultArray := 0
@@ -219,7 +221,7 @@ func (f *feature) getArrayConfig() (map[string]*ArrayConnectionData, error) {
 			arrays[c.SystemID] = &copyOfCred
 		}
 	} else {
-		return nil, fmt.Errorf("arrays details are not provided in configFile %s", configFile)
+		return nil, fmt.Errorf("arrays details are not provided in configFile %s", configurationFile)
 	}
 	return arrays, nil
 }
@@ -318,6 +320,8 @@ func (f *feature) aVxFlexOSService() error {
 	f.errs = make([]error, 0)
 	f.createVolumeRequest = nil
 	f.publishVolumeRequest = nil
+	f.nodeGetInfoRequest = nil
+	f.nodeGetInfoResponse = nil
 	f.listVolumesResponse = nil
 	f.listSnapshotsResponse = nil
 	f.capability = nil
@@ -374,7 +378,7 @@ func (f *feature) aBasicNfsVolumeRequest(name string, size int64) error {
 	if f.arrays == nil {
 		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
 		var err error
-		f.arrays, err = f.getArrayConfig()
+		f.arrays, err = f.getArrayConfig(configFile)
 		if err != nil {
 			return errors.New("Get multi array config failed " + err.Error())
 		}
@@ -439,7 +443,7 @@ func (f *feature) aBasicNfsVolumeRequestWithSizeLessThan3Gi(name string, size in
 	if f.arrays == nil {
 		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
 		var err error
-		f.arrays, err = f.getArrayConfig()
+		f.arrays, err = f.getArrayConfig(configFile)
 		if err != nil {
 			return errors.New("Get multi array config failed " + err.Error())
 		}
@@ -504,7 +508,7 @@ func (f *feature) aNfsVolumeRequestWithQuota(volname string, volsize int64, path
 	if f.arrays == nil {
 		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
 		var err error
-		f.arrays, err = f.getArrayConfig()
+		f.arrays, err = f.getArrayConfig(configFile)
 		if err != nil {
 			return errors.New("Get multi array config failed " + err.Error())
 		}
@@ -1263,7 +1267,7 @@ func (f *feature) iSetAnotherSystemName(systemType string) error {
 	if f.arrays == nil {
 		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
 		var err error
-		f.arrays, err = f.getArrayConfig()
+		f.arrays, err = f.getArrayConfig(configFile)
 		if err != nil {
 			return errors.New("Get multi array config failed " + err.Error())
 		}
@@ -1294,7 +1298,7 @@ func (f *feature) iSetAnotherSystemID(systemType string) error {
 	if f.arrays == nil {
 		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
 		var err error
-		f.arrays, err = f.getArrayConfig()
+		f.arrays, err = f.getArrayConfig(configFile)
 		if err != nil {
 			return errors.New("Get multi array config failed " + err.Error())
 		}
@@ -2100,7 +2104,7 @@ func (f *feature) aBasicNfsVolumeRequestWithWrongNasName(name string, size int64
 	if f.arrays == nil {
 		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
 		var err error
-		f.arrays, err = f.getArrayConfig()
+		f.arrays, err = f.getArrayConfig(configFile)
 		if err != nil {
 			return errors.New("Get multi array config failed " + err.Error())
 		}
@@ -2162,7 +2166,7 @@ func (f *feature) aNfsCapabilityWithVoltypeAccessFstype(voltype, access, fstype 
 	if f.arrays == nil {
 		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
 		var err error
-		f.arrays, err = f.getArrayConfig()
+		f.arrays, err = f.getArrayConfig(configFile)
 		if err != nil {
 			return errors.New("Get multi array config failed " + err.Error())
 		}
@@ -2227,7 +2231,7 @@ func (f *feature) aNfsVolumeRequest(name string, size int64) error {
 	if f.arrays == nil {
 		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
 		var err error
-		f.arrays, err = f.getArrayConfig()
+		f.arrays, err = f.getArrayConfig(configFile)
 		if err != nil {
 			return errors.New("Get multi array config failed " + err.Error())
 		}
@@ -2327,7 +2331,7 @@ func (f *feature) controllerPublishVolumeForNfsWithoutSDC(id string) error {
 	if f.arrays == nil {
 		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
 		var err error
-		f.arrays, err = f.getArrayConfig()
+		f.arrays, err = f.getArrayConfig(configFile)
 		if err != nil {
 			return errors.New("Get multi array config failed " + err.Error())
 		}
@@ -2357,7 +2361,7 @@ func (f *feature) controllerPublishVolumeForNfs(id string, nodeIDEnvVar string) 
 	if f.arrays == nil {
 		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
 		var err error
-		f.arrays, err = f.getArrayConfig()
+		f.arrays, err = f.getArrayConfig(configFile)
 		if err != nil {
 			return errors.New("Get multi array config failed " + err.Error())
 		}
@@ -2609,7 +2613,7 @@ func (f *feature) ICallListFileSystemSnapshot() error {
 	if f.arrays == nil {
 		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
 		var err error
-		f.arrays, err = f.getArrayConfig()
+		f.arrays, err = f.getArrayConfig(configFile)
 		if err != nil {
 			return errors.New("Get multi array config failed " + err.Error())
 		}
@@ -2721,7 +2725,7 @@ func (f *feature) checkNFS(_ context.Context, systemID string) (bool, error) {
 		return false, err
 	}
 	if ver >= 4.0 {
-		arrayConData, err := f.getArrayConfig()
+		arrayConData, err := f.getArrayConfig(configFile)
 		if err != nil {
 			return false, err
 		}
@@ -2732,6 +2736,110 @@ func (f *feature) checkNFS(_ context.Context, systemID string) (bool, error) {
 		return true, nil
 	}
 	return false, nil
+}
+
+func (f *feature) createFakeNodeLabels(zoneLabelKey string) error {
+
+	if zoneLabelKey == "" {
+		zoneLabelKey = os.Getenv("ZONE_LABEL_KEY")
+	}
+	nodeName := os.Getenv("X_CSI_POWERFLEX_KUBE_NODE_NAME")
+
+	node := &apiv1.Node{
+		ObjectMeta: v1.ObjectMeta{
+			Name: nodeName,
+			Labels: map[string]string{
+				zoneLabelKey:             "zoneA",
+				"kubernetes.io/hostname": nodeName,
+			},
+		},
+		Status: apiv1.NodeStatus{
+			Conditions: []apiv1.NodeCondition{
+				{
+					Type:   apiv1.NodeReady,
+					Status: apiv1.ConditionTrue,
+				},
+			},
+		},
+	}
+	_, err := service.K8sClientset.CoreV1().Nodes().Create(context.TODO(), node, v1.CreateOptions{})
+	if err != nil {
+		fmt.Printf("CreateNode returned error: %s\n", err.Error())
+		return err
+	}
+	return nil
+}
+
+func (f *feature) iCallNodeGetInfo(zoneLabelKey string) error {
+	fmt.Println("[iCallNodeGetInfo] Calling NodeGetInfo...")
+	_, err := f.nodeGetInfo(f.nodeGetInfoRequest, zoneLabelKey)
+	if err != nil {
+		fmt.Printf("NodeGetInfo returned error: %s\n", err.Error())
+		f.addError(err)
+	}
+	return nil
+}
+
+func (f *feature) nodeGetInfo(req *csi.NodeGetInfoRequest, zoneLabelKey string) (*csi.NodeGetInfoResponse, error) {
+	fmt.Println("[nodeGetInfo] Calling NodeGetInfo...")
+
+	ctx := context.Background()
+	client := csi.NewNodeClient(grpcClient)
+	var nodeResp *csi.NodeGetInfoResponse
+
+	clientSet := fake.NewSimpleClientset()
+	service.K8sClientset = clientSet
+
+	err := f.createFakeNodeLabels(zoneLabelKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create fake node labels: %v", err)
+	}
+
+	nodeResp, err = client.NodeGetInfo(ctx, req)
+	f.nodeGetInfoResponse = nodeResp
+	return nodeResp, err
+}
+
+func (f *feature) aNodeGetInfoIsReturnedWithZoneTopology() error {
+	accessibility := f.nodeGetInfoResponse.GetAccessibleTopology()
+	log.Printf("Node Accessibility %+v", accessibility)
+	if _, ok := accessibility.Segments[os.Getenv("ZONE_LABEL_KEY")]; !ok {
+		return fmt.Errorf("zone not found")
+	}
+	return nil
+}
+
+func (f *feature) aNodeGetInfoIsReturnedWithoutZoneTopology(zoneLabelKey string) error {
+	accessibility := f.nodeGetInfoResponse.GetAccessibleTopology()
+	log.Printf("Node Accessibility %+v", accessibility)
+	if _, ok := accessibility.Segments[zoneLabelKey]; ok {
+		return fmt.Errorf("zone found")
+	}
+	return nil
+}
+
+func (f *feature) aNodeGetInfoIsReturnedWithSystemTopology() error {
+	accessibility := f.nodeGetInfoResponse.GetAccessibleTopology()
+	log.Printf("Node Accessibility %+v", accessibility)
+
+	var err error
+	f.arrays, err = f.getArrayConfig(zoneConfigFile)
+	if err != nil {
+		return fmt.Errorf("failed to get array config: %v", err)
+	}
+
+	labelAdded := false
+	for _, array := range f.arrays {
+		log.Printf("array systemID %+v", array.SystemID)
+		if _, ok := accessibility.Segments[service.Name+"/"+array.SystemID]; ok {
+			labelAdded = true
+		}
+	}
+
+	if !labelAdded {
+		return fmt.Errorf("topology with zone label not found")
+	}
+	return nil
 }
 
 func (f *feature) iCreateZoneRequest(name string) error {
@@ -2883,4 +2991,8 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call DeleteSnapshotForFS$`, f.iCallDeleteSnapshotForFS)
 	s.Step(`^I create a zone volume request "([^"]*)"$`, f.iCreateZoneRequest)
 	s.Step(`^I create an invalid zone volume request$`, f.iCreateInvalidZoneRequest)
+	s.Step(`^I call NodeGetInfo with "([^"]*)"$`, f.iCallNodeGetInfo)
+	s.Step(`^a NodeGetInfo is returned with zone topology$`, f.aNodeGetInfoIsReturnedWithZoneTopology)
+	s.Step(`^a NodeGetInfo is returned without zone topology "([^"]*)"$`, f.aNodeGetInfoIsReturnedWithoutZoneTopology)
+	s.Step(`^a NodeGetInfo is returned with system topology$`, f.aNodeGetInfoIsReturnedWithSystemTopology)
 }

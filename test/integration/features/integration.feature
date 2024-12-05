@@ -1013,3 +1013,16 @@ Scenario: Create zone volume with invalid zone information
   Examples:
     | errormsg                                               |
     | "no zone topology found in accessibility requirements" |
+
+@zone-integration
+Scenario: call NodeGetInfo
+  Given a VxFlexOS service
+  And I call NodeGetInfo with ""
+  Then a NodeGetInfo is returned with zone topology
+  And a NodeGetInfo is returned with system topology
+
+@zone-integration
+Scenario: call NodeGetInfo
+  Given a VxFlexOS service
+  And I call NodeGetInfo with "invalid_zone_key"
+  Then a NodeGetInfo is returned without zone topology "invalid_zone_key"
