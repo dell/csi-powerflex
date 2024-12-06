@@ -139,19 +139,19 @@ func (f *feature) getGoscaleioClient() (client *goscaleio.Client, err error) {
 // there is no way to call service.go methods from here
 // hence copy same method over there , this is used to get all arrays and pick different
 // systemID to test with see  method iSetAnotherSystemID
-func (f *feature) getArrayConfig(configurationFile string) (map[string]*ArrayConnectionData, error) {
+func (f *feature) getArrayConfig(filePath string) (map[string]*ArrayConnectionData, error) {
 	arrays := make(map[string]*ArrayConnectionData)
 
-	_, err := os.Stat(configurationFile)
+	_, err := os.Stat(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("File %s does not exist", configurationFile)
+			return nil, fmt.Errorf("File %s does not exist", filePath)
 		}
 	}
 
-	config, err := os.ReadFile(filepath.Clean(configurationFile))
+	config, err := os.ReadFile(filepath.Clean(filePath))
 	if err != nil {
-		return nil, fmt.Errorf("File %s errors: %v", configurationFile, err)
+		return nil, fmt.Errorf("File %s errors: %v", filePath, err)
 	}
 
 	if string(config) != "" {
@@ -162,7 +162,7 @@ func (f *feature) getArrayConfig(configurationFile string) (map[string]*ArrayCon
 		}
 
 		if len(jsonCreds) == 0 {
-			return nil, fmt.Errorf("no arrays are provided in configFile %s", configurationFile)
+			return nil, fmt.Errorf("no arrays are provided in configFile %s", filePath)
 		}
 
 		noOfDefaultArray := 0
@@ -221,7 +221,7 @@ func (f *feature) getArrayConfig(configurationFile string) (map[string]*ArrayCon
 			arrays[c.SystemID] = &copyOfCred
 		}
 	} else {
-		return nil, fmt.Errorf("arrays details are not provided in configFile %s", configurationFile)
+		return nil, fmt.Errorf("arrays details are not provided in configFile %s", filePath)
 	}
 	return arrays, nil
 }

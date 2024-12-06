@@ -39,14 +39,14 @@ const (
 
 var grpcClient *grpc.ClientConn
 
-func readConfigFile(configurationFile string) {
+func readConfigFile(filePath string) {
 	/* load array config and give proper errors if not ok*/
-	if _, err := os.Stat(configurationFile); err == nil {
-		if _, err := os.ReadFile(configurationFile); err != nil {
-			err = fmt.Errorf("DEBUG integration pre requisites missing %s with multi array configuration file ", configurationFile)
+	if _, err := os.Stat(filePath); err == nil {
+		if _, err := os.ReadFile(filePath); err != nil {
+			err = fmt.Errorf("DEBUG integration pre requisites missing %s with multi array configuration file ", filePath)
 			panic(err)
 		}
-		f, err := os.Open(configurationFile)
+		f, err := os.Open(filePath)
 		r := bufio.NewReader(f)
 		mdms := make([]string, 0)
 		line, isPrefix, err := r.ReadLine()
