@@ -3446,7 +3446,7 @@ func (s *service) CreateReplicationConsistencyGroupSnapshot(client *goscaleio.Cl
 	rcg := goscaleio.NewReplicationConsistencyGroup(client)
 	rcg.ReplicationConsistencyGroup = group
 
-	response, err := rcg.CreateReplicationConsistencyGroupSnapshot(false)
+	response, err := rcg.CreateReplicationConsistencyGroupSnapshot()
 	if err != nil {
 		return nil, err
 	}
