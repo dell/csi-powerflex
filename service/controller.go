@@ -1848,12 +1848,6 @@ func (s *service) ListVolumes(
 		maxEntries = int(req.MaxEntries)
 	)
 
-	// we don't want to deal with too many volumes in one request- limit to 50
-	if maxEntries == 0 {
-		Log.Printf("Request had Max entries set to 0, setting it to 50")
-		maxEntries = 50
-	}
-
 	if v := req.StartingToken; v != "" {
 		i, err := strconv.ParseInt(v, 10, 32)
 		if err != nil {
@@ -2395,17 +2389,21 @@ func (s *service) ControllerGetCapabilities(
 				},
 			},
 		},
-		{ // Required for ListVolumes which is only required if health monitor is enabled
-			Type: &csi.ControllerServiceCapability_Rpc{
-				Rpc: &csi.ControllerServiceCapability_RPC{
-					Type: csi.ControllerServiceCapability_RPC_LIST_VOLUMES,
-				},
+	}
+	ListVolumesCapability := csi.ControllerServiceCapability{
+		// Optional capability only returned when health monitor is not enabled. This is so health monitor will use GetVolume call instead of ListVolumes
+		Type: &csi.ControllerServiceCapability_Rpc{
+			Rpc: &csi.ControllerServiceCapability_RPC{
+				Type: csi.ControllerServiceCapability_RPC_LIST_VOLUMES,
 			},
 		},
 	}
 
 	if s.opts.IsHealthMonitorEnabled {
 		capabilities = append(capabilities, healthMonitorCapabilities...)
+	} else {
+		capabilities = append(capabilities, &ListVolumesCapability)
+
 	}
 
 	return &csi.ControllerGetCapabilitiesResponse{
