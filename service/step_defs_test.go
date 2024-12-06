@@ -2331,7 +2331,7 @@ func (f *feature) aValidControllerGetCapabilitiesResponseIsReturned() error {
 			}
 		}
 
-		if f.service.opts.IsHealthMonitorEnabled && count != 11 {
+		if f.service.opts.IsHealthMonitorEnabled && count != 10 {
 			// Set default value
 			f.service.opts.IsHealthMonitorEnabled = false
 			return errors.New("Did not retrieve all the expected capabilities")
