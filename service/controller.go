@@ -2572,7 +2572,6 @@ func (s *service) systemProbeAll(ctx context.Context, zoneLabel string) error {
 		if val, ok := labels[zoneLabel]; ok {
 			Log.Infof("probing zoneLabel %s, zone value: %s", zoneLabel, val)
 			zone = val
-
 		} else {
 			return fmt.Errorf("label %s not found", zoneLabel)
 		}
@@ -2580,7 +2579,7 @@ func (s *service) systemProbeAll(ctx context.Context, zoneLabel string) error {
 
 	for _, array := range s.opts.arrays {
 		// If zone information is available, use it to probe the array
-		if array.AvailabilityZone != nil && array.AvailabilityZone.Name != ZoneName(zone) {
+		if strings.EqualFold(s.mode, "node") && array.AvailabilityZone != nil && array.AvailabilityZone.Name != ZoneName(zone) {
 			Log.Warnf("array %s zone %s does not match %s, not pinging this array\n", array.SystemID, array.AvailabilityZone.Name, zone)
 			continue
 		}

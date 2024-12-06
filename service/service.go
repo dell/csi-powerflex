@@ -715,6 +715,7 @@ func (s *service) doProbe(ctx context.Context) error {
 	defer px.Unlock()
 
 	if !strings.EqualFold(s.mode, "node") {
+		Log.Infof("[doProbe] controllerProbe - zone label: %s", s.opts.zoneLabelKey)
 		if err := s.systemProbeAll(ctx, ""); err != nil {
 			return err
 		}
