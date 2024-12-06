@@ -25,12 +25,15 @@ const (
 	nodeMdmsFile = "/data/node_mdms.txt"
 )
 
-func NewPreInitService() *service {
+type PreInitService interface {
+	PreInit() error
+}
+
+func NewPreInitService() PreInitService {
 	return &service{}
 }
 
 func (s *service) PreInit() error {
-
 	Log.Infof("PreInit running")
 
 	arrayConfig, err := getArrayConfig(context.Background())
@@ -72,17 +75,18 @@ func (s *service) PreInit() error {
 
 		if zone == "" {
 			return fmt.Errorf("No zone found, cannot configure this node")
-		} else {
-			Log.Infof("Zone found, will configure MDMs for this node, zone: %s", zone)
-			mdmData, err = getMdmList(connectionData, labelKey, zone)
-			if err != nil {
-				return err
-			}
+		}
+
+		Log.Infof("Zone found, will configure MDMs for this node, zone: %s", zone)
+		mdmData, err = getMdmList(connectionData, labelKey, zone)
+		if err != nil {
+			return err
 		}
 	}
 
 	Log.Infof("Saving MDM list to %s, MDM=%s", nodeMdmsFile, mdmData)
-	err = os.WriteFile(nodeMdmsFile, []byte(fmt.Sprintf("MDM=%s\n", mdmData)), 0644)
+	// #nosec G306 - false positive, or a bug in gosec
+	err = os.WriteFile(nodeMdmsFile, []byte(fmt.Sprintf("MDM=%s\n", mdmData)), 444)
 	return err
 }
 
@@ -90,7 +94,6 @@ func (s *service) PreInit() error {
 // key and zone. The ordering of the MDM addresses is not guaranteed. An error is
 // returned if either the key or zone are empty.
 func getMdmList(connectionData []*ArrayConnectionData, key, zone string) (string, error) {
-
 	if key == "" {
 		return "", fmt.Errorf("key is empty")
 	}
@@ -116,7 +119,6 @@ func getMdmList(connectionData []*ArrayConnectionData, key, zone string) (string
 // An empty string is returned if the labelKey is not present in all arrays.
 // An error is returned if the key cannot be determined.
 func getLabelKey(connectionData []*ArrayConnectionData) (string, error) {
-
 	if len(connectionData) == 0 {
 		return "", fmt.Errorf("array connection data is empty")
 	}
