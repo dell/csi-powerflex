@@ -81,7 +81,7 @@ func (s *service) PreInit() error {
 		}
 	}
 
-	Log.Infof("Saving MDM list to %s", nodeMdmsFile)
+	Log.Infof("Saving MDM list to %s, MDM=%s", nodeMdmsFile, mdmData)
 	err = os.WriteFile(nodeMdmsFile, []byte(fmt.Sprintf("MDM=%s\n", mdmData)), 0644)
 	return err
 }
