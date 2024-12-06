@@ -2403,7 +2403,6 @@ func (s *service) ControllerGetCapabilities(
 		capabilities = append(capabilities, healthMonitorCapabilities...)
 	} else {
 		capabilities = append(capabilities, &ListVolumesCapability)
-
 	}
 
 	return &csi.ControllerGetCapabilitiesResponse{
