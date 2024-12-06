@@ -80,7 +80,7 @@ func (s *service) Probe(
 	Log.Debug("Probe called")
 	if !strings.EqualFold(s.mode, "node") {
 		Log.Debug("systemProbe")
-		if err := s.systemProbeAll(ctx); err != nil {
+		if err := s.systemProbeAll(ctx, ""); err != nil {
 			Log.Printf("error in systemProbeAll: %s", err.Error())
 			return nil, err
 		}
@@ -107,7 +107,7 @@ func (s *service) ProbeController(ctx context.Context,
 ) {
 	if !strings.EqualFold(s.mode, "node") {
 		Log.Debug("systemProbe")
-		if err := s.systemProbeAll(ctx); err != nil {
+		if err := s.systemProbeAll(ctx, ""); err != nil {
 			Log.Printf("error in systemProbeAll: %s", err.Error())
 			return nil, err
 		}

@@ -2270,13 +2270,18 @@ func (s *service) getSystemCapacity(ctx context.Context, systemID, protectionDom
 
 	adminClient := s.adminClients[systemID]
 	system := s.systems[systemID]
+	if adminClient == nil || system == nil {
+		return 0, fmt.Errorf("can't find adminClient or system by id %s", systemID)
+	}
+
+	Log.Printf("[FERNANDO] adminClient: %v, system: %v", adminClient, system)
 
 	var statsFunc func() (*siotypes.Statistics, error)
 
 	// Default to get Capacity of system
 	statsFunc = system.GetStatistics
 
-	if len(spName) > 0 {
+	if len(spName) > 0 && spName[0] != "" {
 		// if storage pool is given, get capacity of storage pool
 		pdID, err := s.getProtectionDomainIDFromName(systemID, protectionDomain)
 		if err != nil {
@@ -2318,6 +2323,8 @@ func (s *service) getCapacityForAllSystems(ctx context.Context, protectionDomain
 	for _, array := range s.opts.arrays {
 		var systemCapacity int64
 		var err error
+
+		Log.Printf("[FERNANDO] Get capacity for system: %s, pool %d, protection domain %s", array.SystemID, len(spName), protectionDomain)
 
 		if len(spName) > 0 && spName[0] != "" {
 			systemCapacity, err = s.getSystemCapacity(ctx, array.SystemID, protectionDomain, spName[0])
@@ -2546,13 +2553,38 @@ func (s *service) ControllerGetCapabilities(
 
 // systemProbeAll will iterate through all arrays in service.opts.arrays and probe them. If failed, it logs
 // the failed system name
-func (s *service) systemProbeAll(ctx context.Context) error {
+func (s *service) systemProbeAll(ctx context.Context, zoneLabel string) error {
 	// probe all arrays
-	Log.Infof("Probing all arrays. Number of arrays: %d", len(s.opts.arrays))
+	// Log.Infof("Probing all arrays. Number of arrays: %d", len(s.opts.arrays))
+	Log.Infoln("Probing all associated arrays")
 	allArrayFail := true
 	errMap := make(map[string]error)
+	zone := ""
+
+	if zoneLabel != "" {
+		labels, err := GetNodeLabels(ctx, s)
+		if err != nil {
+			return err
+		}
+
+		Log.Infof("Listing labels: %v", labels)
+
+		if val, ok := labels[zoneLabel]; ok {
+			Log.Infof("probing zoneLabel %s, zone value: %s", zoneLabel, val)
+			zone = val
+
+		} else {
+			return fmt.Errorf("label %s not found", zoneLabel)
+		}
+	}
 
 	for _, array := range s.opts.arrays {
+		// If zone information is available, use it to probe the array
+		if array.AvailabilityZone != nil && array.AvailabilityZone.Name != ZoneName(zone) {
+			Log.Warnf("array %s zone %s does not match %s, not pinging this array\n", array.SystemID, array.AvailabilityZone.Name, zone)
+			continue
+		}
+
 		err := s.systemProbe(ctx, array)
 		systemID := array.SystemID
 		if err == nil {
@@ -2611,6 +2643,8 @@ func (s *service) systemProbe(_ context.Context, array *ArrayConnectionData) err
 			s.adminClients[name] = c
 		}
 	}
+
+	Log.Printf("Login to VxFlexOS Gateway, system=%s, endpoint=%s, user=%s\n", systemID, array.Endpoint, array.Username)
 
 	if s.adminClients[systemID].GetToken() == "" {
 		_, err := s.adminClients[systemID].Authenticate(&goscaleio.ConfigConnect{

@@ -666,7 +666,7 @@ func (s *service) getIPAddressByInterface(interfaceName string, networkInterface
 }
 
 func (s *service) checkNFS(ctx context.Context, systemID string) (bool, error) {
-	err := s.systemProbeAll(ctx)
+	err := s.systemProbeAll(ctx, s.opts.zoneLabelKey)
 	if err != nil {
 		return false, err
 	}
@@ -715,7 +715,7 @@ func (s *service) doProbe(ctx context.Context) error {
 	defer px.Unlock()
 
 	if !strings.EqualFold(s.mode, "node") {
-		if err := s.systemProbeAll(ctx); err != nil {
+		if err := s.systemProbeAll(ctx, ""); err != nil {
 			return err
 		}
 	}
@@ -723,7 +723,8 @@ func (s *service) doProbe(ctx context.Context) error {
 	// Do a node probe
 	if !strings.EqualFold(s.mode, "controller") {
 		// Probe all systems managed by driver
-		if err := s.systemProbeAll(ctx); err != nil {
+		Log.Infof("[doProbe] nodeProbe - zone label: %s", s.opts.zoneLabelKey)
+		if err := s.systemProbeAll(ctx, s.opts.zoneLabelKey); err != nil {
 			return err
 		}
 
@@ -1842,6 +1843,48 @@ func (s *service) GetNodeLabels(_ context.Context) (map[string]string, error) {
 	}
 	Log.Debugf("Node labels: %v\n", node.Labels)
 	return node.Labels, nil
+}
+
+func (s *service) SetPodZoneLabel(_ context.Context, zoneLabel map[string]string) error {
+	if K8sClientset == nil {
+		err := k8sutils.CreateKubeClientSet()
+		if err != nil {
+			return status.Error(codes.Internal, GetMessage("init client failed with error: %v", err))
+		}
+		K8sClientset = k8sutils.Clientset
+	}
+
+	Log.Println("SetPodZoneLabel")
+
+	// access the API to fetch node object
+	pods, err := K8sClientset.CoreV1().Pods(DriverNamespace).List(context.TODO(), v1.ListOptions{})
+	if err != nil {
+		return status.Error(codes.Internal, GetMessage("Unable to fetch the node labels. Error: %v", err))
+	}
+
+	podName := ""
+	for _, pod := range pods.Items {
+		if pod.Spec.NodeName == s.opts.KubeNodeName && pod.Labels["app"] != "" {
+			podName = pod.Name
+		}
+	}
+
+	pod, err := K8sClientset.CoreV1().Pods(DriverNamespace).Get(context.TODO(), podName, v1.GetOptions{})
+	if err != nil {
+		return status.Error(codes.Internal, GetMessage("Unable to fetch the node labels. Error: %v", err))
+	}
+
+	for key, value := range zoneLabel {
+		Log.Printf("Setting Label: Key: %s, Value: %s for pod: %s\n", key, value, podName)
+		pod.Labels[key] = value
+	}
+
+	_, err = K8sClientset.CoreV1().Pods(DriverNamespace).Update(context.TODO(), pod, v1.UpdateOptions{})
+	if err != nil {
+		return status.Error(codes.Internal, GetMessage("Unable to fetch the node labels. Error: %v", err))
+	}
+
+	return nil
 }
 
 func (s *service) GetNodeUID(_ context.Context) (string, error) {

@@ -761,6 +761,8 @@ func (s *service) NodeGetInfo(
 
 	if zone, ok := labels[s.opts.zoneLabelKey]; ok {
 		topology[s.opts.zoneLabelKey] = zone
+
+		_ = s.SetPodZoneLabel(ctx, topology)
 	}
 
 	for _, array := range s.opts.arrays {
