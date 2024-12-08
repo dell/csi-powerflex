@@ -143,7 +143,8 @@ func TestPreInit(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   "",
 					Labels: map[string]string{"label1": "value1", "label2": "value2"},
-				}},
+				},
+			},
 			errorExpected:  true,
 			expectedResult: "No zone found, cannot configure this node",
 		},
@@ -169,7 +170,8 @@ func TestPreInit(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   "",
 					Labels: map[string]string{"key1": "zone1", "label2": "value2"},
-				}},
+				},
+			},
 			errorExpected:  false,
 			expectedResult: "192.168.1.1,192.168.1.2",
 		},
