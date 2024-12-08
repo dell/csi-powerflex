@@ -331,7 +331,7 @@ func (f *feature) aVxFlexOSService() error {
 	return nil
 }
 
-func (f *feature) aBasicBlockVolumeRequest(name string, size int64) error {
+func (f *feature) aBasicBlockVolumeRequest(name string, size float64) error {
 	req := new(csi.CreateVolumeRequest)
 	storagePool := os.Getenv("STORAGE_POOL")
 	params := make(map[string]string)
@@ -344,7 +344,7 @@ func (f *feature) aBasicBlockVolumeRequest(name string, size int64) error {
 	makeAUniqueName(&name)
 	req.Name = name
 	capacityRange := new(csi.CapacityRange)
-	capacityRange.RequiredBytes = size * 1024 * 1024 * 1024
+	capacityRange.RequiredBytes = int64(math.Ceil(size * 1024 * 1024 * 1024))
 	req.CapacityRange = capacityRange
 	capability := new(csi.VolumeCapability)
 	block := new(csi.VolumeCapability_BlockVolume)
@@ -2737,7 +2737,7 @@ func (f *feature) checkNFS(_ context.Context, systemID string) (bool, error) {
 func FeatureContext(s *godog.ScenarioContext) {
 	f := &feature{}
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
-	s.Step(`^a basic block volume request "([^"]*)" "(\d+)"$`, f.aBasicBlockVolumeRequest)
+	s.Step(`^a basic block volume request "([^"]*)" "(\d+(\.\d+)?)"$`, f.aBasicBlockVolumeRequest)
 	s.Step(`^Set System Name As "([^"]*)"$`, f.iSetSystemName)
 	s.Step(`^Set Bad AllSystemNames$`, f.iSetBadAllSystemNames)
 	s.Step(`^I call CreateVolume$`, f.iCallCreateVolume)

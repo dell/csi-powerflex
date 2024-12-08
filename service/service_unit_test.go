@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	v1 "k8s.io/api/core/v1"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
@@ -72,7 +71,7 @@ func TestGetVolSize(t *testing.T) {
 		{
 			// requesting a size less than 1GiB should result in a minimal size
 			cr: &csi.CapacityRange{
-				RequiredBytes: 300 * bytesInKiB,
+				RequiredBytes: 1,
 				LimitBytes:    0,
 			},
 			sizeKiB: 8 * kiBytesInGiB,
@@ -104,6 +103,22 @@ func TestGetVolSize(t *testing.T) {
 				LimitBytes:    14 * bytesInGiB,
 			},
 			sizeKiB: 0,
+		},
+		{
+			// Requesting a size with decimal part that rounds up to next multiple of 8 GiB
+			cr: &csi.CapacityRange{
+				RequiredBytes: int64(9.5 * float64(bytesInGiB)),
+				LimitBytes:    0,
+			},
+			sizeKiB: 16 * kiBytesInGiB,
+		},
+		{
+			// Requesting a size of 8.5 GiB to test rounding up
+			cr: &csi.CapacityRange{
+				RequiredBytes: int64(48.5 * float64(bytesInGiB)),
+				LimitBytes:    0,
+			},
+			sizeKiB: 56 * kiBytesInGiB,
 		},
 	}
 
@@ -520,33 +535,22 @@ func TestGetIPAddressByInterface(t *testing.T) {
 func TestFindNetworkInterfaceIPs(t *testing.T) {
 	tests := []struct {
 		name            string
-		expectedError   error
+		expectedError   string
 		client          kubernetes.Interface
 		configMapData   map[string]string
 		createConfigMap func(map[string]string, kubernetes.Interface)
 	}{
 		{
 			name:          "Error getting K8sClient",
-			expectedError: fmt.Errorf("unable to load in-cluster configuration, KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT must be defined"),
+			expectedError: "unable to load in-cluster configuration, KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT must be defined",
 			client:        nil,
 			configMapData: nil,
 			createConfigMap: func(map[string]string, kubernetes.Interface) {
 			},
 		},
 		{
-			name: "Error getting ConfigMap",
-			expectedError: &k8serrors.StatusError{
-				ErrStatus: metav1.Status{
-					Status:  metav1.StatusFailure,
-					Message: "configmaps \"vxflexos-config-params\" not found",
-					Reason:  metav1.StatusReasonNotFound,
-					Details: &metav1.StatusDetails{
-						Name: "vxflexos-config-params",
-						Kind: "configmaps",
-					},
-					Code: 404,
-				},
-			},
+			name:          "Error getting ConfigMap",
+			expectedError: "configmaps \"vxflexos-config-params\" not found",
 			client:        fake.NewSimpleClientset(),
 			configMapData: nil,
 			createConfigMap: func(map[string]string, kubernetes.Interface) {
@@ -554,7 +558,7 @@ func TestFindNetworkInterfaceIPs(t *testing.T) {
 		},
 		{
 			name:          "No Error",
-			expectedError: nil,
+			expectedError: "",
 			client:        fake.NewSimpleClientset(),
 			configMapData: map[string]string{
 				"driver-config-params.yaml": `interfaceNames:
@@ -577,7 +581,7 @@ func TestFindNetworkInterfaceIPs(t *testing.T) {
 		},
 		{
 			name:          "Error unmarshalling ConfigMap params",
-			expectedError: errors.New("error converting YAML to JSON: yaml: line 1: did not find expected node content"),
+			expectedError: "error converting YAML to JSON: yaml: line 1: did not find expected node content",
 			client:        fake.NewSimpleClientset(),
 			configMapData: map[string]string{
 				"driver-config-params.yaml": `[interfaces:`,
@@ -599,7 +603,7 @@ func TestFindNetworkInterfaceIPs(t *testing.T) {
 		},
 		{
 			name:          "Error getting the Network Interface IPs",
-			expectedError: fmt.Errorf("failed to get the Network Interface IPs"),
+			expectedError: "failed to get the Network Interface IPs",
 			client:        fake.NewSimpleClientset(),
 			configMapData: map[string]string{
 				"params-yaml": ``,
@@ -627,7 +631,11 @@ func TestFindNetworkInterfaceIPs(t *testing.T) {
 			K8sClientset = tt.client
 			tt.createConfigMap(tt.configMapData, tt.client)
 			_, err := s.findNetworkInterfaceIPs()
-			assert.Equal(t, err, tt.expectedError)
+			if tt.expectedError == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.EqualError(t, err, tt.expectedError)
+			}
 		})
 	}
 }
