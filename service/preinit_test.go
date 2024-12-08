@@ -15,6 +15,7 @@ package service
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"reflect"
 	"testing"
@@ -57,20 +58,20 @@ func TestPreInit(t *testing.T) {
 		expectedResult  string
 	}{
 		{
-			name:           "no connection info",
+			name:           "should error on no connection info",
 			connectionInfo: []*ArrayConnectionData{},
 			errorExpected:  true,
 			expectedResult: "array connection data is empty",
 		},
 		{
-			name:            "error getting connection info",
+			name:            "should handle error getting connection info",
 			connectionInfo:  nil,
 			connectionError: fmt.Errorf("don't care about error text"),
 			errorExpected:   true,
 			expectedResult:  "don't care about error text",
 		},
 		{
-			name: "zone label is different",
+			name: "should error when zone labels different",
 			connectionInfo: []*ArrayConnectionData{
 				{
 					Zone: ZoneInfo{
@@ -88,11 +89,34 @@ func TestPreInit(t *testing.T) {
 			errorExpected:  true,
 			expectedResult: "zone label key is not the same for all arrays",
 		},
+		{
+			name: "should configure all MDMs when no zone label single array",
+			connectionInfo: []*ArrayConnectionData{
+				{
+					Mdm: "192.168.1.1,192.168.1.2",
+				},
+			},
+			errorExpected:  false,
+			expectedResult: "192.168.1.1,192.168.1.2",
+		},
+		{
+			name: "should configure all MDMs when no zone label multi array",
+			connectionInfo: []*ArrayConnectionData{
+				{
+					Mdm: "192.168.1.1,192.168.1.2",
+				},
+				{
+					Mdm: "192.168.2.1,192.168.2.2",
+				},
+			},
+			errorExpected:  false,
+			expectedResult: "192.168.1.1,192.168.1.2,192.168.2.1,192.168.2.2",
+		},
 
 		// {
 		// 	name:           "",
 		// 	connectionInfo: []*ArrayConnectionData{},
-		// 	errorExpected:  true,
+		// 	errorExpected:  false,
 		// 	expectedResult: "",
 		// },
 	}
@@ -102,13 +126,13 @@ func TestPreInit(t *testing.T) {
 			mockArrayConfigurationProvider := &MockArrayConfigurationProvider{}
 			mockFileWriterProvider := &MockFileWriterProvider{}
 
-			ArrayConfigurationProviderImpl = mockArrayConfigurationProvider
-			FileWriterProviderImpl = mockFileWriterProvider
+			arrayConfigurationProviderImpl = mockArrayConfigurationProvider
+			fileWriterProviderImpl = mockFileWriterProvider
 			K8sClientset = fake.NewClientset()
 			svc := NewPreInitService()
 
 			mockArrayConfigurationProvider.On("GetArrayConfiguration").Return(test.connectionInfo, test.connectionError)
-			mockFileWriterProvider.On("WriteFile").Return(nil)
+			mockFileWriterProvider.On("WriteFile", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 			err := svc.PreInit()
 			if test.errorExpected {
@@ -116,7 +140,7 @@ func TestPreInit(t *testing.T) {
 			} else {
 				assert.Nil(t, err)
 				mockFileWriterProvider.AssertCalled(t, "WriteFile", nodeMdmsFile,
-					[]byte(fmt.Sprintf("MDM=%s\n", test.expectedResult)), 0444)
+					[]byte(fmt.Sprintf("MDM=%s\n", test.expectedResult)), fs.FileMode(0o444))
 			}
 		})
 	}

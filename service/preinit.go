@@ -15,6 +15,7 @@ package service
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"strings"
 
@@ -41,9 +42,6 @@ type FileWriterProvider interface {
 	WriteFile(filename string, data []byte, perm os.FileMode) error
 }
 
-var ArrayConfigurationProviderImpl ArrayConfigurationProvider
-var FileWriterProviderImpl FileWriterProvider
-
 type DefaultArrayConfigurationProvider struct{}
 
 func (s *DefaultArrayConfigurationProvider) GetArrayConfiguration() ([]*ArrayConnectionData, error) {
@@ -66,10 +64,15 @@ func (s *DefaultFileWriterProvider) WriteFile(filename string, data []byte, perm
 	return os.WriteFile(filename, data, perm)
 }
 
+var (
+	arrayConfigurationProviderImpl ArrayConfigurationProvider = &DefaultArrayConfigurationProvider{}
+	fileWriterProviderImpl         FileWriterProvider         = &DefaultFileWriterProvider{}
+)
+
 func (s *service) PreInit() error {
 	Log.Infof("PreInit running")
 
-	arrayConfig, err := ArrayConfigurationProviderImpl.GetArrayConfiguration()
+	arrayConfig, err := arrayConfigurationProviderImpl.GetArrayConfiguration()
 	if err != nil {
 		return err
 	}
@@ -113,8 +116,7 @@ func (s *service) PreInit() error {
 	}
 
 	Log.Infof("Saving MDM list to %s, MDM=%s", nodeMdmsFile, mdmData)
-	// #nosec G306 - false positive, or a bug in gosec
-	err = FileWriterProviderImpl.WriteFile(nodeMdmsFile, []byte(fmt.Sprintf("MDM=%s\n", mdmData)), 444)
+	err = fileWriterProviderImpl.WriteFile(nodeMdmsFile, []byte(fmt.Sprintf("MDM=%s\n", mdmData)), fs.FileMode(0o444))
 	return err
 }
 
