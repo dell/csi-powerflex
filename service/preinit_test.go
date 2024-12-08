@@ -22,6 +22,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 )
 
@@ -53,7 +55,7 @@ func TestPreInit(t *testing.T) {
 		name            string
 		connectionInfo  []*ArrayConnectionData
 		connectionError error
-		modeLabels      map[string]string
+		nodeInfo        *corev1.Node
 		errorExpected   bool
 		expectedResult  string
 	}{
@@ -112,13 +114,65 @@ func TestPreInit(t *testing.T) {
 			errorExpected:  false,
 			expectedResult: "192.168.1.1,192.168.1.2,192.168.2.1,192.168.2.2",
 		},
-
-		// {
-		// 	name:           "",
-		// 	connectionInfo: []*ArrayConnectionData{},
-		// 	errorExpected:  false,
-		// 	expectedResult: "",
-		// },
+		{
+			name: "should fail if zones configured but unable to fetch node labels",
+			connectionInfo: []*ArrayConnectionData{
+				{
+					Mdm: "192.168.1.1,192.168.1.2",
+					Zone: ZoneInfo{
+						LabelKey: "key1",
+						Name:     "zone1",
+					},
+				},
+			},
+			errorExpected:  true,
+			expectedResult: "rpc error: code = Internal desc = Unable to fetch the node labels. Error: nodes \"\" not found",
+		},
+		{
+			name: "should fail if node label not found for node",
+			connectionInfo: []*ArrayConnectionData{
+				{
+					Mdm: "192.168.1.1,192.168.1.2",
+					Zone: ZoneInfo{
+						LabelKey: "key1",
+						Name:     "zone1",
+					},
+				},
+			},
+			nodeInfo: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "",
+					Labels: map[string]string{"label1": "value1", "label2": "value2"},
+				}},
+			errorExpected:  true,
+			expectedResult: "No zone found, cannot configure this node",
+		},
+		{
+			name: "should configure MDMs for only array matching zone label",
+			connectionInfo: []*ArrayConnectionData{
+				{
+					Mdm: "192.168.1.1,192.168.1.2",
+					Zone: ZoneInfo{
+						LabelKey: "key1",
+						Name:     "zone1",
+					},
+				},
+				{
+					Mdm: "192.168.2.1,192.168.2.2",
+					Zone: ZoneInfo{
+						LabelKey: "key1",
+						Name:     "zone2",
+					},
+				},
+			},
+			nodeInfo: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "",
+					Labels: map[string]string{"key1": "zone1", "label2": "value2"},
+				}},
+			errorExpected:  false,
+			expectedResult: "192.168.1.1,192.168.1.2",
+		},
 	}
 
 	for _, test := range tests {
@@ -128,7 +182,13 @@ func TestPreInit(t *testing.T) {
 
 			arrayConfigurationProviderImpl = mockArrayConfigurationProvider
 			fileWriterProviderImpl = mockFileWriterProvider
-			K8sClientset = fake.NewClientset()
+
+			if test.nodeInfo == nil {
+				K8sClientset = fake.NewClientset()
+			} else {
+				K8sClientset = fake.NewClientset(test.nodeInfo)
+			}
+
 			svc := NewPreInitService()
 
 			mockArrayConfigurationProvider.On("GetArrayConfiguration").Return(test.connectionInfo, test.connectionError)
