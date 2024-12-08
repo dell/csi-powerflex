@@ -57,6 +57,18 @@ func main() {
 	service.DriverConfigParamsFile = *driverConfigParamsfile
 	service.KubeConfig = *kubeconfig
 
+	// Run the service as a pre-init step.
+	if os.Getenv(gocsi.EnvVarMode) == "MDM-Info" {
+		fmt.Fprintf(os.Stdout, "PowerFlex Container Storage Interface (CSI) Plugin starting in pre-init mode.")
+		svc := service.NewPreInitService()
+		err := svc.PreInit()
+		if err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "failed to complete pre-init: %v", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
 	run := func(ctx context.Context) {
 		gocsi.Run(ctx, service.Name, "A PowerFlex Container Storage Interface (CSI) Plugin",
 			usage, provider.New())
