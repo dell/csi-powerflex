@@ -49,11 +49,12 @@ func TestNewPreInitService(t *testing.T) {
 
 func TestPreInit(t *testing.T) {
 	tests := []struct {
-		name           string
-		connectionInfo []*ArrayConnectionData
-		modeLabels     map[string]string
-		errorExpected  bool
-		expectedResult string
+		name            string
+		connectionInfo  []*ArrayConnectionData
+		connectionError error
+		modeLabels      map[string]string
+		errorExpected   bool
+		expectedResult  string
 	}{
 		{
 			name:           "no connection info",
@@ -61,6 +62,33 @@ func TestPreInit(t *testing.T) {
 			errorExpected:  true,
 			expectedResult: "array connection data is empty",
 		},
+		{
+			name:            "error getting connection info",
+			connectionInfo:  nil,
+			connectionError: fmt.Errorf("don't care about error text"),
+			errorExpected:   true,
+			expectedResult:  "don't care about error text",
+		},
+		{
+			name: "zone label is different",
+			connectionInfo: []*ArrayConnectionData{
+				{
+					Zone: ZoneInfo{
+						LabelKey: "key1",
+						Name:     "zone1",
+					},
+				},
+				{
+					Zone: ZoneInfo{
+						LabelKey: "key2",
+						Name:     "zone1",
+					},
+				},
+			},
+			errorExpected:  true,
+			expectedResult: "zone label key is not the same for all arrays",
+		},
+
 		// {
 		// 	name:           "",
 		// 	connectionInfo: []*ArrayConnectionData{},
@@ -79,15 +107,14 @@ func TestPreInit(t *testing.T) {
 			K8sClientset = fake.NewClientset()
 			svc := NewPreInitService()
 
-			mockArrayConfigurationProvider.On("GetArrayConfiguration").Return(test.connectionInfo, nil)
+			mockArrayConfigurationProvider.On("GetArrayConfiguration").Return(test.connectionInfo, test.connectionError)
 			mockFileWriterProvider.On("WriteFile").Return(nil)
 
 			err := svc.PreInit()
 			if test.errorExpected {
-				assert.Error(t, err)
 				assert.Equal(t, test.expectedResult, err.Error())
 			} else {
-				assert.NoError(t, err)
+				assert.Nil(t, err)
 				mockFileWriterProvider.AssertCalled(t, "WriteFile", nodeMdmsFile,
 					[]byte(fmt.Sprintf("MDM=%s\n", test.expectedResult)), 0444)
 			}
