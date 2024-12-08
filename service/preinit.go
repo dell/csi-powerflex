@@ -33,12 +33,23 @@ func NewPreInitService() PreInitService {
 	return &service{}
 }
 
-func (s *service) PreInit() error {
-	Log.Infof("PreInit running")
+type ArrayConfigurationProvider interface {
+	GetArrayConfiguration() ([]*ArrayConnectionData, error)
+}
 
-	arrayConfig, err := getArrayConfig(context.Background())
+type FileWriterProvider interface {
+	WriteFile(filename string, data []byte, perm os.FileMode) error
+}
+
+var ArrayConfigurationProviderImpl ArrayConfigurationProvider
+var FileWriterProviderImpl FileWriterProvider
+
+type DefaultArrayConfigurationProvider struct{}
+
+func (s *DefaultArrayConfigurationProvider) GetArrayConfiguration() ([]*ArrayConnectionData, error) {
+	arrayConfig, err := getArrayConfig(nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	connectionData := make([]*ArrayConnectionData, 0)
@@ -46,7 +57,24 @@ func (s *service) PreInit() error {
 		connectionData = append(connectionData, v)
 	}
 
-	labelKey, err := getLabelKey(connectionData)
+	return connectionData, nil
+}
+
+type DefaultFileWriterProvider struct{}
+
+func (s *DefaultFileWriterProvider) WriteFile(filename string, data []byte, perm os.FileMode) error {
+	return os.WriteFile(filename, data, perm)
+}
+
+func (s *service) PreInit() error {
+	Log.Infof("PreInit running")
+
+	arrayConfig, err := ArrayConfigurationProviderImpl.GetArrayConfiguration()
+	if err != nil {
+		return err
+	}
+
+	labelKey, err := getLabelKey(arrayConfig)
 	if err != nil {
 		return err
 	}
@@ -56,7 +84,7 @@ func (s *service) PreInit() error {
 	if labelKey == "" {
 		Log.Debug("No zone key found, will configure all MDMs")
 		sb := strings.Builder{}
-		for _, connectionData := range connectionData {
+		for _, connectionData := range arrayConfig {
 			if connectionData.Mdm != "" {
 				if sb.Len() > 0 {
 					sb.WriteString(",")
@@ -78,7 +106,7 @@ func (s *service) PreInit() error {
 		}
 
 		Log.Infof("Zone found, will configure MDMs for this node, zone: %s", zone)
-		mdmData, err = getMdmList(connectionData, labelKey, zone)
+		mdmData, err = getMdmList(arrayConfig, labelKey, zone)
 		if err != nil {
 			return err
 		}
@@ -86,7 +114,7 @@ func (s *service) PreInit() error {
 
 	Log.Infof("Saving MDM list to %s, MDM=%s", nodeMdmsFile, mdmData)
 	// #nosec G306 - false positive, or a bug in gosec
-	err = os.WriteFile(nodeMdmsFile, []byte(fmt.Sprintf("MDM=%s\n", mdmData)), 444)
+	err = FileWriterProviderImpl.WriteFile(nodeMdmsFile, []byte(fmt.Sprintf("MDM=%s\n", mdmData)), 444)
 	return err
 }
 

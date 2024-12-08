@@ -14,16 +14,85 @@
 package service
 
 import (
+	"fmt"
+	"os"
 	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"k8s.io/client-go/kubernetes/fake"
 )
 
-func xTestPreInit(t *testing.T) {
+type MockArrayConfigurationProvider struct {
+	mock.Mock
+}
+
+func (mock *MockArrayConfigurationProvider) GetArrayConfiguration() ([]*ArrayConnectionData, error) {
+	args := mock.Called()
+	return args.Get(0).([]*ArrayConnectionData), args.Error(1)
+}
+
+type MockFileWriterProvider struct {
+	mock.Mock
+}
+
+func (mock *MockFileWriterProvider) WriteFile(filename string, data []byte, perm os.FileMode) error {
+	args := mock.Called(filename, data, perm)
+	return args.Error(0)
+}
+
+func TestNewPreInitService(t *testing.T) {
 	svc := NewPreInitService()
-	err := svc.PreInit()
-	assert.Nil(t, err)
+	assert.NotNil(t, svc)
+}
+
+func TestPreInit(t *testing.T) {
+	tests := []struct {
+		name           string
+		connectionInfo []*ArrayConnectionData
+		modeLabels     map[string]string
+		errorExpected  bool
+		expectedResult string
+	}{
+		{
+			name:           "no connection info",
+			connectionInfo: []*ArrayConnectionData{},
+			errorExpected:  true,
+			expectedResult: "array connection data is empty",
+		},
+		// {
+		// 	name:           "",
+		// 	connectionInfo: []*ArrayConnectionData{},
+		// 	errorExpected:  true,
+		// 	expectedResult: "",
+		// },
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			mockArrayConfigurationProvider := &MockArrayConfigurationProvider{}
+			mockFileWriterProvider := &MockFileWriterProvider{}
+
+			ArrayConfigurationProviderImpl = mockArrayConfigurationProvider
+			FileWriterProviderImpl = mockFileWriterProvider
+			K8sClientset = fake.NewClientset()
+			svc := NewPreInitService()
+
+			mockArrayConfigurationProvider.On("GetArrayConfiguration").Return(test.connectionInfo, nil)
+			mockFileWriterProvider.On("WriteFile").Return(nil)
+
+			err := svc.PreInit()
+			if test.errorExpected {
+				assert.Error(t, err)
+				assert.Equal(t, test.expectedResult, err.Error())
+			} else {
+				assert.NoError(t, err)
+				mockFileWriterProvider.AssertCalled(t, "WriteFile", nodeMdmsFile,
+					[]byte(fmt.Sprintf("MDM=%s\n", test.expectedResult)), 0444)
+			}
+		})
+	}
 }
 
 func TestGetMdmList(t *testing.T) {
