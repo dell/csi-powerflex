@@ -20,6 +20,7 @@ RUN yum install -y \
     e4fsprogs \
     nfs-utils \
     procps-ng \
+    telnet \
     && \
     yum clean all \
     && \

@@ -40,6 +40,7 @@ var (
 	publishGetMappedVolMaxRetry   = 30
 	unpublishGetMappedVolMaxRetry = 5
 	getMappedVolDelay             = (1 * time.Second)
+	nfsExportsDirectory           = "/nfs/exports"
 
 	// GetNodeLabels - Get the node labels
 	GetNodeLabels = getNodelabels
@@ -162,6 +163,11 @@ func (s *service) NodePublishVolume(
 		for key, value := range volumeContext {
 			Log.WithFields(logrus.Fields{key: value}).Info("found in VolumeContext")
 		}
+	}
+
+	if req.VolumeContext["csi-nfs"] == "RWX" {
+		Log.Infof("csi-nfs: RWX calling nfssvc.NodeStageVolume")
+		return nfssvc.NodePublishVolume(ctx, req)
 	}
 
 	ephemeral, ok := req.VolumeContext["csi.storage.k8s.io/ephemeral"]
@@ -1097,4 +1103,47 @@ func getNodelabels(ctx context.Context, s *service) (map[string]string, error) {
 
 func getNodeUID(ctx context.Context, s *service) (string, error) {
 	return s.GetNodeUID(ctx)
+}
+
+// MountVolume finds a volume exported to the node by VolumeId, mounts to a staging path,
+// The fsType and nfsExport directory are optional arguments.
+// and returns that staging path or an error. This is used by csinfs.
+func (s *service) MountVolume(ctx context.Context, volumeId, fsType, nfsExportDirectory string) (string, error) {
+	Log.Infof("MountVolume called volumeId %s", volumeId)
+	if volumeId == "" {
+		return "", fmt.Errorf("mountVolume: volumeId was empty")
+	}
+	systemId := s.getSystemIDFromCsiVolumeID(volumeId)
+	volId := getVolumeIDFromCsiVolumeID(volumeId)
+	if systemId == "" {
+		return "", fmt.Errorf("mountVolume: could not determine systemId for volumeId %s", volumeId)
+	}
+	// Probe the system to make sure it is managed by driver
+	if err := s.requireProbe(ctx, systemId); err != nil {
+		return "", err
+	}
+	Log.Infof("systemId %s", systemId)
+	sdcMappedVol, err := s.getSDCMappedVol(volId, systemId, publishGetMappedVolMaxRetry)
+	if err != nil {
+		return "", fmt.Errorf("mountVolume: getSDCMappedVol returned error %s", err)
+	}
+	if nfsExportDirectory == "" {
+		nfsExportDirectory = "/nfs/exports"
+	}
+	target := nfsExportsDirectory + "/" + volumeId
+	Log.Infof("target %s", target)
+	if _, err := mkdir(target); err != nil {
+		return "", err
+	}
+	Log.Infof("calling gofsutil.FormatAndMount %s %s %s", sdcMappedVol.SdcDevice, target, "")
+	if fsType == "" {
+		fsType = "ext4"
+	}
+	err = gofsutil.FormatAndMount(ctx, sdcMappedVol.SdcDevice, target, fsType)
+	if err != nil {
+		return "", fmt.Errorf("mountVolume: gofsutil.Mount %s %s failed: %s", sdcMappedVol.SdcDevice, target, err)
+	}
+	Log.Infof("mountVolume %s %s successful", sdcMappedVol.SdcDevice, target)
+
+	return target, nil
 }

@@ -121,6 +121,9 @@ const (
 	// VolumeIDList is the list of volume IDs
 	VolumeIDList = "VolumeIDList"
 
+	// Parameter tag for CSI-NFS in the storage class
+	CsiNfsParameter = "csi-nfs"
+
 	removeModeOnlyMe                    = "ONLY_ME"
 	sioGatewayNotFound                  = "Not found"
 	sioGatewayVolumeNotFound            = "Could not find the volume"
@@ -160,7 +163,7 @@ const (
 // These parameters are copied from the StorageClass parameters to the VolumeContext. The replication ones are used by the node for identifying replicated volumes.
 var interestingParameters = [...]string{0: "FsType", 1: KeyMkfsFormatOption, 2: KeyBandwidthLimitInKbps, 3: KeyIopsLimit,
 	4: KeyReplicationPrefix + KeyReplicationConsistencyGroupName, 5: KeyReplicationPrefix + KeyReplicationEnabled, 6: KeyReplicationPrefix + KeyReplicationClusterID,
-	7: KeyReplicationPrefix + KeyReplicationRemoteSystem, 8: KeyRWXNFS}
+	7: KeyReplicationPrefix + KeyReplicationRemoteSystem, 8: KeyRWXNFS, 9: CsiNfsParameter}
 
 func (s *service) CreateVolume(
 	ctx context.Context,
@@ -168,6 +171,14 @@ func (s *service) CreateVolume(
 	*csi.CreateVolumeResponse, error,
 ) {
 	params := req.GetParameters()
+	if params[CsiNfsParameter] != "" {
+		// Right now no dependence on isRWXAccessMode so can test easily
+		//if isRWXAccessMode(req) {
+		params[CsiNfsParameter] = "RWX"
+		//} else {
+		//params[CsiNfsParameter] = ""
+		//}
+	}
 
 	Log := getLogger(ctx)
 	if md.IsMDStorageClass(params) {
@@ -1258,6 +1269,10 @@ func (s *service) ControllerPublishVolume(
 
 	if md.IsMDVolumeID(csiVolID) {
 		return mdsvc.ControllerPublishVolume(ctx, req)
+	}
+	if req.VolumeContext[CsiNfsParameter] == "RWX" {
+		Log.Infof("csi-nfs: RWX calling nfssvc.ControllerPublishVolume")
+		return nfssvc.ControllerPublishVolume(ctx, req)
 	}
 
 	// get systemID from req
@@ -3547,4 +3562,16 @@ func (s *service) verifySystem(systemID string) (*goscaleio.Client, error) {
 	}
 
 	return adminClient, nil
+}
+
+func isRWXAccessMode(req *csi.CreateVolumeRequest) bool {
+	capabilities := req.GetVolumeCapabilities()
+	for _, capability := range capabilities {
+		accessMode := capability.GetAccessMode()
+		if accessMode.Mode == csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER {
+			Log.Infof("csi-nfs RWX volume request")
+			return true
+		}
+	}
+	return false
 }

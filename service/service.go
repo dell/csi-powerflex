@@ -148,6 +148,7 @@ type Service interface {
 	RegisterAdditionalServers(server *grpc.Server)
 	ProcessMapSecretChange() error
 	VolumeIDToArrayID(string) string
+	MountVolume(context.Context, string, string, string) (string, error)
 }
 
 type NetworkInterface interface {
@@ -548,6 +549,17 @@ func (s *service) BeforeServe(
 	// Update the ConfigMap with the Interface IPs
 	s.updateConfigMap(s.getIPAddressByInterface, ConfigMapFilePath)
 
+	// Call the nfs BeforeServe
+	go func() {
+		Log.Info("***************Calling NFS service Before Serve goroutine ****************")
+		err = nfssvc.BeforeServe(ctx, sp, lis)
+		if err != nil {
+			Log.Errorf("nfs.Beforeserve error: %s", err.Error())
+		} else {
+			Log.Infof("nfs.BeforeServe had no errors")
+		}
+	}()
+
 	// Call the md BeforeServe
 	Log.Infof("************Calling MD service BeforeServe*****************")
 	err = mdsvc.BeforeServe(ctx, sp, lis)
@@ -555,15 +567,6 @@ func (s *service) BeforeServe(
 		Log.Errorf("mdsvc.Beforeserve error: %s", err.Error())
 	} else {
 		Log.Infof("mdsvc.BeforeServe had no errors")
-	}
-
-	// Call the nfs BeforeServe
-	Log.Info("***************Calling NFS service Before Serve****************")
-	err = nfssvc.BeforeServe(ctx, sp, lis)
-	if err != nil {
-		Log.Errorf("nfs.Beforeserve error: %s", err.Error())
-	} else {
-		Log.Infof("nfs.BeforeServe had no errors")
 	}
 
 	if _, ok := csictx.LookupEnv(ctx, "X_CSI_VXFLEXOS_NO_PROBE_ON_START"); !ok {
