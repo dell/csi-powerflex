@@ -75,12 +75,12 @@ func (s *service) PreInit() error {
 
 	arrayConfig, err := arrayConfigurationProviderImpl.GetArrayConfiguration()
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to get array configuration: %v", err)
 	}
 
 	labelKey, err := getLabelKey(arrayConfig)
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to get zone label key: %v", err)
 	}
 
 	var mdmData string
@@ -101,18 +101,21 @@ func (s *service) PreInit() error {
 		Log.Infof("Zone key detected, will configure MDMs for this node, key: %s", labelKey)
 		nodeLabels, err := s.GetNodeLabels(context.Background())
 		if err != nil {
-			return err
-		}
-		zone := nodeLabels[labelKey]
-
-		if zone == "" {
-			return fmt.Errorf("No zone found, cannot configure this node")
+			return fmt.Errorf("unable to get node labels: %v", err)
 		}
 
-		Log.Infof("Zone found, will configure MDMs for this node, zone: %s", zone)
-		mdmData, err = getMdmList(arrayConfig, labelKey, zone)
-		if err != nil {
-			return err
+		zone, ok := nodeLabels[labelKey]
+
+		if ok && zone == "" {
+			Log.Errorf("node key found but zone is missing, will not configure MDMs for this node, key: %s", labelKey)
+		}
+
+		if zone != "" {
+			Log.Infof("zone found, will configure MDMs for this node, zone: %s", zone)
+			mdmData, err = getMdmList(arrayConfig, labelKey, zone)
+			if err != nil {
+				return fmt.Errorf("unable to get MDM list: %v", err)
+			}
 		}
 	}
 

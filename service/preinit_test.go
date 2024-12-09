@@ -63,14 +63,14 @@ func TestPreInit(t *testing.T) {
 			name:           "should error on no connection info",
 			connectionInfo: []*ArrayConnectionData{},
 			errorExpected:  true,
-			expectedResult: "array connection data is empty",
+			expectedResult: "unable to get zone label key: array connection data is empty",
 		},
 		{
 			name:            "should handle error getting connection info",
 			connectionInfo:  nil,
 			connectionError: fmt.Errorf("don't care about error text"),
 			errorExpected:   true,
-			expectedResult:  "don't care about error text",
+			expectedResult:  "unable to get array configuration: don't care about error text",
 		},
 		{
 			name: "should error when zone labels different",
@@ -89,7 +89,7 @@ func TestPreInit(t *testing.T) {
 				},
 			},
 			errorExpected:  true,
-			expectedResult: "zone label key is not the same for all arrays",
+			expectedResult: "unable to get zone label key: zone label key is not the same for all arrays",
 		},
 		{
 			name: "should configure all MDMs when no zone label single array",
@@ -126,10 +126,10 @@ func TestPreInit(t *testing.T) {
 				},
 			},
 			errorExpected:  true,
-			expectedResult: "rpc error: code = Internal desc = Unable to fetch the node labels. Error: nodes \"\" not found",
+			expectedResult: "unable to get node labels: rpc error: code = Internal desc = Unable to fetch the node labels. Error: nodes \"\" not found",
 		},
 		{
-			name: "should fail if node label not found for node",
+			name: "should configure empty MDM list if node label not found for node",
 			connectionInfo: []*ArrayConnectionData{
 				{
 					Mdm: "192.168.1.1,192.168.1.2",
@@ -145,8 +145,28 @@ func TestPreInit(t *testing.T) {
 					Labels: map[string]string{"label1": "value1", "label2": "value2"},
 				},
 			},
-			errorExpected:  true,
-			expectedResult: "No zone found, cannot configure this node",
+			errorExpected:  false,
+			expectedResult: "",
+		},
+		{
+			name: "should configure empty MDM list if node label present but value is nil",
+			connectionInfo: []*ArrayConnectionData{
+				{
+					Mdm: "192.168.1.1,192.168.1.2",
+					Zone: ZoneInfo{
+						LabelKey: "key1",
+						Name:     "zone1",
+					},
+				},
+			},
+			nodeInfo: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "",
+					Labels: map[string]string{"key1": "", "label2": "value2"},
+				},
+			},
+			errorExpected:  false,
+			expectedResult: "",
 		},
 		{
 			name: "should configure MDMs for only array matching zone label",
