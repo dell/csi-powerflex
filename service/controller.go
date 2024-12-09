@@ -224,20 +224,18 @@ func (s *service) CreateVolume(
 		contentSource := req.GetVolumeContentSource()
 		var sourceSystemID string
 		if contentSource != nil {
-			Log.Infof("[CreateVolume] Volume has a content source - we are a snapshot or clone: %+v", contentSource)
+			Log.Infof("[CreateVolume] Zone volume has a content source - we are a snapshot or clone: %+v", contentSource)
 
 			snapshotSource := contentSource.GetSnapshot()
 			cloneSource := contentSource.GetVolume()
 
 			if snapshotSource != nil {
 				sourceSystemID = s.getSystemIDFromCsiVolumeID(snapshotSource.SnapshotId)
-				Log.Infof("[CreateVolume] Snapshot source systemID: %s", sourceSystemID)
+				Log.Infof("[CreateVolume] Zone snapshot source systemID: %s", sourceSystemID)
 			} else if cloneSource != nil {
 				sourceSystemID = s.getSystemIDFromCsiVolumeID(cloneSource.VolumeId)
-				Log.Infof("[CreateVolume] Clone source systemID: %s", sourceSystemID)
+				Log.Infof("[CreateVolume] Zone clone source systemID: %s", sourceSystemID)
 			}
-		} else {
-			Log.Infoln("[CreateVolume] Volume does not have a content source - not a snapshot")
 		}
 
 		for _, topo := range accessibility.GetPreferred() {
@@ -251,15 +249,12 @@ func (s *service) CreateVolume(
 					}
 
 					if sourceSystemID != "" && zoneTarget.systemID != sourceSystemID {
-						Log.Infof("systemID %s does not match snapshot/clone source systemID %s", zoneTarget.systemID, sourceSystemID)
 						continue
 					}
 
 					protectionDomain = string(zoneTarget.protectionDomain)
 					storagePool = string(zoneTarget.pool)
 					systemID = zoneTarget.systemID
-
-					Log.Infof("Preferred topology zone %s, systemID %s, protectionDomain %s, and storagePool %s", zoneName, systemID, protectionDomain, storagePool)
 
 					if err := s.requireProbe(ctx, systemID); err != nil {
 						Log.Errorln("Failed to probe system " + systemID)
@@ -271,6 +266,8 @@ func (s *service) CreateVolume(
 						Segments: systemSegments,
 					})
 
+					// We found a zone topology
+					Log.Infof("Preferred topology zone %s, systemID %s, protectionDomain %s, and storagePool %s", zoneName, systemID, protectionDomain, storagePool)
 					zoneTopology = true
 				}
 			}
@@ -595,7 +592,6 @@ func (s *service) CreateVolume(
 
 				snapshotVolumeResponse.Volume.AccessibleTopology = volumeTopology
 
-				Log.Printf("[FERNANDO] Snapshot Volume Response: %+v", snapshotVolumeResponse)
 				return snapshotVolumeResponse, nil
 			}
 		}
