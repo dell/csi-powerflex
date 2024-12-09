@@ -114,7 +114,7 @@ func (f *feature) getGoscaleioClient() (client *goscaleio.Client, err error) {
 		if err != nil {
 			log.Fatalf("err getting client: %v", err)
 		}
-		_, err = client.Authenticate(&goscaleio.ConfigConnect{
+		_, err = client.Authenticate(context.Background(), &goscaleio.ConfigConnect{
 			Username: a.Username,
 			Password: a.Password,
 			Endpoint: a.Endpoint,

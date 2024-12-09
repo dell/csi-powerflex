@@ -2604,7 +2604,7 @@ func (s *service) systemProbeAll(ctx context.Context, zoneLabel string) error {
 }
 
 // systemProbe will probe the given array
-func (s *service) systemProbe(_ context.Context, array *ArrayConnectionData) error {
+func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) error {
 	// Check that we have the details needed to login to the Gateway
 	if array.Endpoint == "" {
 		return status.Error(codes.FailedPrecondition,
@@ -2646,7 +2646,7 @@ func (s *service) systemProbe(_ context.Context, array *ArrayConnectionData) err
 	Log.Printf("Login to VxFlexOS Gateway, system=%s, endpoint=%s, user=%s\n", systemID, array.Endpoint, array.Username)
 
 	if s.adminClients[systemID].GetToken() == "" {
-		_, err := s.adminClients[systemID].Authenticate(&goscaleio.ConfigConnect{
+		_, err := s.adminClients[systemID].Authenticate(ctx, &goscaleio.ConfigConnect{
 			Endpoint: array.Endpoint,
 			Username: array.Username,
 			Password: array.Password,
@@ -3619,7 +3619,7 @@ func (s *service) CreateReplicationConsistencyGroupSnapshot(client *goscaleio.Cl
 	rcg := goscaleio.NewReplicationConsistencyGroup(client)
 	rcg.ReplicationConsistencyGroup = group
 
-	response, err := rcg.CreateReplicationConsistencyGroupSnapshot(false)
+	response, err := rcg.CreateReplicationConsistencyGroupSnapshot()
 	if err != nil {
 		return nil, err
 	}

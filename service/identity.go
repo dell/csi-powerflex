@@ -16,6 +16,7 @@ package service
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"golang.org/x/net/context"
 
@@ -77,10 +78,12 @@ func (s *service) Probe(
 	_ *csi.ProbeRequest) (
 	*csi.ProbeResponse, error,
 ) {
-	Log.Debug("Probe called")
+	Log.Infof("[Probe] Probe context: %v", ctx)
+	newCtx, _ := context.WithTimeout(ctx, 5*time.Second)
+	Log.Infof("[Probe] New Probe context: %v", newCtx)
 	if !strings.EqualFold(s.mode, "node") {
-		Log.Debug("systemProbe")
-		if err := s.systemProbeAll(ctx, ""); err != nil {
+		Log.Infoln("[Probe] FERNANDO we are probing the controller")
+		if err := s.systemProbeAll(newCtx, ""); err != nil {
 			Log.Printf("error in systemProbeAll: %s", err.Error())
 			return nil, err
 		}
