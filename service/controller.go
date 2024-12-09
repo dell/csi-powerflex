@@ -828,9 +828,7 @@ func (s *service) createVolumeFromSnapshot(req *csi.CreateVolumeRequest,
 	snapID := getVolumeIDFromCsiVolumeID(snapshotSource.SnapshotId)
 	srcVol, err := s.getVolByID(snapID, systemID)
 	if err != nil {
-		if err != nil {
-			return nil, status.Errorf(codes.NotFound, "Snapshot not found: %s, error: %s", snapshotSource.SnapshotId, err.Error())
-		}
+		return nil, status.Errorf(codes.NotFound, "Snapshot not found: %s, error: %s", snapshotSource.SnapshotId, err.Error())
 	}
 	// Validate the size is the same.
 	if int64(srcVol.SizeInKb) != sizeInKbytes {
