@@ -221,6 +221,23 @@ func (s *service) CreateVolume(
 
 	// Handle Zone topology, which happens when node is annotated with a matching zone label
 	if len(zoneTargetMap) != 0 && accessibility != nil && len(accessibility.GetPreferred()) > 0 {
+		contentSource := req.GetVolumeContentSource()
+		var sourceSystemID string
+		if contentSource != nil {
+			Log.Infof("[CreateVolume] Zone volume has a content source - we are a snapshot or clone: %+v", contentSource)
+
+			snapshotSource := contentSource.GetSnapshot()
+			cloneSource := contentSource.GetVolume()
+
+			if snapshotSource != nil {
+				sourceSystemID = s.getSystemIDFromCsiVolumeID(snapshotSource.SnapshotId)
+				Log.Infof("[CreateVolume] Zone snapshot source systemID: %s", sourceSystemID)
+			} else if cloneSource != nil {
+				sourceSystemID = s.getSystemIDFromCsiVolumeID(cloneSource.VolumeId)
+				Log.Infof("[CreateVolume] Zone clone source systemID: %s", sourceSystemID)
+			}
+		}
+
 		for _, topo := range accessibility.GetPreferred() {
 			for topoLabel, zoneName := range topo.Segments {
 				Log.Infof("Zoning based on label %s", s.opts.zoneLabelKey)
@@ -231,11 +248,13 @@ func (s *service) CreateVolume(
 						continue
 					}
 
+					if sourceSystemID != "" && zoneTarget.systemID != sourceSystemID {
+						continue
+					}
+
 					protectionDomain = string(zoneTarget.protectionDomain)
 					storagePool = string(zoneTarget.pool)
 					systemID = zoneTarget.systemID
-
-					Log.Infof("Preferred topology zone %s, systemID %s, protectionDomain %s, and storagePool %s", zoneName, systemID, protectionDomain, storagePool)
 
 					if err := s.requireProbe(ctx, systemID); err != nil {
 						Log.Errorln("Failed to probe system " + systemID)
@@ -247,6 +266,8 @@ func (s *service) CreateVolume(
 						Segments: systemSegments,
 					})
 
+					// We found a zone topology
+					Log.Infof("Preferred topology zone %s, systemID %s, protectionDomain %s, and storagePool %s", zoneName, systemID, protectionDomain, storagePool)
 					zoneTopology = true
 				}
 			}
@@ -552,13 +573,26 @@ func (s *service) CreateVolume(
 		if contentSource != nil {
 			volumeSource := contentSource.GetVolume()
 			if volumeSource != nil {
-				Log.Printf("volume %s specified as volume content source", volumeSource.VolumeId)
-				return s.Clone(req, volumeSource, name, size, storagePool)
+				cloneResponse, err := s.Clone(req, volumeSource, name, size, storagePool)
+				if err != nil {
+					return nil, err
+				}
+
+				cloneResponse.Volume.AccessibleTopology = volumeTopology
+
+				return cloneResponse, nil
 			}
 			snapshotSource := contentSource.GetSnapshot()
 			if snapshotSource != nil {
 				Log.Printf("snapshot %s specified as volume content source", snapshotSource.SnapshotId)
-				return s.createVolumeFromSnapshot(req, snapshotSource, name, size, storagePool)
+				snapshotVolumeResponse, err := s.createVolumeFromSnapshot(req, snapshotSource, name, size, storagePool)
+				if err != nil {
+					return nil, err
+				}
+
+				snapshotVolumeResponse.Volume.AccessibleTopology = volumeTopology
+
+				return snapshotVolumeResponse, nil
 			}
 		}
 

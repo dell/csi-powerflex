@@ -1580,3 +1580,29 @@ Feature: VxFlex OS CSI interface
       | config             |
       | "multi_az"         |
       | "multi_az_custom_labels" |
+  
+  Scenario: Snapshot a single volume in zone
+    Given a VxFlexOS service
+    And I use config <config>
+    When I call Probe
+    And I call CreateVolume "volume1" with zones
+    And a valid CreateVolumeResponse is returned
+    And I call CreateSnapshot <name>
+    Then a valid CreateSnapshotResponse is returned
+    And I call Create Volume for zones from Snapshot <name>
+    Then a valid CreateVolumeResponse is returned
+    Examples:
+      | name      | config             | errorMsg       |    
+      | "snap1"   | "multi_az"         | "none"         |
+      
+  Scenario: Clone a single volume in zone
+    Given a VxFlexOS service
+    And I use config <config>
+    When I call Probe
+    And I call CreateVolume <name> with zones
+    And a valid CreateVolumeResponse is returned    
+    And I call Clone volume for zones <name>
+    Then a valid CreateVolumeResponse is returned
+    Examples:
+      | name      | config             | errorMsg       |    
+      | "volume1"   | "multi_az"       | "none"         |     
