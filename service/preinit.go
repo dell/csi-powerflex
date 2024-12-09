@@ -124,7 +124,7 @@ func (s *service) PreInit() error {
 	return err
 }
 
-// Returns a string with the comma separated list of MDM addresses given a
+// Returns a string with the list of MDM addresses given a
 // key and zone. The MDMs for each array is separated by an ampersand.
 // The ordering of the MDM addresses is not guaranteed. An error is
 // returned if either the key or zone are empty.
