@@ -91,7 +91,7 @@ func (s *service) PreInit() error {
 		for _, connectionData := range arrayConfig {
 			if connectionData.Mdm != "" {
 				if sb.Len() > 0 {
-					sb.WriteString("&")
+					sb.WriteString("\\&")
 				}
 				sb.WriteString(connectionData.Mdm)
 			}
@@ -140,7 +140,7 @@ func getMdmList(connectionData []*ArrayConnectionData, key, zone string) (string
 	for _, connectionData := range connectionData {
 		if connectionData.Mdm != "" && connectionData.Zone.LabelKey == key && connectionData.Zone.Name == zone {
 			if sb.Len() > 0 {
-				sb.WriteString("&")
+				sb.WriteString("\\&")
 			}
 			sb.WriteString(connectionData.Mdm)
 		}

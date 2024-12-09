@@ -112,7 +112,7 @@ func TestPreInit(t *testing.T) {
 				},
 			},
 			errorExpected:  false,
-			expectedResult: "192.168.1.1,192.168.1.2&192.168.2.1,192.168.2.2",
+			expectedResult: "192.168.1.1,192.168.1.2\\&192.168.2.1,192.168.2.2",
 		},
 		{
 			name: "should fail if zones configured but unable to fetch node labels",
@@ -353,7 +353,7 @@ func TestGetMdmList(t *testing.T) {
 			key:            "testKey",
 			zone:           "testZone",
 			errorExpected:  false,
-			expectedResult: "192.168.0.10,192.168.0.20&192.168.1.10,192.168.1.20",
+			expectedResult: "192.168.0.10,192.168.0.20\\&192.168.1.10,192.168.1.20",
 		},
 		{
 			name: "two arrays with one MDM each",
@@ -372,7 +372,7 @@ func TestGetMdmList(t *testing.T) {
 			key:            "testKey",
 			zone:           "testZone",
 			errorExpected:  false,
-			expectedResult: "192.168.0.10&192.168.1.10",
+			expectedResult: "192.168.0.10\\&192.168.1.10",
 		},
 		{
 			name: "two arrays with multiple zones 1",
