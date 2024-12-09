@@ -91,7 +91,7 @@ func (s *service) PreInit() error {
 		for _, connectionData := range arrayConfig {
 			if connectionData.Mdm != "" {
 				if sb.Len() > 0 {
-					sb.WriteString(",")
+					sb.WriteString("&")
 				}
 				sb.WriteString(connectionData.Mdm)
 			}
@@ -122,7 +122,8 @@ func (s *service) PreInit() error {
 }
 
 // Returns a string with the comma separated list of MDM addresses given a
-// key and zone. The ordering of the MDM addresses is not guaranteed. An error is
+// key and zone. The MDMs for each array is separated by an ampersand.
+// The ordering of the MDM addresses is not guaranteed. An error is
 // returned if either the key or zone are empty.
 func getMdmList(connectionData []*ArrayConnectionData, key, zone string) (string, error) {
 	if key == "" {
@@ -136,7 +137,7 @@ func getMdmList(connectionData []*ArrayConnectionData, key, zone string) (string
 	for _, connectionData := range connectionData {
 		if connectionData.Mdm != "" && connectionData.Zone.LabelKey == key && connectionData.Zone.Name == zone {
 			if sb.Len() > 0 {
-				sb.WriteString(",")
+				sb.WriteString("&")
 			}
 			sb.WriteString(connectionData.Mdm)
 		}
