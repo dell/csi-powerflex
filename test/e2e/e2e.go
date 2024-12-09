@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"log"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -38,11 +39,12 @@ const (
 )
 
 type feature struct {
-	errs            []error
-	zoneNodeMapping map[string]string
-	zoneKey         string
-	supportedZones  []string
-	cordonedNode    string
+	errs             []error
+	zoneNodeMapping  map[string]string
+	zoneKey          string
+	supportedZones   []string
+	cordonedNode     string
+	zoneReplicaCount int32
 }
 
 func (f *feature) aVxFlexOSService() error {
@@ -214,12 +216,12 @@ func (f *feature) deleteZoneVolumes(fileLocation string) error {
 }
 
 func (f *feature) checkStatfulSetStatus() error {
-	log.Println("[checkStatfulSetStatus] checking statefulset status")
-
 	err := f.isStatefulSetReady()
 	if err != nil {
 		return err
 	}
+
+	log.Println("[checkStatfulSetStatus] Statefulset and zone pods are ready")
 
 	return nil
 }
@@ -244,6 +246,7 @@ func (f *feature) isStatefulSetReady() error {
 		// Everything should be ready.
 		if *sts.Spec.Replicas == sts.Status.ReadyReplicas {
 			ready = true
+			f.zoneReplicaCount = sts.Status.ReadyReplicas
 			break
 		}
 
@@ -339,6 +342,190 @@ func (f *feature) checkPodsForCordonRun() error {
 	return nil
 }
 
+func (f *feature) createZoneSnapshotsAndRestore(location string) error {
+	log.Println("[createZoneSnapshotsAndRestore] Creating snapshots and restores")
+	templateFile := "templates/" + location + "/snapshot.yaml"
+	updatedTemplateFile := "templates/" + location + "/snapshot-updated.yaml"
+
+	for i := 0; i < int(f.zoneReplicaCount); i++ {
+		time.Sleep(10 * time.Second)
+
+		cpCmd := "cp " + templateFile + " " + updatedTemplateFile
+		b, err := execLocalCommand(cpCmd)
+		if err != nil {
+			return fmt.Errorf("failed to copy template file: %v\nErrMessage:\n%s", err, string(b))
+		}
+
+		// Update iteration and apply...
+		err = replaceInFile("ITERATION", strconv.Itoa(i), updatedTemplateFile)
+		if err != nil {
+			return err
+		}
+
+		createSnapshot := "kubectl apply -f " + updatedTemplateFile
+		_, err = execLocalCommand(createSnapshot)
+		if err != nil {
+			return err
+		}
+	}
+
+	log.Println("[createZoneSnapshotsAndRestore] Snapshots and restores created")
+
+	return nil
+}
+
+func (f *feature) createZoneClonesAndRestore(location string) error {
+	log.Println("[createZoneClonesAndRestore] Creating clones and restores")
+	templateFile := "templates/" + location + "/clone.yaml"
+	updatedTemplateFile := "templates/" + location + "/clone-updated.yaml"
+
+	for i := 0; i < int(f.zoneReplicaCount); i++ {
+		time.Sleep(10 * time.Second)
+
+		cpCmd := "cp " + templateFile + " " + updatedTemplateFile
+		b, err := execLocalCommand(cpCmd)
+		if err != nil {
+			return fmt.Errorf("failed to copy template file: %v\nErrMessage:\n%s", err, string(b))
+		}
+
+		// Update iteration and apply...
+		err = replaceInFile("ITERATION", strconv.Itoa(i), updatedTemplateFile)
+		if err != nil {
+			return err
+		}
+
+		createClone := "kubectl apply -f " + updatedTemplateFile
+		_, err = execLocalCommand(createClone)
+		if err != nil {
+			return err
+		}
+	}
+
+	log.Println("[createZoneClonesAndRestore] Clones and restores created")
+
+	return nil
+}
+
+func (f *feature) deleteZoneSnapshotsAndRestore(location string) error {
+	log.Println("[deleteZoneSnapshotsAndRestore] Deleting restores and snapshots")
+	templateFile := "templates/" + location + "/snapshot.yaml"
+	updatedTemplateFile := "templates/" + location + "/snapshot-updated.yaml"
+
+	for i := 0; i < int(f.zoneReplicaCount); i++ {
+		time.Sleep(10 * time.Second)
+
+		cpCmd := "cp " + templateFile + " " + updatedTemplateFile
+		b, err := execLocalCommand(cpCmd)
+		if err != nil {
+			return fmt.Errorf("failed to copy template file: %v\nErrMessage:\n%s", err, string(b))
+		}
+
+		// Update iteration and apply...
+		err = replaceInFile("ITERATION", strconv.Itoa(i), updatedTemplateFile)
+		if err != nil {
+			return err
+		}
+
+		deleteSnapshot := "kubectl delete -f " + updatedTemplateFile
+		_, err = execLocalCommand(deleteSnapshot)
+		if err != nil {
+			return err
+		}
+	}
+
+	log.Println("[deleteZoneSnapshotsAndRestore] Snapshots and restores deleted")
+
+	return nil
+}
+
+func (f *feature) deleteZoneClonesAndRestore(location string) error {
+	log.Println("[deleteZoneClonesAndRestore] Deleting restores and clones")
+	templateFile := "templates/" + location + "/clone.yaml"
+	updatedTemplateFile := "templates/" + location + "/clone-updated.yaml"
+
+	for i := 0; i < int(f.zoneReplicaCount); i++ {
+		time.Sleep(10 * time.Second)
+
+		cpCmd := "cp " + templateFile + " " + updatedTemplateFile
+		b, err := execLocalCommand(cpCmd)
+		if err != nil {
+			return fmt.Errorf("failed to copy template file: %v\nErrMessage:\n%s", err, string(b))
+		}
+
+		// Update iteration and apply...
+		err = replaceInFile("ITERATION", strconv.Itoa(i), updatedTemplateFile)
+		if err != nil {
+			return err
+		}
+
+		deleteClone := "kubectl delete -f " + updatedTemplateFile
+		_, err = execLocalCommand(deleteClone)
+		if err != nil {
+			return err
+		}
+	}
+
+	log.Println("[deleteZoneClonesAndRestore] Clones and restores deleted")
+
+	return nil
+}
+
+func (f *feature) areAllRestoresRunning() error {
+	log.Println("[areAllRestoresRunning] Checking if all restores are running")
+
+	complete := false
+	attempts := 0
+	for attempts < 15 {
+		getZonePods := "kubectl get pods -n " + testNamespace + " -o jsonpath='{.items}'"
+		result, err := execLocalCommand(getZonePods)
+		if err != nil {
+			return err
+		}
+
+		pods := []v1Core.Pod{}
+		err = json.Unmarshal(result, &pods)
+		if err != nil {
+			return err
+		}
+
+		runningCount := 0
+		for _, pod := range pods {
+			if !strings.Contains(pod.ObjectMeta.Name, "maz-restore") {
+				continue
+			}
+
+			if pod.Status.Phase == "Running" {
+				runningCount++
+			}
+		}
+
+		if runningCount != int(f.zoneReplicaCount) {
+			time.Sleep(10 * time.Second)
+			continue
+		}
+
+		complete = true
+		break
+
+	}
+
+	if !complete {
+		return fmt.Errorf("all restores not running, check pods status containing maz-restore and then try again")
+	}
+
+	return nil
+}
+
+func replaceInFile(oldString, newString, templateFile string) error {
+	cmdString := "s|" + oldString + "|" + newString + "|g"
+	replaceCmd := fmt.Sprintf("sed -i '%s' %s", cmdString, templateFile)
+	_, err := execLocalCommand(replaceCmd)
+	if err != nil {
+		return fmt.Errorf("failed to substitute %s with %s in file %s: %s", oldString, newString, templateFile, err.Error())
+	}
+	return nil
+}
+
 func execLocalCommand(command string) ([]byte, error) {
 	var buf bytes.Buffer
 	cmd := exec.Command("bash", "-c", command)
@@ -364,4 +551,9 @@ func InitializeScenario(s *godog.ScenarioContext) {
 	s.Step(`^check the statefulset for zones$`, f.checkStatfulSetStatus)
 	s.Step(`^cordon one node$`, f.cordonNode)
 	s.Step(`^ensure pods aren't scheduled incorrectly and still running$`, f.checkPodsForCordonRun)
+	s.Step(`^create snapshots for zone volumes and restore in "([^"]*)"$`, f.createZoneSnapshotsAndRestore)
+	s.Step(`^delete snapshots for zone volumes and restore in "([^"]*)"$`, f.deleteZoneSnapshotsAndRestore)
+	s.Step(`^all zone restores are running$`, f.areAllRestoresRunning)
+	s.Step(`^create clones for zone volumes and restore in "([^"]*)"$`, f.createZoneClonesAndRestore)
+	s.Step(`^delete clones for zone volumes and restore in "([^"]*)"$`, f.deleteZoneClonesAndRestore)
 }
