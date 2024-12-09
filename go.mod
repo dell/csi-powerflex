@@ -6,7 +6,6 @@ module github.com/dell/csi-vxflexos/v2
 go 1.23
 
 require (
-	github.com/akutz/memconn v0.1.0
 	github.com/apparentlymart/go-cidr v1.1.0
 	github.com/container-storage-interface/spec v1.6.0
 	github.com/cucumber/godog v0.12.1
@@ -16,14 +15,14 @@ require (
 	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.7.0
 	github.com/dell/gocsi v1.12.0
 	github.com/dell/gofsutil v1.17.0
-	github.com/dell/goscaleio v1.17.0
+	github.com/dell/goscaleio v1.17.2-0.20241209165307-dcbadc33ab2e
 	github.com/fsnotify/fsnotify v1.5.1
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.0
 	github.com/kubernetes-csi/csi-lib-utils v0.9.1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/viper v1.10.1
-	github.com/stretchr/testify v1.7.0
+	github.com/stretchr/testify v1.9.0
 	golang.org/x/net v0.28.0
 	google.golang.org/grpc v1.67.1
 	google.golang.org/protobuf v1.34.2
@@ -73,7 +72,7 @@ require (
 	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.17.0 // indirect
 	golang.org/x/oauth2 v0.22.0 // indirect
-	golang.org/x/sys v0.25.0 // indirect
+	golang.org/x/sys v0.27.0 // indirect
 	golang.org/x/term v0.23.0 // indirect
 	golang.org/x/text v0.17.0 // indirect
 	golang.org/x/time v0.0.0-20210723032227-1f47c861a9ac // indirect
