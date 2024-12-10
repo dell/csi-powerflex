@@ -1,0 +1,7 @@
+- username: "user"
+  password: "pass"
+  systemID: "systemid"
+  endpoint: "https://192.168.1.12"
+  skipCertificateValidation: true
+  isDefault: true
+  mdm: "192.168.1.10,192.168.1.11"
