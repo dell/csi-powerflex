@@ -272,6 +272,20 @@ func (s *service) NodeUnpublishVolume(
 	*csi.NodeUnpublishVolumeResponse, error) {
 
 	Log := getLogger(ctx)
+
+	var reqID string
+	headers, ok := metadata.FromIncomingContext(ctx)
+	if ok {
+		if req, ok := headers["csi.requestid"]; ok && len(req) > 0 {
+			reqID = req[0]
+		}
+	}
+
+	targetPath := req.GetTargetPath()
+	if targetPath == "" {
+		return nil, status.Error(codes.InvalidArgument, "A target path argument is required")
+	}
+
 	if md.IsMDVolumeID(req.GetVolumeId()) {
 		_, err := mdsvc.NodeUnpublishVolume(ctx, req)
 		if err != nil {
@@ -287,17 +301,11 @@ func (s *service) NodeUnpublishVolume(
 		return resp, err
 	}
 
-	var reqID string
-	headers, ok := metadata.FromIncomingContext(ctx)
-	if ok {
-		if req, ok := headers["csi.requestid"]; ok && len(req) > 0 {
-			reqID = req[0]
-		}
-	}
-
-	targetPath := req.GetTargetPath()
-	if targetPath == "" {
-		return nil, status.Error(codes.InvalidArgument, "A target path argument is required")
+	// temporary need to filter this somehow
+	// assume it's a csi-nfs volume unless rejected
+	resp, err := nfssvc.NodeUnpublishVolume(ctx, req)
+	if err == nil {
+		return resp, err
 	}
 
 	s.logStatistics()
@@ -391,7 +399,7 @@ func (s *service) NodeUnpublishVolume(
 	}
 
 	// ensure no ambiguity if legacy vol
-	err := s.checkVolumesMap(csiVolID)
+	err = s.checkVolumesMap(csiVolID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal,
 			"checkVolumesMap for id: %s failed : %s", csiVolID, err.Error())
