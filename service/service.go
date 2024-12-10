@@ -1812,8 +1812,16 @@ func (s *service) GetNodeLabels(_ context.Context) (map[string]string, error) {
 		K8sClientset = k8sutils.Clientset
 	}
 
+	nodeName := s.opts.KubeNodeName
+	if nodeName == "" {
+		Log.Infof("Using env variable for node name")
+		nodeName = os.Getenv("NODENAME")
+	}
+
+	Log.Infof("Using: %s as nodeName", nodeName)
+
 	// access the API to fetch node object
-	node, err := K8sClientset.CoreV1().Nodes().Get(context.TODO(), s.opts.KubeNodeName, v1.GetOptions{})
+	node, err := K8sClientset.CoreV1().Nodes().Get(context.TODO(), nodeName, v1.GetOptions{})
 	if err != nil {
 		return nil, status.Error(codes.Internal, GetMessage("Unable to fetch the node labels. Error: %v", err))
 	}

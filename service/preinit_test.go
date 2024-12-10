@@ -126,7 +126,7 @@ func TestPreInit(t *testing.T) {
 				},
 			},
 			errorExpected:  true,
-			expectedResult: "unable to get node labels: rpc error: code = Internal desc = Unable to fetch the node labels. Error: nodes \"\" not found",
+			expectedResult: "unable to get node labels: rpc error: code = Internal desc = Unable to fetch the node labels. Error: nodes \"testnode\" not found",
 		},
 		{
 			name: "should configure empty MDM list if node label not found for node",
@@ -141,7 +141,7 @@ func TestPreInit(t *testing.T) {
 			},
 			nodeInfo: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:   "",
+					Name:   "testnode",
 					Labels: map[string]string{"label1": "value1", "label2": "value2"},
 				},
 			},
@@ -161,7 +161,7 @@ func TestPreInit(t *testing.T) {
 			},
 			nodeInfo: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:   "",
+					Name:   "testnode",
 					Labels: map[string]string{"key1": "", "label2": "value2"},
 				},
 			},
@@ -188,7 +188,7 @@ func TestPreInit(t *testing.T) {
 			},
 			nodeInfo: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:   "",
+					Name:   "testnode",
 					Labels: map[string]string{"key1": "zone1", "label2": "value2"},
 				},
 			},
@@ -210,6 +210,8 @@ func TestPreInit(t *testing.T) {
 			} else {
 				K8sClientset = fake.NewClientset(test.nodeInfo)
 			}
+
+			t.Setenv("NODENAME", "testnode")
 
 			svc := NewPreInitService()
 
