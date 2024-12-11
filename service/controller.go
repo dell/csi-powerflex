@@ -2593,7 +2593,8 @@ func (s *service) systemProbeAll(ctx context.Context, zoneLabel string) error {
 		}
 	}
 
-	probeSuccess := make(chan bool, len(s.opts.arrays))
+	probeRequestCount := len(s.opts.arrays)
+	probeSuccess := make(chan bool, probeRequestCount)
 	for _, array := range s.opts.arrays {
 		// If zone information is available, use it to probe the array
 		if strings.EqualFold(s.mode, "node") && array.AvailabilityZone != nil && array.AvailabilityZone.Name != ZoneName(zone) {
@@ -2603,6 +2604,7 @@ func (s *service) systemProbeAll(ctx context.Context, zoneLabel string) error {
 
 		// Run probe requests in parallel so that if one takes a long time to respond
 		// others are not blocked. So long as one array is online, we can provision storage.
+		// Useful in controller mode but not necessarily node mode
 		go func() {
 			err := s.systemProbe(ctx, array)
 
@@ -2618,16 +2620,17 @@ func (s *service) systemProbeAll(ctx context.Context, zoneLabel string) error {
 		}()
 	}
 
-	for range s.opts.arrays {
+	for range probeRequestCount {
 		select {
 		case <-ctx.Done():
-			// In case all calls are stuck waiting for responses and context times out
+			// handle case when all probe reqs are stuck waiting for responses and context times out
 			Log.Errorf("[LUKE] probe timed out")
 			break
 		case success := <-probeSuccess:
 			// We only need one successful probe to continue
 			probeSucceeded = probeSucceeded || success
 		}
+
 		if probeSucceeded {
 			Log.Infof("[LUKE] probe success, moving on, returning true")
 			break
