@@ -2379,14 +2379,13 @@ func (s *service) GetCapacity(
 		// If using availability zones, get capacity for the system in the zone
 		// using accessible topology parameter from k8s.
 		if s.opts.zoneLabelKey != "" {
-			for topoKey, topoValue := range req.AccessibleTopology.Segments {
-				if topoKey == s.opts.zoneLabelKey {
-					for _, array := range s.opts.arrays {
-						if topoValue == string(array.AvailabilityZone.Name) {
-							systemID = array.SystemID
-							break
-						}
-					}
+			zoneLabel, ok := req.AccessibleTopology.Segments[s.opts.zoneLabelKey]
+			if !ok {
+				Log.Infof("could not get availability zone from accessible topology. Getting capacity for all systems")
+			}
+			for _, array := range s.opts.arrays {
+				if zoneLabel == string(array.AvailabilityZone.Name) {
+					systemID = array.SystemID
 					break
 				}
 			}
