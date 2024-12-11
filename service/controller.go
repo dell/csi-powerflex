@@ -2584,7 +2584,8 @@ func (s *service) systemProbeAll(ctx context.Context, zoneLabel string) error {
 			continue
 		}
 
-		// Expect responses from Pflex within 60s
+		// Set an upper limit to pflex response times so we can probe all arrays
+		// before the original context times out.
 		subCtx, cancel := context.WithTimeout(ctx, time.Second*60)
 		err := s.systemProbe(subCtx, array)
 		cancel()
