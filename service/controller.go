@@ -2376,6 +2376,22 @@ func (s *service) GetCapacity(
 			}
 		}
 
+		// If using availability zones, get capacity for the system in the zone
+		// using accessible topology parameter from k8s.
+		if s.opts.zoneLabelKey != "" {
+			for topoKey, topoValue := range req.AccessibleTopology.Segments {
+				if topoKey == s.opts.zoneLabelKey {
+					for _, array := range s.opts.arrays {
+						if topoValue == string(array.AvailabilityZone.Name) {
+							systemID = array.SystemID
+							break
+						}
+					}
+					break
+				}
+			}
+		}
+
 		if systemID == "" {
 			// Get capacity of storage pool spname in all systems, return total capacity
 			capacity, err = s.getCapacityForAllSystems(ctx, "", spname)
@@ -2557,7 +2573,7 @@ func (s *service) systemProbeAll(ctx context.Context, zoneLabel string) error {
 	// probe all arrays
 	// Log.Infof("Probing all arrays. Number of arrays: %d", len(s.opts.arrays))
 	Log.Infoln("Probing all associated arrays")
-	allArrayFail := true
+	probeSucceeded := false
 	errMap := make(map[string]error)
 	zone := ""
 
@@ -2577,6 +2593,7 @@ func (s *service) systemProbeAll(ctx context.Context, zoneLabel string) error {
 		}
 	}
 
+	probeSuccess := make(chan bool, len(s.opts.arrays))
 	for _, array := range s.opts.arrays {
 		// If zone information is available, use it to probe the array
 		if strings.EqualFold(s.mode, "node") && array.AvailabilityZone != nil && array.AvailabilityZone.Name != ZoneName(zone) {
@@ -2584,23 +2601,40 @@ func (s *service) systemProbeAll(ctx context.Context, zoneLabel string) error {
 			continue
 		}
 
-		// Set an upper limit to pflex response times so we can probe all arrays
-		// before the original context times out.
-		subCtx, cancel := context.WithTimeout(ctx, time.Second*60)
-		err := s.systemProbe(subCtx, array)
-		cancel()
+		// Run probe requests in parallel so that if one takes a long time to respond
+		// others are not blocked. So long as one array is online, we can provision storage.
+		go func() {
+			err := s.systemProbe(ctx, array)
 
-		systemID := array.SystemID
-		if err == nil {
-			Log.Infof("array %s probed successfully", systemID)
-			allArrayFail = false
-		} else {
-			errMap[systemID] = err
-			Log.Errorf("array %s probe failed: %v", array.SystemID, err)
+			systemID := array.SystemID
+			if err == nil {
+				Log.Infof("array %s probed successfully", systemID)
+				probeSuccess <- true
+			} else {
+				errMap[systemID] = err
+				Log.Errorf("array %s probe failed: %v", array.SystemID, err)
+				probeSuccess <- false
+			}
+		}()
+	}
+
+	for range s.opts.arrays {
+		select {
+		case <-ctx.Done():
+			// In case all calls are stuck waiting for responses and context times out
+			Log.Errorf("[LUKE] probe timed out")
+			break
+		case success := <-probeSuccess:
+			// We only need one successful probe to continue
+			probeSucceeded = probeSucceeded || success
+		}
+		if probeSucceeded {
+			Log.Infof("[LUKE] probe success, moving on, returning true")
+			break
 		}
 	}
 
-	if allArrayFail {
+	if !probeSucceeded {
 		return status.Error(codes.FailedPrecondition,
 			fmt.Sprintf("All arrays are not working. Could not proceed further: %v", errMap))
 	}
