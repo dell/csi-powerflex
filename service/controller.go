@@ -2382,11 +2382,12 @@ func (s *service) GetCapacity(
 			zoneLabel, ok := req.AccessibleTopology.Segments[s.opts.zoneLabelKey]
 			if !ok {
 				Log.Infof("could not get availability zone from accessible topology. Getting capacity for all systems")
-			}
-			for _, array := range s.opts.arrays {
-				if zoneLabel == string(array.AvailabilityZone.Name) {
-					systemID = array.SystemID
-					break
+			} else {
+				for _, array := range s.opts.arrays {
+					if zoneLabel == string(array.AvailabilityZone.Name) {
+						systemID = array.SystemID
+						break
+					}
 				}
 			}
 		}
