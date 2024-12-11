@@ -2584,7 +2584,11 @@ func (s *service) systemProbeAll(ctx context.Context, zoneLabel string) error {
 			continue
 		}
 
-		err := s.systemProbe(ctx, array)
+		// Expect responses from Pflex within 60s
+		subCtx, cancel := context.WithTimeout(ctx, time.Second*60)
+		err := s.systemProbe(subCtx, array)
+		cancel()
+
 		systemID := array.SystemID
 		if err == nil {
 			Log.Infof("array %s probed successfully", systemID)
