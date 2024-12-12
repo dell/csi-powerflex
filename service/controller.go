@@ -2573,7 +2573,7 @@ func (s *service) systemProbeAll(ctx context.Context, zoneLabel string) error {
 	// probe all arrays
 	// Log.Infof("Probing all arrays. Number of arrays: %d", len(s.opts.arrays))
 	Log.Infoln("Probing all associated arrays")
-	probeSucceeded := false
+	allArrayFail := true
 	errMap := make(map[string]error)
 	zone := ""
 
@@ -2593,8 +2593,6 @@ func (s *service) systemProbeAll(ctx context.Context, zoneLabel string) error {
 		}
 	}
 
-	probeRequestCount := len(s.opts.arrays)
-	probeSuccess := make(chan bool, probeRequestCount)
 	for _, array := range s.opts.arrays {
 		// If zone information is available, use it to probe the array
 		if strings.EqualFold(s.mode, "node") && array.AvailabilityZone != nil && array.AvailabilityZone.Name != ZoneName(zone) {
@@ -2602,42 +2600,18 @@ func (s *service) systemProbeAll(ctx context.Context, zoneLabel string) error {
 			continue
 		}
 
-		// Run probe requests in parallel so that if one takes a long time to respond
-		// others are not blocked. So long as one array is online, we can provision storage.
-		// Useful in controller mode but not necessarily node mode
-		go func() {
-			err := s.systemProbe(ctx, array)
-
-			systemID := array.SystemID
-			if err == nil {
-				Log.Infof("array %s probed successfully", systemID)
-				probeSuccess <- true
-			} else {
-				errMap[systemID] = err
-				Log.Errorf("array %s probe failed: %v", array.SystemID, err)
-				probeSuccess <- false
-			}
-		}()
-	}
-
-	for range probeRequestCount {
-		select {
-		case <-ctx.Done():
-			// handle case when all probe reqs are stuck waiting for responses and context times out
-			Log.Errorf("[LUKE] probe timed out")
-			break
-		case success := <-probeSuccess:
-			// We only need one successful probe to continue
-			probeSucceeded = probeSucceeded || success
-		}
-
-		if probeSucceeded {
-			Log.Infof("[LUKE] probe success, moving on, returning true")
-			break
+		err := s.systemProbe(ctx, array)
+		systemID := array.SystemID
+		if err == nil {
+			Log.Infof("array %s probed successfully", systemID)
+			allArrayFail = false
+		} else {
+			errMap[systemID] = err
+			Log.Errorf("array %s probe failed: %v", array.SystemID, err)
 		}
 	}
 
-	if !probeSucceeded {
+	if allArrayFail {
 		return status.Error(codes.FailedPrecondition,
 			fmt.Sprintf("All arrays are not working. Could not proceed further: %v", errMap))
 	}
