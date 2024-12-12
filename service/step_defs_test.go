@@ -326,9 +326,9 @@ func (f *feature) getService() *service {
 		return f.service
 	}
 	var opts Opts
-	ctx := new(context.Context)
+	ctx := context.Background()
 	var err error
-	opts.arrays, err = getArrayConfig(*ctx)
+	opts.arrays, err = getArrayConfig(ctx)
 	if err != nil {
 		log.Printf("Read arrays from config file failed: %s\n", err)
 	}
@@ -462,9 +462,9 @@ func (f *feature) aValidDynamicLogChange(file, expectedLevel string) error {
 
 // GetPluginInfo
 func (f *feature) iCallGetPluginInfo() error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 	req := new(csi.GetPluginInfoRequest)
-	f.getPluginInfoResponse, f.err = f.service.GetPluginInfo(*ctx, req)
+	f.getPluginInfoResponse, f.err = f.service.GetPluginInfo(ctx, req)
 	if f.err != nil {
 		return f.err
 	}
@@ -513,9 +513,9 @@ func (f *feature) aValidGetPlugInfoResponseIsReturned() error {
 }
 
 func (f *feature) iCallGetPluginCapabilities() error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 	req := new(csi.GetPluginCapabilitiesRequest)
-	f.getPluginCapabilitiesResponse, f.err = f.service.GetPluginCapabilities(*ctx, req)
+	f.getPluginCapabilitiesResponse, f.err = f.service.GetPluginCapabilities(ctx, req)
 	if f.err != nil {
 		return f.err
 	}
@@ -538,12 +538,12 @@ func (f *feature) aValidGetPluginCapabilitiesResponseIsReturned() error {
 }
 
 func (f *feature) iCallProbe() error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 	req := new(csi.ProbeRequest)
 	f.checkGoRoutines("before probe")
 	f.service.opts.AutoProbe = true
 	f.service.mode = "controller"
-	f.probeResponse, f.err = f.service.Probe(*ctx, req)
+	f.probeResponse, f.err = f.service.Probe(ctx, req)
 	f.checkGoRoutines("after probe")
 	return nil
 }
@@ -700,7 +700,7 @@ func (f *feature) iSpecifyCreateVolumeMountRequest(fstype string) error {
 }
 
 func (f *feature) iCallCreateVolume(name string) error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 	if f.createVolumeRequest == nil {
 		req := getTypicalCreateVolumeRequest()
 		f.createVolumeRequest = req
@@ -715,7 +715,7 @@ func (f *feature) iCallCreateVolume(name string) error {
 
 	fmt.Println("I am in iCallCreateVolume fn.....")
 
-	f.createVolumeResponse, f.err = f.service.CreateVolume(*ctx, req)
+	f.createVolumeResponse, f.err = f.service.CreateVolume(ctx, req)
 	if f.err != nil {
 		log.Printf("CreateVolume called failed: %s\n", f.err.Error())
 	}
@@ -727,7 +727,7 @@ func (f *feature) iCallCreateVolume(name string) error {
 }
 
 func (f *feature) iCallValidateVolumeHostConnectivity() error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 
 	sdcID := f.service.opts.SdcGUID
 	sdcGUID := strings.ToUpper(sdcID)
@@ -764,7 +764,7 @@ func (f *feature) iCallValidateVolumeHostConnectivity() error {
 		VolumeIds: volIDs,
 	}
 
-	connect, err := f.service.ValidateVolumeHostConnectivity(*ctx, req)
+	connect, err := f.service.ValidateVolumeHostConnectivity(ctx, req)
 	if err != nil {
 		f.err = errors.New(err.Error())
 		return nil
@@ -1026,7 +1026,7 @@ func (f *feature) iSpecifyNoStoragePool() error {
 }
 
 func (f *feature) iCallCreateVolumeSize(name string, size int64) error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 	var req *csi.CreateVolumeRequest
 	if f.createVolumeRequest == nil {
 		req = getTypicalCreateVolumeRequest()
@@ -1040,7 +1040,7 @@ func (f *feature) iCallCreateVolumeSize(name string, size int64) error {
 	req.Name = name
 	f.createVolumeRequest = req
 
-	f.createVolumeResponse, f.err = f.service.CreateVolume(*ctx, req)
+	f.createVolumeResponse, f.err = f.service.CreateVolume(ctx, req)
 	if f.err != nil {
 		log.Printf("CreateVolumeSize called failed: %s\n", f.err.Error())
 	}
@@ -1052,7 +1052,7 @@ func (f *feature) iCallCreateVolumeSize(name string, size int64) error {
 }
 
 func (f *feature) iCallCreateVolumeSizeNFS(name string, size int64) error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 	var req *csi.CreateVolumeRequest
 	if f.createVolumeRequest == nil {
 		req = getTypicalNFSCreateVolumeRequest()
@@ -1066,7 +1066,7 @@ func (f *feature) iCallCreateVolumeSizeNFS(name string, size int64) error {
 	req.Name = name
 	f.createVolumeRequest = req
 
-	f.createVolumeResponse, f.err = f.service.CreateVolume(*ctx, req)
+	f.createVolumeResponse, f.err = f.service.CreateVolume(ctx, req)
 	if f.err != nil {
 		log.Printf("CreateVolumeSize called failed: %s\n", f.err.Error())
 	}
@@ -1610,7 +1610,7 @@ func (f *feature) getControllerDeleteVolumeRequestNFS(accessType string) *csi.De
 }
 
 func (f *feature) iCallPublishVolumeWith(arg1 string) error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 	req := f.publishVolumeRequest
 	if f.publishVolumeRequest == nil {
 		req = f.getControllerPublishVolumeRequest(arg1)
@@ -1618,7 +1618,7 @@ func (f *feature) iCallPublishVolumeWith(arg1 string) error {
 	}
 
 	log.Printf("Calling controllerPublishVolume")
-	f.publishVolumeResponse, f.err = f.service.ControllerPublishVolume(*ctx, req)
+	f.publishVolumeResponse, f.err = f.service.ControllerPublishVolume(ctx, req)
 	if f.err != nil {
 		log.Printf("PublishVolume call failed: %s\n", f.err.Error())
 	}
@@ -1626,7 +1626,7 @@ func (f *feature) iCallPublishVolumeWith(arg1 string) error {
 }
 
 func (f *feature) iCallPublishVolumeWithNFS(arg1 string) error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 	req := f.publishVolumeRequest
 	if f.publishVolumeRequest == nil {
 		req = f.getControllerPublishVolumeRequestNFS(arg1)
@@ -1683,7 +1683,7 @@ func (f *feature) iCallPublishVolumeWithNFS(arg1 string) error {
 	}
 
 	log.Printf("Calling controllerPublishVolume")
-	f.publishVolumeResponse, f.err = f.service.ControllerPublishVolume(*ctx, req)
+	f.publishVolumeResponse, f.err = f.service.ControllerPublishVolume(ctx, req)
 	if f.err != nil {
 		log.Printf("PublishVolume call failed: %s\n", f.err.Error())
 	}
@@ -1806,14 +1806,14 @@ func (f *feature) getControllerUnpublishVolumeRequestNFS() *csi.ControllerUnpubl
 }
 
 func (f *feature) iCallUnpublishVolume() error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 	req := f.unpublishVolumeRequest
 	if f.unpublishVolumeRequest == nil {
 		req = f.getControllerUnpublishVolumeRequest()
 		f.unpublishVolumeRequest = req
 	}
 	log.Printf("Calling controllerUnpublishVolume: %s", req.VolumeId)
-	f.unpublishVolumeResponse, f.err = f.service.ControllerUnpublishVolume(*ctx, req)
+	f.unpublishVolumeResponse, f.err = f.service.ControllerUnpublishVolume(ctx, req)
 	if f.err != nil {
 		log.Printf("UnpublishVolume call failed: %s\n", f.err.Error())
 	}
@@ -1821,7 +1821,7 @@ func (f *feature) iCallUnpublishVolume() error {
 }
 
 func (f *feature) iCallUnpublishVolumeNFS() error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 	req := f.unpublishVolumeRequest
 	if f.unpublishVolumeRequest == nil {
 		req = f.getControllerUnpublishVolumeRequestNFS()
@@ -1855,7 +1855,7 @@ func (f *feature) iCallUnpublishVolumeNFS() error {
 	}
 
 	log.Printf("Calling controllerUnpublishVolume: %s", req.VolumeId)
-	f.unpublishVolumeResponse, f.err = f.service.ControllerUnpublishVolume(*ctx, req)
+	f.unpublishVolumeResponse, f.err = f.service.ControllerUnpublishVolume(ctx, req)
 	if f.err != nil {
 		log.Printf("UnpublishVolume call failed: %s\n", f.err.Error())
 	}
@@ -1877,50 +1877,50 @@ func (f *feature) theNumberOfSDCMappingsIs(arg1 int) error {
 }
 
 func (f *feature) iCallNodeGetInfo() error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 	req := new(csi.NodeGetInfoRequest)
 	f.service.opts.SdcGUID = "9E56672F-2F4B-4A42-BFF4-88B6846FBFDA"
 	GetNodeLabels = mockGetNodeLabels
 	GetNodeUID = mockGetNodeUID
-	f.nodeGetInfoResponse, f.err = f.service.NodeGetInfo(*ctx, req)
+	f.nodeGetInfoResponse, f.err = f.service.NodeGetInfo(ctx, req)
 	return nil
 }
 
 func (f *feature) iCallNodeGetInfoWithValidVolumeLimitNodeLabels() error {
 	f.setFakeNode()
-	ctx := new(context.Context)
+	ctx := context.Background()
 	req := new(csi.NodeGetInfoRequest)
 	f.service.opts.SdcGUID = "9E56672F-2F4B-4A42-BFF4-88B6846FBFDA"
 	GetNodeLabels = mockGetNodeLabelsWithVolumeLimits
-	f.nodeGetInfoResponse, f.err = f.service.NodeGetInfo(*ctx, req)
+	f.nodeGetInfoResponse, f.err = f.service.NodeGetInfo(ctx, req)
 	fmt.Printf("MaxVolumesPerNode: %v", f.nodeGetInfoResponse.MaxVolumesPerNode)
 	return nil
 }
 
 func (f *feature) iCallNodeGetInfoWithInvalidVolumeLimitNodeLabels() error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 	req := new(csi.NodeGetInfoRequest)
 	f.service.opts.SdcGUID = "9E56672F-2F4B-4A42-BFF4-88B6846FBFDA"
 	GetNodeLabels = mockGetNodeLabelsWithInvalidVolumeLimits
-	f.nodeGetInfoResponse, f.err = f.service.NodeGetInfo(*ctx, req)
+	f.nodeGetInfoResponse, f.err = f.service.NodeGetInfo(ctx, req)
 	return nil
 }
 
 func (f *feature) iCallNodeGetInfoWithValidNodeUID() error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 	req := new(csi.NodeGetInfoRequest)
 	GetNodeUID = mockGetNodeUID
 	f.service.opts.SdcGUID = ""
-	f.nodeGetInfoResponse, f.err = f.service.NodeGetInfo(*ctx, req)
+	f.nodeGetInfoResponse, f.err = f.service.NodeGetInfo(ctx, req)
 	fmt.Printf("NodeGetInfoResponse: %v", f.nodeGetInfoResponse)
 	return nil
 }
 
 func (f *feature) iCallGetNodeUID() error {
 	f.setFakeNode()
-	ctx := new(context.Context)
+	ctx := context.Background()
 	nodeUID := ""
-	nodeUID, err := f.service.GetNodeUID(*ctx)
+	nodeUID, err := f.service.GetNodeUID(ctx)
 
 	fmt.Printf("Node UID: %v", nodeUID)
 	if err != nil {
@@ -2012,8 +2012,8 @@ func (f *feature) iCallGetNodeLabelsWithInvalidNode() error {
 
 func (f *feature) iCallGetNodeLabelsWithUnsetKubernetesClient() error {
 	K8sClientset = nil
-	ctx := new(context.Context)
-	f.nodeLabels, f.err = f.service.GetNodeLabels(*ctx)
+	ctx := context.Background()
+	f.nodeLabels, f.err = f.service.GetNodeLabels(ctx)
 	return nil
 }
 
@@ -2025,17 +2025,17 @@ func (f *feature) iCallGetNodeUIDWithInvalidNode() error {
 
 func (f *feature) iCallGetNodeUIDWithUnsetKubernetesClient() error {
 	K8sClientset = nil
-	ctx := new(context.Context)
-	f.nodeUID, f.err = f.service.GetNodeUID(*ctx)
+	ctx := context.Background()
+	f.nodeUID, f.err = f.service.GetNodeUID(ctx)
 	return nil
 }
 
 func (f *feature) iCallNodeProbe() error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 	req := new(csi.ProbeRequest)
 	f.checkGoRoutines("before probe")
 	f.service.mode = "node"
-	f.probeResponse, f.err = f.service.Probe(*ctx, req)
+	f.probeResponse, f.err = f.service.Probe(ctx, req)
 	f.checkGoRoutines("after probe")
 	return nil
 }
@@ -2082,14 +2082,14 @@ func (f *feature) theVolumeLimitIsSet() error {
 }
 
 func (f *feature) iCallDeleteVolumeWith(arg1 string) error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 	req := f.deleteVolumeRequest
 	if f.deleteVolumeRequest == nil {
 		req = f.getControllerDeleteVolumeRequest(arg1)
 		f.deleteVolumeRequest = req
 	}
 	log.Printf("Calling DeleteVolume")
-	f.deleteVolumeResponse, f.err = f.service.DeleteVolume(*ctx, req)
+	f.deleteVolumeResponse, f.err = f.service.DeleteVolume(ctx, req)
 	if f.err != nil {
 		log.Printf("DeleteVolume called failed: %s\n", f.err.Error())
 	}
@@ -2097,14 +2097,14 @@ func (f *feature) iCallDeleteVolumeWith(arg1 string) error {
 }
 
 func (f *feature) iCallDeleteVolumeWithBad(arg1 string) error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 	req := f.deleteVolumeRequest
 	if f.deleteVolumeRequest == nil {
 		req = f.getControllerDeleteVolumeRequestBad(arg1)
 		f.deleteVolumeRequest = req
 	}
 	log.Printf("Calling DeleteVolume")
-	f.deleteVolumeResponse, f.err = f.service.DeleteVolume(*ctx, req)
+	f.deleteVolumeResponse, f.err = f.service.DeleteVolume(ctx, req)
 	if f.err != nil {
 		log.Printf("DeleteVolume called failed: %s\n", f.err.Error())
 	}
@@ -2112,14 +2112,14 @@ func (f *feature) iCallDeleteVolumeWithBad(arg1 string) error {
 }
 
 func (f *feature) iCallDeleteVolumeNFSWith(arg1 string) error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 	req := f.deleteVolumeRequest
 	if f.deleteVolumeRequest == nil {
 		req = f.getControllerDeleteVolumeRequestNFS(arg1)
 		f.deleteVolumeRequest = req
 	}
 	log.Printf("Calling DeleteVolume")
-	f.deleteVolumeResponse, f.err = f.service.DeleteVolume(*ctx, req)
+	f.deleteVolumeResponse, f.err = f.service.DeleteVolume(ctx, req)
 	if f.err != nil {
 		log.Printf("DeleteVolume called failed: %s\n", f.err.Error())
 	}
@@ -2147,7 +2147,7 @@ func (f *feature) theVolumeIsAlreadyMappedToAnSDC() error {
 }
 
 func (f *feature) iCallGetCapacityWithStoragePool(arg1 string) error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 	req := new(csi.GetCapacityRequest)
 	if arg1 != "" {
 		parameters := make(map[string]string)
@@ -2155,7 +2155,7 @@ func (f *feature) iCallGetCapacityWithStoragePool(arg1 string) error {
 		req.Parameters = parameters
 	}
 	log.Printf("Calling GetCapacity")
-	f.getCapacityResponse, f.err = f.service.GetCapacity(*ctx, req)
+	f.getCapacityResponse, f.err = f.service.GetCapacity(ctx, req)
 	if f.err != nil {
 		log.Printf("GetCapacity call failed: %s\n", f.err.Error())
 		return nil
@@ -2205,10 +2205,10 @@ func (f *feature) iCallControllerGetCapabilities(isHealthMonitorEnabled string) 
 	if isHealthMonitorEnabled == "true" {
 		f.service.opts.IsHealthMonitorEnabled = true
 	}
-	ctx := new(context.Context)
+	ctx := context.Background()
 	req := new(csi.ControllerGetCapabilitiesRequest)
 	log.Printf("Calling ControllerGetCapabilities")
-	f.controllerGetCapabilitiesResponse, f.err = f.service.ControllerGetCapabilities(*ctx, req)
+	f.controllerGetCapabilitiesResponse, f.err = f.service.ControllerGetCapabilities(ctx, req)
 	if f.err != nil {
 		log.Printf("ControllerGetCapabilities call failed: %s\n", f.err.Error())
 		return f.err
@@ -2263,7 +2263,7 @@ func (f *feature) iCallListVolumesWith(maxEntriesString, startingToken string) e
 		return err
 	}
 
-	ctx := new(context.Context)
+	ctx := context.Background()
 	req := f.listVolumesRequest
 	if f.listVolumesRequest == nil {
 		switch st := startingToken; st {
@@ -2286,7 +2286,7 @@ func (f *feature) iCallListVolumesWith(maxEntriesString, startingToken string) e
 		f.listVolumesRequest = req
 	}
 	log.Printf("Calling ListVolumes with req=%+v", f.listVolumesRequest)
-	f.listVolumesResponse, f.err = f.service.ListVolumes(*ctx, req)
+	f.listVolumesResponse, f.err = f.service.ListVolumes(ctx, req)
 	if f.err != nil {
 		log.Printf("ListVolume called failed: %s\n", f.err.Error())
 	} else {
@@ -2349,7 +2349,7 @@ func (f *feature) aValidControllerGetCapabilitiesResponseIsReturned() error {
 }
 
 func (f *feature) iCallCloneVolume() error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 	req := getTypicalCreateVolumeRequest()
 	req.Name = "clone"
 	if f.invalidVolumeID {
@@ -2366,7 +2366,7 @@ func (f *feature) iCallCloneVolume() error {
 	req.VolumeContentSource = new(csi.VolumeContentSource)
 	req.VolumeContentSource.Type = &csi.VolumeContentSource_Volume{Volume: source}
 	req.AccessibilityRequirements = new(csi.TopologyRequirement)
-	f.createVolumeResponse, f.err = f.service.CreateVolume(*ctx, req)
+	f.createVolumeResponse, f.err = f.service.CreateVolume(ctx, req)
 	if f.err != nil {
 		fmt.Printf("Error on CreateVolume from volume: %s\n", f.err.Error())
 	}
@@ -2376,7 +2376,7 @@ func (f *feature) iCallCloneVolume() error {
 
 //nolint:revive
 func (f *feature) iCallValidateVolumeCapabilitiesWithVoltypeAccessFstype(voltype, access, fstype string) error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 	req := new(csi.ValidateVolumeCapabilitiesRequest)
 	if f.invalidVolumeID || f.createVolumeResponse == nil {
 		req.VolumeId = badVolumeID2
@@ -2417,7 +2417,7 @@ func (f *feature) iCallValidateVolumeCapabilitiesWithVoltypeAccessFstype(voltype
 	capabilities = append(capabilities, capability)
 	req.VolumeCapabilities = capabilities
 	log.Printf("Calling ValidateVolumeCapabilities %#v", accessMode)
-	f.validateVolumeCapabilitiesResponse, f.err = f.service.ValidateVolumeCapabilities(*ctx, req)
+	f.validateVolumeCapabilitiesResponse, f.err = f.service.ValidateVolumeCapabilities(ctx, req)
 	if f.err != nil {
 		return nil
 	}
@@ -2896,8 +2896,8 @@ func (f *feature) iCallNodePublishVolumeNFS(arg1 string) error {
 
 func (f *feature) iCallUnmountPrivMount() error {
 	gofsutil.GOFSMock.InduceGetMountsError = true
-	ctx := new(context.Context)
-	err := unmountPrivMount(*ctx, nil, "/foo/bar")
+	ctx := context.Background()
+	err := unmountPrivMount(ctx, nil, "/foo/bar")
 	fmt.Printf("unmountPrivMount getMounts error: %s\n", err.Error())
 	//  getMounts induced error
 	if err != nil {
@@ -2917,7 +2917,7 @@ func (f *feature) iCallUnmountPrivMount() error {
 
 		gofsutil.GOFSMock.InduceGetMountsError = false
 		gofsutil.GOFSMock.InduceUnmountError = true
-		err = unmountPrivMount(*ctx, nil, target)
+		err = unmountPrivMount(ctx, nil, target)
 		fmt.Printf("unmountPrivMount unmount error: %s\n", err)
 		if err != nil {
 			f.err = errors.New("error in unmountPrivMount")
@@ -3271,9 +3271,9 @@ func (f *feature) iCallBeforeServe() error {
 }
 
 func (f *feature) iCallNodeStageVolume() error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 	req := new(csi.NodeStageVolumeRequest)
-	_, f.err = f.service.NodeStageVolume(*ctx, req)
+	_, f.err = f.service.NodeStageVolume(ctx, req)
 	return nil
 }
 
@@ -3322,7 +3322,7 @@ func (f *feature) iCallNodeExpandVolume(volPath string) error {
 }
 
 func (f *feature) iCallNodeGetVolumeStats() error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 
 	VolumeID := sdcVolume1
 	VolumePath := datadir
@@ -3352,7 +3352,7 @@ func (f *feature) iCallNodeGetVolumeStats() error {
 
 	req := &csi.NodeGetVolumeStatsRequest{VolumeId: VolumeID, VolumePath: VolumePath}
 
-	f.nodeGetVolumeStatsResponse, f.err = f.service.NodeGetVolumeStats(*ctx, req)
+	f.nodeGetVolumeStatsResponse, f.err = f.service.NodeGetVolumeStats(ctx, req)
 
 	return nil
 }
@@ -3458,12 +3458,12 @@ func (f *feature) iCallNodeUnstageVolumeWith(anError string) error {
 }
 
 func (f *feature) iCallNodeGetCapabilities(isHealthMonitorEnabled string) error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 	if isHealthMonitorEnabled == "true" {
 		f.service.opts.IsHealthMonitorEnabled = true
 	}
 	req := new(csi.NodeGetCapabilitiesRequest)
-	f.nodeGetCapabilitiesResponse, f.err = f.service.NodeGetCapabilities(*ctx, req)
+	f.nodeGetCapabilitiesResponse, f.err = f.service.NodeGetCapabilities(ctx, req)
 	return nil
 }
 
@@ -3654,7 +3654,7 @@ func (f *feature) aValidCreateVolumeSnapshotGroupResponse() error {
 }
 
 func (f *feature) iCallCreateSnapshot(snapName string) error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 
 	if len(f.volumeIDList) == 0 {
 		f.volumeIDList = append(f.volumeIDList, "00000000")
@@ -3689,15 +3689,15 @@ func (f *feature) iCallCreateSnapshot(snapName string) error {
 	}
 
 	fmt.Println("snapName is: ", snapName)
-	fmt.Println("ctx: ", *ctx)
+	fmt.Println("ctx: ", ctx)
 	fmt.Println("req: ", req)
 
-	f.createSnapshotResponse, f.err = f.service.CreateSnapshot(*ctx, req)
+	f.createSnapshotResponse, f.err = f.service.CreateSnapshot(ctx, req)
 	return nil
 }
 
 func (f *feature) iCallCreateSnapshotNFS(snapName string) error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 
 	req := &csi.CreateSnapshotRequest{
 		SourceVolumeId: "14dbbf5617523654" + "/" + fileSystemNameToID["volume1"],
@@ -3713,10 +3713,10 @@ func (f *feature) iCallCreateSnapshotNFS(snapName string) error {
 	}
 
 	fmt.Println("snapName is: ", snapName)
-	fmt.Println("ctx: ", *ctx)
+	fmt.Println("ctx: ", ctx)
 	fmt.Println("req: ", req)
 
-	f.createSnapshotResponse, f.err = f.service.CreateSnapshot(*ctx, req)
+	f.createSnapshotResponse, f.err = f.service.CreateSnapshot(ctx, req)
 	return nil
 }
 
@@ -3740,7 +3740,7 @@ func (f *feature) aValidSnapshot() error {
 }
 
 func (f *feature) iCallDeleteSnapshot() error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 	req := &csi.DeleteSnapshotRequest{SnapshotId: goodSnapID, Secrets: make(map[string]string)}
 	req.Secrets["x"] = "y"
 	if f.invalidVolumeID {
@@ -3748,12 +3748,12 @@ func (f *feature) iCallDeleteSnapshot() error {
 	} else if f.noVolumeID {
 		req.SnapshotId = ""
 	}
-	_, f.err = f.service.DeleteSnapshot(*ctx, req)
+	_, f.err = f.service.DeleteSnapshot(ctx, req)
 	return nil
 }
 
 func (f *feature) iCallDeleteSnapshotNFS() error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 	var req *csi.DeleteSnapshotRequest = new(csi.DeleteSnapshotRequest)
 	if fileSystemNameToID["snap1"] == "" {
 		req = &csi.DeleteSnapshotRequest{SnapshotId: "14dbbf5617523654" + "/" + "1111111", Secrets: make(map[string]string)}
@@ -3762,7 +3762,7 @@ func (f *feature) iCallDeleteSnapshotNFS() error {
 	}
 
 	req.Secrets["x"] = "y"
-	_, f.err = f.service.DeleteSnapshot(*ctx, req)
+	_, f.err = f.service.DeleteSnapshot(ctx, req)
 	return nil
 }
 
@@ -3793,7 +3793,7 @@ func (f *feature) aValidSnapshotConsistencyGroup() error {
 }
 
 func (f *feature) iCallCreateVolumeFromSnapshot() error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 	req := getTypicalCreateVolumeRequest()
 	req.Name = "volumeFromSnap"
 	if f.wrongCapacity {
@@ -3805,7 +3805,7 @@ func (f *feature) iCallCreateVolumeFromSnapshot() error {
 	source := &csi.VolumeContentSource_SnapshotSource{SnapshotId: goodSnapID}
 	req.VolumeContentSource = new(csi.VolumeContentSource)
 	req.VolumeContentSource.Type = &csi.VolumeContentSource_Snapshot{Snapshot: source}
-	f.createVolumeResponse, f.err = f.service.CreateVolume(*ctx, req)
+	f.createVolumeResponse, f.err = f.service.CreateVolume(ctx, req)
 	if f.err != nil {
 		fmt.Printf("Error on CreateVolume from snap: %s\n", f.err.Error())
 	}
@@ -3813,7 +3813,7 @@ func (f *feature) iCallCreateVolumeFromSnapshot() error {
 }
 
 func (f *feature) iCallCreateVolumeFromSnapshotNFS() error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 	req := getTypicalNFSCreateVolumeRequest()
 	req.Name = "volumeFromSnap"
 	if f.wrongCapacity {
@@ -3825,7 +3825,7 @@ func (f *feature) iCallCreateVolumeFromSnapshotNFS() error {
 	source := &csi.VolumeContentSource_SnapshotSource{SnapshotId: "14dbbf5617523654" + "/" + fileSystemNameToID["snap1"]}
 	req.VolumeContentSource = new(csi.VolumeContentSource)
 	req.VolumeContentSource.Type = &csi.VolumeContentSource_Snapshot{Snapshot: source}
-	f.createVolumeResponse, f.err = f.service.CreateVolume(*ctx, req)
+	f.createVolumeResponse, f.err = f.service.CreateVolume(ctx, req)
 	if f.err != nil {
 		fmt.Printf("Error on CreateVolume from snap: %s\n", f.err.Error())
 	}
@@ -3867,7 +3867,7 @@ func (f *feature) iCallListSnapshotsWithMaxentriesAndStartingtoken(maxEntriesStr
 	if err != nil {
 		return nil
 	}
-	ctx := new(context.Context)
+	ctx := context.Background()
 
 	// ignoring integer overflow issue, will not be an issue if maxEntries is less than 2147483647
 	// #nosec G115
@@ -3875,7 +3875,7 @@ func (f *feature) iCallListSnapshotsWithMaxentriesAndStartingtoken(maxEntriesStr
 
 	f.listSnapshotsRequest = req
 	log.Printf("Calling ListSnapshots with req=%+v", f.listVolumesRequest)
-	f.listSnapshotsResponse, f.err = f.service.ListSnapshots(*ctx, req)
+	f.listSnapshotsResponse, f.err = f.service.ListSnapshots(ctx, req)
 	if f.err != nil {
 		log.Printf("ListSnapshots called failed: %s\n", f.err.Error())
 	}
@@ -3888,7 +3888,7 @@ func (f *feature) iCallListSnapshotsForVolume(arg1 string) error {
 		sourceVolumeID = altVolumeID
 	}
 
-	ctx := new(context.Context)
+	ctx := context.Background()
 	req := &csi.ListSnapshotsRequest{SourceVolumeId: sourceVolumeID}
 	req.StartingToken = "0"
 	req.MaxEntries = 100
@@ -3900,7 +3900,7 @@ func (f *feature) iCallListSnapshotsForVolume(arg1 string) error {
 
 	f.listSnapshotsRequest = req
 	log.Printf("Calling ListSnapshots with req=%+v", f.listSnapshotsRequest)
-	f.listSnapshotsResponse, f.err = f.service.ListSnapshots(*ctx, req)
+	f.listSnapshotsResponse, f.err = f.service.ListSnapshots(ctx, req)
 	if f.err != nil {
 		log.Printf("ListSnapshots called failed: %s\n", f.err.Error())
 	}
@@ -3908,11 +3908,11 @@ func (f *feature) iCallListSnapshotsForVolume(arg1 string) error {
 }
 
 func (f *feature) iCallListSnapshotsForSnapshot(arg1 string) error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 	req := &csi.ListSnapshotsRequest{SnapshotId: arg1}
 	f.listSnapshotsRequest = req
 	log.Printf("Calling ListSnapshots with req=%+v", f.listVolumesRequest)
-	f.listSnapshotsResponse, f.err = f.service.ListSnapshots(*ctx, req)
+	f.listSnapshotsResponse, f.err = f.service.ListSnapshots(ctx, req)
 	if f.err != nil {
 		log.Printf("ListSnapshots called failed: %s\n", f.err.Error())
 	}
@@ -4153,8 +4153,8 @@ func (f *feature) iCallGetSystemNameError() error {
 
 	stepHandlersErrors.PodmonNodeProbeError = true
 	//  Unable to probe system with ID:
-	ctx := new(context.Context)
-	f.err = f.service.systemProbe(*ctx, badarray)
+	ctx := context.Background()
+	f.err = f.service.systemProbe(ctx, badarray)
 	return nil
 }
 
@@ -4168,9 +4168,9 @@ func (f *feature) iCallGetSystemName() error {
 func (f *feature) iCallNodeGetAllSystems() error {
 	// lookup the system names for a couple of systems
 	// This should not generate an error as systems without names are supported
-	ctx := new(context.Context)
+	ctx := context.Background()
 	badarray := f.service.opts.arrays[arrayID]
-	f.err = f.service.systemProbe(*ctx, badarray)
+	f.err = f.service.systemProbe(ctx, badarray)
 	return nil
 }
 
@@ -4213,8 +4213,8 @@ func (f *feature) anInvalidMaxVolumesPerNode() error {
 }
 
 func (f *feature) iCallGetArrayConfig() error {
-	ctx := new(context.Context)
-	_, err := getArrayConfig(*ctx)
+	ctx := context.Background()
+	_, err := getArrayConfig(ctx)
 	if err != nil {
 		f.err = err
 	}
@@ -4229,8 +4229,8 @@ func (f *feature) iCallgetArrayInstallationID(systemID string) error {
 }
 
 func (f *feature) iCallSetQoSParameters(systemID string, sdcID string, bandwidthLimit string, iopsLimit string, volumeName string, csiVolID string, nodeID string) error {
-	ctx := new(context.Context)
-	f.err = f.service.setQoSParameters(*ctx, systemID, sdcID, bandwidthLimit, iopsLimit, volumeName, csiVolID, nodeID)
+	ctx := context.Background()
+	f.err = f.service.setQoSParameters(ctx, systemID, sdcID, bandwidthLimit, iopsLimit, volumeName, csiVolID, nodeID)
 	if f.err != nil {
 		fmt.Printf("error in setting QoS parameters for volume %s : %s\n", volumeName, f.err.Error())
 	}
@@ -4273,8 +4273,8 @@ func (f *feature) iUseConfig(filename string) error {
 
 func (f *feature) iCallGetReplicationCapabilities() error {
 	req := &replication.GetReplicationCapabilityRequest{}
-	ctx := new(context.Context)
-	f.replicationCapabilitiesResponse, f.err = f.service.GetReplicationCapabilities(*ctx, req)
+	ctx := context.Background()
+	f.replicationCapabilitiesResponse, f.err = f.service.GetReplicationCapabilities(ctx, req)
 	log.Printf("GetReplicationCapabilities returned %+v", f.replicationCapabilitiesResponse)
 	return nil
 }
@@ -4353,7 +4353,7 @@ func (f *feature) iSetApproveSdcEnabled(approveSDCEnabled string) error {
 }
 
 func (f *feature) iCallCreateRemoteVolume() error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 	req := &replication.CreateRemoteVolumeRequest{}
 	if f.createVolumeResponse == nil {
 		return errors.New("iCallCreateRemoteVolume: f.createVolumeResponse is nil")
@@ -4369,7 +4369,7 @@ func (f *feature) iCallCreateRemoteVolume() error {
 		f.service.WithRP(KeyReplicationRemoteStoragePool): "viki_pool_HDD_20181031",
 		f.service.WithRP(KeyReplicationRemoteSystem):      "15dbbf5617523655",
 	}
-	_, f.err = f.service.CreateRemoteVolume(*ctx, req)
+	_, f.err = f.service.CreateRemoteVolume(ctx, req)
 	if f.err != nil {
 		fmt.Printf("CreateRemoteVolumeRequest returned error: %s", f.err)
 	}
@@ -4377,7 +4377,7 @@ func (f *feature) iCallCreateRemoteVolume() error {
 }
 
 func (f *feature) iCallDeleteLocalVolume(name string) error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 
 	replicatedVolName := "replicated-" + name
 	volumeHandle := arrayID2 + "-" + volumeNameToID[replicatedVolName]
@@ -4395,7 +4395,7 @@ func (f *feature) iCallDeleteLocalVolume(name string) error {
 		VolumeHandle: volumeHandle,
 	}
 
-	_, f.err = f.service.DeleteLocalVolume(*ctx, req)
+	_, f.err = f.service.DeleteLocalVolume(ctx, req)
 	if f.err != nil {
 		fmt.Printf("DeleteLocalVolume returned error: %s", f.err)
 	}
@@ -4404,7 +4404,7 @@ func (f *feature) iCallDeleteLocalVolume(name string) error {
 }
 
 func (f *feature) iCallCreateStorageProtectionGroup() error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 	parameters := make(map[string]string)
 
 	// Must be repeatable.
@@ -4445,12 +4445,12 @@ func (f *feature) iCallCreateStorageProtectionGroup() error {
 	if stepHandlersErrors.BadVolIDError {
 		req.VolumeHandle = "0%0"
 	}
-	f.createStorageProtectionGroupResponse, f.err = f.service.CreateStorageProtectionGroup(*ctx, req)
+	f.createStorageProtectionGroupResponse, f.err = f.service.CreateStorageProtectionGroup(ctx, req)
 	return nil
 }
 
 func (f *feature) iCallCreateStorageProtectionGroupWith(arg1, arg2, arg3 string) error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 	parameters := make(map[string]string)
 
 	// Must be repeatable.
@@ -4467,12 +4467,12 @@ func (f *feature) iCallCreateStorageProtectionGroupWith(arg1, arg2, arg3 string)
 		Parameters:   parameters,
 	}
 
-	f.createStorageProtectionGroupResponse, f.err = f.service.CreateStorageProtectionGroup(*ctx, req)
+	f.createStorageProtectionGroupResponse, f.err = f.service.CreateStorageProtectionGroup(ctx, req)
 	return nil
 }
 
 func (f *feature) iCallGetStorageProtectionGroupStatus() error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 	attributes := make(map[string]string)
 
 	replicationGroupConsistMode = defaultConsistencyMode
@@ -4482,13 +4482,13 @@ func (f *feature) iCallGetStorageProtectionGroupStatus() error {
 		ProtectionGroupId:         f.createStorageProtectionGroupResponse.LocalProtectionGroupId,
 		ProtectionGroupAttributes: attributes,
 	}
-	_, f.err = f.service.GetStorageProtectionGroupStatus(*ctx, req)
+	_, f.err = f.service.GetStorageProtectionGroupStatus(ctx, req)
 
 	return nil
 }
 
 func (f *feature) iCallGetStorageProtectionGroupStatusWithStateAndMode(arg1, arg2 string) error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 	attributes := make(map[string]string)
 
 	replicationGroupState = arg1
@@ -4499,7 +4499,7 @@ func (f *feature) iCallGetStorageProtectionGroupStatusWithStateAndMode(arg1, arg
 		ProtectionGroupId:         f.createStorageProtectionGroupResponse.LocalProtectionGroupId,
 		ProtectionGroupAttributes: attributes,
 	}
-	_, f.err = f.service.GetStorageProtectionGroupStatus(*ctx, req)
+	_, f.err = f.service.GetStorageProtectionGroupStatus(ctx, req)
 
 	return nil
 }
@@ -4511,12 +4511,12 @@ func (f *feature) iCallDeleteVolume(name string) error {
 	for name, id := range volumeNameToID {
 		fmt.Printf("volNameToID name %s id %s\n", name, id)
 	}
-	ctx := new(context.Context)
+	ctx := context.Background()
 	req := f.getControllerDeleteVolumeRequest("single-writer")
 	id := arrayID + "-" + volumeNameToID[name]
 	log.Printf("iCallDeleteVolume name %s to ID %s", name, id)
 	req.VolumeId = id
-	f.deleteVolumeResponse, f.err = f.service.DeleteVolume(*ctx, req)
+	f.deleteVolumeResponse, f.err = f.service.DeleteVolume(ctx, req)
 	if f.err != nil {
 		fmt.Printf("DeleteVolume error: %s", f.err)
 	}
@@ -4524,19 +4524,19 @@ func (f *feature) iCallDeleteVolume(name string) error {
 }
 
 func (f *feature) iCallDeleteStorageProtectionGroup() error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 	attributes := make(map[string]string)
 	attributes[f.service.opts.replicationContextPrefix+"systemName"] = arrayID
 	req := &replication.DeleteStorageProtectionGroupRequest{
 		ProtectionGroupId:         f.createStorageProtectionGroupResponse.LocalProtectionGroupId,
 		ProtectionGroupAttributes: attributes,
 	}
-	f.deleteStorageProtectionGroupResponse, f.err = f.service.DeleteStorageProtectionGroup(*ctx, req)
+	f.deleteStorageProtectionGroupResponse, f.err = f.service.DeleteStorageProtectionGroup(ctx, req)
 	return nil
 }
 
 func (f *feature) iCallExecuteAction(arg1 string) error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 	attributes := make(map[string]string)
 	remoteAttributes := make(map[string]string)
 
@@ -4575,7 +4575,7 @@ func (f *feature) iCallExecuteAction(arg1 string) error {
 		ActionTypes:                     &action,
 	}
 
-	_, f.err = f.service.ExecuteAction(*ctx, req)
+	_, f.err = f.service.ExecuteAction(ctx, req)
 	return nil
 }
 
@@ -4707,7 +4707,7 @@ func getZoneEnabledRequest(zoneLabelName string) *csi.CreateVolumeRequest {
 }
 
 func (f *feature) iCallCreateVolumeWithZones(name string) error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 	if f.createVolumeRequest == nil {
 		req := getZoneEnabledRequest(f.service.opts.zoneLabelKey)
 		f.createVolumeRequest = req
@@ -4717,7 +4717,7 @@ func (f *feature) iCallCreateVolumeWithZones(name string) error {
 
 	fmt.Println("I am in iCallCreateVolume fn.....")
 
-	f.createVolumeResponse, f.err = f.service.CreateVolume(*ctx, req)
+	f.createVolumeResponse, f.err = f.service.CreateVolume(ctx, req)
 	if f.err != nil {
 		log.Printf("CreateVolume called failed: %s\n", f.err.Error())
 	}
@@ -4734,12 +4734,12 @@ func mockGetNodeLabelsWithZone(_ context.Context, s *service) (map[string]string
 }
 
 func (f *feature) iCallNodeGetInfoWithZoneLabels() error {
-	ctx := new(context.Context)
+	ctx := context.Background()
 	req := new(csi.NodeGetInfoRequest)
 	f.service.opts.SdcGUID = "9E56672F-2F4B-4A42-BFF4-88B6846FBFDA"
 	GetNodeLabels = mockGetNodeLabelsWithZone
 	GetNodeUID = mockGetNodeUID
-	f.nodeGetInfoResponse, f.err = f.service.NodeGetInfo(*ctx, req)
+	f.nodeGetInfoResponse, f.err = f.service.NodeGetInfo(ctx, req)
 	return nil
 }
 
