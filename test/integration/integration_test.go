@@ -31,21 +31,22 @@ import (
 )
 
 const (
-	datafile   = "/tmp/datafile"
-	datadir    = "/tmp/datadir"
-	configFile = "../../config.json"
+	datafile       = "/tmp/datafile"
+	datadir        = "/tmp/datadir"
+	configFile     = "../../config.json"
+	zoneConfigFile = "features/array-config/multi-az"
 )
 
 var grpcClient *grpc.ClientConn
 
-func init() {
+func readConfigFile(filePath string) {
 	/* load array config and give proper errors if not ok*/
-	if _, err := os.Stat(configFile); err == nil {
-		if _, err := os.ReadFile(configFile); err != nil {
-			err = fmt.Errorf("DEBUG integration pre requisites missing %s with multi array configuration file ", configFile)
+	if _, err := os.Stat(filePath); err == nil {
+		if _, err := os.ReadFile(filePath); err != nil {
+			err = fmt.Errorf("DEBUG integration pre requisites missing %s with multi array configuration file ", filePath)
 			panic(err)
 		}
-		f, err := os.Open(configFile)
+		f, err := os.Open(filePath)
 		r := bufio.NewReader(f)
 		mdms := make([]string, 0)
 		line, isPrefix, err := r.ReadLine()
@@ -70,6 +71,7 @@ func init() {
 }
 
 func TestIntegration(t *testing.T) {
+	readConfigFile(configFile)
 	var stop func()
 	ctx := context.Background()
 	fmt.Printf("calling startServer")
@@ -118,10 +120,11 @@ func TestIntegration(t *testing.T) {
 }
 
 func TestZoneIntegration(t *testing.T) {
+	readConfigFile(zoneConfigFile)
 	var stop func()
 	ctx := context.Background()
 	fmt.Printf("calling startServer")
-	grpcClient, stop = startServer(ctx, "features/array-config/multi-az")
+	grpcClient, stop = startServer(ctx, zoneConfigFile)
 	fmt.Printf("back from startServer")
 	time.Sleep(5 * time.Second)
 

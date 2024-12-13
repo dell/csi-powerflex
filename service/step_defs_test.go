@@ -3812,6 +3812,39 @@ func (f *feature) iCallCreateVolumeFromSnapshot() error {
 	return nil
 }
 
+func (f *feature) iCallCreateVolumeForZonesFromSnapshot(snapshotID string) error {
+	ctx := new(context.Context)
+	req := getZoneEnabledRequest(f.service.opts.zoneLabelKey)
+	req.Name = "volumeForZonesFromSnap "
+
+	source := &csi.VolumeContentSource_SnapshotSource{SnapshotId: snapshotID}
+	req.VolumeContentSource = new(csi.VolumeContentSource)
+	req.VolumeContentSource.Type = &csi.VolumeContentSource_Snapshot{Snapshot: source}
+	f.createVolumeResponse, f.err = f.service.CreateVolume(*ctx, req)
+	if f.err != nil {
+		fmt.Printf("Error on CreateVolume for zones from snap: %s\n", f.err.Error())
+	}
+	return nil
+}
+
+func (f *feature) iCallCloneVolumeForZones(volumeID string) error {
+	ctx := new(context.Context)
+	req := getZoneEnabledRequest(f.service.opts.zoneLabelKey)
+	req.Name = "clone"
+
+	source := &csi.VolumeContentSource_VolumeSource{VolumeId: volumeID}
+	req.VolumeContentSource = new(csi.VolumeContentSource)
+	req.VolumeContentSource.Type = &csi.VolumeContentSource_Volume{Volume: source}
+	req.AccessibilityRequirements = new(csi.TopologyRequirement)
+	fmt.Printf("CallCloneVolumeForZones with request = %v", req)
+	f.createVolumeResponse, f.err = f.service.CreateVolume(*ctx, req)
+	if f.err != nil {
+		fmt.Printf("Error on CreateVolume from volume: %s\n", f.err.Error())
+	}
+
+	return nil
+}
+
 func (f *feature) iCallCreateVolumeFromSnapshotNFS() error {
 	ctx := context.Background()
 	req := getTypicalNFSCreateVolumeRequest()
@@ -4685,6 +4718,7 @@ func (f *feature) iCallPingNASServer(systemID string, name string) error {
 func getZoneEnabledRequest(zoneLabelName string) *csi.CreateVolumeRequest {
 	req := new(csi.CreateVolumeRequest)
 	params := make(map[string]string)
+	params["storagepool"] = "viki_pool_HDD_20181031"
 	req.Parameters = params
 	capacityRange := new(csi.CapacityRange)
 	capacityRange.RequiredBytes = 32 * 1024 * 1024 * 1024
@@ -4715,11 +4749,11 @@ func (f *feature) iCallCreateVolumeWithZones(name string) error {
 	req := f.createVolumeRequest
 	req.Name = name
 
-	fmt.Println("I am in iCallCreateVolume fn.....")
+	fmt.Printf("I am in iCallCreateVolume with zones fn with req => ..... %v ...", req)
 
 	f.createVolumeResponse, f.err = f.service.CreateVolume(ctx, req)
 	if f.err != nil {
-		log.Printf("CreateVolume called failed: %s\n", f.err.Error())
+		log.Printf("CreateVolume with zones called failed: %s\n", f.err.Error())
 	}
 
 	if f.createVolumeResponse != nil {
@@ -4902,6 +4936,8 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call DeleteSnapshot NFS$`, f.iCallDeleteSnapshotNFS)
 	s.Step(`^a valid snapshot consistency group$`, f.aValidSnapshotConsistencyGroup)
 	s.Step(`^I call Create Volume from Snapshot$`, f.iCallCreateVolumeFromSnapshot)
+	s.Step(`^I call Create Volume for zones from Snapshot "([^"]*)"$`, f.iCallCreateVolumeForZonesFromSnapshot)
+	s.Step(`^I call Clone volume for zones "([^"]*)"$`, f.iCallCloneVolumeForZones)
 	s.Step(`^I call Create Volume from SnapshotNFS$`, f.iCallCreateVolumeFromSnapshotNFS)
 	s.Step(`^the wrong capacity$`, f.theWrongCapacity)
 	s.Step(`^the wrong storage pool$`, f.theWrongStoragePool)

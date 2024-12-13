@@ -1,0 +1,41 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: clone-maz-pvcITERATION
+  namespace: vxflexos-test
+spec:
+  storageClassName: vxflexos-az-wait
+  dataSource:
+    name: multi-az-pvc-vxflextest-az-ITERATION
+    kind: PersistentVolumeClaim
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 8Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: clone-maz-restore-podITERATION
+  namespace: vxflexos-test
+spec:
+  containers:
+    - name: busybox
+      image: quay.io/quay/busybox:latest
+      command: ["/bin/sleep", "3600"]
+      volumeMounts:
+        - mountPath: "/data0"
+          name: multi-az-pvc
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "128Mi"
+        limits:
+          cpu: "200m"
+          memory: "256Mi"
+  volumes:
+    - name: multi-az-pvc
+      persistentVolumeClaim:
+        claimName: clone-maz-pvcITERATION

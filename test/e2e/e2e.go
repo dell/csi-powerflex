@@ -374,8 +374,40 @@ func (f *feature) createZoneSnapshotsAndRestore(location string) error {
 	return nil
 }
 
+func (f *feature) createZoneClonesAndRestore(location string) error {
+	log.Println("[createZoneClonesAndRestore] Creating clones and restores")
+	templateFile := "templates/" + location + "/clone.yaml"
+	updatedTemplateFile := "templates/" + location + "/clone-updated.yaml"
+
+	for i := 0; i < int(f.zoneReplicaCount); i++ {
+		time.Sleep(10 * time.Second)
+
+		cpCmd := "cp " + templateFile + " " + updatedTemplateFile
+		b, err := execLocalCommand(cpCmd)
+		if err != nil {
+			return fmt.Errorf("failed to copy template file: %v\nErrMessage:\n%s", err, string(b))
+		}
+
+		// Update iteration and apply...
+		err = replaceInFile("ITERATION", strconv.Itoa(i), updatedTemplateFile)
+		if err != nil {
+			return err
+		}
+
+		createClone := "kubectl apply -f " + updatedTemplateFile
+		_, err = execLocalCommand(createClone)
+		if err != nil {
+			return err
+		}
+	}
+
+	log.Println("[createZoneClonesAndRestore] Clones and restores created")
+
+	return nil
+}
+
 func (f *feature) deleteZoneSnapshotsAndRestore(location string) error {
-	log.Println("[createZoneSnapshotsAndRestore] Deleting restores and snapshots")
+	log.Println("[deleteZoneSnapshotsAndRestore] Deleting restores and snapshots")
 	templateFile := "templates/" + location + "/snapshot.yaml"
 	updatedTemplateFile := "templates/" + location + "/snapshot-updated.yaml"
 
@@ -394,14 +426,46 @@ func (f *feature) deleteZoneSnapshotsAndRestore(location string) error {
 			return err
 		}
 
-		createSnapshot := "kubectl delete -f " + updatedTemplateFile
-		_, err = execLocalCommand(createSnapshot)
+		deleteSnapshot := "kubectl delete -f " + updatedTemplateFile
+		_, err = execLocalCommand(deleteSnapshot)
 		if err != nil {
 			return err
 		}
 	}
 
-	log.Println("[createZoneSnapshotsAndRestore] Snapshots and restores deleted")
+	log.Println("[deleteZoneSnapshotsAndRestore] Snapshots and restores deleted")
+
+	return nil
+}
+
+func (f *feature) deleteZoneClonesAndRestore(location string) error {
+	log.Println("[deleteZoneClonesAndRestore] Deleting restores and clones")
+	templateFile := "templates/" + location + "/clone.yaml"
+	updatedTemplateFile := "templates/" + location + "/clone-updated.yaml"
+
+	for i := 0; i < int(f.zoneReplicaCount); i++ {
+		time.Sleep(10 * time.Second)
+
+		cpCmd := "cp " + templateFile + " " + updatedTemplateFile
+		b, err := execLocalCommand(cpCmd)
+		if err != nil {
+			return fmt.Errorf("failed to copy template file: %v\nErrMessage:\n%s", err, string(b))
+		}
+
+		// Update iteration and apply...
+		err = replaceInFile("ITERATION", strconv.Itoa(i), updatedTemplateFile)
+		if err != nil {
+			return err
+		}
+
+		deleteClone := "kubectl delete -f " + updatedTemplateFile
+		_, err = execLocalCommand(deleteClone)
+		if err != nil {
+			return err
+		}
+	}
+
+	log.Println("[deleteZoneClonesAndRestore] Clones and restores deleted")
 
 	return nil
 }
@@ -426,7 +490,7 @@ func (f *feature) areAllRestoresRunning() error {
 
 		runningCount := 0
 		for _, pod := range pods {
-			if !strings.Contains(pod.ObjectMeta.Name, "snapshot-maz-restore") {
+			if !strings.Contains(pod.ObjectMeta.Name, "maz-restore") {
 				continue
 			}
 
@@ -446,7 +510,7 @@ func (f *feature) areAllRestoresRunning() error {
 	}
 
 	if !complete {
-		return fmt.Errorf("all restores not running, check pods status starting with snapshot-maz-restore and then try again")
+		return fmt.Errorf("all restores not running, check pods status containing maz-restore and then try again")
 	}
 
 	return nil
@@ -490,4 +554,6 @@ func InitializeScenario(s *godog.ScenarioContext) {
 	s.Step(`^create snapshots for zone volumes and restore in "([^"]*)"$`, f.createZoneSnapshotsAndRestore)
 	s.Step(`^delete snapshots for zone volumes and restore in "([^"]*)"$`, f.deleteZoneSnapshotsAndRestore)
 	s.Step(`^all zone restores are running$`, f.areAllRestoresRunning)
+	s.Step(`^create clones for zone volumes and restore in "([^"]*)"$`, f.createZoneClonesAndRestore)
+	s.Step(`^delete clones for zone volumes and restore in "([^"]*)"$`, f.deleteZoneClonesAndRestore)
 }
