@@ -830,6 +830,12 @@ func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolume
 			"systemID is not found in the request and there is no default system")
 	}
 
+	// make sure systemID we get is managed by the driver
+	if err := s.requireProbe(ctx, systemID); err != nil {
+		Log.Infof("System: %s is not managed by driver; volume stats will not be collected", systemID)
+		return nil, err
+	}
+
 	_, err := s.getSDCMappedVol(volID, systemID, 30)
 	if err != nil {
 		// volume not known to SDC, next check if it exists at all
