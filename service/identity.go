@@ -93,10 +93,9 @@ func (s *service) Probe(
 			return nil, err
 		}
 	}
-	ready := new(wrapperspb.BoolValue)
-	ready.Value = true
-	rep := new(csi.ProbeResponse)
-	rep.Ready = ready
+	rep := &csi.ProbeResponse{
+		Ready: wrapperspb.Bool(true),
+	}
 	Log.Debug(fmt.Sprintf("Probe returning: %v", rep.Ready.GetValue()))
 
 	return rep, nil
