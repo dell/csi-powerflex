@@ -224,25 +224,6 @@ func (s *service) CreateVolume(
 		contentSource := req.GetVolumeContentSource()
 		var sourceSystemID string
 		if contentSource != nil {
-			Log.Infof("[CreateVolume] Volume has a content source - we are a snapshot or clone: %+v", contentSource)
-
-			snapshotSource := contentSource.GetSnapshot()
-			cloneSource := contentSource.GetVolume()
-
-			if snapshotSource != nil {
-				sourceSystemID = s.getSystemIDFromCsiVolumeID(snapshotSource.SnapshotId)
-				Log.Infof("[CreateVolume] Snapshot source systemID: %s", sourceSystemID)
-			} else if cloneSource != nil {
-				sourceSystemID = s.getSystemIDFromCsiVolumeID(cloneSource.VolumeId)
-				Log.Infof("[CreateVolume] Clone source systemID: %s", sourceSystemID)
-			}
-		} else {
-			Log.Infoln("[CreateVolume] Volume does not have a content source - not a snapshot")
-		}
-
-		contentSource := req.GetVolumeContentSource()
-		var sourceSystemID string
-		if contentSource != nil {
 			Log.Infof("[CreateVolume] Zone volume has a content source - we are a snapshot or clone: %+v", contentSource)
 
 			snapshotSource := contentSource.GetSnapshot()
