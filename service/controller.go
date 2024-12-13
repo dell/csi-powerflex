@@ -2662,7 +2662,7 @@ func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) e
 	Log.Printf("Login to VxFlexOS Gateway, system=%s, endpoint=%s, user=%s\n", systemID, array.Endpoint, array.Username)
 
 	if s.adminClients[systemID].GetToken() == "" {
-		_, err := s.adminClients[systemID].Authenticate(ctx, &goscaleio.ConfigConnect{
+		_, err := s.adminClients[systemID].WithContext(ctx).Authenticate(&goscaleio.ConfigConnect{
 			Endpoint: array.Endpoint,
 			Username: array.Username,
 			Password: array.Password,
