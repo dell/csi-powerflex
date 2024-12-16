@@ -2375,16 +2375,9 @@ func (s *service) GetCapacity(
 		// If using availability zones, get capacity for the system in the zone
 		// using accessible topology parameter from k8s.
 		if s.opts.zoneLabelKey != "" {
-			zoneLabel, ok := req.AccessibleTopology.Segments[s.opts.zoneLabelKey]
-			if !ok {
-				Log.Infof("could not get availability zone from accessible topology. Getting capacity for all systems")
-			} else {
-				for _, array := range s.opts.arrays {
-					if zoneLabel == string(array.AvailabilityZone.Name) {
-						systemID = array.SystemID
-						break
-					}
-				}
+			systemID, err = s.getSystemIDFromZoneLabelKey(req)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "%s", err.Error())
 			}
 		}
 
@@ -2428,6 +2421,28 @@ func (s *service) GetCapacity(
 		AvailableCapacity: capacity,
 		MaximumVolumeSize: maxVol,
 	}, nil
+}
+
+// getSystemIDFromZoneLabelKey returns the system ID associated with the zoneLabelKey if zoneLabelKey is set and
+// contains an associated zone name. Returns an empty string otherwise.
+func (s *service) getSystemIDFromZoneLabelKey(req *csi.GetCapacityRequest) (systemID string, err error) {
+	zoneName, ok := req.AccessibleTopology.Segments[s.opts.zoneLabelKey]
+	if !ok {
+		Log.Infof("could not get availability zone from accessible topology. Getting capacity for all systems")
+		return "", nil
+	}
+
+	// find the systemID with the matching zone name
+	for _, array := range s.opts.arrays {
+		if zoneName == string(array.AvailabilityZone.Name) {
+			systemID = array.SystemID
+			break
+		}
+	}
+	if systemID == "" {
+		return "", fmt.Errorf("could not find an array assigned to zone '%s'", zoneName)
+	}
+	return systemID, nil
 }
 
 func (s *service) getMaximumVolumeSize(systemID string) (int64, error) {
@@ -2563,36 +2578,46 @@ func (s *service) ControllerGetCapabilities(
 	}, nil
 }
 
+func (s *service) getZoneFromZoneLabelKey(ctx context.Context, zoneLabelKey string) (zone string, err error) {
+	if zoneLabelKey == "" {
+		return "", nil
+	}
+
+	labels, err := GetNodeLabels(ctx, s)
+	if err != nil {
+		return "", err
+	}
+
+	Log.Infof("Listing labels: %v", labels)
+
+	if val, ok := labels[zoneLabelKey]; ok {
+		Log.Infof("probing zoneLabel %s, zone value: %s", zoneLabelKey, val)
+		return val, nil
+	}
+
+	return "", fmt.Errorf("label %s not found", zoneLabelKey)
+}
+
 // systemProbeAll will iterate through all arrays in service.opts.arrays and probe them. If failed, it logs
 // the failed system name
-func (s *service) systemProbeAll(ctx context.Context, zoneLabel string) error {
+func (s *service) systemProbeAll(ctx context.Context, zoneLabelKey string) error {
 	// probe all arrays
 	// Log.Infof("Probing all arrays. Number of arrays: %d", len(s.opts.arrays))
 	Log.Infoln("Probing all associated arrays")
 	allArrayFail := true
 	errMap := make(map[string]error)
-	zone := ""
 
-	if zoneLabel != "" {
-		labels, err := GetNodeLabels(ctx, s)
-		if err != nil {
-			return err
-		}
-
-		Log.Infof("Listing labels: %v", labels)
-
-		if val, ok := labels[zoneLabel]; ok {
-			Log.Infof("probing zoneLabel %s, zone value: %s", zoneLabel, val)
-			zone = val
-		} else {
-			return fmt.Errorf("label %s not found", zoneLabel)
-		}
+	zoneName, err := s.getZoneFromZoneLabelKey(ctx, zoneLabelKey)
+	if err != nil {
+		return err
 	}
 
 	for _, array := range s.opts.arrays {
 		// If zone information is available, use it to probe the array
-		if strings.EqualFold(s.mode, "node") && array.AvailabilityZone != nil && array.AvailabilityZone.Name != ZoneName(zone) {
-			Log.Warnf("array %s zone %s does not match %s, not pinging this array\n", array.SystemID, array.AvailabilityZone.Name, zone)
+		if strings.EqualFold(s.mode, "node") && array.AvailabilityZone != nil && array.AvailabilityZone.Name != ZoneName(zoneName) {
+			// Driver node containers should not probe arrays that exist outside their assigned zone
+			// Driver controller container should probe all arrays
+			Log.Warnf("array %s zone %s does not match %s, not pinging this array\n", array.SystemID, array.AvailabilityZone.Name, zoneName)
 			continue
 		}
 
