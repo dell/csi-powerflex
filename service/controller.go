@@ -2671,7 +2671,7 @@ func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) e
 
 	// initialize system if needed
 	if s.systems[systemID] == nil {
-		system, err := s.adminClients[systemID].FindSystem(
+		system, err := s.adminClients[systemID].WithContext(ctx).FindSystem(
 			array.SystemID, array.SystemID, "")
 		if err != nil {
 			return status.Errorf(codes.FailedPrecondition,
