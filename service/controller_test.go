@@ -1,4 +1,4 @@
-// Copyright © 2019-2024 Dell Inc. or its subsidiaries. All Rights Reserved.
+// Copyright © 2024 Dell Inc. or its subsidiaries. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,10 +31,8 @@ func Test_service_getZoneFromZoneLabelKey(t *testing.T) {
 		systems                 map[string]*sio.System
 		mode                    string
 		volCache                []*siotypes.Volume
-		volCacheRWL             sync.RWMutex
 		volCacheSystemID        string
 		snapCache               []*siotypes.Volume
-		snapCacheRWL            sync.RWMutex
 		snapCacheSystemID       string
 		privDir                 string
 		storagePoolIDToName     map[string]string
@@ -42,10 +40,15 @@ func Test_service_getZoneFromZoneLabelKey(t *testing.T) {
 		volumePrefixToSystems   map[string][]string
 		connectedSystemNameToID map[string]string
 	}
+
 	type args struct {
 		ctx          context.Context
 		zoneLabelKey string
 	}
+
+	const validTopologyKey = "topology.kubernetes.io/zone"
+	const validZone = "zoneA"
+
 	tests := []struct {
 		name             string
 		fields           fields
@@ -55,19 +58,21 @@ func Test_service_getZoneFromZoneLabelKey(t *testing.T) {
 		getNodeLabelFunc func(ctx context.Context, s *service) (map[string]string, error)
 	}{
 		{
+			// happy path test
 			name: "get good zone label",
 			args: args{
 				ctx:          context.Background(),
-				zoneLabelKey: "topology.kubernetes.io/zone",
+				zoneLabelKey: validTopologyKey,
 			},
 			wantZone: "zoneA",
 			wantErr:  false,
 			getNodeLabelFunc: func(ctx context.Context, s *service) (map[string]string, error) {
-				nodeLabels := map[string]string{"topology.kubernetes.io/zone": "zoneA"}
+				nodeLabels := map[string]string{validTopologyKey: validZone}
 				return nodeLabels, nil
 			},
 		},
 		{
+			// The key args.zoneLabelKey will not be found in the map returned by getNodeLabelFunc
 			name: "use bad zone label key",
 			args: args{
 				ctx:          context.Background(),
@@ -80,6 +85,7 @@ func Test_service_getZoneFromZoneLabelKey(t *testing.T) {
 			},
 		},
 		{
+			// getNodeLabelFunc will return an error, triggering failure to get the labels
 			name: "fail to get node labels",
 			args: args{
 				ctx:          context.Background(),
@@ -100,10 +106,10 @@ func Test_service_getZoneFromZoneLabelKey(t *testing.T) {
 				systems:                 tt.fields.systems,
 				mode:                    tt.fields.mode,
 				volCache:                tt.fields.volCache,
-				volCacheRWL:             tt.fields.volCacheRWL,
+				volCacheRWL:             sync.RWMutex{},
 				volCacheSystemID:        tt.fields.volCacheSystemID,
 				snapCache:               tt.fields.snapCache,
-				snapCacheRWL:            tt.fields.snapCacheRWL,
+				snapCacheRWL:            sync.RWMutex{},
 				snapCacheSystemID:       tt.fields.snapCacheSystemID,
 				privDir:                 tt.fields.privDir,
 				storagePoolIDToName:     tt.fields.storagePoolIDToName,
@@ -131,10 +137,8 @@ func Test_service_getSystemIDFromZoneLabelKey(t *testing.T) {
 		systems                 map[string]*sio.System
 		mode                    string
 		volCache                []*siotypes.Volume
-		volCacheRWL             sync.RWMutex
 		volCacheSystemID        string
 		snapCache               []*siotypes.Volume
-		snapCacheRWL            sync.RWMutex
 		snapCacheSystemID       string
 		privDir                 string
 		storagePoolIDToName     map[string]string
@@ -142,9 +146,11 @@ func Test_service_getSystemIDFromZoneLabelKey(t *testing.T) {
 		volumePrefixToSystems   map[string][]string
 		connectedSystemNameToID map[string]string
 	}
+
 	type args struct {
 		req *csi.GetCapacityRequest
 	}
+
 	const validSystemID = "valid-id"
 	const validTopologyKey = "topology.kubernetes.io/zone"
 	const validZone = "zoneA"
@@ -157,6 +163,7 @@ func Test_service_getSystemIDFromZoneLabelKey(t *testing.T) {
 		wantErr      bool
 	}{
 		{
+			// happy path test
 			name:         "get a valid system ID",
 			wantErr:      false,
 			wantSystemID: validSystemID,
@@ -171,7 +178,7 @@ func Test_service_getSystemIDFromZoneLabelKey(t *testing.T) {
 			},
 			fields: fields{
 				opts: Opts{
-					zoneLabelKey: "topology.kubernetes.io/zone",
+					zoneLabelKey: validTopologyKey,
 					arrays: map[string]*ArrayConnectionData{
 						"array1": {
 							SystemID: validSystemID,
@@ -184,6 +191,8 @@ func Test_service_getSystemIDFromZoneLabelKey(t *testing.T) {
 			},
 		},
 		{
+			// should return an empty string if no topology info is passed
+			// with the csi request
 			name:         "topology not passed with csi request",
 			wantErr:      false,
 			wantSystemID: "",
@@ -197,11 +206,13 @@ func Test_service_getSystemIDFromZoneLabelKey(t *testing.T) {
 			},
 			fields: fields{
 				opts: Opts{
-					zoneLabelKey: "topology.kubernetes.io/zone",
+					zoneLabelKey: validTopologyKey,
 				},
 			},
 		},
 		{
+			// topology information in the csi request does not match
+			// any of the arrays in the secret
 			name:         "zone name missing in secret",
 			wantErr:      true,
 			wantSystemID: "",
@@ -216,7 +227,7 @@ func Test_service_getSystemIDFromZoneLabelKey(t *testing.T) {
 			},
 			fields: fields{
 				opts: Opts{
-					zoneLabelKey: "topology.kubernetes.io/zone",
+					zoneLabelKey: validTopologyKey,
 					arrays: map[string]*ArrayConnectionData{
 						"array1": {
 							SystemID: validSystemID,
@@ -239,10 +250,10 @@ func Test_service_getSystemIDFromZoneLabelKey(t *testing.T) {
 				systems:                 tt.fields.systems,
 				mode:                    tt.fields.mode,
 				volCache:                tt.fields.volCache,
-				volCacheRWL:             tt.fields.volCacheRWL,
+				volCacheRWL:             sync.RWMutex{},
 				volCacheSystemID:        tt.fields.volCacheSystemID,
 				snapCache:               tt.fields.snapCache,
-				snapCacheRWL:            tt.fields.snapCacheRWL,
+				snapCacheRWL:            sync.RWMutex{},
 				snapCacheSystemID:       tt.fields.snapCacheSystemID,
 				privDir:                 tt.fields.privDir,
 				storagePoolIDToName:     tt.fields.storagePoolIDToName,
