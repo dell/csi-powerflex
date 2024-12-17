@@ -1845,7 +1845,7 @@ func (s *service) GetNodeLabels(_ context.Context) (map[string]string, error) {
 	return node.Labels, nil
 }
 
-func (s *service) SetPodZoneLabel(_ context.Context, zoneLabel map[string]string) error {
+func (s *service) SetPodZoneLabel(ctx context.Context, zoneLabel map[string]string) error {
 	if K8sClientset == nil {
 		err := k8sutils.CreateKubeClientSet()
 		if err != nil {
@@ -1857,7 +1857,7 @@ func (s *service) SetPodZoneLabel(_ context.Context, zoneLabel map[string]string
 	Log.Println("SetPodZoneLabel")
 
 	// access the API to fetch node object
-	pods, err := K8sClientset.CoreV1().Pods(DriverNamespace).List(context.TODO(), v1.ListOptions{})
+	pods, err := K8sClientset.CoreV1().Pods(DriverNamespace).List(ctx, v1.ListOptions{})
 	if err != nil {
 		return status.Error(codes.Internal, GetMessage("Unable to fetch the node labels. Error: %v", err))
 	}
@@ -1869,7 +1869,7 @@ func (s *service) SetPodZoneLabel(_ context.Context, zoneLabel map[string]string
 		}
 	}
 
-	pod, err := K8sClientset.CoreV1().Pods(DriverNamespace).Get(context.TODO(), podName, v1.GetOptions{})
+	pod, err := K8sClientset.CoreV1().Pods(DriverNamespace).Get(ctx, podName, v1.GetOptions{})
 	if err != nil {
 		return status.Error(codes.Internal, GetMessage("Unable to fetch the node labels. Error: %v", err))
 	}
@@ -1879,9 +1879,9 @@ func (s *service) SetPodZoneLabel(_ context.Context, zoneLabel map[string]string
 		pod.Labels[key] = value
 	}
 
-	_, err = K8sClientset.CoreV1().Pods(DriverNamespace).Update(context.TODO(), pod, v1.UpdateOptions{})
+	_, err = K8sClientset.CoreV1().Pods(DriverNamespace).Update(ctx, pod, v1.UpdateOptions{})
 	if err != nil {
-		return status.Error(codes.Internal, GetMessage("Unable to fetch the node labels. Error: %v", err))
+		return status.Error(codes.Internal, GetMessage("Unable to update the node labels. Error: %v", err))
 	}
 
 	return nil
