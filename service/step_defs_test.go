@@ -3348,6 +3348,9 @@ func (f *feature) iCallNodeGetVolumeStats() error {
 	if stepHandlersErrors.NoSysNameError {
 		f.service.opts.defaultSystemID = ""
 	}
+	if stepHandlersErrors.WrongSystemError {
+		VolumeID = "wrongsystem-435645643"
+	}
 
 	req := &csi.NodeGetVolumeStatsRequest{VolumeId: VolumeID, VolumePath: VolumePath}
 
@@ -3357,7 +3360,7 @@ func (f *feature) iCallNodeGetVolumeStats() error {
 }
 
 func (f *feature) aCorrectNodeGetVolumeStatsResponse() error {
-	if stepHandlersErrors.NoVolIDError || stepHandlersErrors.NoMountPathError || stepHandlersErrors.BadVolIDError || stepHandlersErrors.NoSysNameError {
+	if stepHandlersErrors.NoVolIDError || stepHandlersErrors.NoMountPathError || stepHandlersErrors.BadVolIDError || stepHandlersErrors.NoSysNameError || stepHandlersErrors.WrongSystemError {
 		// errors and no responses should be returned in these instances
 		if f.nodeGetVolumeStatsResponse == nil {
 			fmt.Printf("Response check passed\n")

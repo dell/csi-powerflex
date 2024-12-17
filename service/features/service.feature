@@ -1125,16 +1125,17 @@ Feature: VxFlex OS CSI interface
     And a correct NodeGetVolumeStats Response is returned
     
     Examples:
-      | error                    | errormsg                   | 
-      | "none"                   | "none"                     | 
-      | "BadVolIDError"          | "id must be a hexadecimal" | 
-      | "NoVolIDError"           | "no volume ID  provided"   |
-      | "BadMountPathError"      | "none"                     | 
-      | "NoMountPathError"       | "no volume Path provided"  | 
-      | "NoVolIDSDCError"        | "none"                     |  
-      | "GOFSMockGetMountsError" | "none"                     |
-      | "NoVolError"             | "none"                     |
-      | "NoSysNameError"         | "systemID is not found"    |
+      | error                    | errormsg                          | 
+      | "none"                   | "none"                            | 
+      | "BadVolIDError"          | "id must be a hexadecimal"        | 
+      | "NoVolIDError"           | "no volume ID  provided"          |
+      | "BadMountPathError"      | "none"                            | 
+      | "NoMountPathError"       | "no volume Path provided"         | 
+      | "NoVolIDSDCError"        | "none"                            |   
+      | "GOFSMockGetMountsError" | "none"                            |
+      | "NoVolError"             | "none"                            |
+      | "NoSysNameError"         | "systemID is not found"           |
+      | "WrongSystemError"       | "is not configured in the driver" | 
 
   Scenario: Call getSystemNameMatchingError, should get error in log but no error returned
     Given a VxFlexOS service
