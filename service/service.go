@@ -666,7 +666,7 @@ func (s *service) getIPAddressByInterface(interfaceName string, networkInterface
 }
 
 func (s *service) checkNFS(ctx context.Context, systemID string) (bool, error) {
-	err := s.systemProbeAll(ctx, s.opts.zoneLabelKey)
+	err := s.systemProbeAll(ctx)
 	if err != nil {
 		return false, err
 	}
@@ -714,18 +714,18 @@ func (s *service) doProbe(ctx context.Context) error {
 	px.Lock()
 	defer px.Unlock()
 
-	if !strings.EqualFold(s.mode, "node") {
+	if !s.isNodeMode() {
 		Log.Info("[doProbe] controllerProbe")
-		if err := s.systemProbeAll(ctx, ""); err != nil {
+		if err := s.systemProbeAll(ctx); err != nil {
 			return err
 		}
 	}
 
 	// Do a node probe
-	if !strings.EqualFold(s.mode, "controller") {
+	if !s.isControllerMode() {
 		// Probe all systems managed by driver
 		Log.Info("[doProbe] nodeProbe")
-		if err := s.systemProbeAll(ctx, s.opts.zoneLabelKey); err != nil {
+		if err := s.systemProbeAll(ctx); err != nil {
 			return err
 		}
 
@@ -1866,7 +1866,10 @@ func (s *service) SetPodZoneLabel(ctx context.Context, zoneLabel map[string]stri
 	podName := ""
 	for _, pod := range pods.Items {
 		if pod.Spec.NodeName == s.opts.KubeNodeName && pod.Labels["app"] != "" {
-			podName = pod.Name
+			// only add labels to node pods. Controller pod is not restricted to a zone
+			if strings.Contains(pod.Name, "node") {
+				podName = pod.Name
+			}
 		}
 	}
 
@@ -1943,4 +1946,19 @@ func getZoneKeyLabelFromSecret(arrays map[string]*ArrayConnectionData) (string, 
 	}
 
 	return zoneKeyLabel, nil
+}
+
+// isControllerMode returns true if the mode property of service s is set to "node", false otherwise.
+func (s *service) isNodeMode() bool {
+	return strings.EqualFold(s.mode, "node")
+}
+
+// isControllerMode returns true if the mode property of service s is set to "controller", false otherwise.
+func (s *service) isControllerMode() bool {
+	return strings.EqualFold(s.mode, "controller")
+}
+
+// isInZone returns true if the array is configured for use in the provided zoneName, false otherwise.
+func (array *ArrayConnectionData) isInZone(zoneName string) bool {
+	return array.AvailabilityZone != nil && array.AvailabilityZone.Name == ZoneName(zoneName)
 }

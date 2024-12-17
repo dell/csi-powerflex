@@ -88,7 +88,7 @@ func Test_service_SetPodZoneLabel(t *testing.T) {
 
 	const validZoneName = "zoneA"
 	const validZoneLabelKey = "topology.kubernetes.io/zone"
-	const validAppName = "test-app"
+	const validAppName = "test-node-pod"
 	const validAppLabelKey = "app"
 	const validNodeName = "kube-node-name"
 	validAppLabels := map[string]string{validAppLabelKey: validAppName}
@@ -202,6 +202,80 @@ func Test_service_SetPodZoneLabel(t *testing.T) {
 			err := s.SetPodZoneLabel(tt.args.ctx, tt.args.zoneLabel)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("service.SetPodZoneLabel() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestArrayConnectionData_isInZone(t *testing.T) {
+	type fields struct {
+		SystemID                  string
+		Username                  string
+		Password                  string
+		Endpoint                  string
+		SkipCertificateValidation bool
+		Insecure                  bool
+		IsDefault                 bool
+		AllSystemNames            string
+		NasName                   string
+		AvailabilityZone          *AvailabilityZone
+	}
+	type args struct {
+		zoneName string
+	}
+	tests := map[string]struct {
+		fields fields
+		args   args
+		want   bool
+	}{
+		"array is in the zone": {
+			want: true,
+			fields: fields{
+				AvailabilityZone: &AvailabilityZone{
+					LabelKey: "topology.kubernetes.io/zone",
+					Name:     "zoneA",
+				},
+			},
+			args: args{
+				zoneName: "zoneA",
+			},
+		},
+		"availability zone is not used": {
+			want:   false,
+			fields: fields{},
+			args: args{
+				zoneName: "zoneA",
+			},
+		},
+		"zone names do not match": {
+			want: false,
+			fields: fields{
+				AvailabilityZone: &AvailabilityZone{
+					LabelKey: "topology.kubernetes.io/zone",
+					Name:     "zoneA",
+				},
+			},
+			args: args{
+				zoneName: "zoneB",
+			},
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			array := &ArrayConnectionData{
+				SystemID:                  tt.fields.SystemID,
+				Username:                  tt.fields.Username,
+				Password:                  tt.fields.Password,
+				Endpoint:                  tt.fields.Endpoint,
+				SkipCertificateValidation: tt.fields.SkipCertificateValidation,
+				Insecure:                  tt.fields.Insecure,
+				IsDefault:                 tt.fields.IsDefault,
+				AllSystemNames:            tt.fields.AllSystemNames,
+				NasName:                   tt.fields.NasName,
+				AvailabilityZone:          tt.fields.AvailabilityZone,
+			}
+			if got := array.isInZone(tt.args.zoneName); got != tt.want {
+				t.Errorf("ArrayConnectionData.isInZone() = %v, want %v", got, tt.want)
 			}
 		})
 	}

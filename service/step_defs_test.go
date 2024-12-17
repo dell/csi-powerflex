@@ -4313,7 +4313,7 @@ func (f *feature) iUseConfig(filename string) error {
 		return fmt.Errorf("get zone key label from secret: %s", err.Error())
 	}
 	fmt.Printf("****************************************************** s.opts.arrays %v\n", f.service.opts.arrays)
-	f.service.systemProbeAll(context.Background(), "")
+	f.service.systemProbeAll(context.Background())
 	f.adminClient = f.service.adminClients[arrayID]
 	if f.adminClient == nil {
 		return fmt.Errorf("adminClient nil")

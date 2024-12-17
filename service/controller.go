@@ -2575,10 +2575,7 @@ func (s *service) ControllerGetCapabilities(
 }
 
 func (s *service) getZoneFromZoneLabelKey(ctx context.Context, zoneLabelKey string) (zone string, err error) {
-	if zoneLabelKey == "" {
-		return "", nil
-	}
-
+	// get labels for this service, s
 	labels, err := GetNodeLabels(ctx, s)
 	if err != nil {
 		return "", err
@@ -2586,6 +2583,7 @@ func (s *service) getZoneFromZoneLabelKey(ctx context.Context, zoneLabelKey stri
 
 	Log.Infof("Listing labels: %v", labels)
 
+	// get the zone name from the labels
 	if val, ok := labels[zoneLabelKey]; ok {
 		Log.Infof("probing zoneLabel %s, zone value: %s", zoneLabelKey, val)
 		return val, nil
@@ -2596,23 +2594,27 @@ func (s *service) getZoneFromZoneLabelKey(ctx context.Context, zoneLabelKey stri
 
 // systemProbeAll will iterate through all arrays in service.opts.arrays and probe them. If failed, it logs
 // the failed system name
-func (s *service) systemProbeAll(ctx context.Context, zoneLabelKey string) error {
+func (s *service) systemProbeAll(ctx context.Context) error {
 	// probe all arrays
 	Log.Infoln("Probing all associated arrays")
 	allArrayFail := true
 	errMap := make(map[string]error)
+	zoneName := ""
+	var err error
 
-	zoneName, err := s.getZoneFromZoneLabelKey(ctx, zoneLabelKey)
-	if err != nil {
-		return err
+	if s.opts.zoneLabelKey != "" && s.isNodeMode() {
+		zoneName, err = s.getZoneFromZoneLabelKey(ctx, s.opts.zoneLabelKey)
+		if err != nil {
+			return err
+		}
 	}
 
 	for _, array := range s.opts.arrays {
 		// If zone information is available, use it to probe the array
-		if strings.EqualFold(s.mode, "node") && array.AvailabilityZone != nil && array.AvailabilityZone.Name != ZoneName(zoneName) {
+		if s.isNodeMode() && !array.isInZone(zoneName) {
 			// Driver node containers should not probe arrays that exist outside their assigned zone
 			// Driver controller container should probe all arrays
-			Log.Warnf("array %s zone %s does not match %s, not pinging this array\n", array.SystemID, array.AvailabilityZone.Name, zoneName)
+			Log.Infof("array %s zone %s does not match %s, not pinging this array\n", array.SystemID, array.AvailabilityZone.Name, zoneName)
 			continue
 		}
 
