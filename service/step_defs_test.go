@@ -2163,6 +2163,30 @@ func (f *feature) iCallGetCapacityWithStoragePool(arg1 string) error {
 	return nil
 }
 
+func (f *feature) iCallGetCapacityWithAvailabilityZone(zoneLabelKey, zoneName string) error {
+	ctx := context.Background()
+	req := new(csi.GetCapacityRequest)
+
+	// need to make sure parameters aren't empty.
+	// This is a parameter taken from a running driver.
+	parameters := make(map[string]string)
+	parameters["csi.storage.k8s.io/fstype"] = "xfs"
+	req.Parameters = parameters
+	req.AccessibleTopology = &csi.Topology{
+		Segments: map[string]string{
+			zoneLabelKey: zoneName,
+		},
+	}
+
+	log.Printf("Calling GetCapacity")
+	f.getCapacityResponse, f.err = f.service.GetCapacity(ctx, req)
+	if f.err != nil {
+		log.Printf("GetCapacity call failed: %s\n", f.err.Error())
+		return nil
+	}
+	return nil
+}
+
 func (f *feature) iCallGetMaximumVolumeSize(arg1 string) {
 	systemid := arg1
 	f.maxVolSize, f.err = f.service.getMaximumVolumeSize(systemid)
@@ -4887,6 +4911,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^a valid DeleteVolumeResponse is returned$`, f.aValidDeleteVolumeResponseIsReturned)
 	s.Step(`^the volume is already mapped to an SDC$`, f.theVolumeIsAlreadyMappedToAnSDC)
 	s.Step(`^I call GetCapacity with storage pool "([^"]*)"$`, f.iCallGetCapacityWithStoragePool)
+	s.Step(`^I call GetCapacity with Availability Zone "([^"]*)" "([^"]*)"$`, f.iCallGetCapacityWithAvailabilityZone)
 	s.Step(`^a valid GetCapacityResponse is returned$`, f.aValidGetCapacityResponseIsReturned)
 	s.Step(`^a valid GetCapacityResponse1 is returned$`, f.aValidGetCapacityResponsewithmaxvolsizeIsReturned)
 	s.Step(`^I call get GetMaximumVolumeSize with systemid "([^"]*)"$`, f.iCallGetMaximumVolumeSize)

@@ -490,6 +490,18 @@ Feature: VxFlex OS CSI interface
     Given a VxFlexOS service
     When I call Probe
     And I call GetCapacity with storage pool ""
+
+  Scenario: Call GetCapacity for a system using Availability zones
+    Given a VxFlexOS service
+    And I use config <config>
+    When I call Probe
+    And I call GetCapacity with Availability Zone <zone-key> <zone-name>
+    Then the error contains <errorMsg>
+
+    Examples:
+      | config             | zone-key                         | zone-name   | errorMsg                                              |
+      | "multi_az"         | "zone.csi-vxflexos.dellemc.com"  | "zoneA"     | "none"                                                |
+      | "multi_az"         | "zone.csi-vxflexos.dellemc.com"  | "badZone"   | "could not find an array assigned to zone 'badZone'"  |
   
   Scenario: Call GetCapacity with valid Storage Pool Name
     Given a VxFlexOS service
