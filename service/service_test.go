@@ -150,7 +150,7 @@ func Test_service_SetPodZoneLabel(t *testing.T) {
 					KubeNodeName: validNodeName,
 				},
 			},
-			initTest: func(s *service) {
+			initTest: func(_ *service) {
 				// create a client, but do not create any pods so the request
 				// to list pods fails
 				K8sClientset = fake.NewSimpleClientset()
@@ -170,7 +170,7 @@ func Test_service_SetPodZoneLabel(t *testing.T) {
 					KubeNodeName: validNodeName,
 				},
 			},
-			initTest: func(s *service) {
+			initTest: func(_ *service) {
 				// setup clientset to nil to force creation
 				// Creation should fail because tests are not run in a cluster
 				K8sClientset = nil
