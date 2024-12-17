@@ -542,9 +542,10 @@ func (s *service) BeforeServe(
 	// Update the ConfigMap with the Interface IPs
 	s.updateConfigMap(s.getIPAddressByInterface, ConfigMapFilePath)
 
-	return s.doProbe(ctx)
-
-	// return nil
+	if _, ok := csictx.LookupEnv(ctx, "X_CSI_VXFLEXOS_NO_PROBE_ON_START"); !ok {
+		return s.doProbe(ctx)
+	}
+	return nil
 }
 
 func (s *service) updateConfigMap(getIPAddressByInterfacefunc GetIPAddressByInterfacefunc, configFilePath string) {
@@ -714,7 +715,7 @@ func (s *service) doProbe(ctx context.Context) error {
 	defer px.Unlock()
 
 	if !strings.EqualFold(s.mode, "node") {
-		Log.Infof("[doProbe] controllerProbe - zone label: %s", s.opts.zoneLabelKey)
+		Log.Info("[doProbe] controllerProbe")
 		if err := s.systemProbeAll(ctx, ""); err != nil {
 			return err
 		}
@@ -723,7 +724,7 @@ func (s *service) doProbe(ctx context.Context) error {
 	// Do a node probe
 	if !strings.EqualFold(s.mode, "controller") {
 		// Probe all systems managed by driver
-		Log.Infof("[doProbe] nodeProbe - zone label: %s", s.opts.zoneLabelKey)
+		Log.Info("[doProbe] nodeProbe")
 		if err := s.systemProbeAll(ctx, s.opts.zoneLabelKey); err != nil {
 			return err
 		}
