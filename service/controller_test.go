@@ -66,7 +66,7 @@ func Test_service_getZoneFromZoneLabelKey(t *testing.T) {
 			},
 			wantZone: "zoneA",
 			wantErr:  false,
-			getNodeLabelFunc: func(ctx context.Context, s *service) (map[string]string, error) {
+			getNodeLabelFunc: func(_ context.Context, _ *service) (map[string]string, error) {
 				nodeLabels := map[string]string{validTopologyKey: validZone}
 				return nodeLabels, nil
 			},
@@ -80,7 +80,7 @@ func Test_service_getZoneFromZoneLabelKey(t *testing.T) {
 			},
 			wantZone: "",
 			wantErr:  true,
-			getNodeLabelFunc: func(ctx context.Context, s *service) (map[string]string, error) {
+			getNodeLabelFunc: func(_ context.Context, _ *service) (map[string]string, error) {
 				return nil, nil
 			},
 		},
@@ -93,7 +93,7 @@ func Test_service_getZoneFromZoneLabelKey(t *testing.T) {
 			},
 			wantZone: "",
 			wantErr:  true,
-			getNodeLabelFunc: func(ctx context.Context, s *service) (map[string]string, error) {
+			getNodeLabelFunc: func(_ context.Context, _ *service) (map[string]string, error) {
 				return nil, errors.New("")
 			},
 		},
