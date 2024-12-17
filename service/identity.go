@@ -80,7 +80,7 @@ func (s *service) Probe(
 	Log.Infof("[Probe] Probe context: %v", ctx)
 
 	if !strings.EqualFold(s.mode, "node") {
-		Log.Infoln("[Probe] FERNANDO we are probing the controller")
+		Log.Debug("systemProbe")
 		if err := s.systemProbeAll(ctx, ""); err != nil {
 			Log.Printf("error in systemProbeAll: %s", err.Error())
 			return nil, err

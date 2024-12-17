@@ -2270,8 +2270,6 @@ func (s *service) getSystemCapacity(ctx context.Context, systemID, protectionDom
 		return 0, fmt.Errorf("can't find adminClient or system by id %s", systemID)
 	}
 
-	Log.Printf("[FERNANDO] adminClient: %v, system: %v", adminClient, system)
-
 	var statsFunc func() (*siotypes.Statistics, error)
 
 	// Default to get Capacity of system
@@ -2319,8 +2317,6 @@ func (s *service) getCapacityForAllSystems(ctx context.Context, protectionDomain
 	for _, array := range s.opts.arrays {
 		var systemCapacity int64
 		var err error
-
-		Log.Printf("[FERNANDO] Get capacity for system: %s, pool %d, protection domain %s", array.SystemID, len(spName), protectionDomain)
 
 		if len(spName) > 0 && spName[0] != "" {
 			systemCapacity, err = s.getSystemCapacity(ctx, array.SystemID, protectionDomain, spName[0])
@@ -2602,7 +2598,6 @@ func (s *service) getZoneFromZoneLabelKey(ctx context.Context, zoneLabelKey stri
 // the failed system name
 func (s *service) systemProbeAll(ctx context.Context, zoneLabelKey string) error {
 	// probe all arrays
-	// Log.Infof("Probing all arrays. Number of arrays: %d", len(s.opts.arrays))
 	Log.Infoln("Probing all associated arrays")
 	allArrayFail := true
 	errMap := make(map[string]error)
