@@ -4328,6 +4328,36 @@ func (f *feature) iUseConfig(filename string) error {
 	return nil
 }
 
+func (f *feature) iCallSystemProbeAll(mode string) error {
+	// set the mode of the service
+	if mode == "controller" || mode == "node" {
+		f.service.mode = mode
+	} else {
+		return fmt.Errorf("mode '%s' is not a valid service mode. must be 'controller' or 'node'", mode)
+	}
+
+	// Create a fake node with necessary availability zone labels
+	f.service.opts.KubeNodeName = "node1"
+	fakeNode := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: f.service.opts.KubeNodeName,
+			UID:  "1aa4c285-d41b-4911-bf3e-621253bfbade",
+			Labels: map[string]string{
+				f.service.opts.zoneLabelKey: string(f.service.opts.arrays[arrayID].AvailabilityZone.Name),
+			},
+		},
+	}
+	thisNode, err := K8sClientset.CoreV1().Nodes().Create(context.Background(), fakeNode, metav1.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("could not create k8s node for test: err: %s", err.Error())
+	}
+	// delete it when finished, otherwise it will fail to create nodes for subsequent tests
+	defer K8sClientset.CoreV1().Nodes().Delete(context.Background(), thisNode.Name, *&metav1.DeleteOptions{})
+
+	f.err = f.service.systemProbeAll(context.Background())
+	return nil
+}
+
 func (f *feature) iCallGetReplicationCapabilities() error {
 	req := &replication.GetReplicationCapabilityRequest{}
 	ctx := context.Background()
@@ -5063,6 +5093,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^a valid NodeGetInfo is returned with node topology$`, f.aValidNodeGetInfoIsReturnedWithNodeTopology)
 	s.Step(`^a NodeGetInfo is returned without zone topology$`, f.aNodeGetInfoIsReturnedWithoutZoneTopology)
 	s.Step(`^a NodeGetInfo is returned without zone system topology$`, f.aNodeGetInfoIsReturnedWithoutZoneSystemTopology)
+	s.Step(`^I call systemProbeAll in mode "([^"]*)"`, f.iCallSystemProbeAll)
 
 	s.After(func(ctx context.Context, _ *godog.Scenario, _ error) (context.Context, error) {
 		if f.server != nil {

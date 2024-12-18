@@ -1617,3 +1617,13 @@ Feature: VxFlex OS CSI interface
     Examples:
       | name      | config             | errorMsg       |    
       | "volume1"   | "multi_az"       | "none"         |     
+
+  Scenario: Probe all systems using availability zones
+    Given a VxFlexOS service
+    And I use config <config>
+    When I call systemProbeAll in mode <mode>
+    Then the error contains <errorMsg>
+    Examples:
+      | config      | mode          | errorMsg  |
+      | "multi_az"  | "node"        | "none"    |
+      | "multi_az"  | "controller"  | "none"    |
