@@ -2643,19 +2643,19 @@ func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) e
 	// Check that we have the details needed to login to the Gateway
 	if array.Endpoint == "" {
 		return status.Error(codes.FailedPrecondition,
-			"missing VxFlexOS Gateway endpoint")
+			"missing PowerFlex Gateway endpoint")
 	}
 	if array.Username == "" {
 		return status.Error(codes.FailedPrecondition,
-			"missing VxFlexOS MDM user")
+			"missing PowerFlex MDM user")
 	}
 	if array.Password == "" {
 		return status.Error(codes.FailedPrecondition,
-			"missing VxFlexOS MDM password")
+			"missing PowerFlex MDM password")
 	}
 	if array.SystemID == "" {
 		return status.Error(codes.FailedPrecondition,
-			"missing VxFlexOS system name")
+			"missing PowerFlex system name")
 	}
 	var altSystemNames []string
 	if array.AllSystemNames != "" {
@@ -2678,7 +2678,7 @@ func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) e
 		}
 	}
 
-	Log.Printf("Login to VxFlexOS Gateway, system=%s, endpoint=%s, user=%s\n", systemID, array.Endpoint, array.Username)
+	Log.Printf("Login to PowerFlex Gateway, system=%s, endpoint=%s, user=%s\n", systemID, array.Endpoint, array.Username)
 
 	if s.adminClients[systemID].GetToken() == "" {
 		_, err := s.adminClients[systemID].WithContext(ctx).Authenticate(&goscaleio.ConfigConnect{
@@ -2688,7 +2688,7 @@ func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) e
 		})
 		if err != nil {
 			return status.Errorf(codes.FailedPrecondition,
-				"unable to login to VxFlexOS Gateway: %s", err.Error())
+				"unable to login to PowerFlex Gateway: %s", err.Error())
 		}
 	}
 
@@ -2698,7 +2698,7 @@ func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) e
 			array.SystemID, array.SystemID, "")
 		if err != nil {
 			return status.Errorf(codes.FailedPrecondition,
-				"unable to find matching VxFlexOS system name: %s",
+				"unable to find matching PowerFlex system name: %s",
 				err.Error())
 		}
 		s.systems[systemID] = system
