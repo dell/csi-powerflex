@@ -2585,7 +2585,6 @@ func (s *service) getZoneFromZoneLabelKey(ctx context.Context, zoneLabelKey stri
 
 	// get the zone name from the labels
 	if val, ok := labels[zoneLabelKey]; ok {
-		Log.Infof("probing zoneLabel %s, zone value: %s", zoneLabelKey, val)
 		return val, nil
 	}
 
@@ -2607,6 +2606,7 @@ func (s *service) systemProbeAll(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		Log.Infof("probing zoneLabel '%s', zone value: '%s'", s.opts.zoneLabelKey, zoneName)
 	}
 
 	for _, array := range s.opts.arrays {

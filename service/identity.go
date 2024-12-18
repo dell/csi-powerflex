@@ -77,8 +77,6 @@ func (s *service) Probe(
 	_ *csi.ProbeRequest) (
 	*csi.ProbeResponse, error,
 ) {
-	Log.Infof("[Probe] Probe context: %v", ctx)
-
 	if !strings.EqualFold(s.mode, "node") {
 		Log.Debug("systemProbe")
 		if err := s.systemProbeAll(ctx); err != nil {
