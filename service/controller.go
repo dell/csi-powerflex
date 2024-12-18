@@ -2599,9 +2599,10 @@ func (s *service) systemProbeAll(ctx context.Context) error {
 	allArrayFail := true
 	errMap := make(map[string]error)
 	zoneName := ""
-	var err error
+	usingZones := s.opts.zoneLabelKey != "" && s.isNodeMode()
 
-	if s.opts.zoneLabelKey != "" && s.isNodeMode() {
+	if usingZones {
+		var err error
 		zoneName, err = s.getZoneFromZoneLabelKey(ctx, s.opts.zoneLabelKey)
 		if err != nil {
 			return err
@@ -2611,7 +2612,7 @@ func (s *service) systemProbeAll(ctx context.Context) error {
 
 	for _, array := range s.opts.arrays {
 		// If zone information is available, use it to probe the array
-		if s.isNodeMode() && !array.isInZone(zoneName) {
+		if usingZones && !array.isInZone(zoneName) {
 			// Driver node containers should not probe arrays that exist outside their assigned zone
 			// Driver controller container should probe all arrays
 			Log.Infof("array %s zone %s does not match %s, not pinging this array\n", array.SystemID, array.AvailabilityZone.Name, zoneName)
