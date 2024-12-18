@@ -140,7 +140,7 @@ Feature: VxFlex OS CSI interface
     And the Controller has no connection
     When I invalidate the Probe cache
     And I call Probe
-    Then the error contains "unable to login to VxFlexOS Gateway"
+    Then the error contains "unable to login to PowerFlex Gateway"
 
   Scenario Outline: Probe Call with various errors
     Given a VxFlexOS service
@@ -151,11 +151,11 @@ Feature: VxFlex OS CSI interface
 
     Examples:
       | error               | msg                                            |
-      | "NoEndpointError"   | "missing VxFlexOS Gateway endpoint"            |
-      | "NoUserError"       | "missing VxFlexOS MDM user"                    |
-      | "NoPasswordError"   | "missing VxFlexOS MDM password"                |
-      | "NoSysNameError"    | "missing VxFlexOS system name"                 |
-      | "WrongSysNameError" | "unable to find matching VxFlexOS system name" |
+      | "NoEndpointError"   | "missing PowerFlex Gateway endpoint"            |
+      | "NoUserError"       | "missing PowerFlex MDM user"                    |
+      | "NoPasswordError"   | "missing PowerFlex MDM password"                |
+      | "NoSysNameError"    | "missing PowerFlex system name"                 |
+      | "WrongSysNameError" | "unable to find matching PowerFlex system name" |
 
 
   # This injected error fails on Windows with no SDC but passes on Linux with SDC
@@ -1156,7 +1156,7 @@ Feature: VxFlex OS CSI interface
   Scenario: Call getSystemName, should get error Unable to probe system with ID
     Given a VxFlexOS service
     When I call getSystemNameError
-    Then the error contains "missing VxFlexOS system name"
+    Then the error contains "missing PowerFlex system name"
 
   Scenario: Call getSystemName, should get Found system Name: mocksystem
     Given a VxFlexOS service
@@ -1189,14 +1189,14 @@ Feature: VxFlex OS CSI interface
     And I do not have a gateway connection
     And I do not have a valid gateway endpoint
     When I Call nodeGetAllSystems
-    Then the error contains "missing VxFlexOS Gateway endpoint"
+    Then the error contains "missing PowerFlex Gateway endpoint"
 
   Scenario: Call Node getAllSystems
     Given a VxFlexOS service
     And I do not have a gateway connection
     And I do not have a valid gateway password
     When I Call nodeGetAllSystems
-    Then the error contains "missing VxFlexOS MDM password"
+    Then the error contains "missing PowerFlex MDM password"
 
   Scenario: Call evalsymlinks
     Given a VxFlexOS service
@@ -1262,7 +1262,7 @@ Feature: VxFlex OS CSI interface
     And I invalidate the Probe cache
     When I call BeforeServe
     # Get different error message on Windows vs. Linux
-    Then the error contains "unable to login to VxFlexOS Gateway"
+    Then the error contains "unable to login to PowerFlex Gateway"
 
   Scenario: Test getArrayConfig with invalid config file
     Given an invalid config <configPath>
