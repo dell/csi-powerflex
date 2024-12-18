@@ -1855,8 +1855,6 @@ func (s *service) SetPodZoneLabel(ctx context.Context, zoneLabel map[string]stri
 		K8sClientset = k8sutils.Clientset
 	}
 
-	Log.Println("SetPodZoneLabel")
-
 	// access the API to fetch node object
 	pods, err := K8sClientset.CoreV1().Pods(DriverNamespace).List(ctx, v1.ListOptions{})
 	if err != nil {

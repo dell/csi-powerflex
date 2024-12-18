@@ -49,17 +49,15 @@ func Test_service_getZoneFromZoneLabelKey(t *testing.T) {
 	const validTopologyKey = "topology.kubernetes.io/zone"
 	const validZone = "zoneA"
 
-	tests := []struct {
-		name             string
+	tests := map[string]struct {
 		fields           fields
 		args             args
 		wantZone         string
 		wantErr          bool
 		getNodeLabelFunc func(ctx context.Context, s *service) (map[string]string, error)
 	}{
-		{
+		"success": {
 			// happy path test
-			name: "get good zone label",
 			args: args{
 				ctx:          context.Background(),
 				zoneLabelKey: validTopologyKey,
@@ -71,9 +69,8 @@ func Test_service_getZoneFromZoneLabelKey(t *testing.T) {
 				return nodeLabels, nil
 			},
 		},
-		{
+		"use bad zone label key": {
 			// The key args.zoneLabelKey will not be found in the map returned by getNodeLabelFunc
-			name: "use bad zone label key",
 			args: args{
 				ctx:          context.Background(),
 				zoneLabelKey: "badkey",
@@ -84,9 +81,8 @@ func Test_service_getZoneFromZoneLabelKey(t *testing.T) {
 				return nil, nil
 			},
 		},
-		{
+		"fail to get node labels": {
 			// getNodeLabelFunc will return an error, triggering failure to get the labels
-			name: "fail to get node labels",
 			args: args{
 				ctx:          context.Background(),
 				zoneLabelKey: "unimportant",
@@ -98,8 +94,8 @@ func Test_service_getZoneFromZoneLabelKey(t *testing.T) {
 			},
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for testName, tt := range tests {
+		t.Run(testName, func(t *testing.T) {
 			s := &service{
 				opts:                    tt.fields.opts,
 				adminClients:            tt.fields.adminClients,
@@ -155,16 +151,14 @@ func Test_service_getSystemIDFromZoneLabelKey(t *testing.T) {
 	const validTopologyKey = "topology.kubernetes.io/zone"
 	const validZone = "zoneA"
 
-	tests := []struct {
-		name         string
+	tests := map[string]struct {
 		fields       fields
 		args         args
 		wantSystemID string
 		wantErr      bool
 	}{
-		{
+		"success": {
 			// happy path test
-			name:         "get a valid system ID",
 			wantErr:      false,
 			wantSystemID: validSystemID,
 			args: args{
@@ -190,10 +184,9 @@ func Test_service_getSystemIDFromZoneLabelKey(t *testing.T) {
 				},
 			},
 		},
-		{
+		"topology not passed with csi request": {
 			// should return an empty string if no topology info is passed
 			// with the csi request
-			name:         "topology not passed with csi request",
 			wantErr:      false,
 			wantSystemID: "",
 			args: args{
@@ -210,10 +203,9 @@ func Test_service_getSystemIDFromZoneLabelKey(t *testing.T) {
 				},
 			},
 		},
-		{
+		"zone name missing in secret": {
 			// topology information in the csi request does not match
 			// any of the arrays in the secret
-			name:         "zone name missing in secret",
 			wantErr:      true,
 			wantSystemID: "",
 			args: args{
@@ -242,8 +234,8 @@ func Test_service_getSystemIDFromZoneLabelKey(t *testing.T) {
 			},
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for testName, tt := range tests {
+		t.Run(testName, func(t *testing.T) {
 			s := &service{
 				opts:                    tt.fields.opts,
 				adminClients:            tt.fields.adminClients,

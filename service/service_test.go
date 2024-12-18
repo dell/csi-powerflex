@@ -93,16 +93,14 @@ func Test_service_SetPodZoneLabel(t *testing.T) {
 	const validNodeName = "kube-node-name"
 	validAppLabels := map[string]string{validAppLabelKey: validAppName}
 
-	tests := []struct {
-		name     string
+	tests := map[string]struct {
 		fields   fields
 		args     args
 		initTest func(s *service)
 		wantErr  bool
 	}{
-		{
+		"successfully add zone labels to a pod": {
 			// happy path test
-			name:    "add zone labels to a pod",
 			wantErr: false,
 			args: args{
 				ctx: context.Background(),
@@ -135,9 +133,8 @@ func Test_service_SetPodZoneLabel(t *testing.T) {
 				}
 			},
 		},
-		{
+		"when 'list pods' k8s client request fails": {
 			// Attempt to set pod labels when the k8s client cannot get pods
-			name:    "when 'list pods' k8s client request fails",
 			wantErr: true,
 			args: args{
 				ctx: context.Background(),
@@ -156,8 +153,7 @@ func Test_service_SetPodZoneLabel(t *testing.T) {
 				K8sClientset = fake.NewSimpleClientset()
 			},
 		},
-		{
-			name:    "clientset is nil and fails to create one",
+		"clientset is nil and fails to create one": {
 			wantErr: true,
 			args: args{
 				ctx: context.Background(),
@@ -178,8 +174,8 @@ func Test_service_SetPodZoneLabel(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for testName, tt := range tests {
+		t.Run(testName, func(t *testing.T) {
 			s := &service{
 				opts:                    tt.fields.opts,
 				adminClients:            tt.fields.adminClients,
@@ -228,7 +224,7 @@ func TestArrayConnectionData_isInZone(t *testing.T) {
 		args   args
 		want   bool
 	}{
-		"array is in the zone": {
+		"success": {
 			want: true,
 			fields: fields{
 				AvailabilityZone: &AvailabilityZone{
@@ -260,8 +256,8 @@ func TestArrayConnectionData_isInZone(t *testing.T) {
 			},
 		},
 	}
-	for name, tt := range tests {
-		t.Run(name, func(t *testing.T) {
+	for testName, tt := range tests {
+		t.Run(testName, func(t *testing.T) {
 			array := &ArrayConnectionData{
 				SystemID:                  tt.fields.SystemID,
 				Username:                  tt.fields.Username,

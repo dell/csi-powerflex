@@ -762,7 +762,10 @@ func (s *service) NodeGetInfo(
 	if zone, ok := labels[s.opts.zoneLabelKey]; ok {
 		topology[s.opts.zoneLabelKey] = zone
 
-		_ = s.SetPodZoneLabel(ctx, topology)
+		err = s.SetPodZoneLabel(ctx, topology)
+		if err != nil {
+			Log.Warnf("Unable to set availability zone label '%s:%s' for this pod", topology[s.opts.zoneLabelKey], zone)
+		}
 	}
 
 	for _, array := range s.opts.arrays {
