@@ -773,6 +773,15 @@ func (s *service) NodeGetInfo(
 		}
 	}
 
+	nodeID, err := GetNodeUID(ctx, s)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, GetMessage("Could not fetch node UID"))
+	}
+
+	if s.opts.SdcGUID != "" {
+		nodeID = s.opts.SdcGUID
+	}
+
 	for _, array := range s.opts.arrays {
 		isNFS, err := s.checkNFS(ctx, array.SystemID)
 		if err != nil {
@@ -786,24 +795,13 @@ func (s *service) NodeGetInfo(
 		if zone, ok := topology[s.opts.zoneLabelKey]; ok {
 			if zone == string(array.AvailabilityZone.Name) {
 				// Add only the secret values with the correct zone.
-				nodeID, _ := GetNodeUID(ctx, s)
 				Log.Infof("Zone found for node ID: %s, adding system ID: %s to node topology", nodeID, array.SystemID)
 				topology[Name+"/"+array.SystemID] = SystemTopologySystemValue
 			}
 		} else {
-			nodeID, _ := GetNodeUID(ctx, s)
 			Log.Infof("No zoning found for node ID: %s, adding system ID: %s", nodeID, array.SystemID)
 			topology[Name+"/"+array.SystemID] = SystemTopologySystemValue
 		}
-	}
-
-	nodeID, err := GetNodeUID(ctx, s)
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, GetMessage("Could not fetch node UID"))
-	}
-
-	if s.opts.SdcGUID != "" {
-		nodeID = s.opts.SdcGUID
 	}
 
 	Log.Debugf("NodeId: %v\n", nodeID)
