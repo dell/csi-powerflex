@@ -10,7 +10,7 @@
     "zeroPaddingEnabled": true,
     "backgroundScannerMode": "Disabled",
     "rebalanceIoPriorityPolicy": "favorAppIos",
-    "protectionDomainId": "b8b3919900000000",
+    "protectionDomainId": "14dbbf5617523654",
     "backgroundScannerBWLimitKBps": 0,
     "rebuildIoPriorityBwLimitPerDeviceInKbps": 10240,
     "sparePercentage": 10,

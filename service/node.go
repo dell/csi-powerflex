@@ -733,16 +733,15 @@ func (s *service) NodeGetInfo(
 		}
 	}
 
+	labels, err := GetNodeLabels(ctx, s)
+	if err != nil {
+		return nil, err
+	}
+
 	var maxVxflexosVolumesPerNode int64
 	if len(connectedSystemID) != 0 {
 		// Check for node label 'max-vxflexos-volumes-per-node'. If present set 'MaxVolumesPerNode' to this value.
 		// If node label is not present, set 'MaxVolumesPerNode' to default value i.e., 0
-
-		labels, err := GetNodeLabels(ctx, s)
-		if err != nil {
-			return nil, err
-		}
-
 		if val, ok := labels[maxVxflexosVolumesPerNodeLabel]; ok {
 			maxVxflexosVolumesPerNode, err = strconv.ParseInt(val, 10, 64)
 			if err != nil {
@@ -764,15 +763,14 @@ func (s *service) NodeGetInfo(
 	// csi-vxflexos.dellemc.com/<systemID>: <provisionerName>
 	Log.Infof("Arrays: %+v", s.opts.arrays)
 	topology := map[string]string{}
-	for _, array := range s.opts.arrays {
-		isNFS, err := s.checkNFS(ctx, array.SystemID)
+
+	if zone, ok := labels[s.opts.zoneLabelKey]; ok {
+		topology[s.opts.zoneLabelKey] = zone
+
+		err = s.SetPodZoneLabel(ctx, topology)
 		if err != nil {
-			return nil, err
+			Log.Warnf("Unable to set availability zone label '%s:%s' for this pod", topology[s.opts.zoneLabelKey], zone)
 		}
-		if isNFS {
-			topology[Name+"/"+array.SystemID+"-nfs"] = "true"
-		}
-		topology[Name+"/"+array.SystemID] = SystemTopologySystemValue
 	}
 
 	nodeID, err := GetNodeUID(ctx, s)
@@ -782,6 +780,28 @@ func (s *service) NodeGetInfo(
 
 	if s.opts.SdcGUID != "" {
 		nodeID = s.opts.SdcGUID
+	}
+
+	for _, array := range s.opts.arrays {
+		isNFS, err := s.checkNFS(ctx, array.SystemID)
+		if err != nil {
+			return nil, err
+		}
+
+		if isNFS {
+			topology[Name+"/"+array.SystemID+"-nfs"] = "true"
+		}
+
+		if zone, ok := topology[s.opts.zoneLabelKey]; ok {
+			if zone == string(array.AvailabilityZone.Name) {
+				// Add only the secret values with the correct zone.
+				Log.Infof("Zone found for node ID: %s, adding system ID: %s to node topology", nodeID, array.SystemID)
+				topology[Name+"/"+array.SystemID] = SystemTopologySystemValue
+			}
+		} else {
+			Log.Infof("No zoning found for node ID: %s, adding system ID: %s", nodeID, array.SystemID)
+			topology[Name+"/"+array.SystemID] = SystemTopologySystemValue
+		}
 	}
 
 	Log.Debugf("NodeId: %v\n", nodeID)

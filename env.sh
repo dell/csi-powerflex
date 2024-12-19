@@ -24,9 +24,13 @@ export NFS_STORAGE_POOL=""
 export SDC_GUID=$(/bin/emc/scaleio/drv_cfg --query_guid)
 # Alternate GUID is for another system for testing expose volume to multiple hosts
 export ALT_GUID=
+export X_CSI_POWERFLEX_KUBE_NODE_NAME="node1"
 
 # Interface variables
 export NODE_INTERFACES="nodeName:interfaceName"
+
+# Node Label variables
+export ZONE_LABEL_KEY=""
 
 #Debug variables for goscaleio library
 export GOSCALEIO_SHOWHTTP="true"

@@ -107,22 +107,38 @@ var Log = logrus.New()
 
 // ArrayConnectionData contains data required to connect to array
 type ArrayConnectionData struct {
-	SystemID                  string   `json:"systemID"`
-	Username                  string   `json:"username"`
-	Password                  string   `json:"password"`
-	Endpoint                  string   `json:"endpoint"`
-	SkipCertificateValidation bool     `json:"skipCertificateValidation,omitempty"`
-	Insecure                  bool     `json:"insecure,omitempty"`
-	IsDefault                 bool     `json:"isDefault,omitempty"`
-	AllSystemNames            string   `json:"allSystemNames"`
-	NasName                   string   `json:"nasName"`
-	Mdm                       string   `json:"mdm,omitempty"`
-	Zone                      ZoneInfo `json:"zone,omitempty"`
+	SystemID                  string            `json:"systemID"`
+	Username                  string            `json:"username"`
+	Password                  string            `json:"password"`
+	Endpoint                  string            `json:"endpoint"`
+	SkipCertificateValidation bool              `json:"skipCertificateValidation,omitempty"`
+	Insecure                  bool              `json:"insecure,omitempty"`
+	IsDefault                 bool              `json:"isDefault,omitempty"`
+	AllSystemNames            string            `json:"allSystemNames"`
+	NasName                   string            `json:"nasName"`
+	Mdm                       string            `json:"mdm,omitempty"`
+	AvailabilityZone          *AvailabilityZone `json:"zone,omitempty"`
 }
 
-type ZoneInfo struct {
-	Name     string `json:"name"`
-	LabelKey string `json:"labelKey"`
+// Definitions to make AvailabilityZone decomposition easier to read.
+type (
+	ZoneName             string
+	ZoneTargetMap        map[ZoneName][]ProtectionDomain
+	ProtectionDomainName string
+	PoolName             string
+)
+
+// AvailabilityZone provides a mapping between cluster zones labels and storage systems
+type AvailabilityZone struct {
+	Name              ZoneName           `json:"name"`
+	LabelKey          string             `json:"labelKey"`
+	ProtectionDomains []ProtectionDomain `json:"protectionDomains"`
+}
+
+// ProtectionDomain provides protection domain information for a cluster's availability zone
+type ProtectionDomain struct {
+	Name  ProtectionDomainName `json:"name"`
+	Pools []PoolName           `json:"pools"`
 }
 
 // Manifest is the SP's manifest.
@@ -172,6 +188,7 @@ type Opts struct {
 	IsQuotaEnabled             bool   // allow driver to enable quota limits for NFS volumes
 	ExternalAccess             string // used for adding extra IP/IP range to the NFS export
 	KubeNodeName               string
+	zoneLabelKey               string
 }
 
 type service struct {
@@ -400,6 +417,13 @@ func (s *service) BeforeServe(
 	opts.arrays, err = getArrayConfig(ctx)
 	if err != nil {
 		Log.Warnf("unable to get arrays from config: %s", err.Error())
+		return err
+	}
+
+	// if custom zoning is being used, find the common label from the array secret
+	opts.zoneLabelKey, err = getZoneKeyLabelFromSecret(opts.arrays)
+	if err != nil {
+		Log.Warnf("unable to get zone key from secret: %s", err.Error())
 		return err
 	}
 
@@ -691,15 +715,17 @@ func (s *service) doProbe(ctx context.Context) error {
 	px.Lock()
 	defer px.Unlock()
 
-	if !strings.EqualFold(s.mode, "node") {
+	if !s.isNodeMode() {
+		Log.Info("[doProbe] controllerProbe")
 		if err := s.systemProbeAll(ctx); err != nil {
 			return err
 		}
 	}
 
 	// Do a node probe
-	if !strings.EqualFold(s.mode, "controller") {
+	if !s.isControllerMode() {
 		// Probe all systems managed by driver
+		Log.Info("[doProbe] nodeProbe")
 		if err := s.systemProbeAll(ctx); err != nil {
 			return err
 		}
@@ -1829,6 +1855,49 @@ func (s *service) GetNodeLabels(_ context.Context) (map[string]string, error) {
 	return node.Labels, nil
 }
 
+func (s *service) SetPodZoneLabel(ctx context.Context, zoneLabel map[string]string) error {
+	if K8sClientset == nil {
+		err := k8sutils.CreateKubeClientSet()
+		if err != nil {
+			return status.Error(codes.Internal, GetMessage("init client failed with error: %v", err))
+		}
+		K8sClientset = k8sutils.Clientset
+	}
+
+	// access the API to fetch node object
+	pods, err := K8sClientset.CoreV1().Pods(DriverNamespace).List(ctx, v1.ListOptions{})
+	if err != nil {
+		return status.Error(codes.Internal, GetMessage("Unable to fetch the node labels. Error: %v", err))
+	}
+
+	podName := ""
+	for _, pod := range pods.Items {
+		if pod.Spec.NodeName == s.opts.KubeNodeName && pod.Labels["app"] != "" {
+			// only add labels to node pods. Controller pod is not restricted to a zone
+			if strings.Contains(pod.Name, "node") {
+				podName = pod.Name
+			}
+		}
+	}
+
+	pod, err := K8sClientset.CoreV1().Pods(DriverNamespace).Get(ctx, podName, v1.GetOptions{})
+	if err != nil {
+		return status.Error(codes.Internal, GetMessage("Unable to fetch the node labels. Error: %v", err))
+	}
+
+	for key, value := range zoneLabel {
+		Log.Printf("Setting Label: Key: %s, Value: %s for pod: %s\n", key, value, podName)
+		pod.Labels[key] = value
+	}
+
+	_, err = K8sClientset.CoreV1().Pods(DriverNamespace).Update(ctx, pod, v1.UpdateOptions{})
+	if err != nil {
+		return status.Error(codes.Internal, GetMessage("Unable to update the node labels. Error: %v", err))
+	}
+
+	return nil
+}
+
 func (s *service) GetNodeUID(_ context.Context) (string, error) {
 	if K8sClientset == nil {
 		err := k8sutils.CreateKubeClientSet()
@@ -1866,4 +1935,37 @@ func ParseInt64FromContext(ctx context.Context, key string) (int64, error) {
 
 func lookupEnv(ctx context.Context, key string) (string, bool) {
 	return csictx.LookupEnv(ctx, key)
+}
+
+func getZoneKeyLabelFromSecret(arrays map[string]*ArrayConnectionData) (string, error) {
+	zoneKeyLabel := ""
+
+	for _, array := range arrays {
+		if array.AvailabilityZone != nil {
+			if zoneKeyLabel == "" {
+				// Assumes that the key parameter is not empty
+				zoneKeyLabel = array.AvailabilityZone.LabelKey
+			} else if zoneKeyLabel != array.AvailabilityZone.LabelKey {
+				Log.Warnf("array %s zone key %s does not match %s", array.SystemID, array.AvailabilityZone.LabelKey, zoneKeyLabel)
+				return "", fmt.Errorf("array %s zone key %s does not match %s", array.SystemID, array.AvailabilityZone.LabelKey, zoneKeyLabel)
+			}
+		}
+	}
+
+	return zoneKeyLabel, nil
+}
+
+// isControllerMode returns true if the mode property of service s is set to "node", false otherwise.
+func (s *service) isNodeMode() bool {
+	return strings.EqualFold(s.mode, "node")
+}
+
+// isControllerMode returns true if the mode property of service s is set to "controller", false otherwise.
+func (s *service) isControllerMode() bool {
+	return strings.EqualFold(s.mode, "controller")
+}
+
+// isInZone returns true if the array is configured for use in the provided zoneName, false otherwise.
+func (array *ArrayConnectionData) isInZone(zoneName string) bool {
+	return array.AvailabilityZone != nil && array.AvailabilityZone.Name == ZoneName(zoneName)
 }

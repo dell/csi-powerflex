@@ -1,4 +1,4 @@
-// Copyright © 2019-2022 Dell Inc. or its subsidiaries. All Rights Reserved.
+// Copyright © 2019-2024 Dell Inc. or its subsidiaries. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,13 +14,20 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/cucumber/godog"
+	sio "github.com/dell/goscaleio"
+	siotypes "github.com/dell/goscaleio/types/v1"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/fake"
 )
 
 func TestMain(m *testing.M) {
@@ -55,4 +62,217 @@ func TestMain(m *testing.M) {
 	fmt.Printf("status %d\n", status)
 
 	os.Exit(status)
+}
+
+func Test_service_SetPodZoneLabel(t *testing.T) {
+	type fields struct {
+		opts                    Opts
+		adminClients            map[string]*sio.Client
+		systems                 map[string]*sio.System
+		mode                    string
+		volCache                []*siotypes.Volume
+		volCacheSystemID        string
+		snapCache               []*siotypes.Volume
+		snapCacheSystemID       string
+		privDir                 string
+		storagePoolIDToName     map[string]string
+		statisticsCounter       int
+		volumePrefixToSystems   map[string][]string
+		connectedSystemNameToID map[string]string
+	}
+
+	type args struct {
+		ctx       context.Context
+		zoneLabel map[string]string
+	}
+
+	const validZoneName = "zoneA"
+	const validZoneLabelKey = "topology.kubernetes.io/zone"
+	const validAppName = "test-node-pod"
+	const validAppLabelKey = "app"
+	const validNodeName = "kube-node-name"
+	validAppLabels := map[string]string{validAppLabelKey: validAppName}
+
+	tests := map[string]struct {
+		fields   fields
+		args     args
+		initTest func(s *service)
+		wantErr  bool
+	}{
+		"successfully add zone labels to a pod": {
+			// happy path test
+			wantErr: false,
+			args: args{
+				ctx: context.Background(),
+				zoneLabel: map[string]string{
+					validZoneLabelKey: validZoneName,
+				},
+			},
+			fields: fields{
+				opts: Opts{
+					KubeNodeName: validNodeName,
+				},
+			},
+			initTest: func(s *service) {
+				// setup fake k8s client and create a pod to perform tests against
+				K8sClientset = fake.NewSimpleClientset()
+				podClient := K8sClientset.CoreV1().Pods(DriverNamespace)
+
+				// create test pod
+				_, err := podClient.Create(context.Background(), &v1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   validAppName,
+						Labels: validAppLabels,
+					},
+					Spec: v1.PodSpec{
+						NodeName: s.opts.KubeNodeName,
+					},
+				}, metav1.CreateOptions{})
+				if err != nil {
+					t.Errorf("error creating test pod error = %v", err)
+				}
+			},
+		},
+		"when 'list pods' k8s client request fails": {
+			// Attempt to set pod labels when the k8s client cannot get pods
+			wantErr: true,
+			args: args{
+				ctx: context.Background(),
+				zoneLabel: map[string]string{
+					validZoneLabelKey: validZoneName,
+				},
+			},
+			fields: fields{
+				opts: Opts{
+					KubeNodeName: validNodeName,
+				},
+			},
+			initTest: func(_ *service) {
+				// create a client, but do not create any pods so the request
+				// to list pods fails
+				K8sClientset = fake.NewSimpleClientset()
+			},
+		},
+		"clientset is nil and fails to create one": {
+			wantErr: true,
+			args: args{
+				ctx: context.Background(),
+				zoneLabel: map[string]string{
+					validZoneLabelKey: validZoneName,
+				},
+			},
+			fields: fields{
+				opts: Opts{
+					KubeNodeName: validNodeName,
+				},
+			},
+			initTest: func(_ *service) {
+				// setup clientset to nil to force creation
+				// Creation should fail because tests are not run in a cluster
+				K8sClientset = nil
+			},
+		},
+	}
+
+	for testName, tt := range tests {
+		t.Run(testName, func(t *testing.T) {
+			s := &service{
+				opts:                    tt.fields.opts,
+				adminClients:            tt.fields.adminClients,
+				systems:                 tt.fields.systems,
+				mode:                    tt.fields.mode,
+				volCache:                tt.fields.volCache,
+				volCacheRWL:             sync.RWMutex{},
+				volCacheSystemID:        tt.fields.volCacheSystemID,
+				snapCache:               tt.fields.snapCache,
+				snapCacheRWL:            sync.RWMutex{},
+				snapCacheSystemID:       tt.fields.snapCacheSystemID,
+				privDir:                 tt.fields.privDir,
+				storagePoolIDToName:     tt.fields.storagePoolIDToName,
+				statisticsCounter:       tt.fields.statisticsCounter,
+				volumePrefixToSystems:   tt.fields.volumePrefixToSystems,
+				connectedSystemNameToID: tt.fields.connectedSystemNameToID,
+			}
+
+			tt.initTest(s)
+			err := s.SetPodZoneLabel(tt.args.ctx, tt.args.zoneLabel)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("service.SetPodZoneLabel() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestArrayConnectionData_isInZone(t *testing.T) {
+	type fields struct {
+		SystemID                  string
+		Username                  string
+		Password                  string
+		Endpoint                  string
+		SkipCertificateValidation bool
+		Insecure                  bool
+		IsDefault                 bool
+		AllSystemNames            string
+		NasName                   string
+		AvailabilityZone          *AvailabilityZone
+	}
+	type args struct {
+		zoneName string
+	}
+	tests := map[string]struct {
+		fields fields
+		args   args
+		want   bool
+	}{
+		"success": {
+			want: true,
+			fields: fields{
+				AvailabilityZone: &AvailabilityZone{
+					LabelKey: "topology.kubernetes.io/zone",
+					Name:     "zoneA",
+				},
+			},
+			args: args{
+				zoneName: "zoneA",
+			},
+		},
+		"availability zone is not used": {
+			want:   false,
+			fields: fields{},
+			args: args{
+				zoneName: "zoneA",
+			},
+		},
+		"zone names do not match": {
+			want: false,
+			fields: fields{
+				AvailabilityZone: &AvailabilityZone{
+					LabelKey: "topology.kubernetes.io/zone",
+					Name:     "zoneA",
+				},
+			},
+			args: args{
+				zoneName: "zoneB",
+			},
+		},
+	}
+	for testName, tt := range tests {
+		t.Run(testName, func(t *testing.T) {
+			array := &ArrayConnectionData{
+				SystemID:                  tt.fields.SystemID,
+				Username:                  tt.fields.Username,
+				Password:                  tt.fields.Password,
+				Endpoint:                  tt.fields.Endpoint,
+				SkipCertificateValidation: tt.fields.SkipCertificateValidation,
+				Insecure:                  tt.fields.Insecure,
+				IsDefault:                 tt.fields.IsDefault,
+				AllSystemNames:            tt.fields.AllSystemNames,
+				NasName:                   tt.fields.NasName,
+				AvailabilityZone:          tt.fields.AvailabilityZone,
+			}
+			if got := array.isInZone(tt.args.zoneName); got != tt.want {
+				t.Errorf("ArrayConnectionData.isInZone() = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }

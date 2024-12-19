@@ -76,13 +76,13 @@ func TestPreInit(t *testing.T) {
 			name: "should error when zone labels different",
 			connectionInfo: []*ArrayConnectionData{
 				{
-					Zone: ZoneInfo{
+					AvailabilityZone: &AvailabilityZone{
 						LabelKey: "key1",
 						Name:     "zone1",
 					},
 				},
 				{
-					Zone: ZoneInfo{
+					AvailabilityZone: &AvailabilityZone{
 						LabelKey: "key2",
 						Name:     "zone1",
 					},
@@ -119,7 +119,7 @@ func TestPreInit(t *testing.T) {
 			connectionInfo: []*ArrayConnectionData{
 				{
 					Mdm: "192.168.1.1,192.168.1.2",
-					Zone: ZoneInfo{
+					AvailabilityZone: &AvailabilityZone{
 						LabelKey: "key1",
 						Name:     "zone1",
 					},
@@ -133,7 +133,7 @@ func TestPreInit(t *testing.T) {
 			connectionInfo: []*ArrayConnectionData{
 				{
 					Mdm: "192.168.1.1,192.168.1.2",
-					Zone: ZoneInfo{
+					AvailabilityZone: &AvailabilityZone{
 						LabelKey: "key1",
 						Name:     "zone1",
 					},
@@ -153,7 +153,7 @@ func TestPreInit(t *testing.T) {
 			connectionInfo: []*ArrayConnectionData{
 				{
 					Mdm: "192.168.1.1,192.168.1.2",
-					Zone: ZoneInfo{
+					AvailabilityZone: &AvailabilityZone{
 						LabelKey: "key1",
 						Name:     "zone1",
 					},
@@ -173,14 +173,14 @@ func TestPreInit(t *testing.T) {
 			connectionInfo: []*ArrayConnectionData{
 				{
 					Mdm: "192.168.1.1,192.168.1.2",
-					Zone: ZoneInfo{
+					AvailabilityZone: &AvailabilityZone{
 						LabelKey: "key1",
 						Name:     "zone1",
 					},
 				},
 				{
 					Mdm: "192.168.2.1,192.168.2.2",
-					Zone: ZoneInfo{
+					AvailabilityZone: &AvailabilityZone{
 						LabelKey: "key1",
 						Name:     "zone2",
 					},
@@ -314,9 +314,9 @@ func TestGetMdmList(t *testing.T) {
 			name: "single MDM",
 			connectionInfo: []*ArrayConnectionData{
 				{
-					SystemID: "testSystemID",
-					Mdm:      "192.168.0.10",
-					Zone:     ZoneInfo{Name: "testZone", LabelKey: "testKey"},
+					SystemID:         "testSystemID",
+					Mdm:              "192.168.0.10",
+					AvailabilityZone: &AvailabilityZone{Name: "testZone", LabelKey: "testKey"},
 				},
 			},
 			key:            "testKey",
@@ -328,9 +328,9 @@ func TestGetMdmList(t *testing.T) {
 			name: "two MDMs",
 			connectionInfo: []*ArrayConnectionData{
 				{
-					SystemID: "testSystemID",
-					Mdm:      "192.168.0.10,192.168.0.20",
-					Zone:     ZoneInfo{Name: "testZone", LabelKey: "testKey"},
+					SystemID:         "testSystemID",
+					Mdm:              "192.168.0.10,192.168.0.20",
+					AvailabilityZone: &AvailabilityZone{Name: "testZone", LabelKey: "testKey"},
 				},
 			},
 			key:            "testKey",
@@ -342,14 +342,14 @@ func TestGetMdmList(t *testing.T) {
 			name: "two arrays",
 			connectionInfo: []*ArrayConnectionData{
 				{
-					SystemID: "testSystemID1",
-					Mdm:      "192.168.0.10,192.168.0.20",
-					Zone:     ZoneInfo{Name: "testZone", LabelKey: "testKey"},
+					SystemID:         "testSystemID1",
+					Mdm:              "192.168.0.10,192.168.0.20",
+					AvailabilityZone: &AvailabilityZone{Name: "testZone", LabelKey: "testKey"},
 				},
 				{
-					SystemID: "testSystemID2",
-					Mdm:      "192.168.1.10,192.168.1.20",
-					Zone:     ZoneInfo{Name: "testZone", LabelKey: "testKey"},
+					SystemID:         "testSystemID2",
+					Mdm:              "192.168.1.10,192.168.1.20",
+					AvailabilityZone: &AvailabilityZone{Name: "testZone", LabelKey: "testKey"},
 				},
 			},
 			key:            "testKey",
@@ -361,14 +361,14 @@ func TestGetMdmList(t *testing.T) {
 			name: "two arrays with one MDM each",
 			connectionInfo: []*ArrayConnectionData{
 				{
-					SystemID: "testSystemID1",
-					Mdm:      "192.168.0.10",
-					Zone:     ZoneInfo{Name: "testZone", LabelKey: "testKey"},
+					SystemID:         "testSystemID1",
+					Mdm:              "192.168.0.10",
+					AvailabilityZone: &AvailabilityZone{Name: "testZone", LabelKey: "testKey"},
 				},
 				{
-					SystemID: "testSystemID2",
-					Mdm:      "192.168.1.10",
-					Zone:     ZoneInfo{Name: "testZone", LabelKey: "testKey"},
+					SystemID:         "testSystemID2",
+					Mdm:              "192.168.1.10",
+					AvailabilityZone: &AvailabilityZone{Name: "testZone", LabelKey: "testKey"},
 				},
 			},
 			key:            "testKey",
@@ -380,14 +380,14 @@ func TestGetMdmList(t *testing.T) {
 			name: "two arrays with multiple zones 1",
 			connectionInfo: []*ArrayConnectionData{
 				{
-					SystemID: "testSystemID1",
-					Mdm:      "192.168.0.10,192.168.0.20",
-					Zone:     ZoneInfo{Name: "testZone1", LabelKey: "testKey"},
+					SystemID:         "testSystemID1",
+					Mdm:              "192.168.0.10,192.168.0.20",
+					AvailabilityZone: &AvailabilityZone{Name: "testZone1", LabelKey: "testKey"},
 				},
 				{
-					SystemID: "testSystemID2",
-					Mdm:      "192.168.1.10,192.168.1.20",
-					Zone:     ZoneInfo{Name: "testZone2", LabelKey: "testKey"},
+					SystemID:         "testSystemID2",
+					Mdm:              "192.168.1.10,192.168.1.20",
+					AvailabilityZone: &AvailabilityZone{Name: "testZone2", LabelKey: "testKey"},
 				},
 			},
 			key:            "testKey",
@@ -399,14 +399,14 @@ func TestGetMdmList(t *testing.T) {
 			name: "two arrays with multiple zones 2",
 			connectionInfo: []*ArrayConnectionData{
 				{
-					SystemID: "testSystemID1",
-					Mdm:      "192.168.0.10,192.168.0.20",
-					Zone:     ZoneInfo{Name: "testZone1", LabelKey: "testKey"},
+					SystemID:         "testSystemID1",
+					Mdm:              "192.168.0.10,192.168.0.20",
+					AvailabilityZone: &AvailabilityZone{Name: "testZone1", LabelKey: "testKey"},
 				},
 				{
-					SystemID: "testSystemID2",
-					Mdm:      "192.168.1.10,192.168.1.20",
-					Zone:     ZoneInfo{Name: "testZone2", LabelKey: "testKey"},
+					SystemID:         "testSystemID2",
+					Mdm:              "192.168.1.10,192.168.1.20",
+					AvailabilityZone: &AvailabilityZone{Name: "testZone2", LabelKey: "testKey"},
 				},
 			},
 			key:            "testKey",
@@ -418,14 +418,14 @@ func TestGetMdmList(t *testing.T) {
 			name: "two arrays in same zone with different keys 1",
 			connectionInfo: []*ArrayConnectionData{
 				{
-					SystemID: "testSystemID1",
-					Mdm:      "192.168.0.10,192.168.0.20",
-					Zone:     ZoneInfo{Name: "testZone", LabelKey: "testKey1"},
+					SystemID:         "testSystemID1",
+					Mdm:              "192.168.0.10,192.168.0.20",
+					AvailabilityZone: &AvailabilityZone{Name: "testZone", LabelKey: "testKey1"},
 				},
 				{
-					SystemID: "testSystemID2",
-					Mdm:      "192.168.1.10,192.168.1.20",
-					Zone:     ZoneInfo{Name: "testZone", LabelKey: "testKey2"},
+					SystemID:         "testSystemID2",
+					Mdm:              "192.168.1.10,192.168.1.20",
+					AvailabilityZone: &AvailabilityZone{Name: "testZone", LabelKey: "testKey2"},
 				},
 			},
 			key:            "testKey1",
@@ -437,14 +437,14 @@ func TestGetMdmList(t *testing.T) {
 			name: "two arrays in same zone with different keys 2",
 			connectionInfo: []*ArrayConnectionData{
 				{
-					SystemID: "testSystemID1",
-					Mdm:      "192.168.0.10,192.168.0.20",
-					Zone:     ZoneInfo{Name: "testZone", LabelKey: "testKey1"},
+					SystemID:         "testSystemID1",
+					Mdm:              "192.168.0.10,192.168.0.20",
+					AvailabilityZone: &AvailabilityZone{Name: "testZone", LabelKey: "testKey1"},
 				},
 				{
-					SystemID: "testSystemID2",
-					Mdm:      "192.168.1.10,192.168.1.20",
-					Zone:     ZoneInfo{Name: "testZone", LabelKey: "testKey2"},
+					SystemID:         "testSystemID2",
+					Mdm:              "192.168.1.10,192.168.1.20",
+					AvailabilityZone: &AvailabilityZone{Name: "testZone", LabelKey: "testKey2"},
 				},
 			},
 			key:            "testKey2",
@@ -498,12 +498,12 @@ func TestGetLabelKey(t *testing.T) {
 			name: "zone is not empty with different keys",
 			connectionInfo: []*ArrayConnectionData{
 				{
-					SystemID: "testSystemID1",
-					Zone:     ZoneInfo{Name: "testZone", LabelKey: "testKey1"},
+					SystemID:         "testSystemID1",
+					AvailabilityZone: &AvailabilityZone{Name: "testZone", LabelKey: "testKey1"},
 				},
 				{
-					SystemID: "testSystemID2",
-					Zone:     ZoneInfo{Name: "testZone", LabelKey: "testKey2"},
+					SystemID:         "testSystemID2",
+					AvailabilityZone: &AvailabilityZone{Name: "testZone", LabelKey: "testKey2"},
 				},
 			},
 			errorExpected:  true,
@@ -516,8 +516,8 @@ func TestGetLabelKey(t *testing.T) {
 					SystemID: "testSystemID1",
 				},
 				{
-					SystemID: "testSystemID2",
-					Zone:     ZoneInfo{Name: "testZone", LabelKey: "testKey1"},
+					SystemID:         "testSystemID2",
+					AvailabilityZone: &AvailabilityZone{Name: "testZone", LabelKey: "testKey1"},
 				},
 			},
 			errorExpected:  true,
@@ -527,12 +527,12 @@ func TestGetLabelKey(t *testing.T) {
 			name: "same key in all zones",
 			connectionInfo: []*ArrayConnectionData{
 				{
-					SystemID: "testSystemID1",
-					Zone:     ZoneInfo{Name: "testZone", LabelKey: "testKey1"},
+					SystemID:         "testSystemID1",
+					AvailabilityZone: &AvailabilityZone{Name: "testZone", LabelKey: "testKey1"},
 				},
 				{
-					SystemID: "testSystemID2",
-					Zone:     ZoneInfo{Name: "testZone", LabelKey: "testKey1"},
+					SystemID:         "testSystemID2",
+					AvailabilityZone: &AvailabilityZone{Name: "testZone", LabelKey: "testKey1"},
 				},
 			},
 			errorExpected:  false,
@@ -542,12 +542,12 @@ func TestGetLabelKey(t *testing.T) {
 			name: "case sensitivity test for key",
 			connectionInfo: []*ArrayConnectionData{
 				{
-					SystemID: "testSystemID1",
-					Zone:     ZoneInfo{Name: "testZone", LabelKey: "testKey1"},
+					SystemID:         "testSystemID1",
+					AvailabilityZone: &AvailabilityZone{Name: "testZone", LabelKey: "testKey1"},
 				},
 				{
-					SystemID: "testSystemID2",
-					Zone:     ZoneInfo{Name: "testZone", LabelKey: "TestKey1"},
+					SystemID:         "testSystemID2",
+					AvailabilityZone: &AvailabilityZone{Name: "testZone", LabelKey: "TestKey1"},
 				},
 			},
 			errorExpected:  true,

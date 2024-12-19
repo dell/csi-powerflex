@@ -54,7 +54,7 @@ unit-test:
 
 # Linux only; populate env.sh with the hardware parameters
 integration-test:
-	( cd test/integration; sh run.sh )
+	( cd test/integration; sh run.sh TestIntegration )
 
 check:
 	@scripts/check.sh ./provider/ ./service/

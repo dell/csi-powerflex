@@ -6,7 +6,6 @@ module github.com/dell/csi-vxflexos/v2
 go 1.23
 
 require (
-	github.com/akutz/memconn v0.1.0
 	github.com/apparentlymart/go-cidr v1.1.0
 	github.com/container-storage-interface/spec v1.6.0
 	github.com/cucumber/godog v0.15.0
@@ -16,7 +15,7 @@ require (
 	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.7.0
 	github.com/dell/gocsi v1.12.0
 	github.com/dell/gofsutil v1.17.0
-	github.com/dell/goscaleio v1.17.1
+	github.com/dell/goscaleio v1.17.2-0.20241218182509-936b677c46d5
 	github.com/fsnotify/fsnotify v1.8.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1

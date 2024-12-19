@@ -1,7 +1,7 @@
 [
     {
         "endpoint": "",
-        "username": "admin",
+        "username": "username",
         "password": "password",
         "insecure": true,
         "isDefault": true,
