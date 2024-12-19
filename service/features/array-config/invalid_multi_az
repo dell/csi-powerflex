@@ -1,0 +1,21 @@
+[
+   {
+      "endpoint": "http://127.0.0.1",
+      "username": "username",
+      "password": "password",
+      "insecure": true,
+      "isDefault": true,
+      "systemID": "14dbbf5617523654",
+      "zone": {
+         "name": "notExistent",
+         "protectionDomains": [
+            {
+               "name": "bad",
+               "pools": [
+                  "badPool"
+               ]
+            }
+         ]
+      }
+   }
+]

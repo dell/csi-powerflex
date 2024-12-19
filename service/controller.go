@@ -155,20 +155,41 @@ const (
 
 var interestingParameters = [...]string{0: "FsType", 1: KeyMkfsFormatOption, 2: KeyBandwidthLimitInKbps, 3: KeyIopsLimit}
 
+type ZoneContent struct {
+	systemID         string
+	protectionDomain ProtectionDomainName
+	pool             PoolName
+}
+
 func (s *service) CreateVolume(
 	ctx context.Context,
 	req *csi.CreateVolumeRequest) (
 	*csi.CreateVolumeResponse, error,
 ) {
 	params := req.GetParameters()
+	var systemID string
+	var err error
 
-	systemID, err := s.getSystemIDFromParameters(params)
-	if err != nil {
-		return nil, err
+	// This is a map of zone to the arrayID and pool identifier
+	zoneTargetMap := make(map[ZoneName]ZoneContent)
+
+	if _, ok := params[KeySystemID]; !ok {
+		zoneTargetMap = s.getZonesFromSecret()
 	}
 
-	if err := s.requireProbe(ctx, systemID); err != nil {
-		return nil, err
+	if len(zoneTargetMap) == 0 {
+		sid, err := s.getSystemIDFromParameters(params)
+		if err != nil {
+			return nil, err
+		}
+
+		systemID = sid
+	}
+
+	if systemID != "" {
+		if err := s.requireProbe(ctx, systemID); err != nil {
+			return nil, err
+		}
 	}
 
 	s.logStatistics()
@@ -191,9 +212,77 @@ func (s *service) CreateVolume(
 		Log.Printf("Received CreateVolume request without accessibility keys")
 	}
 
+	// Look for zone topology
+	zoneTopology := false
+	var storagePool string
+	var protectionDomain string
 	var volumeTopology []*csi.Topology
 	systemSegments := map[string]string{} // topology segments matching requested system for a volume
-	if accessibility != nil && len(accessibility.GetPreferred()) > 0 {
+
+	// Handle Zone topology, which happens when node is annotated with a matching zone label
+	if len(zoneTargetMap) != 0 && accessibility != nil && len(accessibility.GetPreferred()) > 0 {
+		contentSource := req.GetVolumeContentSource()
+		var sourceSystemID string
+		if contentSource != nil {
+			Log.Infof("[CreateVolume] Zone volume has a content source - we are a snapshot or clone: %+v", contentSource)
+
+			snapshotSource := contentSource.GetSnapshot()
+			cloneSource := contentSource.GetVolume()
+
+			if snapshotSource != nil {
+				sourceSystemID = s.getSystemIDFromCsiVolumeID(snapshotSource.SnapshotId)
+				Log.Infof("[CreateVolume] Zone snapshot source systemID: %s", sourceSystemID)
+			} else if cloneSource != nil {
+				sourceSystemID = s.getSystemIDFromCsiVolumeID(cloneSource.VolumeId)
+				Log.Infof("[CreateVolume] Zone clone source systemID: %s", sourceSystemID)
+			}
+		}
+
+		for _, topo := range accessibility.GetPreferred() {
+			for topoLabel, zoneName := range topo.Segments {
+				Log.Infof("Zoning based on label %s", s.opts.zoneLabelKey)
+				if strings.HasPrefix(topoLabel, s.opts.zoneLabelKey) {
+					zoneTarget, ok := zoneTargetMap[ZoneName(zoneName)]
+					if !ok {
+						Log.Infof("no zone target for %s", zoneTarget)
+						continue
+					}
+
+					if sourceSystemID != "" && zoneTarget.systemID != sourceSystemID {
+						continue
+					}
+
+					protectionDomain = string(zoneTarget.protectionDomain)
+					storagePool = string(zoneTarget.pool)
+					systemID = zoneTarget.systemID
+
+					if err := s.requireProbe(ctx, systemID); err != nil {
+						Log.Errorln("Failed to probe system " + systemID)
+						continue
+					}
+
+					systemSegments[s.opts.zoneLabelKey] = zoneName
+					volumeTopology = append(volumeTopology, &csi.Topology{
+						Segments: systemSegments,
+					})
+
+					// We found a zone topology
+					Log.Infof("Preferred topology zone %s, systemID %s, protectionDomain %s, and storagePool %s", zoneName, systemID, protectionDomain, storagePool)
+					zoneTopology = true
+				}
+			}
+
+			if zoneTopology {
+				break
+			}
+		}
+
+		if !zoneTopology {
+			return nil, status.Error(codes.InvalidArgument, "no zone topology found in accessibility requirements")
+		}
+	}
+
+	if !zoneTopology && accessibility != nil && len(accessibility.GetPreferred()) > 0 {
 		requestedSystem := ""
 		sID := ""
 		system := s.systems[systemID]
@@ -451,21 +540,31 @@ func (s *service) CreateVolume(
 		params = mergeStringMaps(params, req.GetSecrets())
 
 		// We require the storagePool name for creation
-		sp, ok := params[KeyStoragePool]
-		if !ok {
-			return nil, status.Errorf(codes.InvalidArgument,
-				"%s is a required parameter", KeyStoragePool)
+		if storagePool == "" {
+			sp, ok := params[KeyStoragePool]
+			if !ok {
+				return nil, status.Errorf(codes.InvalidArgument,
+					"%s is a required parameter", KeyStoragePool)
+			}
+
+			storagePool = sp
+		} else {
+			Log.Printf("[CreateVolume] Multi-AZ Storage Pool Determined by Secret %s", storagePool)
 		}
 
-		pdID := ""
-		pd, ok := params[KeyProtectionDomain]
-		if !ok {
-			Log.Printf("Protection Domain name not provided; there could be conflicts if two storage pools share a name")
-		} else {
-			pdID, err = s.getProtectionDomainIDFromName(systemID, pd)
-			if err != nil {
-				return nil, err
+		var pdID string
+		if protectionDomain == "" {
+			pd, ok := params[KeyProtectionDomain]
+			if !ok {
+				Log.Printf("Protection Domain name not provided; there could be conflicts if two storage pools share a name")
+			} else {
+				protectionDomain = pd
 			}
+		}
+
+		pdID, err = s.getProtectionDomainIDFromName(systemID, protectionDomain)
+		if err != nil {
+			return nil, err
 		}
 
 		volType := s.getVolProvisionType(params) // Thick or Thin
@@ -474,13 +573,26 @@ func (s *service) CreateVolume(
 		if contentSource != nil {
 			volumeSource := contentSource.GetVolume()
 			if volumeSource != nil {
-				Log.Printf("volume %s specified as volume content source", volumeSource.VolumeId)
-				return s.Clone(req, volumeSource, name, size, sp)
+				cloneResponse, err := s.Clone(req, volumeSource, name, size, storagePool)
+				if err != nil {
+					return nil, err
+				}
+
+				cloneResponse.Volume.AccessibleTopology = volumeTopology
+
+				return cloneResponse, nil
 			}
 			snapshotSource := contentSource.GetSnapshot()
 			if snapshotSource != nil {
 				Log.Printf("snapshot %s specified as volume content source", snapshotSource.SnapshotId)
-				return s.createVolumeFromSnapshot(req, snapshotSource, name, size, sp)
+				snapshotVolumeResponse, err := s.createVolumeFromSnapshot(req, snapshotSource, name, size, storagePool)
+				if err != nil {
+					return nil, err
+				}
+
+				snapshotVolumeResponse.Volume.AccessibleTopology = volumeTopology
+
+				return snapshotVolumeResponse, nil
 			}
 		}
 
@@ -489,7 +601,7 @@ func (s *service) CreateVolume(
 		fields := map[string]interface{}{
 			"name":                               name,
 			"sizeInKiB":                          size,
-			"storagePool":                        sp,
+			"storagePool":                        storagePool,
 			"volType":                            volType,
 			HeaderPersistentVolumeName:           params[CSIPersistentVolumeName],
 			HeaderPersistentVolumeClaimName:      params[CSIPersistentVolumeClaimName],
@@ -517,13 +629,13 @@ func (s *service) CreateVolume(
 			Log.Println("warning: goscaleio.VolumeParam: no MetaData method exists, consider updating goscaleio library.")
 		}
 
-		createResp, err := s.adminClients[systemID].CreateVolume(volumeParam, sp, pdID)
+		createResp, err := s.adminClients[systemID].CreateVolume(volumeParam, storagePool, pdID)
 		if err != nil {
 			// handle case where volume already exists
 			if !strings.EqualFold(err.Error(), sioGatewayVolumeNameInUse) {
-				Log.Printf("error creating volume: %s pool %s error: %s", name, sp, err.Error())
+				Log.Printf("error creating volume: %s pool %s error: %s", name, storagePool, err.Error())
 				return nil, status.Errorf(codes.Internal,
-					"error when creating volume %s storagepool %s: %s", name, sp, err.Error())
+					"error when creating volume %s storagepool %s: %s", name, storagePool, err.Error())
 			}
 		}
 
@@ -548,7 +660,7 @@ func (s *service) CreateVolume(
 
 		// since the volume could have already exists, double check that the
 		// volume has the expected parameters
-		spID, err := s.getStoragePoolID(sp, systemID, pdID)
+		spID, err := s.getStoragePoolID(storagePool, systemID, pdID)
 		if err != nil {
 			return nil, status.Errorf(codes.Unavailable,
 				"volume exists, but could not verify parameters: %s",
@@ -737,6 +849,7 @@ func (s *service) getSystemIDFromParameters(params map[string]string) (string, e
 			return "", status.Errorf(codes.FailedPrecondition, "No system ID is found in parameters or as default")
 		}
 	}
+
 	Log.Printf("getSystemIDFromParameters system %s", systemID)
 
 	// if name set for array.SystemID use id instead
@@ -746,6 +859,36 @@ func (s *service) getSystemIDFromParameters(params map[string]string) (string, e
 	}
 	Log.Printf("Use systemID as %s", systemID)
 	return systemID, nil
+}
+
+// getZonesFromSecret returns a map with zone names as keys to zone content
+// with zone content consisting of the PowerFlex systemID, protection domain and pool.
+func (s *service) getZonesFromSecret() map[ZoneName]ZoneContent {
+	zoneTargetMap := make(map[ZoneName]ZoneContent)
+
+	for _, array := range s.opts.arrays {
+		availabilityZone := array.AvailabilityZone
+		if availabilityZone == nil {
+			continue
+		}
+
+		zone := availabilityZone.Name
+
+		var pd ProtectionDomainName
+		if availabilityZone.ProtectionDomains[0].Name != "" {
+			pd = availabilityZone.ProtectionDomains[0].Name
+		}
+
+		pool := availabilityZone.ProtectionDomains[0].Pools[0]
+
+		zoneTargetMap[zone] = ZoneContent{
+			systemID:         array.SystemID,
+			protectionDomain: pd,
+			pool:             pool,
+		}
+	}
+
+	return zoneTargetMap
 }
 
 // Create a volume (which is actually a snapshot) from an existing snapshot.
@@ -2127,13 +2270,16 @@ func (s *service) getSystemCapacity(ctx context.Context, systemID, protectionDom
 
 	adminClient := s.adminClients[systemID]
 	system := s.systems[systemID]
+	if adminClient == nil || system == nil {
+		return 0, fmt.Errorf("can't find adminClient or system by id %s", systemID)
+	}
 
 	var statsFunc func() (*siotypes.Statistics, error)
 
 	// Default to get Capacity of system
 	statsFunc = system.GetStatistics
 
-	if len(spName) > 0 {
+	if len(spName) > 0 && spName[0] != "" {
 		// if storage pool is given, get capacity of storage pool
 		pdID, err := s.getProtectionDomainIDFromName(systemID, protectionDomain)
 		if err != nil {
@@ -2176,7 +2322,7 @@ func (s *service) getCapacityForAllSystems(ctx context.Context, protectionDomain
 		var systemCapacity int64
 		var err error
 
-		if len(spName) > 0 {
+		if len(spName) > 0 && spName[0] != "" {
 			systemCapacity, err = s.getSystemCapacity(ctx, array.SystemID, protectionDomain, spName[0])
 		} else {
 			systemCapacity, err = s.getSystemCapacity(ctx, array.SystemID, "")
@@ -2210,7 +2356,7 @@ func (s *service) GetCapacity(
 
 	systemID := ""
 	params := req.GetParameters()
-	if params == nil || len(params) == 0 {
+	if len(params) == 0 {
 		// Get capacity of all systems
 		capacity, err = s.getCapacityForAllSystems(ctx, "")
 	} else {
@@ -2223,6 +2369,15 @@ func (s *service) GetCapacity(
 			if strings.EqualFold(key, KeySystemID) {
 				systemID = value
 				break
+			}
+		}
+
+		// If using availability zones, get capacity for the system in the zone
+		// using accessible topology parameter from k8s.
+		if s.opts.zoneLabelKey != "" {
+			systemID, err = s.getSystemIDFromZoneLabelKey(req)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "%s", err.Error())
 			}
 		}
 
@@ -2266,6 +2421,28 @@ func (s *service) GetCapacity(
 		AvailableCapacity: capacity,
 		MaximumVolumeSize: maxVol,
 	}, nil
+}
+
+// getSystemIDFromZoneLabelKey returns the system ID associated with the zoneLabelKey if zoneLabelKey is set and
+// contains an associated zone name. Returns an empty string otherwise.
+func (s *service) getSystemIDFromZoneLabelKey(req *csi.GetCapacityRequest) (systemID string, err error) {
+	zoneName, ok := req.AccessibleTopology.Segments[s.opts.zoneLabelKey]
+	if !ok {
+		Log.Infof("could not get availability zone from accessible topology. Getting capacity for all systems")
+		return "", nil
+	}
+
+	// find the systemID with the matching zone name
+	for _, array := range s.opts.arrays {
+		if zoneName == string(array.AvailabilityZone.Name) {
+			systemID = array.SystemID
+			break
+		}
+	}
+	if systemID == "" {
+		return "", fmt.Errorf("could not find an array assigned to zone '%s'", zoneName)
+	}
+	return systemID, nil
 }
 
 func (s *service) getMaximumVolumeSize(systemID string) (int64, error) {
@@ -2415,15 +2592,51 @@ func (s *service) ControllerGetCapabilities(
 	}, nil
 }
 
+func (s *service) getZoneFromZoneLabelKey(ctx context.Context, zoneLabelKey string) (zone string, err error) {
+	// get labels for this service, s
+	labels, err := GetNodeLabels(ctx, s)
+	if err != nil {
+		return "", err
+	}
+
+	Log.Infof("Listing labels: %v", labels)
+
+	// get the zone name from the labels
+	if val, ok := labels[zoneLabelKey]; ok {
+		return val, nil
+	}
+
+	return "", fmt.Errorf("label %s not found", zoneLabelKey)
+}
+
 // systemProbeAll will iterate through all arrays in service.opts.arrays and probe them. If failed, it logs
 // the failed system name
 func (s *service) systemProbeAll(ctx context.Context) error {
 	// probe all arrays
-	Log.Infof("Probing all arrays. Number of arrays: %d", len(s.opts.arrays))
+	Log.Infoln("Probing all associated arrays")
 	allArrayFail := true
 	errMap := make(map[string]error)
+	zoneName := ""
+	usingZones := s.opts.zoneLabelKey != "" && s.isNodeMode()
+
+	if usingZones {
+		var err error
+		zoneName, err = s.getZoneFromZoneLabelKey(ctx, s.opts.zoneLabelKey)
+		if err != nil {
+			return err
+		}
+		Log.Infof("probing zoneLabel '%s', zone value: '%s'", s.opts.zoneLabelKey, zoneName)
+	}
 
 	for _, array := range s.opts.arrays {
+		// If zone information is available, use it to probe the array
+		if usingZones && !array.isInZone(zoneName) {
+			// Driver node containers should not probe arrays that exist outside their assigned zone
+			// Driver controller container should probe all arrays
+			Log.Infof("array %s zone %s does not match %s, not pinging this array\n", array.SystemID, array.AvailabilityZone.Name, zoneName)
+			continue
+		}
+
 		err := s.systemProbe(ctx, array)
 		systemID := array.SystemID
 		if err == nil {
@@ -2444,23 +2657,23 @@ func (s *service) systemProbeAll(ctx context.Context) error {
 }
 
 // systemProbe will probe the given array
-func (s *service) systemProbe(_ context.Context, array *ArrayConnectionData) error {
+func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) error {
 	// Check that we have the details needed to login to the Gateway
 	if array.Endpoint == "" {
 		return status.Error(codes.FailedPrecondition,
-			"missing VxFlexOS Gateway endpoint")
+			"missing PowerFlex Gateway endpoint")
 	}
 	if array.Username == "" {
 		return status.Error(codes.FailedPrecondition,
-			"missing VxFlexOS MDM user")
+			"missing PowerFlex MDM user")
 	}
 	if array.Password == "" {
 		return status.Error(codes.FailedPrecondition,
-			"missing VxFlexOS MDM password")
+			"missing PowerFlex MDM password")
 	}
 	if array.SystemID == "" {
 		return status.Error(codes.FailedPrecondition,
-			"missing VxFlexOS system name")
+			"missing PowerFlex system name")
 	}
 	var altSystemNames []string
 	if array.AllSystemNames != "" {
@@ -2483,25 +2696,27 @@ func (s *service) systemProbe(_ context.Context, array *ArrayConnectionData) err
 		}
 	}
 
+	Log.Printf("Login to PowerFlex Gateway, system=%s, endpoint=%s, user=%s\n", systemID, array.Endpoint, array.Username)
+
 	if s.adminClients[systemID].GetToken() == "" {
-		_, err := s.adminClients[systemID].Authenticate(&goscaleio.ConfigConnect{
+		_, err := s.adminClients[systemID].WithContext(ctx).Authenticate(&goscaleio.ConfigConnect{
 			Endpoint: array.Endpoint,
 			Username: array.Username,
 			Password: array.Password,
 		})
 		if err != nil {
 			return status.Errorf(codes.FailedPrecondition,
-				"unable to login to VxFlexOS Gateway: %s", err.Error())
+				"unable to login to PowerFlex Gateway: %s", err.Error())
 		}
 	}
 
 	// initialize system if needed
 	if s.systems[systemID] == nil {
-		system, err := s.adminClients[systemID].FindSystem(
+		system, err := s.adminClients[systemID].WithContext(ctx).FindSystem(
 			array.SystemID, array.SystemID, "")
 		if err != nil {
 			return status.Errorf(codes.FailedPrecondition,
-				"unable to find matching VxFlexOS system name: %s",
+				"unable to find matching PowerFlex system name: %s",
 				err.Error())
 		}
 		s.systems[systemID] = system

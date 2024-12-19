@@ -1,4 +1,4 @@
-// Copyright © 2019-2022 Dell Inc. or its subsidiaries. All Rights Reserved.
+// Copyright © 2019-2024 Dell Inc. or its subsidiaries. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -77,7 +77,6 @@ func (s *service) Probe(
 	_ *csi.ProbeRequest) (
 	*csi.ProbeResponse, error,
 ) {
-	Log.Debug("Probe called")
 	if !strings.EqualFold(s.mode, "node") {
 		Log.Debug("systemProbe")
 		if err := s.systemProbeAll(ctx); err != nil {
@@ -92,10 +91,9 @@ func (s *service) Probe(
 			return nil, err
 		}
 	}
-	ready := new(wrapperspb.BoolValue)
-	ready.Value = true
-	rep := new(csi.ProbeResponse)
-	rep.Ready = ready
+	rep := &csi.ProbeResponse{
+		Ready: wrapperspb.Bool(true),
+	}
 	Log.Debug(fmt.Sprintf("Probe returning: %v", rep.Ready.GetValue()))
 
 	return rep, nil

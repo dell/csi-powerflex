@@ -1,0 +1,53 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: vxflexos-az
+provisioner: csi-vxflexos.dellemc.com
+# reclaimPolicy: PVs that are dynamically created by a StorageClass will have the reclaim policy specified here
+# Allowed values:
+#   Reclaim: retain the PV after PVC deletion
+#   Delete: delete the PV after PVC deletion
+# Optional: true
+# Default value: Delete
+reclaimPolicy: Delete
+# allowVolumeExpansion: allows the users to resize the volume by editing the corresponding PVC object
+# Allowed values:
+#   true: allow users to resize the PVC
+#   false: does not allow users to resize the PVC
+# Optional: true
+# Default value: false
+allowVolumeExpansion: true
+parameters:
+  # Filesytem type for volumes created by storageclass
+  # Default value: None if defaultFsType is not mentioned in values.yaml
+  # Else defaultFsType value mentioned in values.yaml
+  # will be used as default value
+  csi.storage.k8s.io/fstype: xfs
+  # Limit the volume network bandwidth
+  # Value is a positive number in granularity of 1024 Kbps; 0 = unlimited
+  # Allowed values: one string for bandwidth limit in Kbps
+  # Optional: false
+  # Uncomment the line below if you want to use bandwidthLimitInKbps
+  # bandwidthLimitInKbps: <BANDWIDTH_LIMIT_IN_KBPS> # Insert bandwidth limit in Kbps
+  # Limit the volume IOPS
+  # The number of IOPS must be greater than 10; 0 = unlimited
+  # Allowed values: one string for iops limit
+  # Optional: false
+  # Uncomment the line below if you want to use iopsLimit
+  # iopsLimit: <IOPS_LIMIT> # Insert iops limit
+# volumeBindingMode determines how volume binding and dynamic provisioning should occur
+# Allowed values:
+#  Immediate: volume binding and dynamic provisioning occurs once PVC is created
+#  WaitForFirstConsumer: delay the binding and provisioning of PV until a pod using the PVC is created.
+# Optional: false
+# Default value: WaitForFirstConsumer (required for topology section below)
+volumeBindingMode: WaitForFirstConsumer
+# allowedTopologies helps scheduling pods on worker nodes which match all of below expressions.
+# by providing the zone key, the scheduler can make sure that pods are scheduled on the same zone.
+# Note: The node must have the same label value with the key and a single associated zone.
+allowedTopologies:
+  - matchLabelExpressions:
+      - key: topology.kubernetes.io/zone
+        values:
+          - zoneA
+          - zoneB

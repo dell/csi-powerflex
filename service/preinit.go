@@ -138,7 +138,7 @@ func getMdmList(connectionData []*ArrayConnectionData, key, zone string) (string
 
 	sb := &strings.Builder{}
 	for _, connectionData := range connectionData {
-		if connectionData.Mdm != "" && connectionData.Zone.LabelKey == key && connectionData.Zone.Name == zone {
+		if connectionData.Mdm != "" && connectionData.AvailabilityZone != nil && connectionData.AvailabilityZone.LabelKey == key && string(connectionData.AvailabilityZone.Name) == zone {
 			if sb.Len() > 0 {
 				sb.WriteString("\\&")
 			}
@@ -158,10 +158,13 @@ func getLabelKey(connectionData []*ArrayConnectionData) (string, error) {
 		return "", fmt.Errorf("array connection data is empty")
 	}
 
-	labelKey := connectionData[0].Zone.LabelKey
+	labelKey := ""
+	if connectionData[0].AvailabilityZone != nil {
+		labelKey = connectionData[0].AvailabilityZone.LabelKey
+	}
 
 	for _, v := range connectionData {
-		if v.Zone.LabelKey != labelKey {
+		if v.AvailabilityZone != nil && v.AvailabilityZone.LabelKey != labelKey {
 			return "", fmt.Errorf("zone label key is not the same for all arrays")
 		}
 	}
