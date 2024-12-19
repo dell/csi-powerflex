@@ -44,11 +44,10 @@ parameters:
 volumeBindingMode: WaitForFirstConsumer
 # allowedTopologies helps scheduling pods on worker nodes which match all of below expressions.
 # by providing the zone key, the scheduler can make sure that pods are scheduled on the same zone.
-# Note: The node must have the same label value with the key zone.csi-vxflexos.dellemc.com and a single
-# associated zone.
+# Note: The node must have the same label value with the key and a single associated zone.
 allowedTopologies:
   - matchLabelExpressions:
-      - key: zone.csi-vxflexos.dellemc.com
+      - key: topology.kubernetes.io/zone
         values:
           - zoneA
           - zoneB
