@@ -208,6 +208,8 @@ type service struct {
 	// maps the first 24 bits of a volume ID to the volume's systemID
 	volumePrefixToSystems   map[string][]string
 	connectedSystemNameToID map[string]string
+
+	mutex sync.Mutex
 }
 
 type Config struct {
