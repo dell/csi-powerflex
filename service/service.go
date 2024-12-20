@@ -208,6 +208,8 @@ type service struct {
 	// maps the first 24 bits of a volume ID to the volume's systemID
 	volumePrefixToSystems   map[string][]string
 	connectedSystemNameToID map[string]string
+
+	mutex sync.Mutex
 }
 
 type Config struct {
@@ -543,9 +545,18 @@ func (s *service) BeforeServe(
 	// Update the ConfigMap with the Interface IPs
 	s.updateConfigMap(s.getIPAddressByInterface, ConfigMapFilePath)
 
+	Log.Printf("[BeforeServe] Context: %+v", ctx)
+
+	newContext, cancel := context.WithDeadline(ctx, time.Now().Add(1*time.Second))
+	defer cancel()
+
 	if _, ok := csictx.LookupEnv(ctx, "X_CSI_VXFLEXOS_NO_PROBE_ON_START"); !ok {
-		return s.doProbe(ctx)
+		err := s.doProbe(newContext)
+		Log.Printf("BeforeServe - doProbe: Completed at %s", time.Now().Format(time.RFC3339))
+		return err
 	}
+
+	Log.Printf("BeforeServe: Completed at %s", time.Now().Format(time.RFC3339))
 	return nil
 }
 

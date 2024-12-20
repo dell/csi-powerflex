@@ -155,6 +155,8 @@ const (
 
 var interestingParameters = [...]string{0: "FsType", 1: KeyMkfsFormatOption, 2: KeyBandwidthLimitInKbps, 3: KeyIopsLimit}
 
+// var lock = sync.RWMutex{}
+
 type ZoneContent struct {
 	systemID         string
 	protectionDomain ProtectionDomainName
@@ -2614,8 +2616,9 @@ func (s *service) getZoneFromZoneLabelKey(ctx context.Context, zoneLabelKey stri
 func (s *service) systemProbeAll(ctx context.Context) error {
 	// probe all arrays
 	Log.Infoln("Probing all associated arrays")
-	allArrayFail := true
-	errMap := make(map[string]error)
+	// allArrayFail := true
+	// errMap := make(map[string]error)
+	errMap := new(sync.Map)
 	zoneName := ""
 	usingZones := s.opts.zoneLabelKey != "" && s.isNodeMode()
 
@@ -2628,6 +2631,9 @@ func (s *service) systemProbeAll(ctx context.Context) error {
 		Log.Infof("probing zoneLabel '%s', zone value: '%s'", s.opts.zoneLabelKey, zoneName)
 	}
 
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(s.opts.arrays))
+
 	for _, array := range s.opts.arrays {
 		// If zone information is available, use it to probe the array
 		if usingZones && !array.isInZone(zoneName) {
@@ -2637,20 +2643,48 @@ func (s *service) systemProbeAll(ctx context.Context) error {
 			continue
 		}
 
-		err := s.systemProbe(ctx, array)
-		systemID := array.SystemID
-		if err == nil {
-			Log.Infof("array %s probed successfully", systemID)
-			allArrayFail = false
-		} else {
-			errMap[systemID] = err
-			Log.Errorf("array %s probe failed: %v", array.SystemID, err)
-		}
+		wg.Add(1)
+
+		go func(array *ArrayConnectionData) {
+			defer wg.Done()
+			defer func() {
+				if r := recover(); r != nil {
+					Log.Errorf("recovered from panic in systemProbe: %v", r)
+				}
+			}()
+
+			Log.Infof("[SystemProbeAll - FERNANDO] probing array %s", array.SystemID)
+
+			err := s.systemProbe(ctx, array)
+			systemID := array.SystemID
+			if err != nil {
+				// errMap[systemID] = err
+				errMap.Store(systemID, err)
+				Log.Errorf("array %s probe failed: %v", array.SystemID, err)
+				errChan <- err
+			} else {
+				Log.Infof("array %s probed successfully", systemID)
+				// allArrayFail = false
+			}
+
+		}(array)
 	}
 
-	if allArrayFail {
+	go func() {
+		wg.Wait()
+		close(errChan)
+	}()
+
+	var errs []error
+	for err := range errChan {
+		errs = append(errs, err)
+	}
+
+	Log.Printf("[SystemProbeAll] Number of failed probes: %d", len(errs))
+
+	if len(errs) == len(s.opts.arrays) {
 		return status.Error(codes.FailedPrecondition,
-			fmt.Sprintf("All arrays are not working. Could not proceed further: %v", errMap))
+			fmt.Sprintf("All arrays are not working. Could not proceed further: %v", errs))
 	}
 
 	return nil
@@ -2658,6 +2692,9 @@ func (s *service) systemProbeAll(ctx context.Context) error {
 
 // systemProbe will probe the given array
 func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) error {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
 	// Check that we have the details needed to login to the Gateway
 	if array.Endpoint == "" {
 		return status.Error(codes.FailedPrecondition,
@@ -2691,8 +2728,10 @@ func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) e
 				"unable to create ScaleIO client: %s", err.Error())
 		}
 		s.adminClients[systemID] = c
+		// s.setAdminClient(systemID, c)
 		for _, name := range altSystemNames {
 			s.adminClients[name] = c
+			// s.setAdminClient(name, c)
 		}
 	}
 
@@ -3747,3 +3786,39 @@ func (s *service) verifySystem(systemID string) (*goscaleio.Client, error) {
 
 	return adminClient, nil
 }
+
+// func (s *service) setMuxAdminClient(systemID string, client *goscaleio.Client) {
+// 	lock.Lock()
+// 	defer lock.Unlock()
+// 	s.adminClients[systemID] = client
+// }
+
+// func (s *service) getMuxAdminClient(systemID string) *goscaleio.Client {
+// 	lock.RLock()
+// 	defer lock.RUnlock()
+// 	return s.adminClients[systemID]
+// }
+
+// func (s *service) setMuxSystem(name string, system *goscaleio.System) {
+// 	lock.Lock()
+// 	defer lock.Unlock()
+// 	s.systems[name] = system
+// }
+
+// func (s *service) getMuxSystem(name string) *goscaleio.System {
+// 	lock.RLock()
+// 	defer lock.RUnlock()
+// 	return s.systems[name]
+// }
+
+// func (s *service) setMuxConnectedSystemNameToID(name, id string) {
+// 	lock.Lock()
+// 	defer lock.Unlock()
+// 	s.connectedSystemNameToID[name] = id
+// }
+
+// func (s *service) getMuxConnectedSystemNameToID(name string) string {
+// 	lock.RLock()
+// 	defer lock.RUnlock()
+// 	return s.connectedSystemNameToID[name]
+// }
