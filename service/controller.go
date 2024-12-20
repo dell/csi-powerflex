@@ -2628,6 +2628,9 @@ func (s *service) systemProbeAll(ctx context.Context) error {
 		Log.Infof("probing zoneLabel '%s', zone value: '%s'", s.opts.zoneLabelKey, zoneName)
 	}
 
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(s.opts.arrays))
+
 	for _, array := range s.opts.arrays {
 		// If zone information is available, use it to probe the array
 		if usingZones && !array.isInZone(zoneName) {
@@ -2637,16 +2640,34 @@ func (s *service) systemProbeAll(ctx context.Context) error {
 			continue
 		}
 
-		err := s.systemProbe(ctx, array)
-		systemID := array.SystemID
-		if err == nil {
-			Log.Infof("array %s probed successfully", systemID)
-			allArrayFail = false
-		} else {
-			errMap[systemID] = err
-			Log.Errorf("array %s probe failed: %v", array.SystemID, err)
-		}
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+			err := s.systemProbe(ctx, array)
+			systemID := array.SystemID
+			if err == nil {
+				Log.Infof("array %s probed successfully", systemID)
+				allArrayFail = false
+			} else {
+				errMap[systemID] = err
+				Log.Errorf("array %s probe failed: %v", array.SystemID, err)
+				errChan <- err
+			}
+		}()
 	}
+
+	go func() {
+		wg.Wait()
+		close(errChan)
+	}()
+
+	var errs []error
+	for err := range errChan {
+		errs = append(errs, err)
+	}
+
+	Log.Printf("[SystemProbeAll] Number of failed probes: %d", len(errs))
 
 	if allArrayFail {
 		return status.Error(codes.FailedPrecondition,
