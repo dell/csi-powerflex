@@ -209,7 +209,7 @@ type service struct {
 	volumePrefixToSystems   map[string][]string
 	connectedSystemNameToID map[string]string
 
-	mutex sync.Mutex
+	probeMutex sync.Mutex
 }
 
 type Config struct {
@@ -545,18 +545,18 @@ func (s *service) BeforeServe(
 	// Update the ConfigMap with the Interface IPs
 	s.updateConfigMap(s.getIPAddressByInterface, ConfigMapFilePath)
 
-	Log.Printf("[BeforeServe] Context: %+v", ctx)
-
-	newContext, cancel := context.WithDeadline(ctx, time.Now().Add(1*time.Second))
-	defer cancel()
-
 	if _, ok := csictx.LookupEnv(ctx, "X_CSI_VXFLEXOS_NO_PROBE_ON_START"); !ok {
+		Log.Printf("BeforeServe probing starting %s", time.Now().Format("15:04:05.000000000"))
+		// probe before the server starts, to avoid errors in the controller, we must return before 2 seconds.
+		beforeServeMaxTimeout := 1 * time.Second
+		newContext, cancel := context.WithDeadline(ctx, time.Now().Add(beforeServeMaxTimeout))
+		defer cancel()
+
 		err := s.doProbe(newContext)
-		Log.Printf("BeforeServe - doProbe: Completed at %s", time.Now().Format(time.RFC3339))
+		Log.Printf("BeforeServe probing complete %s", time.Now().Format("15:04:05.000000000"))
 		return err
 	}
 
-	Log.Printf("BeforeServe: Completed at %s", time.Now().Format(time.RFC3339))
 	return nil
 }
 
