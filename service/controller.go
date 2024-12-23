@@ -2659,7 +2659,6 @@ func (s *service) systemProbeAll(ctx context.Context) error {
 			} else {
 				Log.Infof("array %s probed successfully", systemID)
 			}
-
 		}(array)
 	}
 
