@@ -2634,12 +2634,25 @@ func (s *service) systemProbeAll(ctx context.Context) error {
 	var wg sync.WaitGroup
 	errChan := make(chan error, len(s.opts.arrays))
 
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		deadline = time.Now().Add(10 * time.Second)
+	}
+
+	// Calculate the new deadline by subtracting the desired duration
+	newDeadline := deadline.Add(-(100 * time.Millisecond))
+	newCtx, cancel := context.WithDeadline(ctx, newDeadline)
+	defer cancel()
+
+	Log.Printf("[SystemProbeAll - FERNANDO] context deadline: %v, new deadline: %v", deadline, newDeadline)
+
 	for _, array := range s.opts.arrays {
 		// If zone information is available, use it to probe the array
 		if usingZones && !array.isInZone(zoneName) {
 			// Driver node containers should not probe arrays that exist outside their assigned zone
 			// Driver controller container should probe all arrays
 			Log.Infof("array %s zone %s does not match %s, not pinging this array\n", array.SystemID, array.AvailabilityZone.Name, zoneName)
+			errChan <- fmt.Errorf("array %s zone %s does not match %s, not pinging this array", array.SystemID, array.AvailabilityZone.Name, zoneName)
 			continue
 		}
 
@@ -2647,15 +2660,10 @@ func (s *service) systemProbeAll(ctx context.Context) error {
 
 		go func(array *ArrayConnectionData) {
 			defer wg.Done()
-			defer func() {
-				if r := recover(); r != nil {
-					Log.Errorf("recovered from panic in systemProbe: %v", r)
-				}
-			}()
 
 			Log.Infof("[SystemProbeAll - FERNANDO] probing array %s", array.SystemID)
 
-			err := s.systemProbe(ctx, array)
+			err := s.systemProbe(newCtx, array)
 			systemID := array.SystemID
 			if err != nil {
 				// errMap[systemID] = err
@@ -2728,14 +2736,17 @@ func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) e
 				"unable to create ScaleIO client: %s", err.Error())
 		}
 		s.adminClients[systemID] = c
-		// s.setAdminClient(systemID, c)
+		// s.setMuxAdminClient(systemID, c)
 		for _, name := range altSystemNames {
 			s.adminClients[name] = c
-			// s.setAdminClient(name, c)
+			// s.setMuxAdminClient(name, c)
 		}
 	}
 
 	Log.Printf("Login to PowerFlex Gateway, system=%s, endpoint=%s, user=%s\n", systemID, array.Endpoint, array.Username)
+
+	// client := s.getMuxAdminClient(systemID)
+	// client := s.adminClients[systemID]
 
 	if s.adminClients[systemID].GetToken() == "" {
 		_, err := s.adminClients[systemID].WithContext(ctx).Authenticate(&goscaleio.ConfigConnect{
@@ -2759,17 +2770,26 @@ func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) e
 				err.Error())
 		}
 		s.systems[systemID] = system
+		// s.setMuxSystem(systemID, system)
 		if system.System != nil && system.System.Name != "" {
 			Log.Printf("Found Name for system=%s with ID=%s", system.System.Name, system.System.ID)
 			s.connectedSystemNameToID[system.System.Name] = system.System.ID
 			s.systems[system.System.ID] = system
 			s.adminClients[system.System.ID] = s.adminClients[systemID]
+
+			// s.setMuxConnectedSystemNameToID(system.System.Name, system.System.ID)
+			// s.setMuxSystem(system.System.ID, system)
+			// s.setMuxAdminClient(system.System.ID, client)
 		}
 		// associate alternate system name to systemID
 		for _, name := range altSystemNames {
 			s.systems[name] = system
 			s.adminClients[name] = s.adminClients[systemID]
 			s.connectedSystemNameToID[name] = system.System.ID
+
+			// s.setMuxSystem(name, system)
+			// s.setMuxAdminClient(name, client)
+			// s.setMuxConnectedSystemNameToID(name, system.System.ID)
 		}
 	}
 
@@ -2779,7 +2799,8 @@ func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) e
 		sysID = id
 		s.opts.arrays[sysID] = array
 	}
-	if array.IsDefault == true {
+
+	if array.IsDefault {
 		Log.Infof("default array is set to array ID: %s", sysID)
 		s.opts.defaultSystemID = sysID
 		Log.Printf("%s is the default array, skipping VolumePrefixToSystems map update. \n", sysID)
@@ -2789,6 +2810,7 @@ func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) e
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -3787,38 +3809,38 @@ func (s *service) verifySystem(systemID string) (*goscaleio.Client, error) {
 	return adminClient, nil
 }
 
-// func (s *service) setMuxAdminClient(systemID string, client *goscaleio.Client) {
-// 	lock.Lock()
-// 	defer lock.Unlock()
-// 	s.adminClients[systemID] = client
-// }
+func (s *service) setMuxAdminClient(systemID string, client *goscaleio.Client) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	s.adminClients[systemID] = client
+}
 
-// func (s *service) getMuxAdminClient(systemID string) *goscaleio.Client {
-// 	lock.RLock()
-// 	defer lock.RUnlock()
-// 	return s.adminClients[systemID]
-// }
+func (s *service) getMuxAdminClient(systemID string) *goscaleio.Client {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	return s.adminClients[systemID]
+}
 
-// func (s *service) setMuxSystem(name string, system *goscaleio.System) {
-// 	lock.Lock()
-// 	defer lock.Unlock()
-// 	s.systems[name] = system
-// }
+func (s *service) setMuxSystem(name string, system *goscaleio.System) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	s.systems[name] = system
+}
 
-// func (s *service) getMuxSystem(name string) *goscaleio.System {
-// 	lock.RLock()
-// 	defer lock.RUnlock()
-// 	return s.systems[name]
-// }
+func (s *service) getMuxSystem(name string) *goscaleio.System {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	return s.systems[name]
+}
 
-// func (s *service) setMuxConnectedSystemNameToID(name, id string) {
-// 	lock.Lock()
-// 	defer lock.Unlock()
-// 	s.connectedSystemNameToID[name] = id
-// }
+func (s *service) setMuxConnectedSystemNameToID(name, id string) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	s.connectedSystemNameToID[name] = id
+}
 
-// func (s *service) getMuxConnectedSystemNameToID(name string) string {
-// 	lock.RLock()
-// 	defer lock.RUnlock()
-// 	return s.connectedSystemNameToID[name]
-// }
+func (s *service) getMuxConnectedSystemNameToID(name string) string {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	return s.connectedSystemNameToID[name]
+}
