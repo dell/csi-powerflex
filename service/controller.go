@@ -2616,7 +2616,8 @@ func (s *service) getZoneFromZoneLabelKey(ctx context.Context, zoneLabelKey stri
 func (s *service) systemProbeAll(ctx context.Context) error {
 	// probe all arrays
 	Log.Infoln("Probing all associated arrays")
-	errMap := new(sync.Map)
+	allArrayFail := true
+	errMap := make(map[string]error)
 	zoneName := ""
 	usingZones := s.opts.zoneLabelKey != "" && s.isNodeMode()
 
@@ -2629,9 +2630,6 @@ func (s *service) systemProbeAll(ctx context.Context) error {
 		Log.Infof("probing zoneLabel '%s', zone value: '%s'", s.opts.zoneLabelKey, zoneName)
 	}
 
-	var wg sync.WaitGroup
-	errChan := make(chan error, len(s.opts.arrays))
-
 	newCtx, cancel := createProbeContextWithDeadline(ctx)
 	defer cancel()
 
@@ -2641,42 +2639,26 @@ func (s *service) systemProbeAll(ctx context.Context) error {
 			// Driver node containers should not probe arrays that exist outside their assigned zone
 			// Driver controller container should probe all arrays
 			Log.Infof("array %s zone %s does not match %s, not pinging this array\n", array.SystemID, array.AvailabilityZone.Name, zoneName)
-			errChan <- fmt.Errorf("array %s zone %s does not match %s, not pinging this array", array.SystemID, array.AvailabilityZone.Name, zoneName)
+			errMap[array.SystemID] = fmt.Errorf("array %s zone %s does not match %s, not pinging this array", array.SystemID, array.AvailabilityZone.Name, zoneName)
 			continue
 		}
 
-		wg.Add(1)
-
-		go func(array *ArrayConnectionData) {
-			defer wg.Done()
-
-			err := s.systemProbe(newCtx, array)
-			systemID := array.SystemID
-			if err != nil {
-				errMap.Store(systemID, err)
-				Log.Errorf("array %s probe failed: %v", array.SystemID, err)
-				errChan <- err
-			} else {
-				Log.Infof("array %s probed successfully", systemID)
-			}
-		}(array)
+		err := s.systemProbe(newCtx, array)
+		systemID := array.SystemID
+		if err != nil {
+			errMap[systemID] = err
+			Log.Errorf("array %s probe failed: %v", array.SystemID, err)
+		} else {
+			allArrayFail = false
+			Log.Infof("array %s probed successfully", systemID)
+		}
 	}
 
-	go func() {
-		wg.Wait()
-		close(errChan)
-	}()
+	Log.Printf("[SystemProbeAll] Number of failed probes: %d", len(errMap))
 
-	var errs []error
-	for err := range errChan {
-		errs = append(errs, err)
-	}
-
-	Log.Printf("[SystemProbeAll] Number of failed probes: %d", len(errs))
-
-	if len(errs) == len(s.opts.arrays) {
+	if allArrayFail {
 		return status.Error(codes.FailedPrecondition,
-			fmt.Sprintf("All arrays are not working. Could not proceed further: %v", errs))
+			fmt.Sprintf("All arrays are not working. Could not proceed further: %v", errMap))
 	}
 
 	return nil
@@ -2684,9 +2666,6 @@ func (s *service) systemProbeAll(ctx context.Context) error {
 
 // systemProbe will probe the given array
 func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) error {
-	s.probeMutex.Lock()
-	defer s.probeMutex.Unlock()
-
 	// Check that we have the details needed to login to the Gateway
 	if array.Endpoint == "" {
 		return status.Error(codes.FailedPrecondition,
