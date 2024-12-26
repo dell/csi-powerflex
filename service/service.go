@@ -544,8 +544,17 @@ func (s *service) BeforeServe(
 	s.updateConfigMap(s.getIPAddressByInterface, ConfigMapFilePath)
 
 	if _, ok := csictx.LookupEnv(ctx, "X_CSI_VXFLEXOS_NO_PROBE_ON_START"); !ok {
-		return s.doProbe(ctx)
+		Log.Printf("BeforeServe probing starting %s", time.Now().Format("15:04:05.000000000"))
+		// probe before the server starts, to avoid errors in the controller, we must return before 2 seconds.
+		beforeServeMaxTimeout := 1 * time.Second
+		newContext, cancel := context.WithDeadline(ctx, time.Now().Add(beforeServeMaxTimeout))
+		defer cancel()
+
+		err := s.doProbe(newContext)
+		Log.Printf("BeforeServe probing complete %s", time.Now().Format("15:04:05.000000000"))
+		return err
 	}
+
 	return nil
 }
 
