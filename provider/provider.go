@@ -14,9 +14,9 @@
 package provider
 
 import (
-	"github.com/dell/csi-vxflexos/v2/service"
-	nfs "github.com/dell/csi-nfs/pkg"
 	"github.com/dell/csi-md/md"
+	nfs "github.com/dell/csi-nfs/nfs"
+	"github.com/dell/csi-vxflexos/v2/service"
 	"github.com/dell/gocsi"
 	logrus "github.com/sirupsen/logrus"
 )

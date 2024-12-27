@@ -25,6 +25,7 @@ import (
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/dell/csi-md/md"
+	"github.com/dell/csi-nfs/nfs"
 	"github.com/dell/gofsutil"
 	"github.com/dell/goscaleio"
 	"github.com/sirupsen/logrus"
@@ -59,6 +60,9 @@ func (s *service) NodeStageVolume(
 	if md.IsMDVolumeID(req.GetVolumeId()) {
 		return mdsvc.NodeStageVolume(ctx, req)
 	}
+	if nfs.IsNFSVolumeID(req.GetVolumeId()) {
+		req.VolumeId = nfs.NFSToArrayVolumeID(req.GetVolumeId())
+	}
 
 	return nil, status.Error(codes.Unimplemented, "")
 }
@@ -73,6 +77,9 @@ func (s *service) NodeUnstageVolume(
 
 	if md.IsMDVolumeID(req.GetVolumeId()) {
 		return mdsvc.NodeUnstageVolume(ctx, req)
+	}
+	if nfs.IsNFSVolumeID(req.GetVolumeId()) {
+		req.VolumeId = nfs.NFSToArrayVolumeID(req.GetVolumeId())
 	}
 
 	var reqID string
@@ -127,6 +134,10 @@ func (s *service) NodePublishVolume(
 	req *csi.NodePublishVolumeRequest) (
 	*csi.NodePublishVolumeResponse, error) {
 
+	if nfs.IsNFSVolumeID(req.GetVolumeId()) {
+		return nfssvc.NodePublishVolume(ctx, req)
+	}
+
 	Log := getLogger(ctx)
 	if md.IsMDVolumeID(req.GetVolumeId()) {
 		// md requires a call to NodeStageVolume before node publish. The current csi-powerflex driver does not
@@ -158,16 +169,14 @@ func (s *service) NodePublishVolume(
 		Log.Infof("Error storing meta-data: %s", metadataerror)
 	}
 	volumeContext := req.GetVolumeContext()
+	if nfs.IsNFSVolumeID(req.GetVolumeId()) {
+		req.VolumeId = nfs.NFSToArrayVolumeID(req.GetVolumeId())
+	}
 	if volumeContext != nil {
 		Log.Info("VolumeContext:")
 		for key, value := range volumeContext {
 			Log.WithFields(logrus.Fields{key: value}).Info("found in VolumeContext")
 		}
-	}
-
-	if req.VolumeContext["csi-nfs"] == "RWX" {
-		Log.Infof("csi-nfs: RWX calling nfssvc.NodeStageVolume")
-		return nfssvc.NodePublishVolume(ctx, req)
 	}
 
 	ephemeral, ok := req.VolumeContext["csi.storage.k8s.io/ephemeral"]
@@ -271,6 +280,11 @@ func (s *service) NodeUnpublishVolume(
 	req *csi.NodeUnpublishVolumeRequest) (
 	*csi.NodeUnpublishVolumeResponse, error) {
 
+	var err error
+	if nfs.IsNFSVolumeID(req.GetVolumeId()) {
+		resp, err := nfssvc.NodeUnpublishVolume(ctx, req)
+		return resp, err
+	}
 	Log := getLogger(ctx)
 
 	var reqID string
@@ -298,13 +312,6 @@ func (s *service) NodeUnpublishVolume(
 		}
 		_, err = mdsvc.NodeUnstageVolume(ctx, nodeUnstageRequest)
 		resp := &csi.NodeUnpublishVolumeResponse{}
-		return resp, err
-	}
-
-	// temporary need to filter this somehow
-	// assume it's a csi-nfs volume unless rejected
-	resp, err := nfssvc.NodeUnpublishVolume(ctx, req)
-	if err == nil {
 		return resp, err
 	}
 
@@ -1116,12 +1123,14 @@ func getNodeUID(ctx context.Context, s *service) (string, error) {
 // MountVolume finds a volume exported to the node by VolumeId, mounts to a staging path,
 // The fsType and nfsExport directory are optional arguments.
 // and returns that staging path or an error. This is used by csinfs.
+// Note the volumeId here is an NFS volume id prepended with nfs-.
 func (s *service) MountVolume(ctx context.Context, volumeId, fsType, nfsExportDirectory string) (string, error) {
 	Log.Infof("MountVolume called volumeId %s", volumeId)
 	if volumeId == "" {
 		return "", fmt.Errorf("mountVolume: volumeId was empty")
 	}
 	systemId := s.getSystemIDFromCsiVolumeID(volumeId)
+	systemId = strings.Replace(systemId, "nfs-", "", 1)
 	volId := getVolumeIDFromCsiVolumeID(volumeId)
 	if systemId == "" {
 		return "", fmt.Errorf("mountVolume: could not determine systemId for volumeId %s", volumeId)
@@ -1130,7 +1139,7 @@ func (s *service) MountVolume(ctx context.Context, volumeId, fsType, nfsExportDi
 	if err := s.requireProbe(ctx, systemId); err != nil {
 		return "", err
 	}
-	Log.Infof("systemId %s", systemId)
+	Log.Infof("systemId %s volumeId", systemId, volId)
 	sdcMappedVol, err := s.getSDCMappedVol(volId, systemId, publishGetMappedVolMaxRetry)
 	if err != nil {
 		return "", fmt.Errorf("mountVolume: getSDCMappedVol returned error %s", err)
@@ -1154,4 +1163,24 @@ func (s *service) MountVolume(ctx context.Context, volumeId, fsType, nfsExportDi
 	Log.Infof("mountVolume %s %s successful", sdcMappedVol.SdcDevice, target)
 
 	return target, nil
+}
+
+func (s *service) UnmountVolume(ctx context.Context, volumeId, nfsExportDirectory string) error {
+	if nfsExportDirectory == "" {
+		nfsExportDirectory = "/nfs/exports"
+	}
+	target := nfsExportDirectory + "/" + volumeId
+	Log.Infof("calling gofsutil.Unmount %s", target)
+	err := gofsutil.Unmount(ctx, target)
+	if err != nil &&
+		!strings.Contains(err.Error(), "no such file or directory") &&
+		!strings.Contains(err.Error(), "invalid argument") &&
+		!strings.Contains(err.Error(), "no mount point specified") {
+		return fmt.Errorf("unmountVolume: gofsutil.Unmount %s failed: %s", target, err)
+	}
+	err = os.Remove(target)
+	if err != nil && !strings.Contains(err.Error(), "no such file or directory") {
+		Log.Infof("UnmountVolume could not remove directory %s: %s", target, err)
+	}
+	return nil
 }

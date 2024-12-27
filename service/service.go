@@ -149,6 +149,7 @@ type Service interface {
 	ProcessMapSecretChange() error
 	VolumeIDToArrayID(string) string
 	MountVolume(context.Context, string, string, string) (string, error)
+	UnmountVolume(context.Context, string, string) error
 }
 
 type NetworkInterface interface {
