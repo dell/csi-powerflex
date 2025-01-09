@@ -1,5 +1,5 @@
-# Copyright © 2019-2022 Dell Inc. or its subsidiaries. All Rights Reserved.
-# 
+# Copyright © 2019-2025 Dell Inc. or its subsidiaries. All Rights Reserved.
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -32,13 +32,12 @@ ENTRYPOINT ["/csi-vxflexos.sh"]
 COPY --from=builder /go/src/csi-vxflexos /
 COPY "csi-vxflexos.sh" /
 RUN chmod +x /csi-vxflexos.sh
-LABEL vendor="Dell Inc." \
+LABEL vendor="Dell Technologies" \
+    maintainer="Dell Technologies" \
     name="csi-powerflex" \
     summary="CSI Driver for Dell EMC PowerFlex" \
     description="CSI Driver for provisioning persistent storage from Dell EMC PowerFlex" \
+    release="1.13.0" \
     version="2.13.0" \
     license="Apache-2.0"
 COPY ./licenses /licenses
-
-
-
