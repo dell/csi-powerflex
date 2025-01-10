@@ -599,14 +599,12 @@ func mkdir(path string) (bool, error) {
 // It determines this by checking to see if the volume is mounted anywhere else
 // other than the private mount.
 func unpublishVolume(
-	req *csi.NodeUnpublishVolumeRequest,
+	volumeID, targetPath string,
 	privDir, device string, reqID string,
 ) error {
 	ctx := context.Background()
-	id := req.GetVolumeId()
 
-	target := req.GetTargetPath()
-	if target == "" {
+	if targetPath == "" {
 		return status.Error(codes.InvalidArgument,
 			"target path required")
 	}
@@ -616,17 +614,17 @@ func unpublishVolume(
 	if err != nil {
 		return status.Errorf(codes.Internal,
 			"error getting block device for volume: %s, err: %s",
-			id, err.Error())
+			volumeID, err.Error())
 	}
 
 	// Path to mount device to
-	privTgt := getPrivateMountPoint(privDir, id)
+	privTgt := getPrivateMountPoint(privDir, volumeID)
 
 	f := logrus.Fields{
 		"device":       sysDevice.RealDev,
 		"privTgt":      privTgt,
 		"CSIRequestID": reqID,
-		"target":       target,
+		"target":       targetPath,
 	}
 
 	mnts, err := gofsutil.GetMounts(ctx)
@@ -644,10 +642,10 @@ func unpublishVolume(
 			if m.Path == privTgt {
 				privMntExist = true
 				Log.Printf("Found private mount for device %#v, private mount path: %s .", sysDevice, privTgt)
-			} else if m.Path == target {
+			} else if m.Path == targetPath {
 				tgtMntExist = true
 				deviceMount = m
-				Log.Printf("Found target mount for device %#v, target mount path: %s .", sysDevice, target)
+				Log.Printf("Found target mount for device %#v, target mount path: %s .", sysDevice, targetPath)
 			}
 		}
 	}
@@ -656,12 +654,12 @@ func unpublishVolume(
 	}
 
 	if tgtMntExist {
-		Log.WithFields(f).Debug(fmt.Sprintf("Unmounting %s", target))
-		if err := gofsutil.Unmount(ctx, target); err != nil {
+		Log.WithFields(f).Debug(fmt.Sprintf("Unmounting %s", targetPath))
+		if err := gofsutil.Unmount(ctx, targetPath); err != nil {
 			return status.Errorf(codes.Internal,
 				"Error unmounting target: %s", err.Error())
 		}
-		if err := removeWithRetry(target); err != nil {
+		if err := removeWithRetry(targetPath); err != nil {
 			return status.Errorf(codes.Internal,
 				"Error remove target folder: %s", err.Error())
 		}

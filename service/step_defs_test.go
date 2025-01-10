@@ -2854,15 +2854,12 @@ func (f *feature) iCallMountPublishVolume() error {
 }
 
 func (f *feature) iCallMountUnpublishVolume() error {
-	req := new(csi.NodeUnpublishVolumeRequest)
-	req.TargetPath = ""
-	err := unpublishVolume(req, "", "/bad/device", "1")
+	err := unpublishVolume("", "", "", "/bad/device", "1")
 	if err != nil {
 		fmt.Printf("NodeUnpublishVolume bad targetPath: %s\n", err.Error())
 		f.err = errors.New("error in unpublishVolume")
 	}
-	req.TargetPath = "/badpath"
-	err = unpublishVolume(req, "", "/bad/device", "1")
+	err = unpublishVolume("", "/badpath", "", "/bad/device", "1")
 	if err != nil {
 		fmt.Printf("NodeUnpublishVolume bad device : %s\n", err.Error())
 		f.err = errors.New("error in unpublishVolume")
