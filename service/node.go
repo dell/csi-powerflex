@@ -371,7 +371,7 @@ func (s *service) NodeUnpublishVolume(
 		return &csi.NodeUnpublishVolumeResponse{}, nil
 	}
 
-	if err := unpublishVolume(req, s.privDir, sdcMappedVol.SdcDevice, reqID); err != nil {
+	if err := unpublishVolume(csiVolID, req.GetTargetPath(), s.privDir, sdcMappedVol.SdcDevice, reqID); err != nil {
 		return nil, err
 	}
 
