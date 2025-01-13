@@ -53,6 +53,7 @@ Scenario Outline: Node publish and unpublish ephemeral volume
     And I call NodePublishVolume "SDC_GUID"
     And I call NodeUnpublishVolume "SDC_GUID"
     Then the error contains <errormsg>
+    And there are no remaining mounts
 
 Examples:
  |  name                   | size           | storagepool              | systemName         | errormsg                                |
