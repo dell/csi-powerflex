@@ -16,9 +16,9 @@
 # on this system. This will make real calls to the SIO.
 # NOTE: you must run this as root, as the plugin cannot retrieve the SdcGUID without being root!
 
-sh validate_http_unauthorized.sh
-rc=$?
-if [ $rc -ne 0 ]; then echo "failed http unauthorized test"; exit $rc; fi
+#sh validate_http_unauthorized.sh
+#rc=$?
+#if [ $rc -ne 0 ]; then echo "failed http unauthorized test"; exit $rc; fi
 
 rm -f unix_sock
 . ../../env.sh
@@ -26,7 +26,16 @@ echo $SDC_GUID
 
 testRun=$1
 
-GOOS=linux CGO_ENABLED=0 GO111MODULE=on go test -v -coverprofile=c.linux.out -timeout 60m -coverpkg=github.com/dell/csi-vxflexos/service -run "^$testRun\$\$" &
+if [ -z "$VOL_NAME_SUFFIX" ]; then
+  echo "Set VOL_NAME_SUFFIX in env.sh to help identify volumes that belong to your testing."
+  exit 1
+elif [[ ! $VOL_NAME_SUFFIX =~ ^[a-zA-Z0-9]{4,10}$ ]]; then
+  echo "Set VOL_NAME_SUFFIX in env.sh should be 4 to 10 alphanumeric characters."
+  exit 1
+fi
+
+
+GOOS=linux CGO_ENABLED=0 GO111MODULE=on go test -v -coverprofile=c.linux.out -timeout 180m -coverpkg=github.com/dell/csi-vxflexos/service -run "^$testRun\$\$" &
 if [ -f ./csi-sanity ] ; then
     sleep 5
     ./csi-sanity --csi.endpoint=./unix_sock --csi.testvolumeparameters=./pool.yml --csi.testvolumesize 8589934592

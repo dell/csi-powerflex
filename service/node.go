@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -38,7 +39,7 @@ var (
 	connectedSystemID             = make([]string, 0)
 	publishGetMappedVolMaxRetry   = 30
 	unpublishGetMappedVolMaxRetry = 5
-	getMappedVolDelay             = (1 * time.Second)
+	getMappedVolDelay             = 1 * time.Second
 
 	// GetNodeLabels - Get the node labels
 	GetNodeLabels = getNodelabels
@@ -345,8 +346,8 @@ func (s *service) NodeUnpublishVolume(
 
 	sdcMappedVol, err := s.getSDCMappedVol(volID, systemID, unpublishGetMappedVolMaxRetry)
 	if err != nil {
-		Log.Infof("Error from getSDCMappedVol is: %#v", err)
-		Log.Infof("Error message from getSDCMappedVol is: %s", err.Error())
+		Log.Info(err.Error())
+
 		// fix k8s 19 bug: ControllerUnpublishVolume is called before NodeUnpublishVolume
 		// cleanup target from pod
 		if err := gofsutil.Unmount(ctx, targetPath); err != nil {
@@ -394,23 +395,24 @@ func (s *service) getSDCMappedVol(volumeID string, systemID string, maxRetry int
 	// communicate with SDC that it has volume
 	var sdcMappedVol *goscaleio.SdcMappedVolume
 	var err error
+
+	if id, ok := s.connectedSystemNameToID[systemID]; ok {
+		Log.Infof("Resolved system name %s to id %s", systemID, id)
+		systemID = id
+	}
+
 	for i := 0; i < maxRetry; i++ {
-		if id, ok := s.connectedSystemNameToID[systemID]; ok {
-			Log.Printf("Node publish getMappedVol name: %s id: %s", systemID, id)
-			systemID = id
-		}
 		sdcMappedVol, err = getMappedVol(volumeID, systemID)
 		if sdcMappedVol != nil {
 			break
 		}
-		Log.Printf("Node publish getMappedVol retry: %d", i)
+		Log.Debugf("Volume mapping not found, retry: %d", i)
 		time.Sleep(getMappedVolDelay)
 	}
 	if err != nil {
-		Log.Printf("SDC returned volume %s on system %s not published to node", volumeID, systemID)
 		return nil, err
 	}
-	return sdcMappedVol, err
+	return sdcMappedVol, nil
 }
 
 // Get the volumes published to the SDC (given by SdcMappedVolume) and scan for requested vol id
@@ -419,18 +421,17 @@ func getMappedVol(volID string, systemID string) (*goscaleio.SdcMappedVolume, er
 	localVols, _ := goscaleio.GetLocalVolumeMap()
 	var sdcMappedVol *goscaleio.SdcMappedVolume
 	if len(localVols) == 0 {
-		Log.Printf("Length of localVols (goscaleio.GetLocalVolumeMap()) is 0 \n")
+		Log.Debugf("No volumes are mapped to this node.")
 	}
 	for _, v := range localVols {
 		if v.VolumeID == volID && v.MdmID == systemID {
 			sdcMappedVol = v
-			Log.Printf("Found matching SDC mapped volume %v", sdcMappedVol)
+			Log.Debugf("Found matching SDC mapped volume: %v", sdcMappedVol)
 			break
 		}
 	}
 	if sdcMappedVol == nil {
-		return nil, status.Errorf(codes.Unavailable,
-			"volume: %s on system: %s not published to node", volID, systemID)
+		return nil, fmt.Errorf("volume %s on system %s is not mapped to this node", volID, systemID)
 	}
 	return sdcMappedVol, nil
 }
@@ -501,6 +502,7 @@ func (s *service) nodeProbe(ctx context.Context) error {
 
 		// make sure privDir is pre-created
 		if _, err := mkdir(s.privDir); err != nil {
+			Log.WithField("path", s.privDir).WithError(err).Error("Failed to create private mount dir")
 			return status.Errorf(codes.Internal,
 				"plugin private dir: %s creation error: %s",
 				s.privDir, err.Error())
@@ -631,10 +633,45 @@ func kmodLoaded(opts Opts) bool {
 	return false
 }
 
+func DrvCfgQuerySystems() (*[]goscaleio.ConfiguredCluster, error) {
+
+	Log.Info("==AB== running local version of DrvCfgQuerySystems without chroot")
+
+	clusters := make([]goscaleio.ConfiguredCluster, 0)
+
+	drvCfg := "/opt/emc/scaleio/sdc/bin/drv_cfg"
+
+	cmd := exec.Command(drvCfg, "--query_mdm")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("DrvCfgQuerySystems: Request to query MDM failed : %v", err)
+	}
+
+	// Parse the output to extract MDM information
+	re := regexp.MustCompile(`MDM-ID ([a-f0-9]+) SDC ID ([a-f0-9]+)`)
+	matches := re.FindAllStringSubmatch(string(output), -1)
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("no MDM information found in drv_cfg output")
+	}
+
+	// Fetch the systemID and sdcID for each system
+	for _, match := range matches {
+		systemID := match[1]
+		sdcID := match[2]
+		aCluster := goscaleio.ConfiguredCluster{
+			SystemID: systemID,
+			SdcID:    sdcID,
+		}
+		clusters = append(clusters, aCluster)
+	}
+
+	return &clusters, nil
+}
+
 func getSystemsKnownToSDC() ([]string, error) {
 	systems := make([]string, 0)
 
-	discoveredSystems, err := goscaleio.DrvCfgQuerySystems()
+	discoveredSystems, err := DrvCfgQuerySystems()
 	if err != nil {
 		return systems, err
 	}
