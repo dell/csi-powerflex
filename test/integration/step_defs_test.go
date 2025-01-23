@@ -102,6 +102,15 @@ type feature struct {
 	VolumeGroupSnapshot2        *volGroupSnap.CreateVolumeGroupSnapshotResponse
 }
 
+func appendUnique(idList []string, newId string) (newList []string, added bool) {
+	for _, id := range idList {
+		if id == newId {
+			return idList, false
+		}
+	}
+	return append(idList, newId), true
+}
+
 func (f *feature) getGoscaleioClient() (client *goscaleio.Client, err error) {
 	fmt.Println("f.arrays,len", f.arrays, f.arrays)
 
@@ -370,150 +379,26 @@ func (f *feature) aBasicBlockVolumeRequest(name string, size float64) error {
 }
 
 func (f *feature) aBasicNfsVolumeRequest(name string, size int64) error {
-	req := new(csi.CreateVolumeRequest)
-	params := make(map[string]string)
-
-	ctx := context.Background()
-	nfsPool := os.Getenv("NFS_STORAGE_POOL")
-
-	fmt.Println("f.arrays,len", f.arrays, f.arrays)
-
-	if f.arrays == nil {
-		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
-		var err error
-		f.arrays, err = f.getArrayConfig(configFile)
-		if err != nil {
-			return errors.New("Get multi array config failed " + err.Error())
-		}
-	}
-
-	for _, a := range f.arrays {
-		systemid := a.SystemID
-		val, err := f.checkNFS(ctx, systemid)
-		if err != nil {
-			return err
-		}
-
-		if val {
-			params["storagepool"] = nfsPool
-			params["thickprovisioning"] = "false"
-			if os.Getenv("X_CSI_QUOTA_ENABLED") == "true" {
-				params["isQuotaEnabled"] = "true"
-				params["softLimit"] = "20"
-				params["path"] = "/nfs-quota1"
-				params["gracePeriod"] = "86400"
-			}
-			if len(f.anotherSystemID) > 0 {
-				params["systemID"] = f.anotherSystemID
-			}
-			req.Parameters = params
-			makeAUniqueName(&name)
-			req.Name = name
-			capacityRange := new(csi.CapacityRange)
-			capacityRange.RequiredBytes = size * 1024 * 1024 * 1024
-			req.CapacityRange = capacityRange
-			capability := new(csi.VolumeCapability)
-			mount := new(csi.VolumeCapability_MountVolume)
-			mount.FsType = "nfs"
-			mountType := new(csi.VolumeCapability_Mount)
-			mountType.Mount = mount
-			capability.AccessType = mountType
-			accessMode := new(csi.VolumeCapability_AccessMode)
-			accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER
-			capability.AccessMode = accessMode
-			f.capability = capability
-			capabilities := make([]*csi.VolumeCapability, 0)
-			capabilities = append(capabilities, capability)
-			req.VolumeCapabilities = capabilities
-			f.createVolumeRequest = req
-			return nil
-		}
-		fmt.Printf("Array with SystemId %s does not support NFS. Skipping this step", systemid)
-		return nil
-	}
-	return nil
-}
-
-func (f *feature) aBasicNfsVolumeRequestWithSizeLessThan3Gi(name string, size int64) error {
-	req := new(csi.CreateVolumeRequest)
-	params := make(map[string]string)
-
-	ctx := context.Background()
-	nfsPool := os.Getenv("NFS_STORAGE_POOL")
-
-	fmt.Println("f.arrays,len", f.arrays, f.arrays)
-
-	if f.arrays == nil {
-		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
-		var err error
-		f.arrays, err = f.getArrayConfig(configFile)
-		if err != nil {
-			return errors.New("Get multi array config failed " + err.Error())
-		}
-	}
-
-	for _, a := range f.arrays {
-		systemid := a.SystemID
-		val, err := f.checkNFS(ctx, systemid)
-		if err != nil {
-			return err
-		}
-
-		if val {
-			params["storagepool"] = nfsPool
-			params["thickprovisioning"] = "false"
-			if os.Getenv("X_CSI_QUOTA_ENABLED") == "true" {
-				params["isQuotaEnabled"] = "true"
-				params["softLimit"] = "20"
-				params["path"] = "/nfs-quota1"
-				params["gracePeriod"] = "86400"
-			}
-			if len(f.anotherSystemID) > 0 {
-				params["systemID"] = f.anotherSystemID
-			}
-			req.Parameters = params
-			makeAUniqueName(&name)
-			req.Name = name
-			capacityRange := new(csi.CapacityRange)
-			capacityRange.RequiredBytes = size * 1024 * 1024 * 1024
-			req.CapacityRange = capacityRange
-			capability := new(csi.VolumeCapability)
-			mount := new(csi.VolumeCapability_MountVolume)
-			mount.FsType = "nfs"
-			mountType := new(csi.VolumeCapability_Mount)
-			mountType.Mount = mount
-			capability.AccessType = mountType
-			accessMode := new(csi.VolumeCapability_AccessMode)
-			accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER
-			capability.AccessMode = accessMode
-			f.capability = capability
-			capabilities := make([]*csi.VolumeCapability, 0)
-			capabilities = append(capabilities, capability)
-			req.VolumeCapabilities = capabilities
-			f.createVolumeRequest = req
-			return nil
-		}
-		fmt.Printf("Array with SystemId %s does not support NFS. Skipping this step", systemid)
-		return nil
-	}
-	return nil
+	return f.nfsVolumeRequest(name, size, false, "/nfs-quota1", "20", "86400")
 }
 
 func (f *feature) aNfsVolumeRequestWithQuota(volname string, volsize int64, path string, softlimit string, graceperiod string) error {
+	return f.nfsVolumeRequest(volname, volsize, true, path, softlimit, graceperiod)
+}
+
+func (f *feature) nfsVolumeRequest(volname string, volsize int64, withQuota bool, path string, softlimit string, graceperiod string) error {
 	req := new(csi.CreateVolumeRequest)
 	params := make(map[string]string)
 
 	ctx := context.Background()
 	nfsPool := os.Getenv("NFS_STORAGE_POOL")
 
-	fmt.Println("f.arrays,len", f.arrays, f.arrays)
-
 	if f.arrays == nil {
-		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
+		fmt.Printf("Initialize ArrayConfig from %s\n", configFile)
 		var err error
 		f.arrays, err = f.getArrayConfig(configFile)
 		if err != nil {
-			return errors.New("Get multi array config failed " + err.Error())
+			return fmt.Errorf("get multi array config failed: %v", err)
 		}
 	}
 
@@ -530,10 +415,12 @@ func (f *feature) aNfsVolumeRequestWithQuota(volname string, volsize int64, path
 			}
 			params["storagepool"] = nfsPool
 			params["thickprovisioning"] = "false"
-			params["isQuotaEnabled"] = "true"
-			params["softLimit"] = softlimit
-			params["path"] = path
-			params["gracePeriod"] = graceperiod
+			if withQuota || os.Getenv("X_CSI_QUOTA_ENABLED") == "true" {
+				params["isQuotaEnabled"] = "true"
+				params["softLimit"] = softlimit
+				params["path"] = path
+				params["gracePeriod"] = graceperiod
+			}
 			if len(f.anotherSystemID) > 0 {
 				params["systemID"] = f.anotherSystemID
 			}
@@ -585,7 +472,7 @@ func (f *feature) iCallCreateVolume() error {
 		fmt.Printf("CreateVolume %s (%s) %s\n", volResp.GetVolume().VolumeContext["Name"],
 			volResp.GetVolume().VolumeId, volResp.GetVolume().VolumeContext["CreationTime"])
 		f.volID = volResp.GetVolume().VolumeId
-		f.volIDList = append(f.volIDList, volResp.GetVolume().VolumeId)
+		f.volIDList, _ = appendUnique(f.volIDList, volResp.GetVolume().VolumeId)
 	}
 
 	return nil
@@ -609,13 +496,13 @@ func (f *feature) createVolume(req *csi.CreateVolumeRequest) (*csi.CreateVolumeR
 	return volResp, err
 }
 
-func (f *feature) whenICallDeleteVolume() error {
+func (f *feature) iCallDeleteVolume() error {
 	if f.createVolumeRequest == nil {
 		return nil
 	}
 	err := f.deleteVolume(f.volID)
 	if err != nil {
-		fmt.Printf("DeleteVolume %s:\n", err.Error())
+		fmt.Printf("DeleteVolume %s failed: %v\n", f.volID, err)
 		f.addError(err)
 	} else {
 		fmt.Printf("DeleteVolume %s completed successfully\n", f.volID)
@@ -624,9 +511,9 @@ func (f *feature) whenICallDeleteVolume() error {
 }
 
 func (f *feature) deleteVolume(id string) error {
-	if f.createVolumeRequest == nil {
-		return nil
-	}
+	//if f.createVolumeRequest == nil {
+	//	return nil
+	//}
 	ctx := context.Background()
 	client := csi.NewControllerClient(grpcClient)
 	delVolReq := new(csi.DeleteVolumeRequest)
@@ -635,11 +522,12 @@ func (f *feature) deleteVolume(id string) error {
 	// Retry loop to deal with VxFlexOS API being overwhelmed
 	for i := 0; i < f.maxRetryCount; i++ {
 		_, err = client.DeleteVolume(ctx, delVolReq)
-		if err == nil || !strings.Contains(err.Error(), "Insufficient resources") {
+		// "Insufficient resources" and "Aborted" API errors may be temporary, so we want to re-try
+		if err == nil || (!strings.Contains(err.Error(), "Insufficient resources") && !strings.Contains(err.Error(), "Aborted")) {
 			// no need for retry
 			break
 		}
-		fmt.Printf("retry: %s\n", err.Error())
+		fmt.Printf("Will retry DeleteVolume due to error: %v\n", err)
 		time.Sleep(RetrySleepTime)
 	}
 	return err
@@ -686,6 +574,7 @@ func (f *feature) getMountVolumeRequest(name string) *csi.CreateVolumeRequest {
 	params := make(map[string]string)
 	storagePool := os.Getenv("STORAGE_POOL")
 	params["storagepool"] = storagePool
+	// Use the default system, unless an alternative system is requested
 	if len(f.anotherSystemID) > 0 {
 		params["systemID"] = f.anotherSystemID
 	}
@@ -716,7 +605,6 @@ func (f *feature) getControllerPublishVolumeRequest() *csi.ControllerPublishVolu
 	req := new(csi.ControllerPublishVolumeRequest)
 	req.VolumeId = f.volID
 	req.NodeId = os.Getenv("SDC_GUID")
-	fmt.Printf("req.NodeId %s\n", req.NodeId)
 	req.Readonly = false
 	req.VolumeCapability = f.capability
 	f.publishVolumeRequest = req
@@ -726,7 +614,7 @@ func (f *feature) getControllerPublishVolumeRequest() *csi.ControllerPublishVolu
 func (f *feature) whenICallPublishVolume(nodeIDEnvVar string) error {
 	err := f.controllerPublishVolume(f.volID, nodeIDEnvVar)
 	if err != nil {
-		fmt.Printf("ControllerPublishVolume %s:\n", err.Error())
+		fmt.Printf("ControllerPublishVolume: %s\n", err.Error())
 		f.addError(err)
 	} else {
 		fmt.Printf("ControllerPublishVolume completed successfully\n")
@@ -898,7 +786,7 @@ func (f *feature) whenICallNodePublishVolume(arg1 string) error {
 	return nil
 }
 
-func (f *feature) iCallEthemeralNodePublishVolume(id, size string) error {
+func (f *feature) iCallEphemeralNodePublishVolume(id, size string) error {
 	req := f.getNodePublishVolumeRequest()
 	req.VolumeId = id
 	f.volID = req.VolumeId
@@ -975,7 +863,7 @@ func (f *feature) nodeUnpublishVolume(id string, path string) error {
 //nolint:revive
 func (f *feature) verifyPublishedVolumeWithVoltypeAccessFstype(voltype, access, fstype string) error {
 	if len(f.errs) > 0 {
-		fmt.Printf("Not verifying published volume because of previous error")
+		fmt.Printf("Not verifying published volume because of previous error\n")
 		return nil
 	}
 	var cmd *exec.Cmd
@@ -1033,6 +921,9 @@ func (f *feature) iCallCreateSnapshot() error {
 }
 
 func (f *feature) iCallDeleteSnapshot() error {
+	//fmt.Printf("=== AB: sleeping 2 minutes before deleting snapshot %s\n", f.snapshotID)
+	//time.Sleep(time.Minute * 3)
+
 	ctx := context.Background()
 	client := csi.NewControllerClient(grpcClient)
 	req := &csi.DeleteSnapshotRequest{
@@ -1045,6 +936,10 @@ func (f *feature) iCallDeleteSnapshot() error {
 	} else {
 		fmt.Printf("DeleteSnapshot: SnapshotId %s\n", req.SnapshotId)
 	}
+
+	//fmt.Printf("=== AB: sleeping 3 minutes after deleting snapshot\n")
+	//time.Sleep(time.Minute * 1)
+
 	time.Sleep(RetrySleepTime)
 	return nil
 }
@@ -1082,10 +977,10 @@ func (f *feature) iCallCreateSnapshotConsistencyGroup() error {
 	return nil
 }
 
-func (f *feature) whenICallDeleteAllVolumes() error {
+func (f *feature) iCallDeleteAllVolumes() error {
 	for _, v := range f.volIDList {
 		f.volID = v
-		f.whenICallDeleteVolume()
+		f.iCallDeleteVolume()
 	}
 	return nil
 }
@@ -1096,8 +991,7 @@ func (f *feature) iCallCreateVolumeFromSnapshot() error {
 	source := &csi.VolumeContentSource_SnapshotSource{SnapshotId: f.snapshotID}
 	req.VolumeContentSource = new(csi.VolumeContentSource)
 	req.VolumeContentSource.Type = &csi.VolumeContentSource_Snapshot{Snapshot: source}
-	fmt.Printf("Calling CreateVolume with snapshot source")
-
+	fmt.Printf("Calling CreateVolume %s with snapshot %s as source\n", req.Name, f.snapshotID)
 	_ = f.createAVolume(req, "single CreateVolume from Snap")
 	time.Sleep(SleepTime)
 	return nil
@@ -1109,7 +1003,7 @@ func (f *feature) iCallCloneVolume() error {
 	source := &csi.VolumeContentSource_VolumeSource{VolumeId: f.volID}
 	req.VolumeContentSource = new(csi.VolumeContentSource)
 	req.VolumeContentSource.Type = &csi.VolumeContentSource_Volume{Volume: source}
-	fmt.Printf("Calling Clone Volume\n")
+	fmt.Printf("Calling CreateVolume %s with volume %s as source\n", req.Name, f.volID)
 	_ = f.createAVolume(req, "single CloneVolume")
 	time.Sleep(SleepTime)
 	return nil
@@ -1120,17 +1014,20 @@ func (f *feature) createAVolume(req *csi.CreateVolumeRequest, voltype string) er
 	client := csi.NewControllerClient(grpcClient)
 	volResp, err := client.CreateVolume(ctx, req)
 	if err != nil {
-		fmt.Printf("CreateVolume %s request returned error: %s\n", voltype, err.Error())
+		fmt.Printf("CreateVolume (%s) request failed: %v\n", voltype, err)
 		f.addError(err)
 	} else {
-		fmt.Printf("CreateVolume from snap %s (%s) %s\n", volResp.GetVolume().VolumeContext["Name"],
-			volResp.GetVolume().VolumeId, volResp.GetVolume().VolumeContext["CreationTime"])
-		f.volIDList = append(f.volIDList, volResp.GetVolume().VolumeId)
+		//fmt.Printf("CreateVolume succeded: %s (id: %s)\n",
+		//	volResp.GetVolume().VolumeContext["Name"],
+		//	volResp.GetVolume().VolumeId)
+		f.volIDList, _ = appendUnique(f.volIDList, volResp.GetVolume().VolumeId)
 	}
 	return err
 }
 
 func (f *feature) iCallCreateManyVolumesFromSnapshot() error {
+	fmt.Printf("Create volume from snapshot 130 times and expect it to fail " +
+		"after the max number of volumes per snapshot is exceeded.\n")
 	for i := 1; i <= 130; i++ {
 		req := f.createVolumeRequest
 		req.Name = fmt.Sprintf("volFromSnap%d", i)
@@ -1138,10 +1035,10 @@ func (f *feature) iCallCreateManyVolumesFromSnapshot() error {
 		source := &csi.VolumeContentSource_SnapshotSource{SnapshotId: f.snapshotID}
 		req.VolumeContentSource = new(csi.VolumeContentSource)
 		req.VolumeContentSource.Type = &csi.VolumeContentSource_Snapshot{Snapshot: source}
-		fmt.Printf("Calling CreateVolume with snapshot source")
+		fmt.Printf("Calling CreateVolume %s with snapshot %s as source\n", req.Name, f.snapshotID)
 		err := f.createAVolume(req, "single CreateVolume from Snap")
 		if err != nil {
-			fmt.Printf("Error on the %d th volume: %s\n", i, err.Error())
+			fmt.Printf("Got expected error on volume #%d\n", i)
 			break
 		}
 	}
@@ -1149,16 +1046,18 @@ func (f *feature) iCallCreateManyVolumesFromSnapshot() error {
 }
 
 func (f *feature) iCallCloneManyVolumes() error {
+	fmt.Printf("Create volume by cloning 130 times and expect it to fail " +
+		"after the max number of clones is exceeded.\n")
 	for i := 1; i <= 130; i++ {
 		req := f.createVolumeRequest
 		req.Name = fmt.Sprintf("cloneVol%d", i)
 		source := &csi.VolumeContentSource_VolumeSource{VolumeId: f.volID}
 		req.VolumeContentSource = new(csi.VolumeContentSource)
 		req.VolumeContentSource.Type = &csi.VolumeContentSource_Volume{Volume: source}
-		fmt.Printf("Calling Clone Volume\n")
+		fmt.Printf("Calling CreateVolume %s with volume %s as source\n", req.Name, f.volID)
 		err := f.createAVolume(req, "single CloneVolume")
 		if err != nil {
-			fmt.Printf("Error on the %d th volume: %s\n", i, err.Error())
+			fmt.Printf("Got expected error on volume #%d\n", i)
 			break
 		}
 	}
@@ -1174,10 +1073,7 @@ func (f *feature) iCallListVolume() error {
 	req := &csi.ListVolumesRequest{}
 	client := csi.NewControllerClient(grpcClient)
 	f.listVolumesResponse, err = client.ListVolumes(ctx, req)
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 func (f *feature) aValidListVolumeResponseIsReturned() error {
@@ -1209,10 +1105,7 @@ func (f *feature) iCallListSnapshotForSnap() error {
 	client := csi.NewControllerClient(grpcClient)
 	fmt.Printf("ListSnapshots for snap id %s\n", f.snapshotID)
 	f.listSnapshotsResponse, err = client.ListSnapshots(ctx, req)
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 func (f *feature) iCallListSnapshot() error {
@@ -1221,10 +1114,7 @@ func (f *feature) iCallListSnapshot() error {
 	req := &csi.ListSnapshotsRequest{}
 	client := csi.NewControllerClient(grpcClient)
 	f.listSnapshotsResponse, err = client.ListSnapshots(ctx, req)
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 func (f *feature) expectErrorListSnapshotResponse() error {
@@ -1251,9 +1141,8 @@ func (f *feature) aValidListSnapshotResponseIsReturned() error {
 	for j := 0; j < len(entries); j++ {
 		entry := entries[j]
 		id := entry.GetSnapshot().SnapshotId
-		ts := entry.GetSnapshot().CreationTime.AsTime().Format(time.RFC3339Nano)
-
-		fmt.Printf("snapshot ID %s source ID %s timestamp %s\n", id, entry.GetSnapshot().SourceVolumeId, ts)
+		//ts := entry.GetSnapshot().CreationTime.AsTime().Format(time.RFC3339Nano)
+		//fmt.Printf("snapshot ID %s source ID %s timestamp %s\n", id, entry.GetSnapshot().SourceVolumeId, ts)
 		if f.snapshotID != "" && strings.Contains(id, f.snapshotID) {
 			foundSnapshot = true
 		}
@@ -1272,7 +1161,7 @@ func (f *feature) iSetAnotherSystemName(systemType string) error {
 		var err error
 		f.arrays, err = f.getArrayConfig(configFile)
 		if err != nil {
-			return errors.New("Get multi array config failed " + err.Error())
+			return errors.New("get multi array config failed " + err.Error())
 		}
 	}
 	isNumeric := regexp.MustCompile(`^[0-9a-f]+$`).MatchString
@@ -1292,7 +1181,7 @@ func (f *feature) iSetAnotherSystemName(systemType string) error {
 	}
 	fmt.Printf("array selected for %s is %s\n", systemType, f.anotherSystemID)
 	if f.anotherSystemID == "" {
-		return errors.New("Failed to get  multi array config for " + systemType)
+		return errors.New("failed to get multi array config for " + systemType)
 	}
 	return nil
 }
@@ -1324,6 +1213,8 @@ func (f *feature) iSetAnotherSystemID(systemType string) error {
 }
 
 func (f *feature) iCreateVolumesInParallel(nVols int) error {
+	fmt.Printf("Creating %d volumes in parallel...\n", nVols)
+
 	idchan := make(chan string, nVols)
 	errchan := make(chan error, nVols)
 	t0 := time.Now()
@@ -1336,11 +1227,10 @@ func (f *feature) iCreateVolumesInParallel(nVols int) error {
 			req := f.getMountVolumeRequest(name)
 			if req != nil {
 				if i%2 == 0 {
-					fmt.Printf("DEBUG change system %d\n", i)
 					req.Parameters["systemID"] = ""
 				}
 				resp, err = f.createVolume(req)
-				if resp != nil {
+				if resp != nil && err == nil {
 					idchan <- resp.GetVolume().VolumeId
 				} else {
 					idchan <- ""
@@ -1356,7 +1246,7 @@ func (f *feature) iCreateVolumesInParallel(nVols int) error {
 		var err error
 		id = <-idchan
 		if id != "" {
-			f.volIDList = append(f.volIDList, id)
+			f.volIDList, _ = appendUnique(f.volIDList, id)
 		}
 		err = <-errchan
 		if err != nil {
@@ -1367,14 +1257,19 @@ func (f *feature) iCreateVolumesInParallel(nVols int) error {
 	}
 	t1 := time.Now()
 	if len(f.volIDList) > nVols {
-		f.volIDList = f.volIDList[0:nVols]
+		fmt.Printf("Found %d registered volumes while expected only %d, some of them will not be tested: %s\n",
+			len(f.volIDList), nVols, strings.Join(f.volIDList, ","))
+		//f.volIDList = f.volIDList[0:nVols]
 	}
-	fmt.Printf("Create volume time for %d volumes %d errors: %v %v\n", nVols, nerrors, t1.Sub(t0).Seconds(), t1.Sub(t0).Seconds()/float64(nVols))
+	fmt.Printf("Create volume time for %d volumes %.6fs, per volume %.6fs, errors %d\n",
+		nVols, t1.Sub(t0).Seconds(), t1.Sub(t0).Seconds()/float64(nVols), nerrors)
 	time.Sleep(SleepTime)
 	return nil
 }
 
 func (f *feature) iPublishVolumesInParallel(nVols int) error {
+	fmt.Printf("Publishing %d volumes in parallel...\n", nVols)
+
 	nvols := len(f.volIDList)
 	done := make(chan bool, nvols)
 	errchan := make(chan error, nvols)
@@ -1411,12 +1306,14 @@ func (f *feature) iPublishVolumesInParallel(nVols int) error {
 		}
 	}
 	t1 := time.Now()
-	fmt.Printf("Controller publish volume time for %d volumes %d errors: %v %v\n", nVols, nerrors, t1.Sub(t0).Seconds(), t1.Sub(t0).Seconds()/float64(nVols))
+	fmt.Printf("Controller publish volume time for %d volumes %.6fs, per volume %.6fs, errors %d\n", nVols, t1.Sub(t0).Seconds(), t1.Sub(t0).Seconds()/float64(nVols), nerrors)
 	time.Sleep(4 * SleepTime)
 	return nil
 }
 
 func (f *feature) iNodePublishVolumesInParallel(nVols int) error {
+	fmt.Printf("Node Publishing %d volumes in parallel...\n", nVols)
+
 	nvols := len(f.volIDList)
 	// make a data directory for each
 	for i := 0; i < nVols; i++ {
@@ -1464,12 +1361,14 @@ func (f *feature) iNodePublishVolumesInParallel(nVols int) error {
 		}
 	}
 	t1 := time.Now()
-	fmt.Printf("Node publish volume time for %d volumes %d errors: %v %v\n", nVols, nerrors, t1.Sub(t0).Seconds(), t1.Sub(t0).Seconds()/float64(nVols))
+	fmt.Printf("Node publish volume time for %d volumes %.6fs, per volume %.6fs, errors %d\n", nVols, t1.Sub(t0).Seconds(), t1.Sub(t0).Seconds()/float64(nVols), nerrors)
 	time.Sleep(2 * SleepTime)
 	return nil
 }
 
 func (f *feature) iNodeUnpublishVolumesInParallel(nVols int) error {
+	fmt.Printf("Node Unpublishing %d volumes in parallel...\n", nVols)
+
 	nvols := len(f.volIDList)
 	done := make(chan bool, nvols)
 	errchan := make(chan error, nvols)
@@ -1507,12 +1406,14 @@ func (f *feature) iNodeUnpublishVolumesInParallel(nVols int) error {
 		}
 	}
 	t1 := time.Now()
-	fmt.Printf("Node unpublish volume time for %d volumes %d errors: %v %v\n", nVols, nerrors, t1.Sub(t0).Seconds(), t1.Sub(t0).Seconds()/float64(nVols))
+	fmt.Printf("Node unpublish volume time for %d volumes %.6fs, per volume %.6fs, errors %d\n", nVols, t1.Sub(t0).Seconds(), t1.Sub(t0).Seconds()/float64(nVols), nerrors)
 	time.Sleep(SleepTime)
 	return nil
 }
 
 func (f *feature) iUnpublishVolumesInParallel(nVols int) error {
+	fmt.Printf("Unpublishing %d volumes in parallel...\n", nVols)
+
 	nvols := len(f.volIDList)
 	done := make(chan bool, nvols)
 	errchan := make(chan error, nvols)
@@ -1549,13 +1450,19 @@ func (f *feature) iUnpublishVolumesInParallel(nVols int) error {
 		}
 	}
 	t1 := time.Now()
-	fmt.Printf("Controller unpublish volume time for %d volumes %d errors: %v %v\n", nVols, nerrors, t1.Sub(t0).Seconds(), t1.Sub(t0).Seconds()/float64(nVols))
+	fmt.Printf("Controller unpublish volume time for %d volumes %.6fs, per volume %.6fs, errors %d\n", nVols, t1.Sub(t0).Seconds(), t1.Sub(t0).Seconds()/float64(nVols), nerrors)
 	time.Sleep(SleepTime)
 	return nil
 }
 
 func (f *feature) whenIDeleteVolumesInParallel(nVols int) error {
-	nVols = len(f.volIDList)
+	fmt.Printf("Deleting %d volumes in parallel...\n", nVols)
+
+	if len(f.volIDList) > nVols {
+		fmt.Printf("Found %d registered volumes vs %d expected\n", len(f.volIDList), nVols)
+		return fmt.Errorf("unexpected number of created volumes")
+	}
+
 	done := make(chan bool, nVols)
 	errchan := make(chan error, nVols)
 
@@ -1591,7 +1498,7 @@ func (f *feature) whenIDeleteVolumesInParallel(nVols int) error {
 		}
 	}
 	t1 := time.Now()
-	fmt.Printf("Delete volume time for %d volumes %d errors: %v %v\n", nVols, nerrors, t1.Sub(t0).Seconds(), t1.Sub(t0).Seconds()/float64(nVols))
+	fmt.Printf("Delete volume time for %d volumes %.6fs, per volume %.6fs, errors %d\n", nVols, t1.Sub(t0).Seconds(), t1.Sub(t0).Seconds()/float64(nVols), nerrors)
 	time.Sleep(RetrySleepTime)
 	return nil
 }
@@ -2684,8 +2591,8 @@ func (f *feature) iCallCreateSnapshotForFS() error {
 		f.addError(err)
 	} else {
 		f.snapshotID = resp.Snapshot.SnapshotId
-		fmt.Printf("createSnapshot: SnapshotId %s SourceVolumeId %s CreationTime %s\n",
-			resp.Snapshot.SnapshotId, resp.Snapshot.SourceVolumeId, resp.Snapshot.CreationTime.AsTime().Format(time.RFC3339))
+		//fmt.Printf("createSnapshot: SnapshotId %s SourceVolumeId %s CreationTime %s\n",
+		//	resp.Snapshot.SnapshotId, resp.Snapshot.SourceVolumeId, resp.Snapshot.CreationTime.AsTime().Format(time.RFC3339))
 	}
 	time.Sleep(RetrySleepTime)
 	return nil
@@ -2920,7 +2827,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^Set System Name As "([^"]*)"$`, f.iSetSystemName)
 	s.Step(`^Set Bad AllSystemNames$`, f.iSetBadAllSystemNames)
 	s.Step(`^I call CreateVolume$`, f.iCallCreateVolume)
-	s.Step(`^when I call DeleteVolume$`, f.whenICallDeleteVolume)
+	s.Step(`^I call DeleteVolume$`, f.iCallDeleteVolume)
 	s.Step(`^there are no errors$`, f.thereAreNoErrors)
 	s.Step(`^the error message should contain "([^"]*)"$`, f.theErrorMessageShouldContain)
 	s.Step(`^a mount volume request "([^"]*)"$`, f.aMountVolumeRequest)
@@ -2939,7 +2846,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^verify published volume with voltype "([^"]*)" access "([^"]*)" fstype "([^"]*)"$`, f.verifyPublishedVolumeWithVoltypeAccessFstype)
 	s.Step(`^I call CreateSnapshot$`, f.iCallCreateSnapshot)
 	s.Step(`^I call CreateSnapshotConsistencyGroup$`, f.iCallCreateSnapshotConsistencyGroup)
-	s.Step(`^when I call DeleteAllVolumes$`, f.whenICallDeleteAllVolumes)
+	s.Step(`^I call DeleteAllVolumes$`, f.iCallDeleteAllVolumes)
 	s.Step(`^I call DeleteSnapshot$`, f.iCallDeleteSnapshot)
 	s.Step(`^I call CreateVolumeFromSnapshot$`, f.iCallCreateVolumeFromSnapshot)
 	s.Step(`^I call CreateManyVolumesFromSnapshot$`, f.iCallCreateManyVolumesFromSnapshot)
@@ -2965,7 +2872,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^when I call NodeExpandVolume$`, f.whenICallNodeExpandVolume)
 	s.Step(`^I call CloneVolume$`, f.iCallCloneVolume)
 	s.Step(`^I call CloneManyVolumes$`, f.iCallCloneManyVolumes)
-	s.Step(`^I call EthemeralNodePublishVolume with ID "([^"]*)" and size "([^"]*)"$`, f.iCallEthemeralNodePublishVolume)
+	s.Step(`^I call EthemeralNodePublishVolume with ID "([^"]*)" and size "([^"]*)"$`, f.iCallEphemeralNodePublishVolume)
 	s.Step(`^I call DeleteVGS$`, f.iCallDeleteVGS)
 	s.Step(`^remove a volume from VolumeGroupSnapshotRequest$`, f.iRemoveAVolumeFromVolumeGroupSnapshotRequest)
 	s.Step(`^I call split VolumeGroupSnapshot$`, f.iCallSplitVolumeGroupSnapshot)
@@ -2975,7 +2882,6 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^the VolumeCondition is "([^"]*)"$`, f.theVolumeConditionIs)
 	s.Step(`^a basic nfs volume request with wrong nasname "([^"]*)" "(\d+)"$`, f.aBasicNfsVolumeRequestWithWrongNasName)
 	s.Step(`^a basic nfs volume request "([^"]*)" "(\d+)"$`, f.aBasicNfsVolumeRequest)
-	s.Step(`^a basic nfs volume request "([^"]*)" "(\d+)"$`, f.aBasicNfsVolumeRequestWithSizeLessThan3Gi)
 	s.Step(`^a basic nfs volume request with quota enabled volname "([^"]*)" volsize "(\d+)" path "([^"]*)" softlimit "([^"]*)" graceperiod "([^"]*)"$`, f.aNfsVolumeRequestWithQuota)
 	s.Step(`^a nfs capability with voltype "([^"]*)" access "([^"]*)" fstype "([^"]*)"$`, f.aNfsCapabilityWithVoltypeAccessFstype)
 	s.Step(`^a nfs volume request "([^"]*)" "(\d+)"$`, f.aNfsVolumeRequest)

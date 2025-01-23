@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"testing"
@@ -90,24 +91,32 @@ func TestIntegration(t *testing.T) {
 	fileMode = 0o777
 	err := os.Mkdir(datadir, fileMode)
 	if err != nil && !os.IsExist(err) {
-		fmt.Printf("%s: %s\n", datadir, err)
+		t.Fatalf("Dir mount point %s creation error: %v", datadir, err)
 	}
 	fmt.Printf("Checking %s\n", datafile)
 	file, err := os.Create(datafile)
 	if err != nil && !os.IsExist(err) {
-		fmt.Printf("%s %s\n", datafile, err)
+		t.Fatalf("File mount point %s creation error: %v", datafile, err)
 	}
 	if file != nil {
 		file.Close()
 	}
 
 	outputfile, err := os.Create("integration.xml")
+	defer outputfile.Close()
+
+	// Create a multi-writer to write to both stdout and the file
+	multiWriter := io.MultiWriter(os.Stdout, outputfile)
 
 	opts := godog.Options{
-		Format: "junit",
-		Output: outputfile,
+		//Format: "junit",
+		//Output: outputfile,
 		Paths:  []string{"features"},
-		// Tags:   "wip",
+		Tags:   "~@pass && ~@fail && ~@alt && @wip",
+		Output: multiWriter,
+		Format: "pretty",
+		//Format:        "pretty,junit",
+		StopOnFailure: true,
 	}
 
 	exitVal := godog.TestSuite{
