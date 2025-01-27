@@ -112,7 +112,7 @@ func appendUnique(idList []string, newId string) (newList []string, added bool) 
 }
 
 func (f *feature) getGoscaleioClient() (client *goscaleio.Client, err error) {
-	fmt.Println("f.arrays,len", f.arrays, f.arrays)
+	fmt.Println("f.arrays", f.arrays)
 
 	if f.arrays == nil {
 		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
@@ -379,19 +379,29 @@ func (f *feature) aBasicBlockVolumeRequest(name string, size float64) error {
 }
 
 func (f *feature) aBasicNfsVolumeRequest(name string, size int64) error {
-	return f.nfsVolumeRequest(name, size, false, "/nfs-quota1", "20", "86400")
+	return f.nfsVolumeRequest(name, size, "", "", "")
 }
 
 func (f *feature) aNfsVolumeRequestWithQuota(volname string, volsize int64, path string, softlimit string, graceperiod string) error {
-	return f.nfsVolumeRequest(volname, volsize, true, path, softlimit, graceperiod)
+	return f.nfsVolumeRequest(volname, volsize, path, softlimit, graceperiod)
 }
 
-func (f *feature) nfsVolumeRequest(volname string, volsize int64, withQuota bool, path string, softlimit string, graceperiod string) error {
+func (f *feature) nfsVolumeRequest(volname string, volsize int64, path string, softlimit string, graceperiod string) error {
 	req := new(csi.CreateVolumeRequest)
 	params := make(map[string]string)
 
 	ctx := context.Background()
 	nfsPool := os.Getenv("NFS_STORAGE_POOL")
+
+	var withQuota bool
+	if path != "" && softlimit != "" && graceperiod != "" {
+		withQuota = true
+	} else if os.Getenv("X_CSI_QUOTA_ENABLED") == "true" {
+		withQuota = true
+		path = os.Getenv("NFS_QUOTA_PATH")
+		softlimit = os.Getenv("NFS_QUOTA_SOFT_LIMIT")
+		graceperiod = os.Getenv("NFS_QUOTA_GRACE_PERIOD")
+	}
 
 	if f.arrays == nil {
 		fmt.Printf("Initialize ArrayConfig from %s\n", configFile)
@@ -415,7 +425,7 @@ func (f *feature) nfsVolumeRequest(volname string, volsize int64, withQuota bool
 			}
 			params["storagepool"] = nfsPool
 			params["thickprovisioning"] = "false"
-			if withQuota || os.Getenv("X_CSI_QUOTA_ENABLED") == "true" {
+			if withQuota {
 				params["isQuotaEnabled"] = "true"
 				params["softLimit"] = softlimit
 				params["path"] = path
@@ -2628,7 +2638,7 @@ func (f *feature) checkNFS(_ context.Context, systemID string) (bool, error) {
 	}
 	version, err := c.GetVersion()
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("array version request failed: %v", err)
 	}
 	ver, err := strconv.ParseFloat(version, 64)
 	if err != nil {

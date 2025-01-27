@@ -20,13 +20,13 @@ export X_CSI_VXFLEXOS_THICKPROVISION=false
 export X_CSI_VXFLEXOS_ENABLESNAPSHOTCGDELETE="true"
 export X_CSI_VXFLEXOS_ENABLELISTVOLUMESNAPSHOTS="true"
 export X_CSI_QUOTA_ENABLED="true"
+export NFS_QUOTA_PATH="/nfs-quota1"
+export NFS_QUOTA_SOFT_LIMIT=20
+export NFS_QUOTA_GRACE_PERIOD=86400
 
-# Variables for using tests
-export CSI_ENDPOINT=`pwd`/unix_sock
-#export STORAGE_POOL="SP-SW_HDD-1"
 export STORAGE_POOL="pool1"
 export NFS_STORAGE_POOL=""
-export SDC_GUID=$(/opt/emc/scaleio/sdc/bin/drv_cfg --query_guid)
+
 # Alternate GUID is for another system for testing expose volume to multiple hosts
 export ALT_GUID=
 #export ALT_GUID=BAA13E19-5472-5634-A7F3-EC28067F0662
@@ -39,7 +39,7 @@ export NODE_INTERFACES="worker-1-6MRQC8xZ3A4zt.domain:ens192"
 export ZONE_LABEL_KEY=""
 
 #Debug variables for goscaleio library
-export GOSCALEIO_SHOWHTTP="true"
+export GOSCALEIO_SHOWHTTP="false"
 
 #If you put the system ID in your config.json, put the
 #system's name here, and vice versa. If your instance does not have a name,
