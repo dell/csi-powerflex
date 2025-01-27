@@ -101,6 +101,4 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.5.0 // indirect
 )
 
-replace (
-	github.com/dell/goscaleio => /root/goscaleio
-)
+replace github.com/dell/goscaleio => /root/goscaleio

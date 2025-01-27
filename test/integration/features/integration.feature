@@ -547,7 +547,7 @@ Feature: VxFlex OS CSI interface
     And I call DeleteVolume
     Then there are no errors
 
-  @wip
+  @nfs
   Scenario: Create and delete basic nfs volume
     Given a VxFlexOS service
     And a basic nfs volume request "nfsvolume1" "8"
@@ -557,7 +557,7 @@ Feature: VxFlex OS CSI interface
     And I call DeleteVolume
     Then there are no errors
 
-  @wip
+  @nfs
   Scenario: Create and delete basic nfs volume with size less than 3Gi
     Given a VxFlexOS service
     And a basic nfs volume request "nfsvolume100" "2"
@@ -567,7 +567,7 @@ Feature: VxFlex OS CSI interface
     And I call DeleteVolume
     Then there are no errors
 
-  @wip
+  @nfs
   Scenario: Idempotent create and delete basic nfs volume
     Given a VxFlexOS service
     And a basic nfs volume request "nfsvolume2" "8"
@@ -577,7 +577,7 @@ Feature: VxFlex OS CSI interface
     And I call DeleteVolume
     Then there are no errors
 
-  @wip
+  @nfs
   Scenario: Create and delete 100000G NFS volume
     Given a VxFlexOS service
     And max retries 1
@@ -586,7 +586,7 @@ Feature: VxFlex OS CSI interface
     And I call DeleteVolume
     Then the error message should contain "Unprocessable Entity"
 
-    @wip
+    @nfs
   Scenario: Create a NFS volume with wrong NasName
     Given a VxFlexOS service
     And a basic nfs volume request with wrong nasname "nfsvolume3" "8"
@@ -596,6 +596,7 @@ Feature: VxFlex OS CSI interface
       | errormsg    |
       | "couldn't find given NAS server by name" |
 
+      @nfs
   Scenario Outline: Create publish, node-publish, node-unpublish, unpublish, and delete nfs volume
     Given a VxFlexOS service
     And a nfs capability with voltype <voltype> access <access> fstype <fstype>
@@ -614,6 +615,7 @@ Feature: VxFlex OS CSI interface
       | voltype | access          | fstype | errormsg |
       | "mount" | "single-writer" | "nfs"  | "none"   |
 
+  @nfs
   Scenario Outline: Create publish, node-publish, node-unpublish, unpublish, and delete nfs volume without SDC dependency
     Given a VxFlexOS service
     And a nfs capability with voltype <voltype> access <access> fstype <fstype>
@@ -632,6 +634,7 @@ Feature: VxFlex OS CSI interface
       | voltype | access          | fstype |
       | "mount" | "single-writer" | "nfs"  |
 
+  @nfs
   Scenario: Expand Nfs Volume
     Given a VxFlexOS service
     And a nfs capability with voltype "mount" access "single-writer" fstype "nfs"
@@ -653,6 +656,7 @@ Feature: VxFlex OS CSI interface
     And I call DeleteVolume
     Then there are no errors
 
+  @nfs
   Scenario: Expand Nfs Volume without SDC dependency
     Given a VxFlexOS service
     And a nfs capability with voltype "mount" access "single-writer" fstype "nfs"
@@ -674,6 +678,7 @@ Feature: VxFlex OS CSI interface
     And I call DeleteVolume
     Then there are no errors
 
+  @nfs
   Scenario: NFS Create volume, create snapshot, delete volume
     Given a VxFlexOS service
     And a basic nfs volume request "nfsvolume1" "8"
@@ -687,6 +692,7 @@ Feature: VxFlex OS CSI interface
     And I call DeleteVolume
     Then there are no errors
 
+  @nfs
   Scenario: NFS Create volume, idempotent create snapshot, delete volume
     Given a VxFlexOS service
     And a basic nfs volume request "nfsvolume1" "8"
@@ -704,20 +710,21 @@ Feature: VxFlex OS CSI interface
     And I call DeleteVolume
     Then there are no errors
 
+  @nfs
   Scenario: Create basic nfs volume with tree quota enabled with empty path value, error
     Given a VxFlexOS service
     And a basic nfs volume request with quota enabled volname "nfsvolume1" volsize "8" path "" softlimit "20" graceperiod "86400"
     When I call CreateVolume
     Then the error message should contain "path not set for volume"
 
-  
+  @nfs
   Scenario: Create basic nfs volume with tree quota enabled with empty softlimit value, error
     Given a VxFlexOS service
     And a basic nfs volume request with quota enabled volname "nfsvolume1" volsize "8" path "/fs" softlimit "" graceperiod "86400"
     When I call CreateVolume
     Then the error message should contain "softLimit not set for volume"
 
-  
+  @nfs
   Scenario: Create basic nfs volume with tree quota enabled with empty graceperiod value
     Given a VxFlexOS service
     And a basic nfs volume request with quota enabled volname "nfsvolume1" volsize "8" path "/fs" softlimit "20" graceperiod ""
@@ -727,24 +734,28 @@ Feature: VxFlex OS CSI interface
     And I call DeleteVolume
     Then there are no errors
 
+  @nfs
   Scenario: Create basic nfs volume with tree quota enabled with invalid softlimit, error
     Given a VxFlexOS service
     And a basic nfs volume request with quota enabled volname "nfsvolume1" volsize "8" path "/fs" softlimit "abc" graceperiod "86400"
     When I call CreateVolume
     Then the error message should contain "requested softLimit: abc is not numeric for volume"
 
+  @nfs
   Scenario: Create basic nfs volume with tree quota enabled with invalid graceperiod, error
     Given a VxFlexOS service
     And a basic nfs volume request with quota enabled volname "nfsvolume1" volsize "8" path "/fs" softlimit "20" graceperiod "abc"
     When I call CreateVolume
     Then the error message should contain "requested gracePeriod: abc is not numeric for volume"
 
+  @nfs
   Scenario: Create basic nfs volume with tree quota enabled with unlimited softlimit, error
     Given a VxFlexOS service
     And a basic nfs volume request with quota enabled volname "nfsvolume1" volsize "8" path "/fs" softlimit "0" graceperiod "86400"
     When I call CreateVolume
     Then the error message should contain "requested softLimit: 0 perc, i.e. default value which is greater than hardlimit, i.e. volume size"
 
+  @nfs
   Scenario: Create basic nfs volume with tree quota enabled with unlimited graceperiod
     Given a VxFlexOS service
     And a basic nfs volume request with quota enabled volname "nfsvolume1" volsize "8" path "/fs" softlimit "20" graceperiod "-1"
@@ -754,12 +765,14 @@ Feature: VxFlex OS CSI interface
     And I call DeleteVolume
     Then there are no errors
 
+  @nfs
   Scenario: Create basic nfs volume with tree quota enabled with softlimit greater than size, error
     Given a VxFlexOS service
     And a basic nfs volume request with quota enabled volname "nfsvolume1" volsize "8" path "/fs" softlimit "200" graceperiod "86400"
     When I call CreateVolume
     Then the error message should contain "requested softLimit: 200 perc is greater than volume size"
-  
+
+  @nfs
   Scenario: Expand Nfs Volume with tree quota enabled
     Given a VxFlexOS service
     And a nfs capability with voltype "mount" access "single-writer" fstype "nfs"
@@ -781,6 +794,7 @@ Feature: VxFlex OS CSI interface
     And I call DeleteVolume
     Then there are no errors
 
+  @nfs
   Scenario: Expand Nfs Volume without SDC dependency with tree quota enabled
     Given a VxFlexOS service
     And a nfs capability with voltype "mount" access "single-writer" fstype "nfs"
@@ -802,7 +816,7 @@ Feature: VxFlex OS CSI interface
     And I call DeleteVolume
     Then there are no errors
 
-  
+  @nfs
   Scenario: Expand Nfs Volume with tree quota enabled given invalid volume size for exapnd volume
     Given a VxFlexOS service
     And a nfs capability with voltype "mount" access "single-writer" fstype "nfs"
@@ -817,9 +831,9 @@ Feature: VxFlex OS CSI interface
     Then the error message should contain <errormsg>
     Examples:
     | errormsg    |
-    | "422 Unprocessable Entity" |   
-    
+    | "422 Unprocessable Entity" |
 
+  @nfs
   Scenario: Expand Nfs Volume with tree quota disabled
     Given a VxFlexOS service
     And a nfs capability with voltype "mount" access "single-writer" fstype "nfs"
@@ -841,6 +855,7 @@ Feature: VxFlex OS CSI interface
     And I call DeleteVolume
     Then there are no errors    
 
+    @wip
   Scenario Outline: Publish and Unpublish Ephemeral Volume
     Given a VxFlexOS service
     And a capability with voltype "mount" access <access> fstype <fstype>
