@@ -6,7 +6,6 @@ on:  # yamllint disable-line rule:truthy
 
 jobs:
   csm-release:
-    needs: calculate-version
     uses: dell/common-github-actions/.github/workflows/csm-release-driver-module.yaml@main
     with:
       version: "minor"
