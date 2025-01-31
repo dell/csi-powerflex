@@ -11,7 +11,7 @@ name: Dell Libraries Release Update
 on:  # yamllint disable-line rule:truthy
   workflow_dispatch:
   repository_dispatch:
-      types: [latest-released-libraries]
+    types: [latest-released-libraries]
 
 jobs:
   package-update:
