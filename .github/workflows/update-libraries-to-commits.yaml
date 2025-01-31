@@ -9,7 +9,7 @@
 # Reusable workflow to perform updates of Dell client libraries to latest commits
 name: Dell Libraries Commit Update
 on:  # yamllint disable-line rule:truthy
-    workflow_dispatch:
+  workflow_dispatch:
 
 jobs:
   package-update:

@@ -9,9 +9,9 @@
 # Reusable workflow to perform updates of Dell client libraries
 name: Dell Libraries Release Update
 on:  # yamllint disable-line rule:truthy
-    workflow_dispatch:
-    repository_dispatch:
-        types: [latest-released-libraries]
+  workflow_dispatch:
+  repository_dispatch:
+      types: [latest-released-libraries]
 
 jobs:
   package-update:
