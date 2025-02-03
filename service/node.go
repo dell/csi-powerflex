@@ -806,7 +806,7 @@ func (s *service) NodeGetInfo(
 
 		err = s.SetPodZoneLabel(ctx, topology)
 		if err != nil {
-			Log.Warnf("Unable to set availability zone label '%s:%s' for this pod", topology[s.opts.zoneLabelKey], zone)
+			Log.Warnf("Unable to set availability zone label '%s:%s' for this pod: %v", s.opts.zoneLabelKey, topology[s.opts.zoneLabelKey], err)
 		}
 	}
 

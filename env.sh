@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright © 2019-2022 Dell Inc. or its subsidiaries. All Rights Reserved.
+# Copyright © 2019-2025 Dell Inc. or its subsidiaries. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,8 +24,11 @@ export NFS_QUOTA_PATH="/nfs-quota1"
 export NFS_QUOTA_SOFT_LIMIT=20
 export NFS_QUOTA_GRACE_PERIOD=86400
 
-export STORAGE_POOL="pool1"
-export NFS_STORAGE_POOL=""
+#export STORAGE_POOL="pool1"
+export STORAGE_POOL="SP-SW_SSD-1"
+#export PROTECTION_DOMAIN="domain1"
+export PROTECTION_DOMAIN="PD-1"
+export NFS_STORAGE_POOL="SP-SW_SSD-1"
 
 # Alternate GUID is for another system for testing expose volume to multiple hosts
 export ALT_GUID=
@@ -35,9 +38,6 @@ export X_CSI_POWERFLEX_KUBE_NODE_NAME="node1"
 # Interface variables
 export NODE_INTERFACES="worker-1-6MRQC8xZ3A4zt.domain:ens192"
 
-# Node Label variables
-export ZONE_LABEL_KEY=""
-
 #Debug variables for goscaleio library
 export GOSCALEIO_SHOWHTTP="false"
 
@@ -45,16 +45,3 @@ export GOSCALEIO_SHOWHTTP="false"
 #system's name here, and vice versa. If your instance does not have a name,
 #leave this variable blank.
 export ALT_SYSTEM_ID=""
-
-if /sbin/lsmod | grep -q scini; then
-  echo "scini module is present, Proceeding to add MDM..."
-  MDM=`grep mdm ../../config.json | awk -F":" '{print $2}'`
-  for i in $MDM
-  do
-    IP=$i
-    IP=$(echo "$i" | sed "s/\"//g")
-    echo "Adding MDM wth IP: $IP"
-    /opt/emc/scaleio/sdc/bin/drv_cfg --add_mdm --ip $IP
-  done
-fi
-

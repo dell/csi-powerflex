@@ -1859,7 +1859,7 @@ func (s *service) GetNodeLabels(_ context.Context) (map[string]string, error) {
 		nodeName = os.Getenv("NODENAME")
 	}
 
-	Log.Infof("Using: %s as nodeName", nodeName)
+	Log.Debugf("Using %s as nodeName", nodeName)
 
 	// access the API to fetch node object
 	node, err := K8sClientset.CoreV1().Nodes().Get(context.TODO(), nodeName, v1.GetOptions{})
