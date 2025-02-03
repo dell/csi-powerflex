@@ -64,16 +64,31 @@ const (
 	DriverNamespace = "vxflexos"
 )
 
+// AvailabilityZone provides a mapping between cluster zones labels and storage systems
+type AvailabilityZone struct {
+	Name              string             `json:"name"`
+	LabelKey          string             `json:"labelKey"`
+	ProtectionDomains []ProtectionDomain `json:"protectionDomains"`
+}
+
+// ProtectionDomain provides protection domain information for a cluster's availability zone
+type ProtectionDomain struct {
+	Name  string   `json:"name"`
+	Pools []string `json:"pools"`
+}
+
 // ArrayConnectionData contains data required to connect to array
 type ArrayConnectionData struct {
-	SystemID       string `json:"systemID"`
-	Username       string `json:"username"`
-	Password       string `json:"password"`
-	Endpoint       string `json:"endpoint"`
-	Insecure       bool   `json:"insecure,omitempty"`
-	IsDefault      bool   `json:"isDefault,omitempty"`
-	AllSystemNames string `json:"allSystemNames"`
-	NasName        string `json:"nasname"`
+	SystemID         string            `json:"systemID"`
+	Username         string            `json:"username"`
+	Password         string            `json:"password"`
+	Endpoint         string            `json:"endpoint"`
+	Insecure         bool              `json:"insecure,omitempty"`
+	IsDefault        bool              `json:"isDefault,omitempty"`
+	AllSystemNames   string            `json:"allSystemNames"`
+	NasName          string            `json:"nasName"`
+	Mdm              string            `json:"mdm,omitempty"`
+	AvailabilityZone *AvailabilityZone `json:"zone,omitempty"`
 }
 
 type feature struct {
@@ -238,6 +253,33 @@ func (f *feature) getArrayConfig(filePath string) (map[string]*ArrayConnectionDa
 	return arrays, nil
 }
 
+func (f *feature) ArrayConfigWithZone(filePath string) (map[string]*ArrayConnectionData, error) {
+	arrays, err := f.getArrayConfig(filePath)
+	if err != nil {
+		return nil, err
+	}
+	if len(arrays) == 0 {
+		return nil, fmt.Errorf("no array found in file %s", filePath)
+	}
+	// Find the default array
+	var defaultSystem string
+	for k, v := range arrays {
+		if v.IsDefault {
+			defaultSystem = k
+			break
+		}
+	}
+	if defaultSystem == "" {
+		return nil, fmt.Errorf("no default array found in file %s", filePath)
+	}
+	protectionDomain := os.Getenv("PROTECTION_DOMAIN")
+	storagePool := os.Getenv("STORAGE_POOL")
+	fmt.Printf("Adding zone config to system %s: protectionDomain=%s storagePool=%s\n", defaultSystem, protectionDomain, storagePool)
+	//arrays[defaultSystem].
+
+	return arrays, nil
+}
+
 func (f *feature) createConfigMap() error {
 	var configYAMLContent strings.Builder
 
@@ -357,8 +399,7 @@ func (f *feature) aBasicBlockVolumeRequest(name string, size float64) error {
 		params["systemID"] = f.anotherSystemID
 	}
 	req.Parameters = params
-	makeAUniqueName(&name)
-	req.Name = name
+	req.Name = makeDistinctName(name)
 	capacityRange := new(csi.CapacityRange)
 	capacityRange.RequiredBytes = int64(math.Ceil(size * 1024 * 1024 * 1024))
 	req.CapacityRange = capacityRange
@@ -435,8 +476,7 @@ func (f *feature) nfsVolumeRequest(volname string, volsize int64, path string, s
 				params["systemID"] = f.anotherSystemID
 			}
 			req.Parameters = params
-			makeAUniqueName(&volname)
-			req.Name = volname
+			req.Name = makeDistinctName(volname)
 			capacityRange := new(csi.CapacityRange)
 			capacityRange.RequiredBytes = volsize * 1024 * 1024 * 1024
 			req.CapacityRange = capacityRange
@@ -521,9 +561,6 @@ func (f *feature) iCallDeleteVolume() error {
 }
 
 func (f *feature) deleteVolume(id string) error {
-	//if f.createVolumeRequest == nil {
-	//	return nil
-	//}
 	ctx := context.Background()
 	client := csi.NewControllerClient(grpcClient)
 	delVolReq := new(csi.DeleteVolumeRequest)
@@ -589,8 +626,7 @@ func (f *feature) getMountVolumeRequest(name string) *csi.CreateVolumeRequest {
 		params["systemID"] = f.anotherSystemID
 	}
 	req.Parameters = params
-	makeAUniqueName(&name)
-	req.Name = name
+	req.Name = makeDistinctName(name)
 	capacityRange := new(csi.CapacityRange)
 	capacityRange.RequiredBytes = 8 * 1024 * 1024 * 1024
 	req.CapacityRange = capacityRange
@@ -727,8 +763,7 @@ func (f *feature) aVolumeRequest(name string, size int64) error {
 		fmt.Printf("Env variable ALT_SYSTEM_ID not set, assuming system does not have a name \n")
 	}
 	req.Parameters = params
-	makeAUniqueName(&name)
-	req.Name = name
+	req.Name = makeDistinctName(name)
 	capacityRange := new(csi.CapacityRange)
 	capacityRange.RequiredBytes = size * 1024 * 1024 * 1024
 	req.CapacityRange = capacityRange
@@ -800,7 +835,7 @@ func (f *feature) iCallEphemeralNodePublishVolume(id, size string) error {
 	req := f.getNodePublishVolumeRequest()
 	req.VolumeId = id
 	f.volID = req.VolumeId
-	req.VolumeContext = map[string]string{"csi.storage.k8s.io/ephemeral": "true", "volumeName": "int-ephemeral-vol", "size": size, "storagepool": "pool1"}
+	req.VolumeContext = map[string]string{"csi.storage.k8s.io/ephemeral": "true", "volumeName": "test-eph-vol", "size": size, "storagepool": "pool1"}
 
 	ctx := context.Background()
 	client := csi.NewNodeClient(grpcClient)
@@ -915,7 +950,7 @@ func (f *feature) iCallCreateSnapshot() error {
 	client := csi.NewControllerClient(grpcClient)
 	req := &csi.CreateSnapshotRequest{
 		SourceVolumeId: f.volID,
-		Name:           "snapshot-0eb5347a-0000-11e9-ab1c-005056a64ad3",
+		Name:           makeDistinctName("snap"),
 	}
 	resp, err := client.CreateSnapshot(ctx, req)
 	if err != nil {
@@ -931,9 +966,6 @@ func (f *feature) iCallCreateSnapshot() error {
 }
 
 func (f *feature) iCallDeleteSnapshot() error {
-	//fmt.Printf("=== AB: sleeping 2 minutes before deleting snapshot %s\n", f.snapshotID)
-	//time.Sleep(time.Minute * 3)
-
 	ctx := context.Background()
 	client := csi.NewControllerClient(grpcClient)
 	req := &csi.DeleteSnapshotRequest{
@@ -970,7 +1002,7 @@ func (f *feature) iCallCreateSnapshotConsistencyGroup() error {
 	}
 	req := &csi.CreateSnapshotRequest{
 		SourceVolumeId: f.volIDList[0],
-		Name:           "snaptest",
+		Name:           makeDistinctName("snap"),
 	}
 	req.Parameters = make(map[string]string)
 	req.Parameters["VolumeIDList"] = volumeIDList
@@ -1027,9 +1059,6 @@ func (f *feature) createAVolume(req *csi.CreateVolumeRequest, voltype string) er
 		fmt.Printf("CreateVolume (%s) request failed: %v\n", voltype, err)
 		f.addError(err)
 	} else {
-		//fmt.Printf("CreateVolume succeded: %s (id: %s)\n",
-		//	volResp.GetVolume().VolumeContext["Name"],
-		//	volResp.GetVolume().VolumeId)
 		f.volIDList, _ = appendUnique(f.volIDList, volResp.GetVolume().VolumeId)
 	}
 	return err
@@ -1040,8 +1069,8 @@ func (f *feature) iCallCreateManyVolumesFromSnapshot() error {
 		"after the max number of volumes per snapshot is exceeded.\n")
 	for i := 1; i <= 130; i++ {
 		req := f.createVolumeRequest
-		req.Name = fmt.Sprintf("volFromSnap%d", i)
-		makeAUniqueName(&req.Name)
+		req.Name = makeDistinctName(fmt.Sprintf("volFromSnap%d", i))
+
 		source := &csi.VolumeContentSource_SnapshotSource{SnapshotId: f.snapshotID}
 		req.VolumeContentSource = new(csi.VolumeContentSource)
 		req.VolumeContentSource.Type = &csi.VolumeContentSource_Snapshot{Snapshot: source}
@@ -1060,7 +1089,7 @@ func (f *feature) iCallCloneManyVolumes() error {
 		"after the max number of clones is exceeded.\n")
 	for i := 1; i <= 130; i++ {
 		req := f.createVolumeRequest
-		req.Name = fmt.Sprintf("cloneVol%d", i)
+		req.Name = makeDistinctName(fmt.Sprintf("cloneVol%d", i))
 		source := &csi.VolumeContentSource_VolumeSource{VolumeId: f.volID}
 		req.VolumeContentSource = new(csi.VolumeContentSource)
 		req.VolumeContentSource.Type = &csi.VolumeContentSource_Volume{Volume: source}
@@ -1645,7 +1674,7 @@ func (f *feature) iCallCreateVolumeGroupSnapshot() error {
 		params["existingSnapshotGroupID"] = strings.Split(f.VolumeGroupSnapshot.SnapshotGroupID, "-")[1]
 	}
 	req := &volGroupSnap.CreateVolumeGroupSnapshotRequest{
-		Name:            "apple",
+		Name:            makeDistinctName("apple"),
 		SourceVolumeIDs: f.volIDList,
 		Parameters:      params,
 	}
@@ -1653,7 +1682,7 @@ func (f *feature) iCallCreateVolumeGroupSnapshot() error {
 	if err != nil {
 		f.addError(err)
 	}
-	fmt.Printf("Group returned is: %v \n", group)
+	fmt.Printf("Group returned is: %v\n", group)
 	if group != nil {
 		f.VolumeGroupSnapshot = group
 	}
@@ -1681,7 +1710,7 @@ func (f *feature) iCallSplitVolumeGroupSnapshot() error {
 	// adjust f.volIDList to only contain the first, unsnapped volume, and create another VGS for it. Save this one as  f.volumeGroupSnapshot
 	f.volIDListShort = f.volIDList[0:1]
 	req := &volGroupSnap.CreateVolumeGroupSnapshotRequest{
-		Name:            "apple",
+		Name:            makeDistinctName("apple"),
 		SourceVolumeIDs: f.volIDListShort,
 	}
 	group, err := vgsClient.CreateVolumeGroupSnapshot(ctx, req)
@@ -1875,23 +1904,23 @@ func (f *feature) theVolumeconditionIs(health string) error {
 }
 
 // add given suffix to name or use time as suffix and set to max of 30 characters
-func makeAUniqueName(name *string) {
-	if name == nil {
-		temp := "tmp"
-		name = &temp
+func makeDistinctName(name string) string {
+	if name == "" {
+		name = "tmp"
 	}
 	suffix := os.Getenv("VOL_NAME_SUFFIX")
 	if len(suffix) == 0 {
 		now := time.Now()
 		suffix = fmt.Sprintf("%02d%02d%02d", now.Hour(), now.Minute(), now.Second())
-		*name += "_" + suffix
+		name += "_" + suffix
 	} else {
-		*name += "_" + suffix
+		name += "_" + suffix
 	}
-	tmp := *name
-	if len(tmp) > 30 {
-		*name = tmp[len(tmp)-30:]
+	if len(name) > 30 {
+		fmt.Printf("Resource name %s is too long and will be reduced to %s\n", name, name[len(name)-30:])
+		name = name[len(name)-30:]
 	}
+	return name
 }
 
 func (f *feature) iSetBadAllSystemNames() error {
@@ -2050,8 +2079,7 @@ func (f *feature) aBasicNfsVolumeRequestWithWrongNasName(name string, size int64
 				params["systemID"] = f.anotherSystemID
 			}
 			req.Parameters = params
-			makeAUniqueName(&name)
-			req.Name = name
+			req.Name = makeDistinctName(name)
 			capacityRange := new(csi.CapacityRange)
 			capacityRange.RequiredBytes = size * 1024 * 1024 * 1024
 			req.CapacityRange = capacityRange
@@ -2081,7 +2109,7 @@ func (f *feature) aNfsCapabilityWithVoltypeAccessFstype(voltype, access, fstype 
 	// Construct the volume capabilities
 	ctx := context.Background()
 
-	fmt.Println("f.arrays,len", f.arrays, f.arrays)
+	fmt.Println("f.arrays", f.arrays)
 
 	if f.arrays == nil {
 		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
@@ -2182,8 +2210,7 @@ func (f *feature) aNfsVolumeRequest(name string, size int64) error {
 				params["systemID"] = f.anotherSystemID
 			}
 			req.Parameters = params
-			makeAUniqueName(&name)
-			req.Name = name
+			req.Name = makeDistinctName(name)
 			capacityRange := new(csi.CapacityRange)
 			capacityRange.RequiredBytes = size * 1024 * 1024 * 1024
 			req.CapacityRange = capacityRange
@@ -2593,7 +2620,7 @@ func (f *feature) iCallCreateSnapshotForFS() error {
 	client := csi.NewControllerClient(grpcClient)
 	req := &csi.CreateSnapshotRequest{
 		SourceVolumeId: f.volID,
-		Name:           "snapshot-9x89727a-0000-11e9-ab1c-005056a64ad3",
+		Name:           makeDistinctName("snap"),
 	}
 	resp, err := client.CreateSnapshot(ctx, req)
 	if err != nil {
@@ -2601,8 +2628,6 @@ func (f *feature) iCallCreateSnapshotForFS() error {
 		f.addError(err)
 	} else {
 		f.snapshotID = resp.Snapshot.SnapshotId
-		//fmt.Printf("createSnapshot: SnapshotId %s SourceVolumeId %s CreationTime %s\n",
-		//	resp.Snapshot.SnapshotId, resp.Snapshot.SourceVolumeId, resp.Snapshot.CreationTime.AsTime().Format(time.RFC3339))
 	}
 	time.Sleep(RetrySleepTime)
 	return nil
@@ -2690,18 +2715,16 @@ func (f *feature) createFakeNodeLabels(zoneLabelKey string) error {
 }
 
 func (f *feature) iCallNodeGetInfo(zoneLabelKey string) error {
-	fmt.Println("[iCallNodeGetInfo] Calling NodeGetInfo...")
+	fmt.Println("Getting node info")
 	_, err := f.nodeGetInfo(f.nodeGetInfoRequest, zoneLabelKey)
 	if err != nil {
-		fmt.Printf("NodeGetInfo returned error: %s\n", err.Error())
+		fmt.Printf("nodeGetInfo returned error: %v\n", err)
 		f.addError(err)
 	}
 	return nil
 }
 
 func (f *feature) nodeGetInfo(req *csi.NodeGetInfoRequest, zoneLabelKey string) (*csi.NodeGetInfoResponse, error) {
-	fmt.Println("[nodeGetInfo] Calling NodeGetInfo...")
-
 	ctx := context.Background()
 	client := csi.NewNodeClient(grpcClient)
 	var nodeResp *csi.NodeGetInfoResponse
@@ -2742,14 +2765,14 @@ func (f *feature) aNodeGetInfoIsReturnedWithSystemTopology() error {
 	log.Printf("Node Accessibility %+v", accessibility)
 
 	var err error
-	f.arrays, err = f.getArrayConfig(zoneConfigFile)
+	f.arrays, err = f.getArrayConfig(configFile)
 	if err != nil {
 		return fmt.Errorf("failed to get array config: %v", err)
 	}
 
 	labelAdded := false
 	for _, array := range f.arrays {
-		log.Printf("array systemID %+v", array.SystemID)
+		log.Printf("Array systemID: %s", array.SystemID)
 		if _, ok := accessibility.Segments[service.Name+"/"+array.SystemID]; ok {
 			labelAdded = true
 		}
@@ -2782,6 +2805,11 @@ func (f *feature) iCreateZoneRequest(name string) error {
 	return nil
 }
 
+func (f *feature) iPause(seconds int) error {
+	time.Sleep(time.Duration(seconds) * time.Second)
+	return nil
+}
+
 func (f *feature) iCreateInvalidZoneRequest() error {
 	req := f.createGenericZoneRequest("invalid-zone-volume")
 	req.AccessibilityRequirements = new(csi.TopologyRequirement)
@@ -2808,8 +2836,7 @@ func (f *feature) createGenericZoneRequest(name string) *csi.CreateVolumeRequest
 		params["systemID"] = f.anotherSystemID
 	}
 	req.Parameters = params
-	makeAUniqueName(&name)
-	req.Name = name
+	req.Name = makeDistinctName(name)
 	capacityRange := new(csi.CapacityRange)
 	capacityRange.RequiredBytes = 8 * 1024 * 1024 * 1024
 	req.CapacityRange = capacityRange
@@ -2830,7 +2857,46 @@ func (f *feature) createGenericZoneRequest(name string) *csi.CreateVolumeRequest
 	return req
 }
 
+var isZoneArrayConfig bool
+
 func FeatureContext(s *godog.ScenarioContext) {
+
+	s.Before(func(ctx context.Context, sc *godog.Scenario) (context.Context, error) {
+		for _, tag := range sc.Tags {
+			if tag.Name == "@zone-integration" {
+				if !isZoneArrayConfig {
+					log.Printf("Adding zoning to arrays config")
+					err := addArrayZoneConfig()
+					if err != nil {
+						return ctx, fmt.Errorf("failed to update array config file with zones: %v", err)
+					}
+					err = restartService()
+					if err != nil {
+						return ctx, fmt.Errorf("driver service did not restart with updated array config: %v", err)
+					}
+					isZoneArrayConfig = true
+				}
+				return ctx, nil
+			}
+		}
+
+		// Assume this is not a zoning related scenario, use simple array config
+
+		if isZoneArrayConfig {
+			log.Printf("Removing zoning from arrays config")
+			err := resetArrayConfig()
+			if err != nil {
+				return ctx, fmt.Errorf("failed to reset array config file before test: %v", err)
+			}
+			err = restartService()
+			if err != nil {
+				return ctx, fmt.Errorf("driver service did not restart with updated array config: %v", err)
+			}
+			isZoneArrayConfig = false
+		}
+		return ctx, nil
+	})
+
 	f := &feature{}
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
 	s.Step(`^a basic block volume request "([^"]*)" "(\d+(\.\d+)?)"$`, f.aBasicBlockVolumeRequest)
@@ -2913,4 +2979,5 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^a NodeGetInfo is returned with zone topology$`, f.aNodeGetInfoIsReturnedWithZoneTopology)
 	s.Step(`^a NodeGetInfo is returned without zone topology "([^"]*)"$`, f.aNodeGetInfoIsReturnedWithoutZoneTopology)
 	s.Step(`^a NodeGetInfo is returned with system topology$`, f.aNodeGetInfoIsReturnedWithSystemTopology)
+	s.Step(`^I pause for "([0-9]*)" seconds$`, f.iPause)
 }
