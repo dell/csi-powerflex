@@ -1,4 +1,4 @@
-// Copyright © 2020-2022 Dell Inc. or its subsidiaries. All Rights Reserved.
+// Copyright © 2020-2025 Dell Inc. or its subsidiaries. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,8 +15,6 @@ package k8sutils
 
 import (
 	"context"
-	"fmt"
-	"os"
 
 	"github.com/kubernetes-csi/csi-lib-utils/leaderelection"
 	"k8s.io/client-go/kubernetes"
@@ -47,11 +45,8 @@ func CreateKubeClientSet() error {
 }
 
 // LeaderElection - Initializes Leader election
-func LeaderElection(clientset *kubernetes.Interface, lockName string, namespace string, runFunc func(ctx context.Context)) {
+func LeaderElection(clientset *kubernetes.Interface, lockName string, namespace string, runFunc func(ctx context.Context)) error {
 	le := leaderelection.NewLeaderElection(*clientset, lockName, runFunc)
 	le.WithNamespace(namespace)
-	if err := le.Run(); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "failed to initialize leader election: %v", err)
-		os.Exit(1)
-	}
+	return le.Run()
 }

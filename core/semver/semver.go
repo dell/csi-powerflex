@@ -1,15 +1,16 @@
-// Copyright © 2019-2022 Dell Inc. or its subsidiaries. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//      http://www.apache.org/licenses/LICENSE-2.0
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
+/*
+ Copyright © 2025 Dell Inc. or its subsidiaries. All Rights Reserved.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+      http://www.apache.org/licenses/LICENSE-2.0
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+*/
 
 package main
 
@@ -31,30 +32,46 @@ import (
 	"time"
 )
 
-func main() {
-	var (
-		tpl    *template.Template
-		format string
-		output string
-		export bool
-	)
+var (
+	format string
+	output string
+	export bool
+	tpl    *template.Template
+)
 
-	flag.StringVar(
-		&format,
-		"f",
-		"ver",
-		"The output format: env, go, json, mk, rpm, ver")
-	flag.StringVar(
-		&output,
-		"o",
-		"",
-		"The output file")
-	flag.BoolVar(
-		&export,
-		"x",
-		false,
-		"Export env vars. Used with -f env")
+func init() {
+	if flag.Lookup("f") == nil {
+		flag.StringVar(
+			&format,
+			"f",
+			"ver",
+			"The output format: env, go, json, mk, rpm, ver")
+	}
+	if flag.Lookup("o") == nil {
+		flag.StringVar(
+			&output,
+			"o",
+			"",
+			"The output file")
+	}
+	if flag.Lookup("x") == nil {
+		flag.BoolVar(
+			&export,
+			"x",
+			false,
+			"Export env vars. Used with -f env")
+	}
+}
+
+func initFlags() {
+	format = flag.Lookup("f").Value.(flag.Getter).Get().(string)
+	output = flag.Lookup("o").Value.(flag.Getter).Get().(string)
+	export = flag.Lookup("x").Value.(flag.Getter).Get().(bool)
+}
+
+func main() {
 	flag.Parse()
+	initFlags()
 
 	if strings.EqualFold("env", format) {
 		format = "env"
@@ -69,13 +86,10 @@ func main() {
 	} else if strings.EqualFold("ver", format) {
 		format = "ver"
 	} else {
-		/* #nosec G304 */
-		format = filepath.Clean(format)
 		if fileExists(format) {
-			buf, err := os.ReadFile(format)
+			buf, err := ReadFile(format) // #nosec G304
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "error: read tpl failed: %v\n", err)
-				os.Exit(1)
+				errorExit(fmt.Sprintf("error: read tpl failed: %v\n", err))
 			}
 			format = string(buf)
 		}
@@ -85,24 +99,24 @@ func main() {
 
 	var w io.Writer = os.Stdout
 	if len(output) > 0 {
-		output = filepath.Clean(output)
-		fout, err := os.Create(output)
+		fout, err := os.Create(filepath.Clean(output))
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "error: %v\n", err)
-			os.Exit(1)
+			errorExit(fmt.Sprintf("error: %v\n", err))
 		}
 		w = fout
-		/* #nosec G307 */
-		defer fout.Close()
+		defer func() {
+			if err := fout.Close(); err != nil {
+				panic(err)
+			}
+		}() // #nosec G20
 	}
 
-	gitdesc := chkErr(doExec("git", "describe", "--tags", "--long", "--dirty"))
+	gitdesc := chkErr(doExec("git", "describe", "--long", "--dirty"))
 	rx := regexp.MustCompile(
 		`^[^\d]*(\d+)\.(\d+)\.(\d+)(?:-([a-zA-Z].+?))?(?:-(\d+)-g(.+?)(?:-(dirty))?)?\s*$`)
 	m := rx.FindStringSubmatch(gitdesc)
 	if len(m) == 0 {
-		fmt.Fprintf(os.Stderr, "error: match git describe failed: %s\n", gitdesc)
-		os.Exit(1)
+		errorExit(fmt.Sprintf("error: match git describe failed: %s\n", gitdesc))
 	}
 
 	goos := os.Getenv("XGOOS")
@@ -113,7 +127,16 @@ func main() {
 	if goarch == "" {
 		goarch = runtime.GOARCH
 	}
-
+	// get the build number. Jenkins exposes this as an
+	// env variable called BUILD_NUMBER
+	buildNumber := os.Getenv("BUILD_NUMBER")
+	if buildNumber == "" {
+		buildNumber = m[5]
+	}
+	buildType := os.Getenv("BUILD_TYPE")
+	if buildType == "" {
+		buildType = "X"
+	}
 	ver := &semver{
 		GOOS:   goos,
 		GOARCH: goarch,
@@ -123,7 +146,8 @@ func main() {
 		Minor:  toInt(m[2]),
 		Patch:  toInt(m[3]),
 		Notes:  m[4],
-		Build:  toInt(m[5]),
+		Type:   buildType,
+		Build:  toInt(buildNumber),
 		Sha7:   m[6],
 		Sha32:  chkErr(doExec("git", "log", "-n1", `--format=%H`)),
 		Dirty:  m[7] != "",
@@ -147,8 +171,7 @@ func main() {
 		enc := json.NewEncoder(w)
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(ver); err != nil {
-			fmt.Fprintf(os.Stderr, "error: encode to json failed: %v\n", err)
-			os.Exit(1)
+			errorExit(fmt.Sprintf("error: encode to json failed: %v\n", err))
 		}
 	case "mk":
 		for _, v := range ver.EnvVars() {
@@ -157,22 +180,21 @@ func main() {
 			fmt.Fprintf(w, "%s ?=", key)
 			if len(p) == 1 {
 				fmt.Fprintln(w)
-				continue
+			} else {
+				val := p[1]
+				if strings.HasPrefix(val, `"`) &&
+					strings.HasSuffix(val, `"`) {
+					val = val[1 : len(val)-1]
+				}
+				val = strings.Replace(val, "$", "$$", -1)
+				fmt.Fprintf(w, " %s\n", val)
 			}
-			val := p[1]
-			if strings.HasPrefix(val, `"`) &&
-				strings.HasSuffix(val, `"`) {
-				val = val[1 : len(val)-1]
-			}
-			val = strings.Replace(val, "$", "$$", -1)
-			fmt.Fprintf(w, " %s\n", val)
 		}
 	case "rpm":
 		fmt.Fprintln(w, ver.RPM())
 	case "tpl":
 		if err := tpl.Execute(w, ver); err != nil {
-			fmt.Fprintf(os.Stderr, "error: template failed: %v\n", err)
-			os.Exit(1)
+			errorExit(fmt.Sprintf("error: template failed: %v\n", err))
 		}
 	case "ver":
 		fmt.Fprintln(w, ver.String())
@@ -180,10 +202,14 @@ func main() {
 }
 
 func doExec(cmd string, args ...string) ([]byte, error) {
-	/* #nosec G204 */
-	c := exec.Command(cmd, args...)
+	c := exec.Command(cmd, args...) // #nosec G204
 	c.Stderr = os.Stderr
 	return c.Output()
+}
+
+func errorExit(message string) {
+	fmt.Fprintf(os.Stderr, "%s", message)
+	OSExit(1)
 }
 
 func chkErr(out []byte, err error) string {
@@ -191,17 +217,17 @@ func chkErr(out []byte, err error) string {
 		return strings.TrimSpace(string(out))
 	}
 
-	e, ok := err.(*exec.ExitError)
+	e, ok := GetExitError(err)
 	if !ok {
-		os.Exit(1)
+		OSExit(1)
 	}
 
-	st, ok := e.Sys().(syscall.WaitStatus)
+	status, ok := GetStatusError(e)
 	if !ok {
-		os.Exit(1)
+		OSExit(1)
 	}
 
-	os.Exit(st.ExitStatus())
+	OSExit(status)
 	return ""
 }
 
@@ -215,6 +241,7 @@ type semver struct {
 	Patch       int    `json:"patch"`
 	Build       int    `json:"build"`
 	Notes       string `json:"notes"`
+	Type        string `json:"type"`
 	Dirty       bool   `json:"dirty"`
 	Sha7        string `json:"sha7"`
 	Sha32       string `json:"sha32"`
@@ -253,8 +280,9 @@ func (v *semver) EnvVars() []string {
 		fmt.Sprintf("MAJOR=%d", v.Major),
 		fmt.Sprintf("MINOR=%d", v.Minor),
 		fmt.Sprintf("PATCH=%d", v.Patch),
-		fmt.Sprintf("BUILD=%d", v.Build),
+		fmt.Sprintf("BUILD=%3.3d", v.Build),
 		fmt.Sprintf("NOTES=\"%s\"", v.Notes),
+		fmt.Sprintf("TYPE=%s", v.Type),
 		fmt.Sprintf("DIRTY=%v", v.Dirty),
 		fmt.Sprintf("SHA7=%s", v.Sha7),
 		fmt.Sprintf("SHA32=%s", v.Sha32),
@@ -310,14 +338,32 @@ var goarchToUname = map[string]string{
 }
 
 func fileExists(filePath string) bool {
-	_, err := os.Stat(filePath)
-	if err == nil {
+	if _, err := os.Stat(filePath); !os.IsNotExist(err) {
 		return true
 	}
-	if os.IsNotExist(err) {
-		fmt.Printf("File %s doesn't exist", filePath)
-	} else {
-		fmt.Printf("Found error %v while checking stat of file %s ", err, filePath)
-	}
 	return false
+}
+
+// ReadFile is a wrapper around os.ReadFile
+var ReadFile = func(file string) ([]byte, error) {
+	return os.ReadFile(file) // #nosec G304
+}
+
+// OSExit is a wrapper around os.Exit
+var OSExit = func(code int) {
+	os.Exit(code)
+}
+
+// GetExitError is a wrapper around exec.ExitError
+var GetExitError = func(err error) (e *exec.ExitError, ok bool) {
+	e, ok = err.(*exec.ExitError)
+	return
+}
+
+// GetStatusError is a wrapper around syscall.WaitStatus
+var GetStatusError = func(exitError *exec.ExitError) (status int, ok bool) {
+	if e, ok := exitError.Sys().(syscall.WaitStatus); ok {
+		return e.ExitStatus(), true
+	}
+	return 1, false
 }

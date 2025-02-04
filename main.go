@@ -85,7 +85,11 @@ func main() {
 		}
 		service.K8sClientset = k8sutils.Clientset
 		// Attempt to become leader and start the driver
-		k8sutils.LeaderElection(&k8sutils.Clientset, lockName, *leaderElectionNamespace, run)
+		err = k8sutils.LeaderElection(&k8sutils.Clientset, lockName, *leaderElectionNamespace, run)
+		if err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "failed to become leader: %v", err)
+			os.Exit(1)
+		}
 	}
 }
 
