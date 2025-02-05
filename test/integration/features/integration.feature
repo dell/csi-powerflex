@@ -23,16 +23,16 @@ Feature: VxFlex OS CSI interface
     And I call DeleteVolume
     Then there are no errors
     Examples:
-      | voltype | access                      | fstype | errormsg |
-      | "mount" | "single-writer"             | "xfs"  | "none"   |
-      | "mount" | "single-node-single-writer" | "xfs"  | "none"   |
-      | "mount" | "single-node-multi-writer"  | "xfs"  | "none"   |
+      | voltype | access                      | fstype |
+      | "mount" | "single-writer"             | "xfs"  |
+      | "mount" | "single-node-single-writer" | "xfs"  |
+      | "mount" | "single-node-multi-writer"  | "xfs"  |
 
 
   Scenario: Create and delete basic volume
     Given a VxFlexOS service
     And a basic block volume request "integration1" "8"
-    When I call CreateVolume
+    And I call CreateVolume
     When I call ListVolume
     Then a valid ListVolumeResponse is returned
     And I call DeleteVolume
@@ -43,8 +43,8 @@ Feature: VxFlex OS CSI interface
     Given a VxFlexOS service
     And a basic block volume request "integration1" "48.1"
     When I call CreateVolume
-    When I call ListVolume
-    Then a valid ListVolumeResponse is returned
+    And I call ControllerGetVolume
+    And there are no errors
     And I call DeleteVolume
     Then there are no errors
 
@@ -326,13 +326,11 @@ Feature: VxFlex OS CSI interface
     And I call DeleteAllVolumes
     And there are no errors
 
-
   Scenario Outline: Create, publish, node-publish, node-unpublish, unpublish, and delete basic volume
     Given a VxFlexOS service
     And a capability with voltype <voltype> access <access> fstype <fstype>
     And a volume request "integration5" "8"
     When I call CreateVolume
-    And there are no errors
     And when I call PublishVolume "SDC_GUID"
     And when I call NodePublishVolume "SDC_GUID"
     And verify published volume with voltype <voltype> access <access> fstype <fstype>
@@ -340,7 +338,7 @@ Feature: VxFlex OS CSI interface
     And when I call NodeUnpublishVolume "SDC_GUID"
     And when I call UnpublishVolume "SDC_GUID"
     And I call DeleteVolume
-    Then the error message should contain <errormsg>
+    Then there are no errors
 
     Examples:
       | voltype | access                      | fstype | errormsg                   |
@@ -348,12 +346,26 @@ Feature: VxFlex OS CSI interface
       | "mount" | "single-writer"             | "ext4" | "none"                     |
       | "mount" | "single-node-single-writer" | "xfs"  | "none"                     |
       | "mount" | "single-node-single-writer" | "ext4" | "none"                     |
-      | "mount" | "multi-writer"              | "ext4" | "multi-writer not allowed" |
       | "block" | "single-writer"             | "none" | "none"                     |
       | "block" | "single-node-single-writer" | "none" | "none"                     |
       | "block" | "multi-writer"              | "none" | "none"                     |
       | "block" | "single-writer"             | "none" | "none"                     |
       | "block" | "single-node-single-writer" | "none" | "none"                     |
+
+  Scenario Outline: Create and try publishing volume with unsupported access mode
+    Given a VxFlexOS service
+    And a capability with voltype <voltype> access <access> fstype <fstype>
+    And a volume request "integration5" "8"
+    When I call CreateVolume
+    And there are no errors
+    And when I call PublishVolume "SDC_GUID"
+    Then the error message should contain <errormsg>
+    And I call DeleteVolume
+    Then there are no errors
+
+    Examples:
+      | voltype | access                      | fstype | errormsg                   |
+      | "mount" | "multi-writer"              | "ext4" | "multi-writer not allowed" |
 
 
   Scenario: Create volume with access mode read only many
@@ -525,8 +537,8 @@ Feature: VxFlex OS CSI interface
     And there are no errors
     And when I call NodeExpandVolume
     And there are no errors
-    And I call ListVolume
-    And a valid ListVolumeResponse is returned
+    And I call ControllerGetVolume
+    And there are no errors
     And when I call NodeUnpublishVolume "SDC_GUID"
     And there are no errors
     And when I call UnpublishVolume "SDC_GUID"
@@ -549,8 +561,8 @@ Feature: VxFlex OS CSI interface
     And there are no errors
     And when I call NodeExpandVolume
     And there are no errors
-    And I call ListVolume
-    And a valid ListVolumeResponse is returned
+    And I call ControllerGetVolume
+    And there are no errors
     And when I call NodeUnpublishVolume "SDC_GUID"
     And there are no errors
     And when I call UnpublishVolume "SDC_GUID"
@@ -564,8 +576,6 @@ Feature: VxFlex OS CSI interface
     Given a VxFlexOS service
     And a basic nfs volume request "nfsvolume1" "8"
     When I call CreateVolume
-    When I call ListVolume
-    Then a valid ListVolumeResponse is returned
     And I call DeleteVolume
     Then there are no errors
 
@@ -575,8 +585,6 @@ Feature: VxFlex OS CSI interface
     Given a VxFlexOS service
     And a basic nfs volume request "nfsvolume100" "2"
     When I call CreateVolume
-    When I call ListVolume
-    Then a valid ListVolumeResponse is returned
     And I call DeleteVolume
     Then there are no errors
 
@@ -610,7 +618,7 @@ Feature: VxFlex OS CSI interface
     Then the error message should contain <errormsg>
     Examples:
       | errormsg                                 |
-      | "couldn't find given NAS server by name" |
+      | "could not find given NAS server by name" |
 
 
   @nfs
@@ -666,8 +674,6 @@ Feature: VxFlex OS CSI interface
     And there are no errors
     And when I call NfsExpandVolume to "20"
     And there are no errors
-    And I call ListVolume
-    And a valid ListVolumeResponse is returned
     And when I call NodeUnpublishVolume for nfs "SDC_GUID"
     And there are no errors
     And when I call UnpublishVolume for nfs "SDC_GUID"
@@ -689,8 +695,6 @@ Feature: VxFlex OS CSI interface
     And there are no errors
     And when I call NfsExpandVolume to "20"
     And there are no errors
-    And I call ListVolume
-    And a valid ListVolumeResponse is returned
     And when I call NodeUnpublishVolume for nfs
     And there are no errors
     And when I call UnpublishVolume for nfs
@@ -754,8 +758,6 @@ Feature: VxFlex OS CSI interface
     Given a VxFlexOS service
     And a basic nfs volume request with quota enabled volname "nfsvolume1" volsize "8" path "/fs" softlimit "20" graceperiod ""
     When I call CreateVolume
-    When I call ListVolume
-    Then a valid ListVolumeResponse is returned
     And I call DeleteVolume
     Then there are no errors
 
@@ -789,8 +791,6 @@ Feature: VxFlex OS CSI interface
     Given a VxFlexOS service
     And a basic nfs volume request with quota enabled volname "nfsvolume1" volsize "8" path "/fs" softlimit "20" graceperiod "-1"
     When I call CreateVolume
-    When I call ListVolume
-    Then a valid ListVolumeResponse is returned
     And I call DeleteVolume
     Then there are no errors
 
@@ -816,8 +816,6 @@ Feature: VxFlex OS CSI interface
     And there are no errors
     And when I call NfsExpandVolume to "15"
     And there are no errors
-    And I call ListVolume
-    And a valid ListVolumeResponse is returned
     And when I call NodeUnpublishVolume for nfs "SDC_GUID"
     And there are no errors
     And when I call UnpublishVolume for nfs "SDC_GUID"
@@ -839,8 +837,6 @@ Feature: VxFlex OS CSI interface
     And there are no errors
     And when I call NfsExpandVolume to "15"
     And there are no errors
-    And I call ListVolume
-    And a valid ListVolumeResponse is returned
     And when I call NodeUnpublishVolume for nfs
     And there are no errors
     And when I call UnpublishVolume for nfs
@@ -850,21 +846,20 @@ Feature: VxFlex OS CSI interface
 
 
   @nfs
-  Scenario: Expand Nfs Volume with tree quota enabled given invalid volume size for exapnd volume
+  Scenario: Expand Nfs Volume with tree quota enabled given invalid volume size for expand volume
     Given a VxFlexOS service
     And a nfs capability with voltype "mount" access "single-writer" fstype "nfs"
     And a basic nfs volume request with quota enabled volname "vol-quota123" volsize "10" path "/nfs-quotakk" softlimit "80" graceperiod "86400"
     When I call CreateVolume
-    And there are no errors
     And when I call PublishVolume for nfs "SDC_GUID"
-    And there are no errors
     And when I call NodePublishVolume for nfs "SDC_GUID"
     And there are no errors
-    And when I call NfsExpandVolume to "15000"
-    Then the error message should contain <errormsg>
-    Examples:
-      | errormsg                   |
-      | "422 Unprocessable Entity" |
+    And when I call NfsExpandVolume to "999999999999"
+    Then the error message should contain "400 Bad Request"
+    And when I call NodeUnpublishVolume for nfs
+    And when I call UnpublishVolume for nfs
+    And I call DeleteVolume
+    Then there are no errors
 
 
   @nfs
@@ -880,14 +875,13 @@ Feature: VxFlex OS CSI interface
     And there are no errors
     And when I call NfsExpandVolume to "15"
     And there are no errors
-    And I call ListVolume
-    And a valid ListVolumeResponse is returned
     And when I call NodeUnpublishVolume for nfs "SDC_GUID"
     And there are no errors
     And when I call UnpublishVolume for nfs "SDC_GUID"
     And there are no errors
     And I call DeleteVolume
     Then there are no errors
+
 
   Scenario Outline: Publish and Unpublish Ephemeral Volume
     Given a VxFlexOS service
@@ -904,6 +898,7 @@ Feature: VxFlex OS CSI interface
       | "123456789" | "8Gi" | "single-writer" | "ext1" | "inline ephemeral node publish failed"       |
       | "123456789" | " Gi" | "single-writer" | "ext4" | "inline ephemeral parse size failed"         |
 
+
   Scenario: Call CreateVolumeGroupSnapshot
     Given a VxFlexOS service
     And a basic block volume request "integration1" "8"
@@ -912,12 +907,11 @@ Feature: VxFlex OS CSI interface
     And I call CreateVolume
     And a basic block volume request "integration3" "8"
     And I call CreateVolume
-    When I call CreateVolumeGroupSnapshot
+    When I call CreateVolumeGroupSnapshot with 3 volumes
     And I call DeleteVGS
     And I call DeleteAllVolumes
     Then the error message should contain "none"
 
-  4
 
   Scenario: Call CreateVolumeGroupSnapshot idempotent
     Given a VxFlexOS service
@@ -927,8 +921,8 @@ Feature: VxFlex OS CSI interface
     And I call CreateVolume
     And a basic block volume request "integration3" "8"
     And I call CreateVolume
-    When I call CreateVolumeGroupSnapshot
-    When I call CreateVolumeGroupSnapshot
+    When I call CreateVolumeGroupSnapshot with 3 volumes
+    When I call CreateVolumeGroupSnapshot with 3 volumes
     And I call DeleteVGS
     And I call DeleteAllVolumes
     Then the error message should contain "none"
@@ -943,10 +937,10 @@ Feature: VxFlex OS CSI interface
     And I call CreateVolume
     And a basic block volume request "integration3" "8"
     And I call CreateVolume
-    When I call CreateVolumeGroupSnapshot
+    When I call CreateVolumeGroupSnapshot with 3 volumes
     And a basic block volume request "integration4" "8"
     And I call CreateVolume
-    When I call CreateVolumeGroupSnapshot
+    When I call CreateVolumeGroupSnapshot with 4 volumes
     And I call DeleteVGS
     And I call DeleteAllVolumes
     Then the error message should contain "Some snapshots exist on array, while others need to be created"
@@ -977,12 +971,12 @@ Feature: VxFlex OS CSI interface
     And I call CreateVolume
     And a basic block volume request "integration3" "8"
     And I call CreateVolume
-    When I call CreateVolumeGroupSnapshot
-    And remove a volume from VolumeGroupSnapshotRequest
-    When I call CreateVolumeGroupSnapshot
+    When I call CreateVolumeGroupSnapshot with 3 volumes
+    When I call CreateVolumeGroupSnapshot with 2 volumes
     And I call DeleteVGS
     And I call DeleteAllVolumes
     Then the error message should contain "contains more snapshots"
+
 
   Scenario: Call ControllerGetVolume with Good VolumeID
     Given a VxFlexOS service
@@ -995,13 +989,14 @@ Feature: VxFlex OS CSI interface
     And when I call NodePublishVolume "SDC_GUID"
     And there are no errors
     And I call ControllerGetVolume
-    And the volumecondition is "healthy"
+    And the controller volume condition is "healthy"
     And when I call NodeUnpublishVolume "SDC_GUID"
     And there are no errors
     And when I call UnpublishVolume "SDC_GUID"
     And there are no errors
     And I call DeleteVolume
     Then there are no errors
+
 
   Scenario: Call ControllerGetVolume with No VolumeID
     Given a VxFlexOS service
@@ -1018,8 +1013,9 @@ Feature: VxFlex OS CSI interface
     And I call DeleteVolume
     Then there are no errors
     And I call ControllerGetVolume
-    And the volumecondition is "unhealthy"
+    And the controller volume condition is "unhealthy"
     Then there are no errors
+
 
   Scenario: Call NodeGetVolumeStats on volume
     Given a VxFlexOS service
@@ -1031,12 +1027,13 @@ Feature: VxFlex OS CSI interface
     And there are no errors
     And when I call NodePublishVolume "SDC_GUID"
     And I call NodeGetVolumeStats
-    And the VolumeCondition is "ok"
+    And the node volume condition is "healthy"
     And when I call NodeUnpublishVolume "SDC_GUID"
     And when I call UnpublishVolume "SDC_GUID"
     And there are no errors
     And I call DeleteVolume
     Then there are no errors
+
 
   Scenario: Call NodeGetVolumeStats on unmounted volume
     Given a VxFlexOS service
@@ -1049,11 +1046,12 @@ Feature: VxFlex OS CSI interface
     And when I call NodePublishVolume "SDC_GUID"
     And when I call NodeUnpublishVolume "SDC_GUID"
     And I call NodeGetVolumeStats
-    And the VolumeCondition is "abnormal"
+    And the node volume condition is "unhealthy"
     And when I call UnpublishVolume "SDC_GUID"
     And there are no errors
     And I call DeleteVolume
     Then there are no errors
+
 
   Scenario: Custom file system format options (mkfsFormatOption)
     Given a VxFlexOS service

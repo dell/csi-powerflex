@@ -19,10 +19,8 @@ export VOL_NAME_SUFFIX=babija
 export X_CSI_VXFLEXOS_THICKPROVISION=false
 export X_CSI_VXFLEXOS_ENABLESNAPSHOTCGDELETE="true"
 export X_CSI_VXFLEXOS_ENABLELISTVOLUMESNAPSHOTS="true"
+# Set to true to enable quota by default for created NFS volumes
 export X_CSI_QUOTA_ENABLED="true"
-export NFS_QUOTA_PATH="/nfs-quota1"
-export NFS_QUOTA_SOFT_LIMIT=20
-export NFS_QUOTA_GRACE_PERIOD=86400
 
 #export STORAGE_POOL="pool1"
 export STORAGE_POOL="SP-SW_SSD-1"
@@ -38,7 +36,7 @@ export X_CSI_POWERFLEX_KUBE_NODE_NAME="node1"
 # Interface variables
 export NODE_INTERFACES="worker-1-6MRQC8xZ3A4zt.domain:ens192"
 
-#Debug variables for goscaleio library
+# Set to true to print debug variables for goscaleio library
 export GOSCALEIO_SHOWHTTP="false"
 
 #If you put the system ID in your config.json, put the

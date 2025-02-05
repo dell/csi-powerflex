@@ -34,15 +34,13 @@ check_test_config()
     config_valid=false
   fi
 
-  if [ "$X_CSI_QUOTA_ENABLED" = "true" ]; then
-    echo "$NFS_QUOTA_PATH" | grep -vEq '^/.+$' && echo "Set NFS_QUOTA_PATH in env.sh to an existing NFS quota path on the PowerFlex array or set X_CSI_QUOTA_ENABLED to false." && config_valid=false
-    echo "$NFS_QUOTA_SOFT_LIMIT" | grep -vEq '^[0-9]+$' && echo "Set NFS_QUOTA_SOFT_LIMIT in env.sh to a number of gigabytes (e.g. \"20\") or set X_CSI_QUOTA_ENABLED to false." && config_valid=false
-    echo "$NFS_QUOTA_GRACE_PERIOD" | grep -vEq '^[0-9]+$' && echo "Set NFS_QUOTA_GRACE_PERIOD in env.sh to a number of seconds (e.g. \"86400\") or set X_CSI_QUOTA_ENABLED to false." && config_valid=false
-  fi
-
   [ ! -f "$array_config" ] && echo "Array config file $array_config not found. Create and populate it." && config_valid=false
 
-  ! $config_valid && echo "Invalid test configuration. Review values in env.sh" && exit 1 || true
+  # For NFS tests, check if mount.nfs is installed
+  ! which mount.nfs &>/dev/null && echo "mount.nfs is not installed and it is required for NFS tests"  && config_valid=false
+
+  ! $config_valid && echo "Invalid test configuration. Review values in env.sh and $array_config." && exit 1 || true
+
 }
 
 print_test_config()
@@ -56,9 +54,7 @@ print_test_config()
   echo "X_CSI_VXFLEXOS_ENABLESNAPSHOTCGDELETE = $X_CSI_VXFLEXOS_ENABLESNAPSHOTCGDELETE"
   echo "X_CSI_VXFLEXOS_ENABLELISTVOLUMESNAPSHOTS = $X_CSI_VXFLEXOS_ENABLELISTVOLUMESNAPSHOTS"
   echo "X_CSI_QUOTA_ENABLED = $X_CSI_QUOTA_ENABLED"
-  echo "NFS_QUOTA_PATH = $NFS_QUOTA_PATH"
-  echo "NFS_QUOTA_SOFT_LIMIT = $NFS_QUOTA_SOFT_LIMIT"
-  echo "NFS_QUOTA_GRACE_PERIOD = $NFS_QUOTA_GRACE_PERIOD"
+  echo "PROTECTION_DOMAIN = $PROTECTION_DOMAIN"
   echo "STORAGE_POOL = $STORAGE_POOL"
   echo "NFS_STORAGE_POOL = $NFS_STORAGE_POOL"
   echo "ALT_GUID = $ALT_GUID"

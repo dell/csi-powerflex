@@ -76,7 +76,7 @@ func readConfigFile(filePath string) {
 // Copy user configuration from baseConfigFile to configFile
 // which will be later updated for some scenarios.
 func resetArrayConfig() error {
-	fmt.Printf("=== AB: resetArrayConfig called\n")
+	fmt.Println("Setting basic array config")
 
 	config, err := os.ReadFile(baseConfigFile)
 	if err != nil {
@@ -91,7 +91,7 @@ func resetArrayConfig() error {
 }
 
 func addArrayZoneConfig() error {
-	fmt.Printf("=== AB: addArrayZoneConfig called\n")
+	fmt.Println("Setting array config with zone")
 
 	protectionDomain := os.Getenv("PROTECTION_DOMAIN")
 	storagePool := os.Getenv("STORAGE_POOL")
