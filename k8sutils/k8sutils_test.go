@@ -8,27 +8,64 @@ import (
 	"github.com/stretchr/testify/assert"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/rest"
 )
 
-// following the structure of csi-powermax test, which has more test cases
-// because csi-powermax allows a
 func Test_CreateKubeClientSet(t *testing.T) {
+	var tempConfigFunc func() (*rest.Config, error)                                // must return getInClusterConfig to its original value
+	var tempClientsetFunc func(config *rest.Config) (*kubernetes.Clientset, error) // must return getK8sClientset to its original value
 	tests := []struct {
 		name    string
-		before  func(string) error
+		before  func() error
 		after   func()
 		wantErr bool
 	}{
+
 		{
-			name:    "failure: must create cert/key under /var, requires root",
-			before:  func(_ string) error { return nil },
+			name: "success: manually set InClusterConfig with mock",
+			before: func() error {
+				Clientset = nil // reset Clientset before each run
+				tempConfigFunc = getInClusterConfig
+				getInClusterConfig = func() (*rest.Config, error) { return &rest.Config{}, nil }
+				return nil
+			},
+			after:   func() { getInClusterConfig = tempConfigFunc },
+			wantErr: false,
+		},
+		{
+			name: "failure: unmocked config function",
+			before: func() error {
+				Clientset = nil // reset Clientset before each run
+				return nil
+			},
 			after:   func() {},
+			wantErr: true,
+		},
+		{
+			name: "failure: error returned by kubernetes.NewForConfig",
+			before: func() error { // overrides to get past a mock and inject a failure
+				Clientset = nil // reset Clientset before each run
+				tempConfigFunc = getInClusterConfig
+				tempClientsetFunc = getK8sClientset
+				getInClusterConfig = func() (*rest.Config, error) { return &rest.Config{}, nil }
+				getK8sClientset = func(config *rest.Config) (*kubernetes.Clientset, error) {
+					return nil, assert.AnError
+				}
+				return nil
+			},
+			after: func() { // restore functions to their defaults
+				getInClusterConfig = tempConfigFunc
+				getK8sClientset = tempClientsetFunc
+			},
 			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			tt.before()
+			defer tt.after()
+
 			err := CreateKubeClientSet()
 			if tt.wantErr {
 				assert.Error(t, err)
