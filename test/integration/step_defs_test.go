@@ -229,33 +229,6 @@ func (f *feature) getArrayConfig(filePath string) (map[string]*ArrayConnectionDa
 	return arrays, nil
 }
 
-func (f *feature) ArrayConfigWithZone(filePath string) (map[string]*ArrayConnectionData, error) {
-	arrays, err := f.getArrayConfig(filePath)
-	if err != nil {
-		return nil, err
-	}
-	if len(arrays) == 0 {
-		return nil, fmt.Errorf("no array found in file %s", filePath)
-	}
-	// Find the default array
-	var defaultSystem string
-	for k, v := range arrays {
-		if v.IsDefault {
-			defaultSystem = k
-			break
-		}
-	}
-	if defaultSystem == "" {
-		return nil, fmt.Errorf("no default array found in file %s", filePath)
-	}
-	protectionDomain := os.Getenv("PROTECTION_DOMAIN")
-	storagePool := os.Getenv("STORAGE_POOL")
-	fmt.Printf("Adding zone config to system %s: protectionDomain=%s storagePool=%s\n", defaultSystem, protectionDomain, storagePool)
-	//arrays[defaultSystem].
-
-	return arrays, nil
-}
-
 func (f *feature) createConfigMap() error {
 	var configYAMLContent strings.Builder
 
@@ -808,7 +781,7 @@ func (f *feature) iCallEphemeralNodePublishVolume(id, size string) error {
 	req := f.getNodePublishVolumeRequest()
 	req.VolumeId = id
 	f.volID = req.VolumeId
-	req.VolumeContext = map[string]string{"csi.storage.k8s.io/ephemeral": "true", "volumeName": "test-eph-vol", "size": size, "storagepool": "pool1"}
+	req.VolumeContext = map[string]string{"csi.storage.k8s.io/ephemeral": "true", "volumeName": "int-ephemeral-vol", "size": size, "storagepool": "pool1"}
 
 	ctx := context.Background()
 	client := csi.NewNodeClient(grpcClient)
@@ -951,10 +924,6 @@ func (f *feature) iCallDeleteSnapshot() error {
 	} else {
 		fmt.Printf("DeleteSnapshot: SnapshotId %s\n", req.SnapshotId)
 	}
-
-	//fmt.Printf("=== AB: sleeping 3 minutes after deleting snapshot\n")
-	//time.Sleep(time.Minute * 1)
-
 	time.Sleep(RetrySleepTime)
 	return nil
 }
@@ -992,10 +961,10 @@ func (f *feature) iCallCreateSnapshotConsistencyGroup() error {
 	return nil
 }
 
-func (f *feature) iCallDeleteAllVolumes() error {
+func (f *feature) whenICallDeleteAllVolumes() error {
 	for _, v := range f.volIDList {
 		f.volID = v
-		f.iCallDeleteVolume()
+		f.whenICallDeleteVolume()
 	}
 	return nil
 }
@@ -1271,9 +1240,8 @@ func (f *feature) iCreateVolumesInParallel(nVols int) error {
 	}
 	t1 := time.Now()
 	if len(f.volIDList) > nVols {
-		fmt.Printf("Found %d registered volumes while expected only %d, some of them will not be tested: %s\n",
+		fmt.Printf("Found %d recorded volumes while expected only %d, some of them will not be tested:\n%s\n",
 			len(f.volIDList), nVols, strings.Join(f.volIDList, ","))
-		//f.volIDList = f.volIDList[0:nVols]
 	}
 	fmt.Printf("Create volume time for %d volumes %.6fs, per volume %.6fs, errors %d\n",
 		nVols, t1.Sub(t0).Seconds(), t1.Sub(t0).Seconds()/float64(nVols), nerrors)
@@ -1641,7 +1609,7 @@ func (f *feature) iCallCreateVolumeGroupSnapshot(volNum int) error {
 		return fmt.Errorf("VGS is requested for less than 2 volumes: %d", volNum)
 	}
 	if len(f.volIDList) < volNum {
-		return fmt.Errorf("only have %d volumes recorded, but VGS is requested for %d volumes", len(f.volIDList), volNum)
+		return fmt.Errorf("found %d recorded volumes, but VGS is requested for %d volumes", len(f.volIDList), volNum)
 	}
 
 	ctx := context.Background()
@@ -1889,10 +1857,8 @@ func makeDistinctName(name string) string {
 	if len(suffix) == 0 {
 		now := time.Now()
 		suffix = fmt.Sprintf("%02d%02d%02d", now.Hour(), now.Minute(), now.Second())
-		name += "_" + suffix
-	} else {
-		name += "_" + suffix
 	}
+	name += "_" + suffix
 	if len(name) > 30 {
 		fmt.Printf("Resource name %s is too long and will be reduced to %s\n", name, name[len(name)-30:])
 		name = name[len(name)-30:]
@@ -2745,7 +2711,6 @@ func (f *feature) aNodeGetInfoIsReturnedWithSystemTopology() error {
 
 	labelAdded := false
 	for _, array := range f.arrays {
-		log.Printf("Array systemID: %s", array.SystemID)
 		if _, ok := accessibility.Segments[service.Name+"/"+array.SystemID]; ok {
 			labelAdded = true
 		}
@@ -2845,9 +2810,9 @@ func FeatureContext(s *godog.ScenarioContext) {
 					if err != nil {
 						return ctx, fmt.Errorf("failed to update array config file with zones: %v", err)
 					}
-					err = restartService()
+					err = restartDriver()
 					if err != nil {
-						return ctx, fmt.Errorf("driver service did not restart with updated array config: %v", err)
+						return ctx, fmt.Errorf("driver did not restart with updated array config: %v", err)
 					}
 					isZoneArrayConfig = true
 				}
@@ -2863,9 +2828,9 @@ func FeatureContext(s *godog.ScenarioContext) {
 			if err != nil {
 				return ctx, fmt.Errorf("failed to reset array config file before test: %v", err)
 			}
-			err = restartService()
+			err = restartDriver()
 			if err != nil {
-				return ctx, fmt.Errorf("driver service did not restart with updated array config: %v", err)
+				return ctx, fmt.Errorf("driver did not restart with updated array config: %v", err)
 			}
 			isZoneArrayConfig = false
 		}
@@ -2878,7 +2843,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^Set System Name As "([^"]*)"$`, f.iSetSystemName)
 	s.Step(`^Set Bad AllSystemNames$`, f.iSetBadAllSystemNames)
 	s.Step(`^I call CreateVolume$`, f.iCallCreateVolume)
-	s.Step(`^I call DeleteVolume$`, f.iCallDeleteVolume)
+	s.Step(`^when I call DeleteVolume$`, f.whenICallDeleteVolume)
 	s.Step(`^there are no errors$`, f.thereAreNoErrors)
 	s.Step(`^the error message should contain "([^"]*)"$`, f.theErrorMessageShouldContain)
 	s.Step(`^a mount volume request "([^"]*)"$`, f.aMountVolumeRequest)
@@ -2897,7 +2862,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^verify published volume with voltype "([^"]*)" access "([^"]*)" fstype "([^"]*)"$`, f.verifyPublishedVolumeWithVoltypeAccessFstype)
 	s.Step(`^I call CreateSnapshot$`, f.iCallCreateSnapshot)
 	s.Step(`^I call CreateSnapshotConsistencyGroup$`, f.iCallCreateSnapshotConsistencyGroup)
-	s.Step(`^I call DeleteAllVolumes$`, f.iCallDeleteAllVolumes)
+	s.Step(`^when I call DeleteAllVolumes$`, f.whenICallDeleteAllVolumes)
 	s.Step(`^I call DeleteSnapshot$`, f.iCallDeleteSnapshot)
 	s.Step(`^I call CreateVolumeFromSnapshot$`, f.iCallCreateVolumeFromSnapshot)
 	s.Step(`^I call CreateManyVolumesFromSnapshot$`, f.iCallCreateManyVolumesFromSnapshot)
