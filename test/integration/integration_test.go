@@ -44,13 +44,14 @@ const (
 )
 
 var grpcClient *grpc.ClientConn
-var stopFunc func()
+var stopDriver func()
 
 func readConfigFile(filePath string) {
 	/* load array config and give proper errors if not ok*/
 	if _, err := os.Stat(filePath); err == nil {
 		if _, err := os.ReadFile(filePath); err != nil {
-			panic(fmt.Sprintf("Failed to read multi array configuration from file %s: %v", filePath, err))
+			msg := fmt.Sprintf("Failed to read multi array configuration from file %s: %v", filePath, err)
+			panic(msg)
 		}
 		f, err := os.Open(filePath)
 		r := bufio.NewReader(f)
@@ -59,22 +60,24 @@ func readConfigFile(filePath string) {
 		for err == nil && !isPrefix {
 			line, isPrefix, err = r.ReadLine()
 			if strings.Contains(string(line), "127.0.0.1") {
-				panic(fmt.Sprintf("Integration test pre-requisite powerflex array endpoint %s is not ok, setup ../../config.json", string(line)))
+				msg := fmt.Sprintf("Integration test pre-requisite powerflex array endpoint %s is not ok, setup ../../config.json", string(line))
+				panic(msg)
 			}
 			if strings.Contains(string(line), "mdm") {
 				mdms = append(mdms, string(line))
 			}
 		}
 		if len(mdms) < 1 {
-			panic(fmt.Sprintf("Integration test pre-requisite config file ../../config.json must have mdm key set with working ip %#v", mdms))
+			msg := fmt.Sprintf("Integration test pre-requisite config file ../../config.json must have mdm key set with working ip %#v", mdms)
+			panic(msg)
 		}
 	} else if os.IsNotExist(err) {
-		panic(fmt.Sprintf("Integration test pre-requisite needs a valid config.json located here: %s", filePath))
+		msg := fmt.Sprintf("Integration test pre-requisite needs a valid config.json located here: %s", filePath)
+		panic(msg)
 	}
 }
 
-// Copy user configuration from baseConfigFile to configFile
-// which will be later updated for some scenarios.
+// Prepare array config file configFile based on the user configuration from baseConfigFile
 func resetArrayConfig() error {
 	fmt.Println("Setting basic array config")
 
@@ -90,6 +93,7 @@ func resetArrayConfig() error {
 	return nil
 }
 
+// Update array config file configFile with zone config from env
 func addArrayZoneConfig() error {
 	fmt.Println("Setting array config with zone")
 
@@ -158,7 +162,7 @@ func TestIntegration(t *testing.T) {
 	readConfigFile(configFile)
 
 	fmt.Printf("Starting PowerFlex CSI driver service...\n")
-	err = startServer(configFile)
+	err = startDriver(configFile)
 	if err != nil {
 		t.Fatalf("Driver failed to start: %v", err)
 	}
@@ -207,7 +211,7 @@ func TestIntegration(t *testing.T) {
 		Options:             &opts,
 	}.Run()
 
-	stopFunc()
+	stopDriver()
 	if exitVal != 0 {
 		t.Fatalf("[TestIntegration] godog exited with %d", exitVal)
 	}
@@ -226,17 +230,17 @@ func TestIdentityGetPluginInfo(t *testing.T) {
 	}
 }
 
-func restartService() error {
+func restartDriver() error {
 	fmt.Println("Restarting driver service")
-	stopFunc()
-	err := startServer(configFile)
+	stopDriver()
+	err := startDriver(configFile)
 	if err != nil {
 		fmt.Printf("Failed to start driver service: %v\n", err)
 	}
 	return err
 }
 
-func startServer(cFile string) error {
+func startDriver(cFile string) error {
 	ctx := context.Background()
 
 	// Create a new SP instance and serve it with a piped connection.
@@ -275,14 +279,14 @@ func startServer(cFile string) error {
 
 	grpcClient = client
 
-	stopFunc = func() {
+	stopDriver = func() {
 		fmt.Println("Stopping GRPS client and driver service...")
 		client.Close()
 		sp.GracefulStop(ctx)
 	}
 
-	// Give the driver time to initialize
-	time.Sleep(5 * time.Second)
+	fmt.Printf("Driver is initializing...")
+	time.Sleep(10 * time.Second)
 
 	return nil
 }
