@@ -3,7 +3,6 @@ Feature: VxFlex OS CSI interface
   I want to run a system test
   So that I know the service functions correctly.
 
-
   Scenario Outline: Create publish, node-publish, node-unpublish, unpublish, and delete basic volume
     Given a VxFlexOS service
     And a capability with voltype <voltype> access <access> fstype <fstype>
@@ -119,7 +118,7 @@ Feature: VxFlex OS CSI interface
       | "alt_system_id_integration8" |
 
   @alt
-  Scenario: Create, publish, unpublish, and delete basic vol, change name of array and specify wrong allSystemNames , this will pass if volume because handle has id
+  Scenario: Create, publish, unpublish, and delete basic vol, change name of array and specify wrong allSystemNames, this will pass if volume because handle has id
     Given a VxFlexOS service
     And I set another systemID "altSystem"
     And Set System Name As "1235e15806d1ec0f-pflex-system"
