@@ -192,9 +192,9 @@ func TestIntegration(t *testing.T) {
 	}
 
 	exitVal := godog.TestSuite{
-		Name:                "godog",
-		ScenarioInitializer: FeatureContext,
-		Options:             &opts,
+		Name:                 "CSI PowerFlex Integration Tests",
+		TestSuiteInitializer: InitSuite,
+		Options:              &opts,
 	}.Run()
 
 	stopDriver()
