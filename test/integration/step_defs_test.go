@@ -113,6 +113,7 @@ type feature struct {
 	arrays                      map[string]*ArrayConnectionData
 	VolumeGroupSnapshot         *volGroupSnap.CreateVolumeGroupSnapshotResponse
 	VolumeGroupSnapshot2        *volGroupSnap.CreateVolumeGroupSnapshotResponse
+	isZoneArrayConfig           bool
 }
 
 func appendUnique(idList []string, newId string) (newList []string, added bool) {
@@ -125,14 +126,6 @@ func appendUnique(idList []string, newId string) (newList []string, added bool) 
 }
 
 func (f *feature) getGoscaleioClient() (client *goscaleio.Client, err error) {
-	if f.arrays == nil {
-		fmt.Printf("Initialize ArrayConfig from %s\n", configFile)
-		var err error
-		f.arrays, err = f.getArrayConfig(configFile)
-		if err != nil {
-			return nil, errors.New("Get multi array config failed " + err.Error())
-		}
-	}
 
 	for _, a := range f.arrays {
 		client, err := goscaleio.NewClientWithArgs(a.Endpoint, "", math.MaxInt64, true, false)
@@ -389,15 +382,6 @@ func (f *feature) nfsVolumeRequest(volname string, volsize int64, withQuota bool
 		withQuota = true
 	}
 
-	if f.arrays == nil {
-		fmt.Printf("Initialize ArrayConfig from %s\n", configFile)
-		var err error
-		f.arrays, err = f.getArrayConfig(configFile)
-		if err != nil {
-			return fmt.Errorf("get multi array config failed: %v", err)
-		}
-	}
-
 	for _, a := range f.arrays {
 		systemid := a.SystemID
 		val, err := f.checkNFS(ctx, systemid)
@@ -461,7 +445,7 @@ func (f *feature) iCallCreateVolume() error {
 	}
 	volResp, err := f.createVolume(f.createVolumeRequest)
 	if err != nil {
-		fmt.Printf("CreateVolume %s:\n", err.Error())
+		fmt.Printf("CreateVolume failed: %v\n", err)
 		f.addError(err)
 	} else {
 		fmt.Printf("CreateVolume %s (%s) %s\n", volResp.GetVolume().VolumeContext["Name"],
@@ -1139,14 +1123,6 @@ func (f *feature) aValidListSnapshotResponseIsReturned() error {
 }
 
 func (f *feature) iSetAnotherSystemName(systemType string) error {
-	if f.arrays == nil {
-		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
-		var err error
-		f.arrays, err = f.getArrayConfig(configFile)
-		if err != nil {
-			return errors.New("get multi array config failed " + err.Error())
-		}
-	}
 	isNumeric := regexp.MustCompile(`^[0-9a-f]+$`).MatchString
 	for _, a := range f.arrays {
 		if systemType == "altSystem" && !a.IsDefault {
@@ -1170,14 +1146,6 @@ func (f *feature) iSetAnotherSystemName(systemType string) error {
 }
 
 func (f *feature) iSetAnotherSystemID(systemType string) error {
-	if f.arrays == nil {
-		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
-		var err error
-		f.arrays, err = f.getArrayConfig(configFile)
-		if err != nil {
-			return errors.New("Get multi array config failed " + err.Error())
-		}
-	}
 	for _, a := range f.arrays {
 		if systemType == "altSystem" && !a.IsDefault {
 			f.anotherSystemID = a.SystemID
@@ -1991,17 +1959,6 @@ func (f *feature) aBasicNfsVolumeRequestWithWrongNasName(name string, size int64
 	ctx := context.Background()
 	nfsPool := os.Getenv("NFS_STORAGE_POOL")
 
-	fmt.Println("f.arrays,len", f.arrays, f.arrays)
-
-	if f.arrays == nil {
-		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
-		var err error
-		f.arrays, err = f.getArrayConfig(configFile)
-		if err != nil {
-			return errors.New("Get multi array config failed " + err.Error())
-		}
-	}
-
 	wrongNasName := "wrongnas"
 
 	for _, a := range f.arrays {
@@ -2051,15 +2008,6 @@ func (f *feature) aBasicNfsVolumeRequestWithWrongNasName(name string, size int64
 func (f *feature) aNfsCapabilityWithVoltypeAccessFstype(voltype, access, fstype string) error {
 	// Construct the volume capabilities
 	ctx := context.Background()
-
-	if f.arrays == nil {
-		fmt.Printf("Initialize ArrayConfig from %s\n", configFile)
-		var err error
-		f.arrays, err = f.getArrayConfig(configFile)
-		if err != nil {
-			return errors.New("Get multi array config failed " + err.Error())
-		}
-	}
 
 	for _, a := range f.arrays {
 		systemid := a.SystemID
@@ -2114,15 +2062,6 @@ func (f *feature) aNfsCapabilityWithVoltypeAccessFstype(voltype, access, fstype 
 func (f *feature) aNfsVolumeRequest(name string, size int64) error {
 	ctx := context.Background()
 	nfsPool := os.Getenv("NFS_STORAGE_POOL")
-
-	if f.arrays == nil {
-		fmt.Printf("Initialize ArrayConfig from %s\n", configFile)
-		var err error
-		f.arrays, err = f.getArrayConfig(configFile)
-		if err != nil {
-			return errors.New("Get multi array config failed " + err.Error())
-		}
-	}
 
 	for _, a := range f.arrays {
 		systemid := a.SystemID
@@ -2214,15 +2153,6 @@ func (f *feature) controllerPublishVolumeForNfsWithoutSDC(id string) error {
 		return fmt.Errorf("createConfigMap failed with error: %v", err)
 	}
 
-	if f.arrays == nil {
-		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
-		var err error
-		f.arrays, err = f.getArrayConfig(configFile)
-		if err != nil {
-			return errors.New("Get multi array config failed " + err.Error())
-		}
-	}
-
 	for _, a := range f.arrays {
 		req.VolumeContext = make(map[string]string)
 		req.VolumeContext["nasName"] = a.NasName
@@ -2243,15 +2173,6 @@ func (f *feature) controllerPublishVolumeForNfs(id string, nodeIDEnvVar string) 
 	req := f.getControllerPublishVolumeRequest()
 	req.VolumeId = id
 	req.NodeId = os.Getenv(nodeIDEnvVar)
-
-	if f.arrays == nil {
-		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
-		var err error
-		f.arrays, err = f.getArrayConfig(configFile)
-		if err != nil {
-			return errors.New("Get multi array config failed " + err.Error())
-		}
-	}
 
 	for _, a := range f.arrays {
 		req.VolumeContext = make(map[string]string)
@@ -2496,14 +2417,6 @@ func (f *feature) controllerExpandVolumeForNfs(volID string, size int64) error {
 
 func (f *feature) ICallListFileSystemSnapshot() error {
 	ctx := context.Background()
-	if f.arrays == nil {
-		fmt.Printf("Initialize ArrayConfig from %s:\n", configFile)
-		var err error
-		f.arrays, err = f.getArrayConfig(configFile)
-		if err != nil {
-			return errors.New("Get multi array config failed " + err.Error())
-		}
-	}
 
 	for _, a := range f.arrays {
 		systemid := a.SystemID
@@ -2609,12 +2522,8 @@ func (f *feature) checkNFS(_ context.Context, systemID string) (bool, error) {
 		return false, err
 	}
 	if ver >= 4.0 {
-		arrayConData, err := f.getArrayConfig(configFile)
-		if err != nil {
-			return false, err
-		}
-		array := arrayConData[systemID]
-		if array.NasName == "" {
+		array := f.arrays[systemID]
+		if array == nil || array.NasName == "" {
 			fmt.Println("nasName value not found in secret, it is mandatory parameter for NFS volume operations")
 		}
 		return true, nil
@@ -2702,12 +2611,6 @@ func (f *feature) aNodeGetInfoIsReturnedWithoutZoneTopology(zoneLabelKey string)
 func (f *feature) aNodeGetInfoIsReturnedWithSystemTopology() error {
 	accessibility := f.nodeGetInfoResponse.GetAccessibleTopology()
 	log.Printf("Node Accessibility %+v", accessibility)
-
-	var err error
-	f.arrays, err = f.getArrayConfig(configFile)
-	if err != nil {
-		return fmt.Errorf("failed to get array config: %v", err)
-	}
 
 	labelAdded := false
 	for _, array := range f.arrays {
@@ -2797,47 +2700,58 @@ func (f *feature) createGenericZoneRequest(name string) *csi.CreateVolumeRequest
 	return req
 }
 
-var isZoneArrayConfig bool
+func InitSuite(ts *godog.TestSuiteContext) {
 
-func FeatureContext(s *godog.ScenarioContext) {
+	s := ts.ScenarioContext()
+
+	f := &feature{}
 
 	s.Before(func(ctx context.Context, sc *godog.Scenario) (context.Context, error) {
+
+		zoneScenario := false
+		arraysChanged := false
+
 		for _, tag := range sc.Tags {
 			if tag.Name == "@zone-integration" {
-				if !isZoneArrayConfig {
-					log.Printf("Adding zoning to arrays config")
-					err := addArrayZoneConfig()
-					if err != nil {
-						return ctx, fmt.Errorf("failed to update array config file with zones: %v", err)
-					}
-					err = restartDriver()
-					if err != nil {
-						return ctx, fmt.Errorf("driver did not restart with updated array config: %v", err)
-					}
-					isZoneArrayConfig = true
-				}
-				return ctx, nil
+				zoneScenario = true
+				break
 			}
 		}
 
-		// Assume this is not a zoning related scenario, use simple array config
-
-		if isZoneArrayConfig {
+		if zoneScenario && !f.isZoneArrayConfig {
+			log.Printf("Adding zoning to arrays config")
+			if err := addArrayZoneConfig(); err != nil {
+				return ctx, fmt.Errorf("failed to update array config file with zones: %v", err)
+			}
+			f.isZoneArrayConfig = true
+			arraysChanged = true
+		} else if !zoneScenario && f.isZoneArrayConfig {
 			log.Printf("Removing zoning from arrays config")
-			err := resetArrayConfig()
-			if err != nil {
+			if err := resetArrayConfig(); err != nil {
 				return ctx, fmt.Errorf("failed to reset array config file before test: %v", err)
 			}
-			err = restartDriver()
-			if err != nil {
+			f.isZoneArrayConfig = false
+			arraysChanged = true
+		}
+
+		if arraysChanged {
+			if err := restartDriver(); err != nil {
 				return ctx, fmt.Errorf("driver did not restart with updated array config: %v", err)
 			}
-			isZoneArrayConfig = false
 		}
+
+		if f.arrays == nil || arraysChanged {
+			fmt.Printf("Loading array config from %s\n", configFile)
+			var err error
+			f.arrays, err = f.getArrayConfig(configFile)
+			if err != nil {
+				return ctx, fmt.Errorf("failed to load array config: %v", err)
+			}
+		}
+
 		return ctx, nil
 	})
 
-	f := &feature{}
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
 	s.Step(`^a basic block volume request "([^"]*)" "(\d+(\.\d+)?)"$`, f.aBasicBlockVolumeRequest)
 	s.Step(`^Set System Name As "([^"]*)"$`, f.iSetSystemName)
