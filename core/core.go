@@ -32,3 +32,10 @@ var (
 	// this program was built.
 	CommitTime time.Time
 )
+
+func setValues(semver string, commit7 string, commit32 string, commitTime time.Time) {
+	SemVer = semver
+	CommitSha7 = commit7
+	CommitSha32 = commit32
+	CommitTime = commitTime
+}

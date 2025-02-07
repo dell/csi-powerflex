@@ -26,37 +26,48 @@ import (
 	"github.com/dell/csi-vxflexos/v2/service"
 	"github.com/dell/gocsi"
 	"github.com/sirupsen/logrus"
+	"k8s.io/client-go/kubernetes"
 )
+
+var flags struct {
+	arrayConfigfile         *string
+	driverConfigParamsfile  *string
+	enableLeaderElection    *bool
+	leaderElectionNamespace *string
+	kubeconfig              *string
+}
 
 // main is ignored when this package is built as a go plug-in
 func main() {
 	logger := logrus.New()
 	service.Log = logger
-	// Always set X_CSI_DEBUG to false irrespective of what user has specified
-	_ = os.Setenv(gocsi.EnvVarDebug, "false")
-	// We always want to enable Request and Response logging(no reason for users to control this)
-	_ = os.Setenv(gocsi.EnvVarReqLogging, "true")
-	_ = os.Setenv(gocsi.EnvVarRepLogging, "true")
-	arrayConfigfile := flag.String("array-config", "", "yaml file with array(s) configuration")
-	driverConfigParamsfile := flag.String("driver-config-params", "", "yaml file with driver config params")
-	enableLeaderElection := flag.Bool("leader-election", false, "boolean to enable leader election")
-	leaderElectionNamespace := flag.String("leader-election-namespace", "", "namespace where leader election lease will be created")
-	kubeconfig := flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
-	flag.Parse()
+	setEnvsFunc()
+	initFlagsFunc()
+	checkConfigsFunc()
+	preInitCheckFunc()
 
-	if *arrayConfigfile == "" {
+	err := driverRun()
+	if err != nil {
+		os.Exit(1)
+	}
+}
+
+var checkConfigsFunc = func() {
+	if *flags.arrayConfigfile == "" {
 		fmt.Fprintf(os.Stderr, "array-config argument is mandatory")
 		os.Exit(1)
 	}
 
-	if *driverConfigParamsfile == "" {
+	if *flags.driverConfigParamsfile == "" {
 		fmt.Fprintf(os.Stderr, "driver-config-params argument is mandatory")
 		os.Exit(1)
 	}
-	service.ArrayConfigFile = *arrayConfigfile
-	service.DriverConfigParamsFile = *driverConfigParamsfile
-	service.KubeConfig = *kubeconfig
+	service.ArrayConfigFile = *flags.arrayConfigfile
+	service.DriverConfigParamsFile = *flags.driverConfigParamsfile
+	service.KubeConfig = *flags.kubeconfig
+}
 
+var preInitCheckFunc = func() {
 	// Run the service as a pre-init step.
 	if os.Getenv(gocsi.EnvVarMode) == "mdm-info" {
 		fmt.Fprintf(os.Stdout, "PowerFlex Container Storage Interface (CSI) Plugin starting in pre-init mode.")
@@ -68,12 +79,11 @@ func main() {
 		}
 		os.Exit(0)
 	}
+}
 
-	run := func(ctx context.Context) {
-		gocsi.Run(ctx, service.Name, "A PowerFlex Container Storage Interface (CSI) Plugin",
-			usage, provider.New())
-	}
-	if !*enableLeaderElection {
+func driverRun() error {
+	run := driverRunFunc
+	if !*flags.enableLeaderElection {
 		run(context.Background())
 	} else {
 		driverName := strings.Replace(service.Name, ".", "-", -1)
@@ -85,12 +95,43 @@ func main() {
 		}
 		service.K8sClientset = k8sutils.Clientset
 		// Attempt to become leader and start the driver
-		err = k8sutils.LeaderElection(&k8sutils.Clientset, lockName, *leaderElectionNamespace, run)
+		err = k8sutils.LeaderElectionFunc(&k8sutils.Clientset, lockName, *flags.leaderElectionNamespace, run)
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "failed to become leader: %v", err)
 			os.Exit(1)
 		}
 	}
+	return nil
+}
+
+var driverRunFunc = func(ctx context.Context) {
+	gocsi.Run(ctx, service.Name, "A PowerFlex Container Storage Interface (CSI) Plugin",
+		usage, provider.New())
+}
+
+var runWithLeaderElectionFunc = func(clientSet kubernetes.Interface, lockName string, namespace string, runFunc func(ctx context.Context)) error {
+	return k8sutils.LeaderElectionFunc(&clientSet, lockName, namespace, runFunc)
+}
+
+var getKubeClientSetFunc = func() error {
+	return k8sutils.CreateKubeClientSet()
+}
+
+var setEnvsFunc = func() {
+	// Always set X_CSI_DEBUG to false irrespective of what user has specified
+	_ = os.Setenv(gocsi.EnvVarDebug, "false")
+	// We always want to enable Request and Response logging(no reason for users to control this)
+	_ = os.Setenv(gocsi.EnvVarReqLogging, "true")
+	_ = os.Setenv(gocsi.EnvVarRepLogging, "true")
+}
+
+var initFlagsFunc = func() {
+	flags.arrayConfigfile = flag.String("array-config", "", "yaml file with array(s) configuration")
+	flags.driverConfigParamsfile = flag.String("driver-config-params", "", "yaml file with driver config params")
+	flags.enableLeaderElection = flag.Bool("leader-election", false, "boolean to enable leader election")
+	flags.leaderElectionNamespace = flag.String("leader-election-namespace", "", "namespace where leader election lease will be created")
+	flags.kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
+	flag.Parse()
 }
 
 const usage = `    X_CSI_VXFLEXOS_SDCGUID

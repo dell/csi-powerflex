@@ -31,13 +31,13 @@ type leaderElection interface {
 
 // CreateKubeClientSet - Returns kubeclient set
 func CreateKubeClientSet() error {
-	config, err := getInClusterConfig()
+	config, err := InClusterConfigFunc()
 	if err != nil {
 		return err
 	}
 
 	// creates the clientset
-	Clientset, err = getK8sClientset(config)
+	Clientset, err = NewForConfigFunc(config)
 	if err != nil {
 		return err
 	}
@@ -46,15 +46,15 @@ func CreateKubeClientSet() error {
 
 // used for unit testing -
 // allows CreateKubeClientSet to be mocked
-var getInClusterConfig = func() (*rest.Config, error) {
+var InClusterConfigFunc = func() (*rest.Config, error) {
 	return rest.InClusterConfig()
 }
-var getK8sClientset = func(config *rest.Config) (*kubernetes.Clientset, error) {
+var NewForConfigFunc = func(config *rest.Config) (*kubernetes.Clientset, error) {
 	return kubernetes.NewForConfig(config)
 }
 
 // LeaderElection - Initializes Leader election
-func LeaderElection(clientset *kubernetes.Interface, lockName string, namespace string, runFunc func(ctx context.Context)) error {
+var LeaderElectionFunc = func(clientset *kubernetes.Interface, lockName string, namespace string, runFunc func(ctx context.Context)) error {
 	le := leaderelection.NewLeaderElection(*clientset, lockName, runFunc)
 	le.WithNamespace(namespace)
 	return le.Run()

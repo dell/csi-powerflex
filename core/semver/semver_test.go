@@ -271,38 +271,3 @@ func TestErrorExit(t *testing.T) {
 	// check the output is the message we logged in errorExit
 	assert.Equal(t, message, string(buf[:n]))
 }
-
-/*
-func TestGetExitError(t *testing.T) {
-	tests := []struct {
-		name    string
-		err     error
-		wantErr bool
-	}{
-		{
-			name:    "nil error",
-			err:     nil,
-			wantErr: false,
-		},
-		{
-			name:    "non-exec.ExitError error",
-			err:     errors.New("some error"),
-			wantErr: false,
-		},
-		{
-			name:    "exec.ExitError error",
-			err:     &exec.ExitError{},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, gotErr := GetExitError(tt.err)
-			if gotErr != tt.wantErr {
-				t.Errorf("GetExitError() = %v, want %v", gotErr, tt.wantErr)
-			}
-		})
-	}
-}
-*/

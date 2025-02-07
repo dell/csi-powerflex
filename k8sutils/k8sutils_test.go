@@ -25,11 +25,11 @@ func Test_CreateKubeClientSet(t *testing.T) {
 			name: "success: manually set InClusterConfig with mock",
 			before: func() error {
 				Clientset = nil // reset Clientset before each run
-				tempConfigFunc = getInClusterConfig
-				getInClusterConfig = func() (*rest.Config, error) { return &rest.Config{}, nil }
+				tempConfigFunc = InClusterConfigFunc
+				InClusterConfigFunc = func() (*rest.Config, error) { return &rest.Config{}, nil }
 				return nil
 			},
-			after:   func() { getInClusterConfig = tempConfigFunc },
+			after:   func() { InClusterConfigFunc = tempConfigFunc },
 			wantErr: false,
 		},
 		{
@@ -45,17 +45,17 @@ func Test_CreateKubeClientSet(t *testing.T) {
 			name: "failure: error returned by kubernetes.NewForConfig",
 			before: func() error { // overrides to get past a mock and inject a failure
 				Clientset = nil // reset Clientset before each run
-				tempConfigFunc = getInClusterConfig
-				tempClientsetFunc = getK8sClientset
-				getInClusterConfig = func() (*rest.Config, error) { return &rest.Config{}, nil }
-				getK8sClientset = func(config *rest.Config) (*kubernetes.Clientset, error) {
+				tempConfigFunc = InClusterConfigFunc
+				tempClientsetFunc = NewForConfigFunc
+				InClusterConfigFunc = func() (*rest.Config, error) { return &rest.Config{}, nil }
+				NewForConfigFunc = func(config *rest.Config) (*kubernetes.Clientset, error) {
 					return nil, assert.AnError
 				}
 				return nil
 			},
 			after: func() { // restore functions to their defaults
-				getInClusterConfig = tempConfigFunc
-				getK8sClientset = tempClientsetFunc
+				InClusterConfigFunc = tempConfigFunc
+				NewForConfigFunc = tempClientsetFunc
 			},
 			wantErr: true,
 		},
@@ -121,7 +121,7 @@ func Test_LeaderElection(t *testing.T) {
 
 			errCh := make(chan error)
 			go func() {
-				errCh <- LeaderElection(&tt.args.clientSet, tt.args.lockName, tt.args.namespace, tt.args.runFunc)
+				errCh <- LeaderElectionFunc(&tt.args.clientSet, tt.args.lockName, tt.args.namespace, tt.args.runFunc)
 			}()
 
 			select {
