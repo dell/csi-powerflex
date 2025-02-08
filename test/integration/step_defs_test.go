@@ -89,6 +89,7 @@ type ArrayConnectionData struct {
 type feature struct {
 	errs                        []error
 	anotherSystemID             string
+	isAlternativeSystem         bool
 	createVolumeRequest         *csi.CreateVolumeRequest
 	publishVolumeRequest        *csi.ControllerPublishVolumeRequest
 	nodePublishVolumeRequest    *csi.NodePublishVolumeRequest
@@ -325,19 +326,35 @@ func (f *feature) aVxFlexOSService() error {
 	f.expandVolumeResponse = nil
 	f.nodeExpandVolumeResponse = nil
 	f.anotherSystemID = ""
+	f.isAlternativeSystem = false
 	return nil
+}
+
+func (f *feature) newVolumeReqParams(isNFS bool) map[string]string {
+	params := make(map[string]string)
+	params["thickprovisioning"] = "false"
+
+	if len(f.anotherSystemID) > 0 {
+		params["systemID"] = f.anotherSystemID
+	}
+
+	if f.isAlternativeSystem {
+		params["storagepool"] = os.Getenv("ALT_STORAGE_POOL")
+		if isNFS && os.Getenv("ALT_NFS_STORAGE_POOL") != "" {
+			params["storagepool"] = os.Getenv("ALT_NFS_STORAGE_POOL")
+		}
+	} else {
+		params["storagepool"] = os.Getenv("STORAGE_POOL")
+		if isNFS && os.Getenv("NFS_STORAGE_POOL") != "" {
+			params["storagepool"] = os.Getenv("NFS_STORAGE_POOL")
+		}
+	}
+	return params
 }
 
 func (f *feature) aBasicBlockVolumeRequest(name string, size float64) error {
 	req := new(csi.CreateVolumeRequest)
-	storagePool := os.Getenv("STORAGE_POOL")
-	params := make(map[string]string)
-	params["storagepool"] = storagePool
-	params["thickprovisioning"] = "false"
-	if len(f.anotherSystemID) > 0 {
-		params["systemID"] = f.anotherSystemID
-	}
-	req.Parameters = params
+	req.Parameters = f.newVolumeReqParams(false)
 	req.Name = makeDistinctName(name)
 	capacityRange := new(csi.CapacityRange)
 	capacityRange.RequiredBytes = int64(math.Ceil(size * 1024 * 1024 * 1024))
@@ -368,10 +385,8 @@ func (f *feature) aNfsVolumeRequestWithQuota(volname string, volsize int64, path
 
 func (f *feature) nfsVolumeRequest(volname string, volsize int64, withQuota bool, path string, softlimit string, graceperiod string) error {
 	req := new(csi.CreateVolumeRequest)
-	params := make(map[string]string)
 
 	ctx := context.Background()
-	nfsPool := os.Getenv("NFS_STORAGE_POOL")
 
 	// Even if the caller has not requested a quota explicitly
 	// we may still need to create a quota by default
@@ -387,19 +402,15 @@ func (f *feature) nfsVolumeRequest(volname string, volsize int64, withQuota bool
 		}
 
 		if val {
+			params := f.newVolumeReqParams(true)
 			if a.NasName != "" {
 				params["nasName"] = a.NasName
 			}
-			params["storagepool"] = nfsPool
-			params["thickprovisioning"] = "false"
 			if withQuota {
 				params["isQuotaEnabled"] = "true"
 				params["softLimit"] = softlimit
 				params["path"] = path
 				params["gracePeriod"] = graceperiod
-			}
-			if len(f.anotherSystemID) > 0 {
-				params["systemID"] = f.anotherSystemID
 			}
 			req.Parameters = params
 			req.Name = makeDistinctName(volname)
@@ -545,13 +556,8 @@ func (f *feature) aMountVolumeRequest(name string) error {
 
 func (f *feature) getMountVolumeRequest(name string) *csi.CreateVolumeRequest {
 	req := new(csi.CreateVolumeRequest)
-	params := make(map[string]string)
-	storagePool := os.Getenv("STORAGE_POOL")
-	params["storagepool"] = storagePool
-	// Use the default system, unless an alternative system is requested
-	if len(f.anotherSystemID) > 0 {
-		params["systemID"] = f.anotherSystemID
-	}
+	params := f.newVolumeReqParams(false)
+
 	req.Parameters = params
 	req.Name = makeDistinctName(name)
 	capacityRange := new(csi.CapacityRange)
@@ -674,13 +680,9 @@ func (f *feature) aCapabilityWithVoltypeAccessFstype(voltype, access, fstype str
 
 func (f *feature) aVolumeRequest(name string, size int64) error {
 	req := new(csi.CreateVolumeRequest)
-	params := make(map[string]string)
-	storagePool := os.Getenv("STORAGE_POOL")
-	params["storagepool"] = storagePool
-	params["thickprovisioning"] = "true"
-	if len(f.anotherSystemID) > 0 {
-		params["systemID"] = f.anotherSystemID
-	}
+	params := f.newVolumeReqParams(false)
+
+	// TODO: this does not work well with multi-array configuration and alternative system selection via "I select <type> system ID/name"
 	// use new system name instead of previous name, only set if name has substring alt_system_id
 	newName := os.Getenv("ALT_SYSTEM_ID")
 	if len(newName) > 0 && strings.Contains(name, "alt_system_id") {
@@ -1061,7 +1063,7 @@ func (f *feature) aValidListVolumeResponseIsReturned() error {
 			return nil
 		}
 	}
-	return fmt.Errorf("no volumeID %s in volume list", f.volID)
+	return fmt.Errorf("volume list does not contain volumeID %s", f.volID)
 }
 
 func (f *feature) iCallListSnapshotForSnap() error {
@@ -1085,13 +1087,11 @@ func (f *feature) iCallListSnapshot() error {
 
 func (f *feature) expectErrorListSnapshotResponse() error {
 	err := f.aValidListSnapshotResponseIsReturned()
-	expected := "ListSnapshots does not contain snap id"
-	// expect does not contain snap id
-	if !strings.Contains(err.Error(), expected) {
-		return fmt.Errorf("Error %s does not contain the expected message: %s", err.Error(), expected)
+	expected := "snapshot list does not contain snapshotID"
+	if err == nil || !strings.Contains(err.Error(), expected) {
+		return fmt.Errorf("ListSnapshot response does not contain error [%s]: %v", expected, err)
 	}
-
-	fmt.Printf("got expected error: %s", err.Error())
+	fmt.Printf("ListSnapshots failed as expected: %v", err)
 
 	return nil
 }
@@ -1116,29 +1116,31 @@ func (f *feature) aValidListSnapshotResponseIsReturned() error {
 			return nil
 		}
 	}
-	return fmt.Errorf("no snapshotID %s in snapshot list", f.snapshotID)
+	return fmt.Errorf("snapshot list does not contain snapshotID %s", f.snapshotID)
 }
 
 func (f *feature) iSetAnotherSystemName(systemType string) error {
-	isNumeric := regexp.MustCompile(`^[0-9a-f]+$`).MatchString
+	isHexadecimal := regexp.MustCompile(`^[0-9a-f]+$`).MatchString
 	for _, a := range f.arrays {
 		if systemType == "altSystem" && !a.IsDefault {
-			if !isNumeric(a.SystemID) {
+			if !isHexadecimal(a.SystemID) {
 				f.anotherSystemID = a.SystemID
+				f.isAlternativeSystem = true
 				break
 			}
 		}
 		if systemType == "defaultSystem" && a.IsDefault {
-			if !isNumeric(a.SystemID) {
+			if !isHexadecimal(a.SystemID) {
 				f.anotherSystemID = a.SystemID
+				f.isAlternativeSystem = false
 				break
 			}
 		}
 	}
-	fmt.Printf("array selected for %s is %s\n", systemType, f.anotherSystemID)
 	if f.anotherSystemID == "" {
-		return errors.New("failed to get multi array config for " + systemType)
+		return fmt.Errorf("failed to find %s with name in systemID, check array config", systemType)
 	}
+	fmt.Printf("System name selected for %s is %s\n", systemType, f.anotherSystemID)
 	return nil
 }
 
@@ -1146,17 +1148,19 @@ func (f *feature) iSetAnotherSystemID(systemType string) error {
 	for _, a := range f.arrays {
 		if systemType == "altSystem" && !a.IsDefault {
 			f.anotherSystemID = a.SystemID
+			f.isAlternativeSystem = true
 			break
 		}
 		if systemType == "defaultSystem" && a.IsDefault {
 			f.anotherSystemID = a.SystemID
+			f.isAlternativeSystem = false
 			break
 		}
 	}
-	fmt.Printf("array selected for %s is %s\n", systemType, f.anotherSystemID)
 	if f.anotherSystemID == "" {
-		return errors.New("Failed to get  multi array config for " + systemType)
+		return fmt.Errorf("failed to find %s with ID in systemID, check array config", systemType)
 	}
+	fmt.Printf("System ID selected for %s is %s\n", systemType, f.anotherSystemID)
 	return nil
 }
 
@@ -1174,8 +1178,10 @@ func (f *feature) iCreateVolumesInParallel(nVols int) error {
 			var err error
 			req := f.getMountVolumeRequest(name)
 			if req != nil {
+				// every second volume to be created in the default array
 				if i%2 == 0 {
 					req.Parameters["systemID"] = ""
+					req.Parameters["storagepool"] = os.Getenv("STORAGE_POOL")
 				}
 				resp, err = f.createVolume(req)
 				if resp != nil && err == nil {
@@ -1843,7 +1849,7 @@ func (f *feature) iSetBadAllSystemNames() error {
 	return fmt.Errorf("Error during set bad secret allSystemNames for %s", name)
 }
 
-// And Set System Name As  "id-some-name" or "id_some_name"
+// And Set System Name As "id-some-name" or "id_some_name"
 func (f *feature) iSetSystemName(name string) error {
 	parts := strings.Split(name, "-")
 	id := ""
@@ -1951,13 +1957,13 @@ func (f *feature) restCallToSetName(auth string, url string, name string) (strin
 
 func (f *feature) aBasicNfsVolumeRequestWithWrongNasName(name string, size int64) error {
 	req := new(csi.CreateVolumeRequest)
-	params := make(map[string]string)
 
 	ctx := context.Background()
-	nfsPool := os.Getenv("NFS_STORAGE_POOL")
 
 	wrongNasName := "wrongnas"
 
+	// TODO: this (and all similar) check is wrong. We need to check either f.anotherSystemID (if provided) or
+	// TODO: the default in f.arrays (since this is what is actually used in all NFS tests)
 	for _, a := range f.arrays {
 		systemid := a.SystemID
 		val, err := f.checkNFS(ctx, systemid)
@@ -1966,15 +1972,11 @@ func (f *feature) aBasicNfsVolumeRequestWithWrongNasName(name string, size int64
 		}
 
 		if val {
+			params := f.newVolumeReqParams(true)
 			if a.NasName != "" {
 				params["nasName"] = wrongNasName
 			}
 
-			params["storagepool"] = nfsPool
-			params["thickprovisioning"] = "false"
-			if len(f.anotherSystemID) > 0 {
-				params["systemID"] = f.anotherSystemID
-			}
 			req.Parameters = params
 			req.Name = makeDistinctName(name)
 			capacityRange := new(csi.CapacityRange)
@@ -2057,8 +2059,8 @@ func (f *feature) aNfsCapabilityWithVoltypeAccessFstype(voltype, access, fstype 
 }
 
 func (f *feature) aNfsVolumeRequest(name string, size int64) error {
+	// TODO: this implementation can probably be replaced with a call to nfsVolumeRequest()
 	ctx := context.Background()
-	nfsPool := os.Getenv("NFS_STORAGE_POOL")
 
 	for _, a := range f.arrays {
 		systemid := a.SystemID
@@ -2069,21 +2071,18 @@ func (f *feature) aNfsVolumeRequest(name string, size int64) error {
 
 		if val {
 			req := new(csi.CreateVolumeRequest)
-			params := make(map[string]string)
+			params := f.newVolumeReqParams(true)
 			if a.NasName != "" {
 				params["nasName"] = a.NasName
 			}
-			params["storagepool"] = nfsPool
-			params["thickprovisioning"] = "false"
+
 			if os.Getenv("X_CSI_QUOTA_ENABLED") == "true" {
 				params["isQuotaEnabled"] = "true"
 				params["softLimit"] = "20"
 				params["path"] = "/nfs-quota1"
 				params["gracePeriod"] = "86400"
 			}
-			if len(f.anotherSystemID) > 0 {
-				params["systemID"] = f.anotherSystemID
-			}
+
 			req.Parameters = params
 			req.Name = makeDistinctName(name)
 			capacityRange := new(csi.CapacityRange)
@@ -2668,13 +2667,9 @@ func (f *feature) iCreateInvalidZoneRequest() error {
 
 func (f *feature) createGenericZoneRequest(name string) *csi.CreateVolumeRequest {
 	req := new(csi.CreateVolumeRequest)
-	storagePool := os.Getenv("STORAGE_POOL")
-	params := make(map[string]string)
-	params["storagepool"] = storagePool
-	params["thickprovisioning"] = "false"
-	if len(f.anotherSystemID) > 0 {
-		params["systemID"] = f.anotherSystemID
-	}
+
+	params := f.newVolumeReqParams(false)
+
 	req.Parameters = params
 	req.Name = makeDistinctName(name)
 	capacityRange := new(csi.CapacityRange)
@@ -2716,15 +2711,15 @@ func InitSuite(ts *godog.TestSuiteContext) {
 		}
 
 		if zoneScenario && !f.isZoneArrayConfig {
-			log.Printf("Adding zoning to arrays config")
-			if err := addArrayZoneConfig(); err != nil {
+			log.Printf("Adding zoning to driver arrays config")
+			if err := buildArrayConfig(true, false, false); err != nil {
 				return ctx, fmt.Errorf("failed to update array config file with zones: %v", err)
 			}
 			f.isZoneArrayConfig = true
 			arraysChanged = true
 		} else if !zoneScenario && f.isZoneArrayConfig {
-			log.Printf("Removing zoning from arrays config")
-			if err := resetArrayConfig(); err != nil {
+			log.Printf("Removing zoning from driver arrays config")
+			if err := buildArrayConfig(false, false, false); err != nil {
 				return ctx, fmt.Errorf("failed to reset array config file before test: %v", err)
 			}
 			f.isZoneArrayConfig = false
@@ -2738,9 +2733,9 @@ func InitSuite(ts *godog.TestSuiteContext) {
 		}
 
 		if f.arrays == nil || arraysChanged {
-			fmt.Printf("Loading array config from %s\n", configFile)
+			fmt.Printf("Loading test array config from %s\n", baseConfigFile)
 			var err error
-			f.arrays, err = f.getArrayConfig(configFile)
+			f.arrays, err = f.getArrayConfig(baseConfigFile)
 			if err != nil {
 				return ctx, fmt.Errorf("failed to load array config: %v", err)
 			}
@@ -2785,8 +2780,8 @@ func InitSuite(ts *godog.TestSuiteContext) {
 	s.Step(`^expect Error ListSnapshotResponse$`, f.expectErrorListSnapshotResponse)
 	s.Step(`^I create (\d+) volumes in parallel$`, f.iCreateVolumesInParallel)
 	s.Step(`^I publish (\d+) volumes in parallel$`, f.iPublishVolumesInParallel)
-	s.Step(`^I set another systemID "([^"]*)"$`, f.iSetAnotherSystemID)
-	s.Step(`^I set another systemName "([^"]*)"$`, f.iSetAnotherSystemName)
+	s.Step(`^I select "([^"]*)" system ID$`, f.iSetAnotherSystemID)
+	s.Step(`^I select "([^"]*)" system name$`, f.iSetAnotherSystemName)
 	s.Step(`^I node publish (\d+) volumes in parallel$`, f.iNodePublishVolumesInParallel)
 	s.Step(`^I node unpublish (\d+) volumes in parallel$`, f.iNodeUnpublishVolumesInParallel)
 	s.Step(`^I unpublish (\d+) volumes in parallel$`, f.iUnpublishVolumesInParallel)
