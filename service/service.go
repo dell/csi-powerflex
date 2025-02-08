@@ -1954,15 +1954,26 @@ func lookupEnv(ctx context.Context, key string) (string, bool) {
 
 func getZoneKeyLabelFromSecret(arrays map[string]*ArrayConnectionData) (string, error) {
 	zoneKeyLabel := ""
+	foundEmptyZone := false
 
 	for _, array := range arrays {
 		if array.AvailabilityZone != nil {
+			if foundEmptyZone {
+				// Inconsistency: previous array(s) did not have availability zone
+				return "", fmt.Errorf("zone configuration is missing for some arrays")
+			}
 			if zoneKeyLabel == "" {
 				// Assumes that the key parameter is not empty
 				zoneKeyLabel = array.AvailabilityZone.LabelKey
 			} else if zoneKeyLabel != array.AvailabilityZone.LabelKey {
 				Log.Warnf("array %s zone key %s does not match %s", array.SystemID, array.AvailabilityZone.LabelKey, zoneKeyLabel)
 				return "", fmt.Errorf("array %s zone key %s does not match %s", array.SystemID, array.AvailabilityZone.LabelKey, zoneKeyLabel)
+			}
+		} else {
+			foundEmptyZone = true
+			if zoneKeyLabel != "" {
+				// Inconsistency: previous array(s) had availability zone
+				return "", fmt.Errorf("%s zone configuration is missing", array.SystemID)
 			}
 		}
 	}

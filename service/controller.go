@@ -881,10 +881,12 @@ func (s *service) getZonesFromSecret() map[ZoneName]ZoneContent {
 		zone := availabilityZone.Name
 
 		var pd ProtectionDomainName
+		// TODO: empty ProtectionDomains slice will cause panic, needs validation
 		if availabilityZone.ProtectionDomains[0].Name != "" {
 			pd = availabilityZone.ProtectionDomains[0].Name
 		}
 
+		// TODO: empty Pools slice will cause panic, needs validation
 		pool := availabilityZone.ProtectionDomains[0].Pools[0]
 
 		zoneTargetMap[zone] = ZoneContent{

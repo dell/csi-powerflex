@@ -35,11 +35,14 @@ import (
 )
 
 const (
-	datafile       = "/tmp/datafile"
-	datadir        = "/tmp/datadir"
+	datafile = "/tmp/datafile"
+	datadir  = "/tmp/datadir"
+	// The array configuration provided by the test user
 	baseConfigFile = "../../config.json"
-	configFile     = "./arrays.json"
-	zoneConfigFile = "features/array-config/multi-az"
+	// The auto-generated array configuration file for the driver
+	// that is based on the user provided config in baseConfigFile,
+	// env variables and specific test scenarios requirements
+	configFile = "./secret.json"
 )
 
 var grpcClient *grpc.ClientConn
@@ -76,31 +79,25 @@ func readConfigFile(filePath string) {
 	}
 }
 
-// Prepare array config file configFile based on the user configuration from baseConfigFile
-func resetArrayConfig() error {
-	fmt.Println("Setting basic array config")
-
-	config, err := os.ReadFile(baseConfigFile)
-	if err != nil {
-		return fmt.Errorf("failed to read array config file: %v", err)
-	}
-
-	err = os.WriteFile(configFile, config, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to write array config: %v", err)
-	}
-	return nil
-}
-
-// Update array config file configFile with zone config from env
-func addArrayZoneConfig() error {
-	fmt.Println("Setting array config with zone")
+func buildArrayConfig(withZone, withSystemName, withAltSystemName bool) error {
+	fmt.Println("Building array config")
 
 	protectionDomain := os.Getenv("PROTECTION_DOMAIN")
 	storagePool := os.Getenv("STORAGE_POOL")
 
-	if protectionDomain == "" || storagePool == "" {
+	if withZone && (protectionDomain == "" || storagePool == "") {
 		return fmt.Errorf("PROTECTION_DOMAIN or STORAGE_POOL env variable is not set")
+	}
+
+	systemName := os.Getenv("SYSTEM_NAME")
+	altSystemName := os.Getenv("ALT_SYSTEM_NAME")
+
+	if withSystemName && systemName == "" {
+		return fmt.Errorf("SYSTEM_NAME env variable is not set")
+	}
+
+	if withAltSystemName && altSystemName == "" {
+		return fmt.Errorf("ALT_SYSTEM_NAME env variable is not set")
 	}
 
 	// Read the JSON file
@@ -116,23 +113,47 @@ func addArrayZoneConfig() error {
 		return fmt.Errorf("failed to unmarshal array config JSON: %v", err)
 	}
 
-	// Update the default array with the "zone" config from env
+	// Update the default array with the zone config and system name from env
+	// Update the alternative (non-default) array with the alternative system name from env
 	foundDefault := false
 	for _, a := range arrays {
-		if a.IsDefault == true {
-			fmt.Printf("Adding zone config to system %s: protectionDomain=%s storagePool=%s\n", a.SystemID, protectionDomain, storagePool)
-			a.AvailabilityZone = &AvailabilityZone{
-				Name:     "zoneA",
-				LabelKey: "zone.csi-vxflexos.dellemc.com",
-				ProtectionDomains: []ProtectionDomain{
-					{
-						Name:  protectionDomain,
-						Pools: []string{storagePool},
-					},
-				},
-			}
+		if a.IsDefault {
 			foundDefault = true
-			break
+			if withZone {
+				fmt.Printf("Adding zone config to default system %s: protectionDomain=%s storagePool=%s\n", a.SystemID, protectionDomain, storagePool)
+				a.AvailabilityZone = &AvailabilityZone{
+					Name:     "zoneA",
+					LabelKey: "zone.csi-vxflexos.dellemc.com",
+					ProtectionDomains: []ProtectionDomain{
+						{
+							Name:  protectionDomain,
+							Pools: []string{storagePool},
+						},
+					},
+				}
+			}
+			if withSystemName {
+				fmt.Printf("Using name %s for default system %s in driver config\n", systemName, a.SystemID)
+				a.SystemID = systemName
+			}
+		} else {
+			if withZone {
+				fmt.Printf("Adding dummy zone config to alternative system %s\n", a.SystemID)
+				a.AvailabilityZone = &AvailabilityZone{
+					Name:     "",
+					LabelKey: "zone.csi-vxflexos.dellemc.com",
+					ProtectionDomains: []ProtectionDomain{
+						{
+							Name:  "",
+							Pools: []string{""},
+						},
+					},
+				}
+			}
+			if withAltSystemName {
+				fmt.Printf("Using name %s for alternative system %s in driver config\n", altSystemName, a.SystemID)
+				a.SystemID = altSystemName
+			}
 		}
 	}
 	if !foundDefault {
@@ -154,7 +175,7 @@ func addArrayZoneConfig() error {
 }
 
 func TestIntegration(t *testing.T) {
-	err := resetArrayConfig()
+	err := buildArrayConfig(false, false, false)
 	if err != nil {
 		t.Fatalf("Failed to setup array config file: %v", err)
 	}

@@ -22,14 +22,20 @@ export X_CSI_VXFLEXOS_ENABLELISTVOLUMESNAPSHOTS="true"
 # Set to true to enable quota by default for created NFS volumes
 export X_CSI_QUOTA_ENABLED="true"
 
-#export STORAGE_POOL="pool1"
-export STORAGE_POOL="SP-SW_SSD-1"
-#export PROTECTION_DOMAIN="domain1"
-export PROTECTION_DOMAIN="PD-1"
-export NFS_STORAGE_POOL="SP-SW_SSD-1"
+# System name for the default system specified in config.json
+export SYSTEM_NAME=""
+export STORAGE_POOL=""
+# TODO: add protection domain for alternative system too or we assume nfs test will always run against primary system?
+export NFS_STORAGE_POOL=""
+export PROTECTION_DOMAIN=""
+
+# System name for the alternative (non-default) system specified in config.json
+export ALT_SYSTEM_NAME=""
+export ALT_STORAGE_POOL=""
 
 # Alternate GUID is for another system for testing expose volume to multiple hosts
 export ALT_GUID=
+
 #export ALT_GUID=BAA13E19-5472-5634-A7F3-EC28067F0662
 export X_CSI_POWERFLEX_KUBE_NODE_NAME="node1"
 
@@ -42,4 +48,4 @@ export GOSCALEIO_SHOWHTTP="false"
 #If you put the system ID in your config.json, put the
 #system's name here, and vice versa. If your instance does not have a name,
 #leave this variable blank.
-export ALT_SYSTEM_ID=""
+#export ALT_SYSTEM_ID=""
