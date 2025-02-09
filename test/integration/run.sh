@@ -94,6 +94,9 @@ fi
 export ZONE_LABEL_KEY="zone.csi-vxflexos.dellemc.com"
 export CSI_ENDPOINT=`pwd`/unix_sock
 export SDC_GUID=$(/opt/emc/scaleio/sdc/bin/drv_cfg --query_guid)
+export NODE_INTERFACES="worker-1-6MRQC8xZ3A4zt.domain:ens192"
+export X_CSI_POWERFLEX_KUBE_NODE_NAME="node1"
+
 
 testRun=$1
 export TEST_TAGS="$2"

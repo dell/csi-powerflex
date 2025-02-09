@@ -91,8 +91,6 @@ type ArrayConnectionData struct {
 
 type feature struct {
 	errs                        []error
-	anotherSystemID             string
-	isAlternativeSystem         bool
 	createVolumeRequest         *csi.CreateVolumeRequest
 	publishVolumeRequest        *csi.ControllerPublishVolumeRequest
 	nodePublishVolumeRequest    *csi.NodePublishVolumeRequest
@@ -114,7 +112,13 @@ type feature struct {
 	arrays                      map[string]*ArrayConnectionData
 	VolumeGroupSnapshot         *volGroupSnap.CreateVolumeGroupSnapshotResponse
 	VolumeGroupSnapshot2        *volGroupSnap.CreateVolumeGroupSnapshotResponse
-	isZoneArrayConfig           bool
+	// Track the array config currently used by the driver
+	drvHasDefaultName bool
+	drvHasAltName     bool
+	drvHasZoning      bool
+	// Array identifiers (either ID or Name) that the test will use in CSI requests
+	systemIdentifier     string
+	useAlternativeSystem bool
 }
 
 func appendUnique(idList []string, newId string) (newList []string, added bool) {
@@ -126,9 +130,10 @@ func appendUnique(idList []string, newId string) (newList []string, added bool) 
 	return append(idList, newId), true
 }
 
-func (f *feature) getGoscaleioClient() (client *goscaleio.Client, err error) {
+func (f *feature) getGoscaleioClient(systemID string) (client *goscaleio.Client, err error) {
 
-	for _, a := range f.arrays {
+	a := f.arrays[systemID]
+	if a != nil {
 		client, err := goscaleio.NewClientWithArgs(a.Endpoint, "", math.MaxInt64, true, false)
 		if err != nil {
 			log.Fatalf("err getting client: %v", err)
@@ -150,7 +155,7 @@ func (f *feature) getGoscaleioClient() (client *goscaleio.Client, err error) {
 
 		return client, nil
 	}
-	return nil, err
+	return nil, fmt.Errorf("goscaleio client was requested for unknown systemID %s", systemID)
 }
 
 // there is no way to call service.go methods from here
@@ -171,8 +176,8 @@ func (f *feature) getArrayConfig(filePath string) (map[string]*ArrayConnectionDa
 			return nil, fmt.Errorf("unable to parse the credentials: %v", err)
 		}
 
-		if len(jsonCreds) == 0 {
-			return nil, fmt.Errorf("no arrays are provided in configFile %s", filePath)
+		if len(jsonCreds) != 2 {
+			return nil, fmt.Errorf("expected 2 arrays (one default) in file %s, but found %d", filePath, len(jsonCreds))
 		}
 
 		noOfDefaultArray := 0
@@ -221,6 +226,90 @@ func (f *feature) getArrayConfig(filePath string) (map[string]*ArrayConnectionDa
 		return nil, fmt.Errorf("arrays details are not provided in configFile %s", filePath)
 	}
 	return arrays, nil
+}
+
+// Connect to arrays to
+// 1) check connectivity and authentication
+// 2) TODO: check that provided storage pools and protection domain exist
+// 3) TODO: check that NFS server is enabled
+// 4) check undeleted objects left from previous failed test runs
+func (f *feature) checkArraysState() error {
+
+	nameSuffix := "_" + os.Getenv("VOL_NAME_SUFFIX")
+	if nameSuffix == "_" {
+		return fmt.Errorf("distinct object name suffix is not set, check VOL_NAME_SUFFIX in env.sh")
+	}
+
+	foundObj := false
+
+	for _, a := range f.arrays {
+		fmt.Printf("\nValidating system %s ...\n", a.SystemID)
+
+		c, err := f.getGoscaleioClient(a.SystemID)
+		if err != nil {
+			return fmt.Errorf("failed to get goscaleio client: %v", err)
+		}
+		system, err := c.FindSystem(a.SystemID, "", "")
+		if err != nil {
+			return fmt.Errorf("failed to request system object: %v", err)
+		}
+
+		fileSystems, err := system.GetAllFileSystems()
+		if err != nil {
+			return fmt.Errorf("failed to request file systems: %v", err)
+		}
+
+		volumes, err := c.GetVolume("", "", "", "", false)
+		if err != nil {
+			return fmt.Errorf("failed to request all volumes: %v", err)
+		}
+
+		snapshots, err := c.GetVolume("", "", "", "", true)
+		if err != nil {
+			return fmt.Errorf("failed to request all snapshots: %v", err)
+		}
+
+		fmt.Printf("Total file systems fetched: %d\n", len(fileSystems))
+		for _, fs := range fileSystems {
+			if strings.Contains(fs.Name, nameSuffix) {
+				foundObj = true
+				fmt.Printf(">>> System %s has undeleted file systems %s\n", a.SystemID, fs.Name)
+			}
+		}
+
+		fmt.Printf("Total volumes fetched: %d\n", len(volumes))
+		for _, v := range volumes {
+			if strings.Contains(v.Name, nameSuffix) {
+				foundObj = true
+				fmt.Printf(">>> System %s has undeleted volume %s\n", a.SystemID, v.Name)
+
+				//tgtVol := goscaleio.NewVolume(c)
+				//tgtVol.Volume = v
+				//err = tgtVol.RemoveVolume("ONLY_ME")
+				//if err != nil {
+				//	fmt.Printf(">>> failed to delete volume %s\n", v.Name)
+				//} else {
+				//	fmt.Printf(">>> deleted volume %s\n", v.Name)
+				//}
+			}
+		}
+
+		fmt.Printf("Total snapshots fetched: %d\n", len(snapshots))
+		for _, s := range snapshots {
+			if strings.Contains(s.Name, nameSuffix) {
+				foundObj = true
+				fmt.Printf(">>> System %s has undeleted snapshot %s\n", a.SystemID, s.Name)
+			}
+		}
+
+		fmt.Println()
+	}
+
+	if foundObj {
+		return fmt.Errorf("undeleted objects found in arrays")
+	}
+
+	return nil
 }
 
 func (f *feature) createConfigMap() error {
@@ -314,6 +403,18 @@ func (f *feature) addError(err error) {
 }
 
 func (f *feature) aVxFlexOSService() error {
+	return f.prepareVxFlexOSService(false, false, false)
+}
+
+func (f *feature) aVxFlexOSServiceWithNames(defaultIdentifier, altIdentifier string) error {
+	return f.prepareVxFlexOSService(defaultIdentifier == "name", altIdentifier == "name", false)
+}
+
+func (f *feature) aVxFlexOSServiceWithZone() error {
+	return f.prepareVxFlexOSService(false, false, true)
+}
+
+func (f *feature) prepareVxFlexOSService(defaultUseName bool, altUseName bool, useZoning bool) error {
 	f.errs = make([]error, 0)
 	f.createVolumeRequest = nil
 	f.publishVolumeRequest = nil
@@ -328,8 +429,42 @@ func (f *feature) aVxFlexOSService() error {
 	f.maxRetryCount = MaxRetries
 	f.expandVolumeResponse = nil
 	f.nodeExpandVolumeResponse = nil
-	f.anotherSystemID = ""
-	f.isAlternativeSystem = false
+
+	// Don't set systemID in CreateVolume requests unless a system is explicitly selected by the scenario
+	f.systemIdentifier = ""
+	// Imply the default system unless the alt system is explicitly selected by the scenario
+	f.useAlternativeSystem = false
+
+	updateDrvConfig := false
+
+	if f.drvHasDefaultName != defaultUseName {
+		// The test needs the driver to identify the default system differently
+		updateDrvConfig = true
+	}
+	if f.drvHasAltName != altUseName {
+		// The test needs the driver to identify the alternative system differently
+		updateDrvConfig = true
+	}
+	if f.drvHasZoning != useZoning {
+		// The test needs the driver to have topology configuration for arrays
+		updateDrvConfig = true
+	}
+
+	if updateDrvConfig {
+		fmt.Printf("Updating driver array config: use name for default system = %v, use name for alt system = %v, use zoning = %v\n",
+			defaultUseName, altUseName, useZoning)
+		err := buildArrayConfig(defaultUseName, altUseName, useZoning)
+		if err != nil {
+			return fmt.Errorf("failed to rebuild driver array config: %v", err)
+		}
+		if err := restartDriver(); err != nil {
+			return fmt.Errorf("driver did not restart with updated array config: %v", err)
+		}
+		f.drvHasDefaultName = defaultUseName
+		f.drvHasAltName = altUseName
+		f.drvHasZoning = useZoning
+	}
+
 	return nil
 }
 
@@ -337,17 +472,22 @@ func (f *feature) newVolumeReqParams(isNFS bool) map[string]string {
 	params := make(map[string]string)
 	params["thickprovisioning"] = "false"
 
-	if len(f.anotherSystemID) > 0 {
-		params["systemID"] = f.anotherSystemID
+	// Set systemID if the test has explicitly selected a system in a previous step
+	if f.systemIdentifier != "" {
+		params["systemID"] = f.systemIdentifier
 	}
 
-	if f.isAlternativeSystem {
+	// If the test has explicitly selected a system in a previous step
+	// it could be the default or alternative system, so use the relevant storage class.
+	if f.useAlternativeSystem {
 		params["storagepool"] = os.Getenv("ALT_STORAGE_POOL")
+		// The user could have defined a separate storage class for NFS volumes
 		if isNFS && os.Getenv("ALT_NFS_STORAGE_POOL") != "" {
 			params["storagepool"] = os.Getenv("ALT_NFS_STORAGE_POOL")
 		}
 	} else {
 		params["storagepool"] = os.Getenv("STORAGE_POOL")
+		// The user could have defined a separate storage class for NFS volumes
 		if isNFS && os.Getenv("NFS_STORAGE_POOL") != "" {
 			params["storagepool"] = os.Getenv("NFS_STORAGE_POOL")
 		}
@@ -683,18 +823,7 @@ func (f *feature) aCapabilityWithVoltypeAccessFstype(voltype, access, fstype str
 
 func (f *feature) aVolumeRequest(name string, size int64) error {
 	req := new(csi.CreateVolumeRequest)
-	params := f.newVolumeReqParams(false)
-
-	// TODO: this does not work well with multi-array configuration and alternative system selection via "I select <type> system ID/name"
-	// use new system name instead of previous name, only set if name has substring alt_system_id
-	newName := os.Getenv("ALT_SYSTEM_ID")
-	if len(newName) > 0 && strings.Contains(name, "alt_system_id") {
-		fmt.Printf("Using %s as systemID for volume request \n", newName)
-		params["systemID"] = newName
-	} else {
-		fmt.Printf("Env variable ALT_SYSTEM_ID not set, assuming system does not have a name \n")
-	}
-	req.Parameters = params
+	req.Parameters = f.newVolumeReqParams(false)
 	req.Name = makeDistinctName(name)
 	capacityRange := new(csi.CapacityRange)
 	capacityRange.RequiredBytes = size * 1024 * 1024 * 1024
@@ -957,7 +1086,7 @@ func (f *feature) whenICallDeleteAllVolumes() error {
 
 func (f *feature) iCallCreateVolumeFromSnapshot() error {
 	req := f.createVolumeRequest
-	req.Name = "volFromSnap-" + req.Name
+	req.Name = makeDistinctName("volFromSnap")
 	source := &csi.VolumeContentSource_SnapshotSource{SnapshotId: f.snapshotID}
 	req.VolumeContentSource = new(csi.VolumeContentSource)
 	req.VolumeContentSource.Type = &csi.VolumeContentSource_Snapshot{Snapshot: source}
@@ -969,7 +1098,7 @@ func (f *feature) iCallCreateVolumeFromSnapshot() error {
 
 func (f *feature) iCallCloneVolume() error {
 	req := f.createVolumeRequest
-	req.Name = "cloneVol-" + req.Name
+	req.Name = makeDistinctName("cloneVol")
 	source := &csi.VolumeContentSource_VolumeSource{VolumeId: f.volID}
 	req.VolumeContentSource = new(csi.VolumeContentSource)
 	req.VolumeContentSource.Type = &csi.VolumeContentSource_Volume{Volume: source}
@@ -1122,48 +1251,27 @@ func (f *feature) aValidListSnapshotResponseIsReturned() error {
 	return fmt.Errorf("snapshot list does not contain snapshotID %s", f.snapshotID)
 }
 
-func (f *feature) iSetAnotherSystemName(systemType string) error {
-	isHexadecimal := regexp.MustCompile(`^[0-9a-f]+$`).MatchString
-	for _, a := range f.arrays {
-		if systemType == "altSystem" && !a.IsDefault {
-			if !isHexadecimal(a.SystemID) {
-				f.anotherSystemID = a.SystemID
-				f.isAlternativeSystem = true
-				break
-			}
-		}
-		if systemType == "defaultSystem" && a.IsDefault {
-			if !isHexadecimal(a.SystemID) {
-				f.anotherSystemID = a.SystemID
-				f.isAlternativeSystem = false
-				break
-			}
-		}
-	}
-	if f.anotherSystemID == "" {
-		return fmt.Errorf("failed to find %s with name in systemID, check array config", systemType)
-	}
-	fmt.Printf("System name selected for %s is %s\n", systemType, f.anotherSystemID)
-	return nil
-}
+func (f *feature) iSelectSystem(systemType, identityType string) error {
 
-func (f *feature) iSetAnotherSystemID(systemType string) error {
-	for _, a := range f.arrays {
-		if systemType == "altSystem" && !a.IsDefault {
-			f.anotherSystemID = a.SystemID
-			f.isAlternativeSystem = true
-			break
+	if identityType == "ID" {
+		for _, a := range f.arrays {
+			if (systemType == "default" && a.IsDefault) ||
+				(systemType == "alternative" && !a.IsDefault) {
+				f.systemIdentifier = a.SystemID
+				break
+			}
 		}
-		if systemType == "defaultSystem" && a.IsDefault {
-			f.anotherSystemID = a.SystemID
-			f.isAlternativeSystem = false
-			break
+	} else {
+		if systemType == "default" {
+			f.systemIdentifier = os.Getenv("SYSTEM_NAME")
+		} else {
+			f.systemIdentifier = os.Getenv("ALT_SYSTEM_NAME")
 		}
 	}
-	if f.anotherSystemID == "" {
-		return fmt.Errorf("failed to find %s with ID in systemID, check array config", systemType)
-	}
-	fmt.Printf("System ID selected for %s is %s\n", systemType, f.anotherSystemID)
+	f.useAlternativeSystem = systemType == "alternative"
+
+	fmt.Printf("Test will use systemID %s (%s system %s) in requests to driver\n", f.systemIdentifier, systemType, identityType)
+
 	return nil
 }
 
@@ -1181,7 +1289,7 @@ func (f *feature) iCreateVolumesInParallel(nVols int) error {
 			var err error
 			req := f.getMountVolumeRequest(name)
 			if req != nil {
-				// every second volume to be created in the default array
+				// every second volume to be created in the array selected by the driver
 				if i%2 == 0 {
 					req.Parameters["systemID"] = ""
 					req.Parameters["storagepool"] = os.Getenv("STORAGE_POOL")
@@ -1841,66 +1949,69 @@ func makeDistinctName(name string) string {
 }
 
 func (f *feature) iSetBadAllSystemNames() error {
+	// TODO: do not modify f.arrays - it's our source of truth
 	name := os.Getenv("ALT_SYSTEM_ID")
-	for _, a := range f.arrays {
-		if strings.Contains(a.AllSystemNames, name) {
-			a.AllSystemNames = "badname"
-			fmt.Printf("set bad allSystemNames for %s done \n", name)
-			return nil
-		}
-	}
+	//for _, a := range f.arrays {
+	//	if strings.Contains(a.AllSystemNames, name) {
+	//		a.AllSystemNames = "badname"
+	//		fmt.Printf("set bad allSystemNames for %s done \n", name)
+	//		return nil
+	//	}
+	//}
 	return fmt.Errorf("Error during set bad secret allSystemNames for %s", name)
 }
 
 // And Set System Name As "id-some-name" or "id_some_name"
 func (f *feature) iSetSystemName(name string) error {
-	parts := strings.Split(name, "-")
-	id := ""
-	if len(parts) > 1 {
-		id = parts[0]
-	} else {
-		parts = strings.Split(name, "_")
-		if len(parts) > 1 {
-			id = parts[0]
-		}
-	}
-	isNumeric := regexp.MustCompile(`^[0-9a-f]+$`).MatchString
-	if !isNumeric(id) {
-		return fmt.Errorf("Error during set name on pflex %s is not id of system", id)
-	}
-	endpoint := ""
-	var array *ArrayConnectionData
-	for _, a := range f.arrays {
-		if strings.Contains(a.SystemID, id) || strings.Contains(a.SystemID, "pflex") {
-			endpoint = a.Endpoint
-			array = a
-		}
-	}
-	if array == nil {
-		return fmt.Errorf("Error during set name on pflex %s not found in secret", name)
-	}
-	if endpoint != "" {
-		cred := array.Username + ":" + array.Password
-		url := endpoint + "/api/login"
-		fmt.Printf("call url %s\n", url)
-		token, err := f.restCallToSetName(cred, url, "")
-		if err != nil {
-			fmt.Printf("name changed error %s", err.Error())
-			return err
-		}
-		if len(token) > 1 {
-			auth := array.Username + ":" + token
-			urlsys := endpoint + "/api/instances/System::" + id + "/action/setSystemName"
-			fmt.Printf("call urlsys %s\n", urlsys)
-			fmt.Printf("call name %s\n", name)
-			_, err := f.restCallToSetName(auth, urlsys, name)
-			if err != nil {
-				return fmt.Errorf("Error during set name on pflex %s", err.Error())
-			}
-			os.Setenv("ALT_SYSTEM_ID", name)
-			return nil
-		}
-	}
+	//parts := strings.Split(name, "-")
+	//id := ""
+	//if len(parts) > 1 {
+	//	id = parts[0]
+	//} else {
+	//	parts = strings.Split(name, "_")
+	//	if len(parts) > 1 {
+	//		id = parts[0]
+	//	}
+	//}
+	//isNumeric := regexp.MustCompile(`^[0-9a-f]+$`).MatchString
+	//if !isNumeric(id) {
+	//	return fmt.Errorf("Error during set name on pflex %s is not id of system", id)
+	//}
+	//endpoint := ""
+	//var array *ArrayConnectionData
+	//for _, a := range f.arrays {
+	//	if strings.Contains(a.SystemID, id) || strings.Contains(a.SystemID, "pflex") {
+	//		endpoint = a.Endpoint
+	//		array = a
+	//	}
+	//}
+	//if array == nil {
+	//	return fmt.Errorf("Error during set name on pflex %s not found in secret", name)
+	//}
+	//if endpoint != "" {
+	//	cred := array.Username + ":" + array.Password
+	//	url := endpoint + "/api/login"
+	//	fmt.Printf("call url %s\n", url)
+	//	token, err := f.restCallToSetName(cred, url, "")
+	//	if err != nil {
+	//		fmt.Printf("name changed error %s", err.Error())
+	//		return err
+	//	}
+	//	if len(token) > 1 {
+	//		auth := array.Username + ":" + token
+	//		urlsys := endpoint + "/api/instances/System::" + id + "/action/setSystemName"
+	//		fmt.Printf("call urlsys %s\n", urlsys)
+	//		fmt.Printf("call name %s\n", name)
+	//		_, err := f.restCallToSetName(auth, urlsys, name)
+	//		if err != nil {
+	//			return fmt.Errorf("Error during set name on pflex %s", err.Error())
+	//		}
+	//		os.Setenv("ALT_SYSTEM_ID", name)
+	//		return nil
+	//	}
+	//}
+	// TODO: we should never change system name of storage system as part of a test,
+	// especially without reverting this change.
 	return fmt.Errorf("Error during set name on pflex %s", name)
 }
 
@@ -2425,7 +2536,7 @@ func (f *feature) ICallListFileSystemSnapshot() error {
 		}
 
 		if val {
-			c, err := f.getGoscaleioClient()
+			c, err := f.getGoscaleioClient(a.SystemID)
 			if err != nil {
 				return errors.New("Geting goscaleio client failed " + err.Error())
 			}
@@ -2505,7 +2616,7 @@ func (f *feature) iCallDeleteSnapshotForFS() error {
 }
 
 func (f *feature) checkNFS(_ context.Context, systemID string) (bool, error) {
-	c, err := f.getGoscaleioClient()
+	c, err := f.getGoscaleioClient(systemID)
 	if err != nil {
 		return false, errors.New("Geting goscaleio client failed " + err.Error())
 	}
@@ -2523,7 +2634,7 @@ func (f *feature) checkNFS(_ context.Context, systemID string) (bool, error) {
 	if ver >= 4.0 {
 		array := f.arrays[systemID]
 		if array == nil || array.NasName == "" {
-			fmt.Println("nasName value not found in secret, it is mandatory parameter for NFS volume operations")
+			fmt.Println("nasName value not found in array config, it is mandatory parameter for NFS volume operations")
 		}
 		return true, nil
 	}
@@ -2695,59 +2806,30 @@ func (f *feature) createGenericZoneRequest(name string) *csi.CreateVolumeRequest
 	return req
 }
 
-func InitSuite(ts *godog.TestSuiteContext) {
-
-	s := ts.ScenarioContext()
+func FeatureContext(ts *godog.TestSuiteContext) {
 
 	f := &feature{}
+	s := ts.ScenarioContext()
 
-	s.Before(func(ctx context.Context, sc *godog.Scenario) (context.Context, error) {
-
-		zoneScenario := false
-		arraysChanged := false
-
-		for _, tag := range sc.Tags {
-			if tag.Name == "@zone-integration" {
-				zoneScenario = true
-				break
-			}
+	ts.BeforeSuite(func() {
+		// Load the user provided baseConfigFile, not the generated configFile that is used to configure the driver
+		arrays, err := f.getArrayConfig(baseConfigFile)
+		if err != nil {
+			fmt.Printf("Failed to load test array config: %v\n", err)
+			os.Exit(1)
 		}
+		f.arrays = arrays
 
-		if zoneScenario && !f.isZoneArrayConfig {
-			log.Printf("Adding zoning to driver arrays config")
-			if err := buildArrayConfig(true, false, false); err != nil {
-				return ctx, fmt.Errorf("failed to update array config file with zones: %v", err)
-			}
-			f.isZoneArrayConfig = true
-			arraysChanged = true
-		} else if !zoneScenario && f.isZoneArrayConfig {
-			log.Printf("Removing zoning from driver arrays config")
-			if err := buildArrayConfig(false, false, false); err != nil {
-				return ctx, fmt.Errorf("failed to reset array config file before test: %v", err)
-			}
-			f.isZoneArrayConfig = false
-			arraysChanged = true
+		// Check if arrays are accessible and have no undeleted objects that may interfere with this test run
+		if err := f.checkArraysState(); err != nil {
+			fmt.Printf("Failed to validate arrays: %v\n", err)
+			os.Exit(1)
 		}
-
-		if arraysChanged {
-			if err := restartDriver(); err != nil {
-				return ctx, fmt.Errorf("driver did not restart with updated array config: %v", err)
-			}
-		}
-
-		if f.arrays == nil || arraysChanged {
-			fmt.Printf("Loading test array config from %s\n", baseConfigFile)
-			var err error
-			f.arrays, err = f.getArrayConfig(baseConfigFile)
-			if err != nil {
-				return ctx, fmt.Errorf("failed to load array config: %v", err)
-			}
-		}
-
-		return ctx, nil
 	})
 
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
+	s.Step(`^a VxFlexOS service with default system (ID|Name) and alternative system (ID|Name)$`, f.aVxFlexOSServiceWithNames)
+	s.Step(`^a VxFlexOS service with topology$`, f.aVxFlexOSServiceWithZone)
 	s.Step(`^a basic block volume request "([^"]*)" "(\d+(\.\d+)?)"$`, f.aBasicBlockVolumeRequest)
 	s.Step(`^Set System Name As "([^"]*)"$`, f.iSetSystemName)
 	s.Step(`^Set Bad AllSystemNames$`, f.iSetBadAllSystemNames)
@@ -2783,8 +2865,7 @@ func InitSuite(ts *godog.TestSuiteContext) {
 	s.Step(`^expect Error ListSnapshotResponse$`, f.expectErrorListSnapshotResponse)
 	s.Step(`^I create (\d+) volumes in parallel$`, f.iCreateVolumesInParallel)
 	s.Step(`^I publish (\d+) volumes in parallel$`, f.iPublishVolumesInParallel)
-	s.Step(`^I select "([^"]*)" system ID$`, f.iSetAnotherSystemID)
-	s.Step(`^I select "([^"]*)" system name$`, f.iSetAnotherSystemName)
+	s.Step(`^I select (default|alternative) system with (ID|Name)$`, f.iSelectSystem)
 	s.Step(`^I node publish (\d+) volumes in parallel$`, f.iNodePublishVolumesInParallel)
 	s.Step(`^I node unpublish (\d+) volumes in parallel$`, f.iNodeUnpublishVolumesInParallel)
 	s.Step(`^I unpublish (\d+) volumes in parallel$`, f.iUnpublishVolumesInParallel)
@@ -2827,5 +2908,5 @@ func InitSuite(ts *godog.TestSuiteContext) {
 	s.Step(`^a NodeGetInfo is returned with zone topology$`, f.aNodeGetInfoIsReturnedWithZoneTopology)
 	s.Step(`^a NodeGetInfo is returned without zone topology "([^"]*)"$`, f.aNodeGetInfoIsReturnedWithoutZoneTopology)
 	s.Step(`^a NodeGetInfo is returned with system topology$`, f.aNodeGetInfoIsReturnedWithSystemTopology)
-	s.Step(`^I pause for "([0-9]*)" seconds$`, f.iPause)
+	s.Step(`^I pause for (\d+) seconds$`, f.iPause)
 }

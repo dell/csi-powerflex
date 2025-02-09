@@ -78,7 +78,8 @@ Feature: VxFlex OS CSI interface
   Scenario: Create, publish, unpublish, and delete basic vol, but sc has name, and secret has id
     Given a VxFlexOS service
     And a capability with voltype "mount" access "single-writer" fstype "ext4"
-    And a volume request "alt_system_id_integration7" "8"
+    And I select default system with Name
+    And a volume request "int" "8"
     When I call CreateVolume
     And there are no errors
     And when I call PublishVolume "SDC_GUID"
@@ -98,11 +99,10 @@ Feature: VxFlex OS CSI interface
 
   @alt
   Scenario Outline: Create volume on alternative system, secret has system name, first req has system name, second req has system ID
-    Given a VxFlexOS service
+    Given a VxFlexOS service with default system ID and alternative system Name
     And a capability with voltype "mount" access "single-writer" fstype "ext4"
-    And I select "altSystem" system name
-    And there are no errors
-    And a volume request <name> "8"
+    And I select alternative system with <identity>
+    And a volume request "int7" "8"
     When I call CreateVolume
     And there are no errors
     And when I call PublishVolume "SDC_GUID"
@@ -115,46 +115,48 @@ Feature: VxFlex OS CSI interface
     Then there are no errors
 
     Examples:
-      | name                         |
-      | "integration7"               |
-      | "alt_system_id_integration8" |
+      | identity |
+      | Name     |
+      | ID       |
 
-  @alt
-  Scenario: Create, publish, unpublish, and delete basic vol, change name of array and specify wrong allsystem names, this will pass if volume because handle has id
-    Given a VxFlexOS service
-    And I select "altSystem" systemID
-    And Set System Name As "1235e15806d1ec0f-pflex-system"
-    And Set Bad Allsystem names
-    And a capability with voltype "mount" access "single-writer" fstype "ext4"
-    And a volume request "integration9" "8"
-    When I call CreateVolume
-    And Set System Name As "1235e15806d1ec0f_pflex_system"
-    And when I call PublishVolume "SDC_GUID"
-    And there are no errors
-    And when I call NodePublishVolume "SDC_GUID"
-    And when I call NodeUnpublishVolume "SDC_GUID"
-    And when I call UnpublishVolume "SDC_GUID"
-    And there are no errors
-    And when I call DeleteVolume
+    # TODO: AllSystemNames scenarios should be redefined, we should not change system name of a storage system
+#  @alt
+#  Scenario: Create, publish, unpublish, and delete basic vol, change name of array and specify wrong allsystem names, this will pass because handle has id
+#    Given a VxFlexOS service
+#    And I select alternative system with ID
+#    And Set System Name As "1235e15806d1ec0f-pflex-system"
+#    And Set Bad AllSystemNames
+#    And a capability with voltype "mount" access "single-writer" fstype "ext4"
+#    And a volume request "integration9" "8"
+#    When I call CreateVolume
+#    And Set System Name As "1235e15806d1ec0f_pflex_system"
+#    And when I call PublishVolume "SDC_GUID"
+#    And there are no errors
+#    And when I call NodePublishVolume "SDC_GUID"
+#    And when I call NodeUnpublishVolume "SDC_GUID"
+#    And when I call UnpublishVolume "SDC_GUID"
+#    And there are no errors
+#    And when I call DeleteVolume
 
-  @alt
-  Scenario: Create, publish, unpublish, and delete basic vol, change name of array and specify allsystem names
-    Given a VxFlexOS service
-    And I select "altSystem" system ID
-    And Set System Name As "1235e15806d1ec0f-pflex-system"
-    And a capability with voltype "mount" access "single-writer" fstype "ext4"
-    And a volume request "integration8" "8"
-    When I call CreateVolume
-    And Set System Name As "1235e15806d1ec0f_pflex_system"
-    And there are no errors
-    And when I call PublishVolume "SDC_GUID"
-    And there are no errors
-    And when I call NodePublishVolume "SDC_GUID"
-    And when I call NodeUnpublishVolume "SDC_GUID"
-    And when I call UnpublishVolume "SDC_GUID"
-    And there are no errors
-    And when I call DeleteVolume
-    Then there are no errors
+    # TODO: AllSystemNames scenarios should be redefined, we should not change system name of a storage system
+#  @alt
+#  Scenario: Create, publish, unpublish, and delete basic vol, change name of array and specify allsystem names
+#    Given a VxFlexOS service
+#    And I select "altSystem" system ID
+#    And Set System Name As "1235e15806d1ec0f-pflex-system"
+#    And a capability with voltype "mount" access "single-writer" fstype "ext4"
+#    And a volume request "integration8" "8"
+#    When I call CreateVolume
+#    And Set System Name As "1235e15806d1ec0f_pflex_system"
+#    And there are no errors
+#    And when I call PublishVolume "SDC_GUID"
+#    And there are no errors
+#    And when I call NodePublishVolume "SDC_GUID"
+#    And when I call NodeUnpublishVolume "SDC_GUID"
+#    And when I call UnpublishVolume "SDC_GUID"
+#    And there are no errors
+#    And when I call DeleteVolume
+#    Then there are no errors
 
   @long
   Scenario Outline: Create volume, create snapshot, delete snapshot, delete volume for multiple sizes
@@ -188,7 +190,7 @@ Feature: VxFlex OS CSI interface
   @alt
   Scenario: Create snapshot, attempts to list snapshots (alternative system ID)
     Given a VxFlexOS service
-    And I select "altSystem" system ID
+    And I select alternative system with ID
     And a basic block volume request "ss1" "8"
     When I call CreateVolume
     And I call CreateSnapshot
@@ -203,9 +205,9 @@ Feature: VxFlex OS CSI interface
   # ListVolume only returns volumes from the default array,
   # so commented this out, CSM issue opened to fix the driver
   @alt
-  Scenario: Create volume from snapshot, list snapshots, list volumes (select system ID)
+  Scenario: Create volume from snapshot, list snapshots, list volumes (select system using ID)
     Given a VxFlexOS service
-    And I select <id> system ID
+    And I select <system> system with ID
     And a basic block volume request "integration1" "8"
     When I call CreateVolume
     And I call CreateSnapshot
@@ -227,14 +229,14 @@ Feature: VxFlex OS CSI interface
     And I call ListVolume
 
     Examples:
-      | id              |
-      | "altSystem"     |
-      | "defaultSystem" |
+      | system          |
+      | alternative     |
+      | default         |
 
   @alt
   Scenario: Create volume, clone volume, delete original volume, delete new volume
     Given a VxFlexOS service
-    And I select <id> system ID
+    And I select <system> system with ID
     And a basic block volume request "integration1" "8"
     When I call CreateVolume
     And I call CloneVolume
@@ -249,9 +251,9 @@ Feature: VxFlex OS CSI interface
     And there are no errors
 
     Examples:
-      | id              |
-      | "altSystem"     |
-      | "defaultSystem" |
+      | system          |
+      | alternative     |
+      | default         |
 
   Scenario: Create volume, create snapshot, create many volumes from snap, delete original volume, delete new volumes
     Given a VxFlexOS service
@@ -350,8 +352,8 @@ Feature: VxFlex OS CSI interface
     Then there are no errors
 
     Examples:
-      | voltype | access                      | fstype | errormsg                   |
-      | "mount" | "multi-writer"              | "ext4" | "multi-writer not allowed" |
+      | voltype | access           | fstype | errormsg                   |
+      | "mount" | "multi-writer"   | "ext4" | "multi-writer not allowed" |
 
   Scenario: Create volume with access mode read only many
     Given a VxFlexOS service
@@ -379,7 +381,6 @@ Feature: VxFlex OS CSI interface
 #      and the test does not have any interface to call NodePublishVolume on the ALT node.
 #
 #      BUG: repeated NodePublishVolume on different local paths works, but Unpublish fails.
-
   Scenario: Create block volume with access mode read write many
     Given a VxFlexOS service
     And a capability with voltype "block" access "multi-writer" fstype ""
@@ -451,7 +452,7 @@ Feature: VxFlex OS CSI interface
   @alt
   Scenario Outline: Scalability test to create volumes, publish, node publish, node unpublish, unpublish, delete volumes in parallel
     Given a VxFlexOS service
-    And I select <id> system ID
+    And I select <system> system with ID
     When I create <numberOfVolumes> volumes in parallel
     And there are no errors
     And I publish <numberOfVolumes> volumes in parallel
@@ -466,9 +467,9 @@ Feature: VxFlex OS CSI interface
     Then there are no errors
 
     Examples:
-      | id              | numberOfVolumes |
-      | "altSystem"     | 5               |
-      | "defaultSystem" | 5               |
+      | system      | numberOfVolumes |
+      | alternative | 5               |
+      | default     | 5               |
 
   Scenario Outline: Idempotent create volumes, publish, node publish, node unpublish, unpublish, delete volumes in parallel
     Given a VxFlexOS service
@@ -856,6 +857,7 @@ Feature: VxFlex OS CSI interface
       | "123456789" | "8Gi" | "single-writer" | "ext1" | "inline ephemeral node publish failed"       |
       | "123456789" | " Gi" | "single-writer" | "ext4" | "inline ephemeral parse size failed"         |
 
+  @vg
   Scenario: Call CreateVolumeGroupSnapshot
     Given a VxFlexOS service
     And a basic block volume request "integration1" "8"
@@ -869,6 +871,7 @@ Feature: VxFlex OS CSI interface
     And when I call DeleteAllVolumes
     Then the error message should contain "none"
 
+  @vg
   Scenario: Call CreateVolumeGroupSnapshot idempotent
     Given a VxFlexOS service
     And a basic block volume request "integration1" "8"
@@ -1031,8 +1034,8 @@ Feature: VxFlex OS CSI interface
 
   @zone-integration @sanity
   Scenario: Create publish, unpublish, and delete zone volume
-    Given a VxFlexOS service
-    And I create a zone volume request "zone-integration-vol"
+    Given a VxFlexOS service with topology
+    And I create a zone volume request "zone-vol"
     When I call CreateVolume
     And there are no errors
     And when I call PublishVolume "SDC_GUID"
@@ -1044,7 +1047,7 @@ Feature: VxFlex OS CSI interface
 
   @zone-integration
   Scenario: Create zone volume with invalid zone information
-    Given a VxFlexOS service
+    Given a VxFlexOS service with topology
     And I create an invalid zone volume request
     When I call CreateVolume
     Then the error message should contain <errormsg>
@@ -1055,7 +1058,7 @@ Feature: VxFlex OS CSI interface
 
   @zone-integration
   Scenario: call NodeGetInfo with no zone key
-    Given a VxFlexOS service
+    Given a VxFlexOS service with topology
     And I call NodeGetInfo with ""
     And there are no errors
     Then a NodeGetInfo is returned with zone topology
@@ -1063,6 +1066,6 @@ Feature: VxFlex OS CSI interface
 
   @zone-integration
   Scenario: call NodeGetInfo with invalid zone key
-    Given a VxFlexOS service
+    Given a VxFlexOS service with topology
     And I call NodeGetInfo with "invalid_zone_key"
     Then a NodeGetInfo is returned without zone topology "invalid_zone_key"
