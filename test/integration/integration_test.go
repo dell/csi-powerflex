@@ -79,7 +79,7 @@ func readConfigFile(filePath string) {
 	}
 }
 
-func buildArrayConfig(withZone, withSystemName, withAltSystemName bool) error {
+func buildArrayConfig(withDefaultSysName, withAltSysName, withZone bool) error {
 	fmt.Println("Building array config")
 
 	protectionDomain := os.Getenv("PROTECTION_DOMAIN")
@@ -92,11 +92,11 @@ func buildArrayConfig(withZone, withSystemName, withAltSystemName bool) error {
 	systemName := os.Getenv("SYSTEM_NAME")
 	altSystemName := os.Getenv("ALT_SYSTEM_NAME")
 
-	if withSystemName && systemName == "" {
+	if withDefaultSysName && systemName == "" {
 		return fmt.Errorf("SYSTEM_NAME env variable is not set")
 	}
 
-	if withAltSystemName && altSystemName == "" {
+	if withAltSysName && altSystemName == "" {
 		return fmt.Errorf("ALT_SYSTEM_NAME env variable is not set")
 	}
 
@@ -132,7 +132,7 @@ func buildArrayConfig(withZone, withSystemName, withAltSystemName bool) error {
 					},
 				}
 			}
-			if withSystemName {
+			if withDefaultSysName {
 				fmt.Printf("Using name %s for default system %s in driver config\n", systemName, a.SystemID)
 				a.SystemID = systemName
 			}
@@ -150,7 +150,7 @@ func buildArrayConfig(withZone, withSystemName, withAltSystemName bool) error {
 					},
 				}
 			}
-			if withAltSystemName {
+			if withAltSysName {
 				fmt.Printf("Using name %s for alternative system %s in driver config\n", altSystemName, a.SystemID)
 				a.SystemID = altSystemName
 			}
@@ -211,13 +211,13 @@ func TestIntegration(t *testing.T) {
 	opts := godog.Options{
 		Paths:         []string{"features"},
 		Tags:          tags,
-		Format:        "pretty,junit:integration.xml",
+		Format:        "pretty", //,junit:integration.xml",
 		StopOnFailure: true,
 	}
 
 	exitVal := godog.TestSuite{
 		Name:                 "CSI PowerFlex Integration Tests",
-		TestSuiteInitializer: InitSuite,
+		TestSuiteInitializer: FeatureContext,
 		Options:              &opts,
 	}.Run()
 
