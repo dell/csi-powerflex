@@ -375,16 +375,15 @@ Feature: VxFlex OS CSI interface
     And when I call DeleteVolume
     Then there are no errors
 
-  @fail
-#      this test cannot work even if ALT_GUID is set to a read SDC connected to
+
+#      this test cannot work even if ALT_GUID is set to a real SDC connected to
 #      the same array. Main reason is that NodePublishVolume can only publish volumes locally
 #      and the test does not have any interface to call NodePublishVolume on the ALT node.
-#
-#      BUG: repeated NodePublishVolume on different local paths works, but Unpublish fails.
+  @multi-host @fail
   Scenario: Create block volume with access mode read write many
     Given a VxFlexOS service
     And a capability with voltype "block" access "multi-writer" fstype ""
-    And a volume request "block-multi-writer-test" "8"
+    And a volume request "multi-writer" "8"
     When I call CreateVolume
     And there are no errors
     And when I call PublishVolume "SDC_GUID"
@@ -415,7 +414,8 @@ Feature: VxFlex OS CSI interface
     And when I call DeleteVolume
     Then there are no errors
 
-  @fail
+  # Running this test would require one more host with SDC installed and connected to the same storage system
+  @multi-host @fail
   Scenario: Multi-host create publish, unpublish, and delete basic volume
     Given a VxFlexOS service
     And a basic block volume request "integration6" "8"

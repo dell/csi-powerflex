@@ -175,6 +175,11 @@ func buildArrayConfig(withDefaultSysName, withAltSysName, withZone bool) error {
 }
 
 func TestIntegration(t *testing.T) {
+	// This will make goscaleio.DrvCfgQuerySystems() work on the host directly
+	// (vs inside a container with host's root fs mounted to /noderoot)
+	os.Symlink("/", "/noderoot")
+	defer os.Remove("/noderoot")
+
 	err := buildArrayConfig(false, false, false)
 	if err != nil {
 		t.Fatalf("Failed to setup array config file: %v", err)
