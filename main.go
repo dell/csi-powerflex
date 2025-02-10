@@ -91,7 +91,7 @@ func driverRun() error {
 		err := k8sutils.CreateKubeClientSet()
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "failed to create clientset for leader election: %v", err)
-			os.Exit(1)
+			return err
 		}
 		service.K8sClientset = k8sutils.Clientset
 		// Attempt to become leader and start the driver

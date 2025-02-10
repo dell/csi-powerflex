@@ -12,8 +12,8 @@ import (
 )
 
 func Test_CreateKubeClientSet(t *testing.T) {
-	var tempConfigFunc func() (*rest.Config, error)                                // must return getInClusterConfig to its original value
-	var tempClientsetFunc func(config *rest.Config) (*kubernetes.Clientset, error) // must return getK8sClientset to its original value
+	var tempConfigFunc func() (*rest.Config, error)                               // must return getInClusterConfig to its original value
+	var tempClientsetFunc func(config *rest.Config) (kubernetes.Interface, error) // must return getK8sClientset to its original value
 	tests := []struct {
 		name    string
 		before  func() error
@@ -48,7 +48,7 @@ func Test_CreateKubeClientSet(t *testing.T) {
 				tempConfigFunc = InClusterConfigFunc
 				tempClientsetFunc = NewForConfigFunc
 				InClusterConfigFunc = func() (*rest.Config, error) { return &rest.Config{}, nil }
-				NewForConfigFunc = func(config *rest.Config) (*kubernetes.Clientset, error) {
+				NewForConfigFunc = func(config *rest.Config) (kubernetes.Interface, error) {
 					return nil, assert.AnError
 				}
 				return nil

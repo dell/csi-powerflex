@@ -49,7 +49,7 @@ func CreateKubeClientSet() error {
 var InClusterConfigFunc = func() (*rest.Config, error) {
 	return rest.InClusterConfig()
 }
-var NewForConfigFunc = func(config *rest.Config) (*kubernetes.Clientset, error) {
+var NewForConfigFunc = func(config *rest.Config) (kubernetes.Interface, error) {
 	return kubernetes.NewForConfig(config)
 }
 
