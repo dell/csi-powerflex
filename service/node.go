@@ -19,12 +19,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
-	csi "github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/dell/gofsutil"
 	"github.com/dell/goscaleio"
 	"github.com/sirupsen/logrus"
@@ -633,45 +632,10 @@ func kmodLoaded(opts Opts) bool {
 	return false
 }
 
-func DrvCfgQuerySystems() (*[]goscaleio.ConfiguredCluster, error) {
-
-	Log.Info("==AB== running local version of DrvCfgQuerySystems without chroot")
-
-	clusters := make([]goscaleio.ConfiguredCluster, 0)
-
-	drvCfg := "/opt/emc/scaleio/sdc/bin/drv_cfg"
-
-	cmd := exec.Command(drvCfg, "--query_mdm")
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return nil, fmt.Errorf("DrvCfgQuerySystems: Request to query MDM failed : %v", err)
-	}
-
-	// Parse the output to extract MDM information
-	re := regexp.MustCompile(`MDM-ID ([a-f0-9]+) SDC ID ([a-f0-9]+)`)
-	matches := re.FindAllStringSubmatch(string(output), -1)
-	if len(matches) == 0 {
-		return nil, fmt.Errorf("no MDM information found in drv_cfg output")
-	}
-
-	// Fetch the systemID and sdcID for each system
-	for _, match := range matches {
-		systemID := match[1]
-		sdcID := match[2]
-		aCluster := goscaleio.ConfiguredCluster{
-			SystemID: systemID,
-			SdcID:    sdcID,
-		}
-		clusters = append(clusters, aCluster)
-	}
-
-	return &clusters, nil
-}
-
 func getSystemsKnownToSDC() ([]string, error) {
 	systems := make([]string, 0)
 
-	discoveredSystems, err := DrvCfgQuerySystems()
+	discoveredSystems, err := goscaleio.DrvCfgQuerySystems()
 	if err != nil {
 		return systems, err
 	}
@@ -914,7 +878,7 @@ func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolume
 	// check if volume path is accessible
 	if healthy {
 		_, err = os.ReadDir(volPath)
-		if err != nil && healthy {
+		if err != nil {
 			healthy = false
 			message = fmt.Sprintf("volume path: %s is not accessible: %v", volPath, err)
 		}
