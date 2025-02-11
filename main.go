@@ -16,6 +16,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -43,42 +44,51 @@ func main() {
 	service.Log = logger
 	setEnvsFunc()
 	initFlagsFunc()
-	checkConfigsFunc()
-	preInitCheckFunc()
 
-	err := driverRun()
+	err := checkConfigsFunc()
 	if err != nil {
-		os.Exit(1)
+		forceExit()
+	}
+
+	done, err := preInitCheckFunc()
+	if err != nil {
+		forceExit()
+	}
+	if done {
+		return // main loop is finished, return here
+	}
+
+	err = driverRun()
+	if err != nil {
+		forceExit()
 	}
 }
 
-var checkConfigsFunc = func() {
+var checkConfigsFunc = func() error {
 	if *flags.arrayConfigfile == "" {
 		fmt.Fprintf(os.Stderr, "array-config argument is mandatory")
-		os.Exit(1)
+		return errors.New("missing param")
 	}
 
 	if *flags.driverConfigParamsfile == "" {
 		fmt.Fprintf(os.Stderr, "driver-config-params argument is mandatory")
-		os.Exit(1)
+		return errors.New("missing param")
 	}
 	service.ArrayConfigFile = *flags.arrayConfigfile
 	service.DriverConfigParamsFile = *flags.driverConfigParamsfile
 	service.KubeConfig = *flags.kubeconfig
+	return nil
 }
 
-var preInitCheckFunc = func() {
+var preInitCheckFunc = func() (bool, error) {
 	// Run the service as a pre-init step.
 	if os.Getenv(gocsi.EnvVarMode) == "mdm-info" {
 		fmt.Fprintf(os.Stdout, "PowerFlex Container Storage Interface (CSI) Plugin starting in pre-init mode.")
 		svc := service.NewPreInitService()
 		err := svc.PreInit()
-		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "failed to complete pre-init: %v", err)
-			os.Exit(1)
-		}
-		os.Exit(0)
+		return (err == nil), err
 	}
+	return false, nil
 }
 
 func driverRun() error {
@@ -98,7 +108,7 @@ func driverRun() error {
 		err = k8sutils.LeaderElectionFunc(&k8sutils.Clientset, lockName, *flags.leaderElectionNamespace, run)
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "failed to become leader: %v", err)
-			os.Exit(1)
+			return err
 		}
 	}
 	return nil
@@ -117,6 +127,7 @@ var getKubeClientSetFunc = func() error {
 	return k8sutils.CreateKubeClientSet()
 }
 
+// sets environment variables
 var setEnvsFunc = func() {
 	// Always set X_CSI_DEBUG to false irrespective of what user has specified
 	_ = os.Setenv(gocsi.EnvVarDebug, "false")
@@ -125,6 +136,7 @@ var setEnvsFunc = func() {
 	_ = os.Setenv(gocsi.EnvVarRepLogging, "true")
 }
 
+// initializes all driver flags
 var initFlagsFunc = func() {
 	flags.arrayConfigfile = flag.String("array-config", "", "yaml file with array(s) configuration")
 	flags.driverConfigParamsfile = flag.String("driver-config-params", "", "yaml file with driver config params")
@@ -132,6 +144,11 @@ var initFlagsFunc = func() {
 	flags.leaderElectionNamespace = flag.String("leader-election-namespace", "", "namespace where leader election lease will be created")
 	flags.kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
 	flag.Parse()
+}
+
+// allows for override in UT to test codepaths that end in force-quit
+var forceExit = func() {
+	os.Exit(1)
 }
 
 const usage = `    X_CSI_VXFLEXOS_SDCGUID

@@ -16,6 +16,7 @@ import (
 )
 
 func Test_main(t *testing.T) {
+	// capture defaults and reset after each test for a clean testing env.
 	defaultRunFunc := driverRunFunc
 	defaultGetKubeClientSetFunc := getKubeClientSetFunc
 	defaultRunLeaderElectionFunc := runWithLeaderElectionFunc
@@ -24,6 +25,10 @@ func Test_main(t *testing.T) {
 	defaultPreInitCheckFunc := preInitCheckFunc
 	defaultK8sConfigFunc := k8sutils.InClusterConfigFunc
 	defaultK8sClientsetFunc := k8sutils.NewForConfigFunc
+
+	// UT will always fail if os.Exit(1) is called, so override it with a do-nothing by default
+	// make sure to override this with an appropriate channel output or similar if testing a failure!
+	defaultForceExit := func() {}
 
 	afterEach := func() {
 		flags.enableLeaderElection = nil
@@ -35,6 +40,7 @@ func Test_main(t *testing.T) {
 		initFlagsFunc = defaultInitFlagsFunc
 		checkConfigsFunc = defaultCheckConfigsFunc
 		preInitCheckFunc = defaultPreInitCheckFunc
+		forceExit = defaultForceExit
 		k8sutils.InClusterConfigFunc = defaultK8sConfigFunc
 		k8sutils.NewForConfigFunc = defaultK8sClientsetFunc
 	}
@@ -68,9 +74,11 @@ func Test_main(t *testing.T) {
 					flags.leaderElectionNamespace = &LENamespace
 					flags.kubeconfig = &kubeconfig
 				}
-				checkConfigsFunc = func() {
+				checkConfigsFunc = func() error {
+					return nil
 				}
-				preInitCheckFunc = func() {
+				preInitCheckFunc = func() (bool, error) {
+					return false, nil
 				}
 				runWithLeaderElectionFunc = func(_ kubernetes.Interface, _ string, _ string, _ func(_ context.Context)) error {
 					return nil
@@ -96,9 +104,11 @@ func Test_main(t *testing.T) {
 					k8sutils.Clientset = fake.NewClientset()
 					return nil
 				}
-				checkConfigsFunc = func() {
+				checkConfigsFunc = func() error {
+					return nil
 				}
-				preInitCheckFunc = func() {
+				preInitCheckFunc = func() (bool, error) {
+					return false, nil
 				}
 				runWithLeaderElectionFunc = func(_ kubernetes.Interface, _ string, _ string, _ func(_ context.Context)) error {
 					return nil
@@ -138,6 +148,7 @@ func Test_driverRun(t *testing.T) {
 	defaultRunLeaderElectionFunc := runWithLeaderElectionFunc
 	defaultK8sConfigFunc := k8sutils.InClusterConfigFunc
 	defaultK8sClientsetFunc := k8sutils.NewForConfigFunc
+
 	afterEach := func() {
 		flags.enableLeaderElection = nil
 		flags.leaderElectionNamespace = nil
