@@ -24,6 +24,10 @@ updates:
           - minor
         patterns:
           - "*"
+    ignore:
+      - dependency-name: "*"
+        # Ignore patch updates
+        update-types: ["version-update:semver-patch"]
 
   # github actions
   - package-ecosystem: "github-actions"
