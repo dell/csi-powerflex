@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"os"
 	"testing"
 	"time"
@@ -18,31 +19,33 @@ import (
 func Test_main(t *testing.T) {
 	// capture defaults and reset after each test for a clean testing env.
 	defaultRunFunc := driverRunFunc
-	defaultGetKubeClientSetFunc := getKubeClientSetFunc
-	defaultRunLeaderElectionFunc := runWithLeaderElectionFunc
+	defaultRunLoopFunc := driverRunLoopFunc
 	defaultInitFlagsFunc := initFlagsFunc
 	defaultCheckConfigsFunc := checkConfigsFunc
 	defaultPreInitCheckFunc := preInitCheckFunc
 	defaultK8sConfigFunc := k8sutils.InClusterConfigFunc
 	defaultK8sClientsetFunc := k8sutils.NewForConfigFunc
+	defaultK8sLEFunc := k8sutils.LeaderElectionFunc
 
 	// UT will always fail if os.Exit(1) is called, so override it with a do-nothing by default
 	// make sure to override this with an appropriate channel output or similar if testing a failure!
 	defaultForceExit := func() {}
 
 	afterEach := func() {
+		flags.arrayConfigfile = nil
+		flags.driverConfigParamsfile = nil
 		flags.enableLeaderElection = nil
 		flags.leaderElectionNamespace = nil
 		flags.kubeconfig = nil
 		driverRunFunc = defaultRunFunc
-		getKubeClientSetFunc = defaultGetKubeClientSetFunc
-		runWithLeaderElectionFunc = defaultRunLeaderElectionFunc
+		driverRunLoopFunc = defaultRunLoopFunc
 		initFlagsFunc = defaultInitFlagsFunc
 		checkConfigsFunc = defaultCheckConfigsFunc
 		preInitCheckFunc = defaultPreInitCheckFunc
 		forceExit = defaultForceExit
 		k8sutils.InClusterConfigFunc = defaultK8sConfigFunc
 		k8sutils.NewForConfigFunc = defaultK8sClientsetFunc
+		k8sutils.LeaderElectionFunc = defaultK8sLEFunc
 	}
 
 	beforeEach := func() {
@@ -63,7 +66,7 @@ func Test_main(t *testing.T) {
 		{
 			name: "execute main() without leader election",
 			setup: func() {
-				driverRunFunc = func(_ context.Context) {
+				driverRunLoopFunc = func(_ context.Context) {
 					runningCh <- "running"
 				}
 				initFlagsFunc = func() {
@@ -80,7 +83,7 @@ func Test_main(t *testing.T) {
 				preInitCheckFunc = func() (bool, error) {
 					return false, nil
 				}
-				runWithLeaderElectionFunc = func(_ kubernetes.Interface, _ string, _ string, _ func(_ context.Context)) error {
+				k8sutils.LeaderElectionFunc = func(_ *kubernetes.Interface, _ string, _ string, _ func(_ context.Context)) error {
 					return nil
 				}
 			},
@@ -89,8 +92,7 @@ func Test_main(t *testing.T) {
 		{
 			name: "execute main() with leader election",
 			setup: func() {
-				driverRunFunc = func(_ context.Context) {
-					runningCh <- "running"
+				driverRunLoopFunc = func(_ context.Context) {
 				}
 				initFlagsFunc = func() {
 					LEEnabled := true
@@ -100,22 +102,129 @@ func Test_main(t *testing.T) {
 					flags.leaderElectionNamespace = &LENamespace
 					flags.kubeconfig = &kubeconfig
 				}
-				getKubeClientSetFunc = func() error {
-					k8sutils.Clientset = fake.NewClientset()
-					return nil
-				}
 				checkConfigsFunc = func() error {
 					return nil
 				}
 				preInitCheckFunc = func() (bool, error) {
 					return false, nil
 				}
-				runWithLeaderElectionFunc = func(_ kubernetes.Interface, _ string, _ string, _ func(_ context.Context)) error {
+				k8sutils.LeaderElectionFunc = func(_ *kubernetes.Interface, _ string, _ string, _ func(_ context.Context)) error {
+					runningCh <- "running"
 					return nil
 				}
 
 			},
 			want: "running",
+		},
+		{
+			name: "fail main() at checkConfigsFunc",
+			setup: func() {
+				driverRunLoopFunc = func(_ context.Context) {
+				}
+				initFlagsFunc = func() {
+					LEEnabled := true
+					LENamespace := "vxflexos"
+					kubeconfig := ""
+					flags.enableLeaderElection = &LEEnabled
+					flags.leaderElectionNamespace = &LENamespace
+					flags.kubeconfig = &kubeconfig
+				}
+				checkConfigsFunc = func() error {
+					runningCh <- "fail"
+					return errors.New("some error")
+				}
+				preInitCheckFunc = func() (bool, error) {
+					return false, nil
+				}
+				k8sutils.LeaderElectionFunc = func(_ *kubernetes.Interface, _ string, _ string, _ func(_ context.Context)) error {
+					return nil
+				}
+
+			},
+			want: "fail",
+		},
+		{
+			name: "fail main() at preinitCheckFunc",
+			setup: func() {
+				driverRunLoopFunc = func(_ context.Context) {
+				}
+				initFlagsFunc = func() {
+					LEEnabled := true
+					LENamespace := "vxflexos"
+					kubeconfig := ""
+					flags.enableLeaderElection = &LEEnabled
+					flags.leaderElectionNamespace = &LENamespace
+					flags.kubeconfig = &kubeconfig
+				}
+				checkConfigsFunc = func() error {
+					return nil
+				}
+				preInitCheckFunc = func() (bool, error) {
+					runningCh <- "fail"
+					return false, errors.New("some error")
+				}
+				k8sutils.LeaderElectionFunc = func(_ *kubernetes.Interface, _ string, _ string, _ func(_ context.Context)) error {
+					return nil
+				}
+
+			},
+			want: "fail",
+		},
+		{
+			name: "fail main() at driverRun",
+			setup: func() {
+				driverRunFunc = func() error {
+					runningCh <- "not running"
+					return errors.New("some error")
+				}
+				initFlagsFunc = func() {
+					LEEnabled := true
+					LENamespace := "vxflexos"
+					kubeconfig := ""
+					flags.enableLeaderElection = &LEEnabled
+					flags.leaderElectionNamespace = &LENamespace
+					flags.kubeconfig = &kubeconfig
+				}
+
+				checkConfigsFunc = func() error {
+					return nil
+				}
+				preInitCheckFunc = func() (bool, error) {
+					return false, errors.New("some error")
+				}
+				k8sutils.LeaderElectionFunc = func(_ *kubernetes.Interface, _ string, _ string, _ func(_ context.Context)) error {
+					return nil
+				}
+
+			},
+			want: "not running",
+		},
+		{
+			name: "end main() at preinitCheckFunc",
+			setup: func() {
+				driverRunLoopFunc = func(_ context.Context) {
+				}
+				initFlagsFunc = func() {
+					LEEnabled := true
+					LENamespace := "vxflexos"
+					kubeconfig := ""
+					flags.enableLeaderElection = &LEEnabled
+					flags.leaderElectionNamespace = &LENamespace
+					flags.kubeconfig = &kubeconfig
+				}
+				checkConfigsFunc = func() error {
+					return nil
+				}
+				preInitCheckFunc = func() (bool, error) {
+					runningCh <- "graceful stop"
+					return true, nil
+				}
+				k8sutils.LeaderElectionFunc = func(_ *kubernetes.Interface, _ string, _ string, _ func(_ context.Context)) error {
+					return nil
+				}
+
+			},
+			want: "graceful stop",
 		},
 	}
 	for _, tt := range tests {
@@ -143,21 +252,20 @@ func Test_main(t *testing.T) {
 
 func Test_driverRun(t *testing.T) {
 	// capture defaults and reset after each test for a clean testing env.
-	defaultRunFunc := driverRunFunc
-	defaultGetKubeClientSetFunc := getKubeClientSetFunc
-	defaultRunLeaderElectionFunc := runWithLeaderElectionFunc
+	defaultRunFunc := driverRunLoopFunc
 	defaultK8sConfigFunc := k8sutils.InClusterConfigFunc
 	defaultK8sClientsetFunc := k8sutils.NewForConfigFunc
+	defaultK8sLEFunc := k8sutils.LeaderElectionFunc
 
 	afterEach := func() {
 		flags.enableLeaderElection = nil
 		flags.leaderElectionNamespace = nil
 		flags.kubeconfig = nil
-		driverRunFunc = defaultRunFunc
-		getKubeClientSetFunc = defaultGetKubeClientSetFunc
-		runWithLeaderElectionFunc = defaultRunLeaderElectionFunc
+		driverRunLoopFunc = defaultRunFunc
 		k8sutils.InClusterConfigFunc = defaultK8sConfigFunc
 		k8sutils.NewForConfigFunc = defaultK8sClientsetFunc
+		k8sutils.LeaderElectionFunc = defaultK8sLEFunc
+
 	}
 	beforeEach := func() {
 		k8sutils.InClusterConfigFunc = func() (*rest.Config, error) {
@@ -183,7 +291,7 @@ func Test_driverRun(t *testing.T) {
 
 				// assign values to necessary flags
 				flags.enableLeaderElection = &enableLE
-				driverRunFunc = func(_ context.Context) {
+				driverRunLoopFunc = func(_ context.Context) {
 					runningCh <- "running"
 				}
 
@@ -199,22 +307,41 @@ func Test_driverRun(t *testing.T) {
 				LENamespace := "vxflexos"
 				kubeconfigFilepath := "./some/path"
 
-				getKubeClientSetFunc = func() error {
-					k8sutils.Clientset = fake.NewClientset()
-					return nil
+				// assign values to necessary flags
+				flags.enableLeaderElection = &enableLE
+				flags.leaderElectionNamespace = &LENamespace
+				flags.kubeconfig = &kubeconfigFilepath
+
+				driverRunLoopFunc = func(_ context.Context) {
+					runningCh <- "running"
 				}
+			},
+			want:    "running",
+			wantErr: false,
+			errMsg:  "",
+		},
+		{
+			name: "run the driver with leader election but fail LE",
+			setup: func() {
+				enableLE := true
+				LENamespace := "vxflexos"
+				kubeconfigFilepath := "./some/path"
 
 				// assign values to necessary flags
 				flags.enableLeaderElection = &enableLE
 				flags.leaderElectionNamespace = &LENamespace
 				flags.kubeconfig = &kubeconfigFilepath
 
-				driverRunFunc = func(_ context.Context) {
-					runningCh <- "running"
+				driverRunLoopFunc = func(_ context.Context) {
+				}
+
+				k8sutils.LeaderElectionFunc = func(clientSet *kubernetes.Interface, lockName string, namespace string, runFunc func(ctx context.Context)) error {
+					runningCh <- "fail"
+					return errors.New("injected k8s error")
 				}
 			},
-			want:    "running",
-			wantErr: false,
+			want:    "fail",
+			wantErr: true,
 			errMsg:  "",
 		},
 		{
@@ -228,18 +355,18 @@ func Test_driverRun(t *testing.T) {
 				flags.enableLeaderElection = &enableLE
 				flags.leaderElectionNamespace = &LENamespace
 				flags.kubeconfig = &kubeconfigFilepath
-				driverRunFunc = func(_ context.Context) {
-					runningCh <- "should not be running"
+				driverRunLoopFunc = func(_ context.Context) {
+					runningCh <- "fail"
 				}
 
 				// make kubeclientset fail
 				k8sutils.NewForConfigFunc = func(config *rest.Config) (kubernetes.Interface, error) {
-					return nil, assert.AnError
+					return nil, errors.New("kubeclientset fail")
 				}
 			},
-			want:    "should not be running",
+			want:    "fail",
 			wantErr: true,
-			errMsg:  "",
+			errMsg:  "kubeclientset fail",
 		},
 		{
 			name: "leader election fails",
@@ -247,12 +374,7 @@ func Test_driverRun(t *testing.T) {
 				enableLE := true
 				LENamespace := "vxflexos"
 				kubeconfigFilepath := "./some/path"
-
-				getKubeClientSetFunc = func() error {
-					k8sutils.Clientset = fake.NewClientset()
-					return nil
-				}
-				runWithLeaderElectionFunc = func(_ kubernetes.Interface, _ string, _ string, _ func(context.Context)) error {
+				k8sutils.LeaderElectionFunc = func(_ *kubernetes.Interface, _ string, _ string, _ func(context.Context)) error {
 					return errors.New("error, leader election failed")
 				}
 
@@ -261,7 +383,7 @@ func Test_driverRun(t *testing.T) {
 				flags.leaderElectionNamespace = &LENamespace
 				flags.kubeconfig = &kubeconfigFilepath
 
-				driverRunFunc = func(_ context.Context) {
+				driverRunLoopFunc = func(_ context.Context) {
 					runningCh <- "should not be running"
 				}
 			},
@@ -282,7 +404,7 @@ func Test_driverRun(t *testing.T) {
 
 			err := make(chan error)
 			go func() {
-				err <- driverRun()
+				err <- driverRunFunc()
 			}()
 
 			select {
@@ -349,6 +471,11 @@ func Test_initFlags(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			flags.arrayConfigfile = nil
+			flags.driverConfigParamsfile = nil
+			flags.enableLeaderElection = nil
+			flags.leaderElectionNamespace = nil
+			flags.kubeconfig = nil
 			initFlagsFunc()
 
 			assert.Equal(t, tt.want.enableLeaderElection, *flags.enableLeaderElection)
@@ -356,4 +483,106 @@ func Test_initFlags(t *testing.T) {
 			assert.Equal(t, tt.want.kubeconfig, *flags.kubeconfig)
 		})
 	}
+}
+
+func Test_preinitCheckFunc(t *testing.T) {
+	afterEach := func() {
+	}
+
+	beforeEach := func() {
+	}
+
+	tests := []struct {
+		name     string
+		setup    func()
+		wantStop bool
+		wantErr  bool
+	}{
+		{
+			name: "execute preinit function without setting mdm-info",
+			setup: func() {
+			},
+			wantStop: false,
+			wantErr:  false,
+		},
+		{
+			name: "execute preinit function with setting mdm-info/failing service preinit",
+			setup: func() {
+				os.Setenv(gocsi.EnvVarMode, "mdm-info")
+			},
+			wantStop: false,
+			wantErr:  true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			beforeEach()
+			defer afterEach()
+			tt.setup()
+
+			stop, err := preInitCheckFunc()
+			if stop != tt.wantStop {
+				t.Errorf("main() = %v, want %v", stop, tt.wantStop)
+			}
+			if (err != nil) != tt.wantErr {
+				t.Errorf("main() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// Cannot be run in a vacuum, must be run as part of suite.
+// Flags are initialized once and only once. Reinitialization causes failure.
+func Test_checkConfigsFunc(t *testing.T) {
+	afterEach := func() {
+	}
+
+	beforeEach := func() {
+	}
+
+	tests := []struct {
+		name    string
+		setup   func()
+		wantErr bool
+	}{
+		{
+			name: "execute checkConfigs function without setting flags",
+			setup: func() {
+			},
+			wantErr: true,
+		},
+		{
+			name: "execute checkConfigs function with only setting arrayConfigfile flag",
+			setup: func() {
+				*flags.arrayConfigfile = "not-empty"
+				flag.Parse()
+			},
+			wantErr: true,
+		},
+		{
+			name: "execute checkConfigs function with all flags set",
+			setup: func() {
+				*flags.arrayConfigfile = "not-empty"
+				*flags.driverConfigParamsfile = "not-empty"
+				flag.Parse()
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			beforeEach()
+			defer afterEach()
+			tt.setup()
+
+			err := checkConfigsFunc()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("main() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func Test_driverRunLoopFunc(t *testing.T) {
+
 }

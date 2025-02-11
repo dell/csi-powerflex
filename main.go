@@ -27,7 +27,6 @@ import (
 	"github.com/dell/csi-vxflexos/v2/service"
 	"github.com/dell/gocsi"
 	"github.com/sirupsen/logrus"
-	"k8s.io/client-go/kubernetes"
 )
 
 var flags struct {
@@ -58,7 +57,7 @@ func main() {
 		return // main loop is finished, return here
 	}
 
-	err = driverRun()
+	err = driverRunFunc()
 	if err != nil {
 		forceExit()
 	}
@@ -91,8 +90,8 @@ var preInitCheckFunc = func() (bool, error) {
 	return false, nil
 }
 
-func driverRun() error {
-	run := driverRunFunc
+var driverRunFunc = func() error {
+	run := driverRunLoopFunc
 	if !*flags.enableLeaderElection {
 		run(context.Background())
 	} else {
@@ -114,17 +113,9 @@ func driverRun() error {
 	return nil
 }
 
-var driverRunFunc = func(ctx context.Context) {
+var driverRunLoopFunc = func(ctx context.Context) {
 	gocsi.Run(ctx, service.Name, "A PowerFlex Container Storage Interface (CSI) Plugin",
 		usage, provider.New())
-}
-
-var runWithLeaderElectionFunc = func(clientSet kubernetes.Interface, lockName string, namespace string, runFunc func(ctx context.Context)) error {
-	return k8sutils.LeaderElectionFunc(&clientSet, lockName, namespace, runFunc)
-}
-
-var getKubeClientSetFunc = func() error {
-	return k8sutils.CreateKubeClientSet()
 }
 
 // sets environment variables
