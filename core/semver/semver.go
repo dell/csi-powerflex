@@ -63,6 +63,11 @@ func init() {
 	}
 }
 
+// must be injectable for unit testing
+var gitDescribeFunc = func() ([]byte, error) {
+	return doExec("git", "describe", "--long", "--dirty")
+}
+
 func initFlags() {
 	format = flag.Lookup("f").Value.(flag.Getter).Get().(string)
 	output = flag.Lookup("o").Value.(flag.Getter).Get().(string)
@@ -111,7 +116,7 @@ func main() {
 		}() // #nosec G20
 	}
 
-	gitdesc := chkErr(doExec("git", "describe", "--long", "--dirty"))
+	gitdesc := chkErr(gitDescribeFunc())
 	rx := regexp.MustCompile(
 		`^[^\d]*(\d+)\.(\d+)\.(\d+)(?:-([a-zA-Z].+?))?(?:-(\d+)-g(.+?)(?:-(dirty))?)?\s*$`)
 	m := rx.FindStringSubmatch(gitdesc)
