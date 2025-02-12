@@ -20,7 +20,6 @@ func Test_CreateKubeClientSet(t *testing.T) {
 		after   func()
 		wantErr bool
 	}{
-
 		{
 			name: "success: manually set InClusterConfig with mock",
 			before: func() error {
@@ -48,7 +47,7 @@ func Test_CreateKubeClientSet(t *testing.T) {
 				tempConfigFunc = InClusterConfigFunc
 				tempClientsetFunc = NewForConfigFunc
 				InClusterConfigFunc = func() (*rest.Config, error) { return &rest.Config{}, nil }
-				NewForConfigFunc = func(config *rest.Config) (kubernetes.Interface, error) {
+				NewForConfigFunc = func(_ *rest.Config) (kubernetes.Interface, error) {
 					return nil, assert.AnError
 				}
 				return nil
@@ -102,7 +101,7 @@ func Test_LeaderElection(t *testing.T) {
 				clientSet: fake.NewClientset(),
 				lockName:  "driver-csi-powermax-dellemc-com",
 				namespace: "powermax",
-				runFunc: func(ctx context.Context) {
+				runFunc: func(_ context.Context) {
 					t.Log("leader is elected and run func is running")
 					testCh <- true
 				},

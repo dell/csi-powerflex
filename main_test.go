@@ -112,7 +112,6 @@ func Test_main(t *testing.T) {
 					runningCh <- "running"
 					return nil
 				}
-
 			},
 			want: "running",
 		},
@@ -139,7 +138,6 @@ func Test_main(t *testing.T) {
 				k8sutils.LeaderElectionFunc = func(_ *kubernetes.Interface, _ string, _ string, _ func(_ context.Context)) error {
 					return nil
 				}
-
 			},
 			want: "fail",
 		},
@@ -166,7 +164,6 @@ func Test_main(t *testing.T) {
 				k8sutils.LeaderElectionFunc = func(_ *kubernetes.Interface, _ string, _ string, _ func(_ context.Context)) error {
 					return nil
 				}
-
 			},
 			want: "fail",
 		},
@@ -195,7 +192,6 @@ func Test_main(t *testing.T) {
 				k8sutils.LeaderElectionFunc = func(_ *kubernetes.Interface, _ string, _ string, _ func(_ context.Context)) error {
 					return nil
 				}
-
 			},
 			want: "not running",
 		},
@@ -222,7 +218,6 @@ func Test_main(t *testing.T) {
 				k8sutils.LeaderElectionFunc = func(_ *kubernetes.Interface, _ string, _ string, _ func(_ context.Context)) error {
 					return nil
 				}
-
 			},
 			want: "graceful stop",
 		},
@@ -265,7 +260,6 @@ func Test_driverRun(t *testing.T) {
 		k8sutils.InClusterConfigFunc = defaultK8sConfigFunc
 		k8sutils.NewForConfigFunc = defaultK8sClientsetFunc
 		k8sutils.LeaderElectionFunc = defaultK8sLEFunc
-
 	}
 	beforeEach := func() {
 		k8sutils.InClusterConfigFunc = func() (*rest.Config, error) {
@@ -294,7 +288,6 @@ func Test_driverRun(t *testing.T) {
 				driverRunLoopFunc = func(_ context.Context) {
 					runningCh <- "running"
 				}
-
 			},
 			want:    "running",
 			wantErr: false,
@@ -335,7 +328,7 @@ func Test_driverRun(t *testing.T) {
 				driverRunLoopFunc = func(_ context.Context) {
 				}
 
-				k8sutils.LeaderElectionFunc = func(clientSet *kubernetes.Interface, lockName string, namespace string, runFunc func(ctx context.Context)) error {
+				k8sutils.LeaderElectionFunc = func(_ *kubernetes.Interface, _ string, _ string, _ func(ctx context.Context)) error {
 					runningCh <- "fail"
 					return errors.New("injected k8s error")
 				}
@@ -581,8 +574,4 @@ func Test_checkConfigsFunc(t *testing.T) {
 			}
 		})
 	}
-}
-
-func Test_driverRunLoopFunc(t *testing.T) {
-
 }
