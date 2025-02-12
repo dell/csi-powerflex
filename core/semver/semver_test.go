@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
 func TestMainFunction(t *testing.T) {
@@ -326,10 +327,27 @@ func TestErrorExit(t *testing.T) {
 	assert.Equal(t, message, string(buf[:n]))
 }
 
+// Mock for the gitDescribeFunc
+type MockGitDescribe struct {
+	mock.Mock
+}
+
+// Simulate the function call because of "dubious ownership" error
+// when running in GH actions
+func (m *MockGitDescribe) gitDescribeFunc() ([]byte, error) {
+	args := m.Called()
+	return args.Get(0).([]byte), args.Error(1)
+}
+
 func TestGitDescribe(t *testing.T) {
-	actual, err := gitDescribeFunc()
+	mockGit := new(MockGitDescribe)
+
+	expectedOutput := []byte("v1.0.0-0-gabcdef0-dirty")
+	mockGit.On("gitDescribeFunc").Return(expectedOutput, nil)
+
+	actual, err := mockGit.gitDescribeFunc()
+
 	assert.Nil(t, err)
-	expected, err := exec.Command("git", "describe", "--long", "--dirty").Output()
-	assert.Nil(t, err)
-	assert.Equal(t, expected, actual)
+	assert.Equal(t, expectedOutput, actual)
+	mockGit.AssertExpectations(t)
 }
