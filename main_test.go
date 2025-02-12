@@ -353,7 +353,7 @@ func Test_driverRun(t *testing.T) {
 				}
 
 				// make kubeclientset fail
-				k8sutils.NewForConfigFunc = func(config *rest.Config) (kubernetes.Interface, error) {
+				k8sutils.NewForConfigFunc = func(_ *rest.Config) (kubernetes.Interface, error) {
 					return nil, errors.New("kubeclientset fail")
 				}
 			},
