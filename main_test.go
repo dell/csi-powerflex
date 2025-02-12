@@ -412,9 +412,7 @@ func Test_driverRun(t *testing.T) {
 
 			err := make(chan error)
 			go func() {
-				//mutex.Lock()
 				err <- driverRunFunc()
-				//mutex.Unlock()
 			}()
 
 			select {
