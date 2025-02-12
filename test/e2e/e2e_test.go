@@ -11,6 +11,8 @@
 // limitations under the License.
 //
 
+// +build integration
+
 package e2e
 
 import (

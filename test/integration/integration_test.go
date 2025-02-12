@@ -11,6 +11,8 @@
 // limitations under the License.
 //
 
+// +build integration
+
 package integration_test
 
 import (
