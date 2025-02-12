@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -27,11 +28,15 @@ func Test_main(t *testing.T) {
 	defaultK8sClientsetFunc := k8sutils.NewForConfigFunc
 	defaultK8sLEFunc := k8sutils.LeaderElectionFunc
 
+	// editing the flags for the sake of testing is causing a data-race
+	mutex := &sync.Mutex{}
+
 	// UT will always fail if os.Exit(1) is called, so override it with a do-nothing by default
 	// make sure to override this with an appropriate channel output or similar if testing a failure!
 	defaultForceExit := func() {}
 
 	afterEach := func() {
+		mutex.Lock()
 		flags.arrayConfigfile = nil
 		flags.driverConfigParamsfile = nil
 		flags.enableLeaderElection = nil
@@ -46,6 +51,7 @@ func Test_main(t *testing.T) {
 		k8sutils.InClusterConfigFunc = defaultK8sConfigFunc
 		k8sutils.NewForConfigFunc = defaultK8sClientsetFunc
 		k8sutils.LeaderElectionFunc = defaultK8sLEFunc
+		mutex.Unlock()
 	}
 
 	beforeEach := func() {
@@ -231,7 +237,11 @@ func Test_main(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 
-			go main()
+			go func() {
+				mutex.Lock()
+				main()
+				mutex.Unlock()
+			}()
 
 			select {
 			case running := <-runningCh:
@@ -252,7 +262,11 @@ func Test_driverRun(t *testing.T) {
 	defaultK8sClientsetFunc := k8sutils.NewForConfigFunc
 	defaultK8sLEFunc := k8sutils.LeaderElectionFunc
 
+	// editing the flags for the sake of testing is causing a data-race
+	mutex := &sync.Mutex{}
+
 	afterEach := func() {
+		mutex.Lock()
 		flags.enableLeaderElection = nil
 		flags.leaderElectionNamespace = nil
 		flags.kubeconfig = nil
@@ -260,6 +274,7 @@ func Test_driverRun(t *testing.T) {
 		k8sutils.InClusterConfigFunc = defaultK8sConfigFunc
 		k8sutils.NewForConfigFunc = defaultK8sClientsetFunc
 		k8sutils.LeaderElectionFunc = defaultK8sLEFunc
+		mutex.Unlock()
 	}
 	beforeEach := func() {
 		k8sutils.InClusterConfigFunc = func() (*rest.Config, error) {
@@ -397,7 +412,9 @@ func Test_driverRun(t *testing.T) {
 
 			err := make(chan error)
 			go func() {
+				//mutex.Lock()
 				err <- driverRunFunc()
+				//mutex.Unlock()
 			}()
 
 			select {
