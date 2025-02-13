@@ -11,7 +11,7 @@ help:
 	@echo
 
 .PHONY: integration
-integration: 
+integration:
 	cd integration; ./run.sh TestIntegration
 
 .PHONY: zone-integration
@@ -20,4 +20,4 @@ zone-integration:
 
 .PHONY: zone-e2e
 zone-e2e:
-	go test -v -count=1 -timeout 1h -run '^TestZoneVolumes$$' ./e2e
+	go test -tags=integration -v -count=1 -timeout 1h -run '^TestZoneVolumes$$' ./e2e
