@@ -1,4 +1,4 @@
-// Copyright © 2019-2022 Dell Inc. or its subsidiaries. All Rights Reserved.
+// Copyright © 2019-2025 Dell Inc. or its subsidiaries. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,3 +32,10 @@ var (
 	// this program was built.
 	CommitTime time.Time
 )
+
+func setValues(semver string, commit7 string, commit32 string, commitTime time.Time) {
+	SemVer = semver
+	CommitSha7 = commit7
+	CommitSha32 = commit32
+	CommitTime = commitTime
+}
