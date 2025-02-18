@@ -19,7 +19,6 @@ export VOL_NAME_SUFFIX=
 # System name for the default system specified in config.json
 export SYSTEM_NAME=
 export STORAGE_POOL=
-# TODO: add protection domain for alternative system too or we assume nfs test will always run against primary system?
 export NFS_STORAGE_POOL=
 export PROTECTION_DOMAIN=
 
@@ -27,12 +26,7 @@ export PROTECTION_DOMAIN=
 export ALT_SYSTEM_NAME=
 export ALT_STORAGE_POOL=
 
-# Alternate GUID is for another system for testing expose volume to multiple hosts
-export ALT_GUID=
-
-#export ALT_GUID=BAA13E19-5472-5634-A7F3-EC28067F0662
-
-# Set to true to print debug variables for goscaleio library
+# Set to true to print debug messages from goscaleio library
 export GOSCALEIO_SHOWHTTP="false"
 
 export X_CSI_VXFLEXOS_THICKPROVISION=false

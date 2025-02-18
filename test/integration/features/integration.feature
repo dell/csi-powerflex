@@ -75,7 +75,7 @@ Feature: VxFlex OS CSI interface
     Then there are no errors
 
   @sanity
-  Scenario: Create, publish, unpublish, and delete basic vol, but sc has name, and secret has id
+  Scenario Outline: Create, publish, unpublish, and delete basic vol, but sc has name, and secret has id
     Given a VxFlexOS service
     And a capability with voltype "mount" access "single-writer" fstype "ext4"
     And I select default system with Name
@@ -205,7 +205,7 @@ Feature: VxFlex OS CSI interface
   # ListVolume only returns volumes from the default array,
   # so commented this out, CSM issue opened to fix the driver
   @alt
-  Scenario: Create volume from snapshot, list snapshots, list volumes (select system using ID)
+  Scenario Outline: Create volume from snapshot, list snapshots, list volumes (select system using ID)
     Given a VxFlexOS service
     And I select <system> system with ID
     And a basic block volume request "integration1" "8"
@@ -234,7 +234,7 @@ Feature: VxFlex OS CSI interface
       | default         |
 
   @alt
-  Scenario: Create volume, clone volume, delete original volume, delete new volume
+  Scenario Outline: Create volume, clone volume, delete original volume, delete new volume
     Given a VxFlexOS service
     And I select <system> system with ID
     And a basic block volume request "integration1" "8"
@@ -375,10 +375,6 @@ Feature: VxFlex OS CSI interface
     And when I call DeleteVolume
     Then there are no errors
 
-
-#      this test cannot work even if ALT_GUID is set to a real SDC connected to
-#      the same array. Main reason is that NodePublishVolume can only publish volumes locally
-#      and the test does not have any interface to call NodePublishVolume on the ALT node.
   @multi-host @fail
   Scenario: Create block volume with access mode read write many
     Given a VxFlexOS service
@@ -387,18 +383,18 @@ Feature: VxFlex OS CSI interface
     When I call CreateVolume
     And there are no errors
     And when I call PublishVolume "SDC_GUID"
-    And when I call PublishVolume "ALT_GUID"
+    And when I call PublishVolume "SECOND_SDC_GUID"
     And when I call NodePublishVolumeWithPoint "SDC_GUID" "/tmp/tempdev1" ""
     And there are no errors
     And when I call NodePublishVolumeWithPoint "SDC_GUID" "/tmp/tempdev2" ""
     And there are no errors
-    And when I call NodePublishVolume "ALT_GUID"
+    And when I call NodePublishVolume "SECOND_SDC_GUID"
     And there are no errors
-    And when I call NodeUnpublishVolume "ALT_GUID"
+    And when I call NodeUnpublishVolume "SECOND_SDC_GUID"
     And when I call NodeUnpublishVolumeWithPoint "SDC_GUID" "/tmp/tempdev1"
     And when I call NodeUnpublishVolumeWithPoint "SDC_GUID" "/tmp/tempdev2"
     And when I call UnpublishVolume "SDC_GUID"
-    And when I call UnpublishVolume "ALT_GUID"
+    And when I call UnpublishVolume "SECOND_SDC_GUID"
     And when I call DeleteVolume
     Then there are no errors
 
@@ -424,11 +420,11 @@ Feature: VxFlex OS CSI interface
     And there are no errors
     And when I call PublishVolume "SDC_GUID"
     And there are no errors
-    And when I call PublishVolume "ALT_GUID"
+    And when I call PublishVolume "SECOND_SDC_GUID"
     And there are no errors
     And when I call UnpublishVolume "SDC_GUID"
     And there are no errors
-    And when I call UnpublishVolume "ALT_GUID"
+    And when I call UnpublishVolume "SECOND_SDC_GUID"
     And there are no errors
     And when I call DeleteVolume
     Then there are no errors
@@ -585,7 +581,7 @@ Feature: VxFlex OS CSI interface
     Then the error message should contain "Unprocessable Entity"
 
   @nfs
-  Scenario: Create a NFS volume with wrong NasName
+  Scenario Outline: Create a NFS volume with wrong NasName
     Given a VxFlexOS service
     And a basic nfs volume request with wrong nasname "nfsvolume3" "8"
     When I call CreateVolume
@@ -1005,7 +1001,7 @@ Feature: VxFlex OS CSI interface
     And when I call DeleteVolume
     Then there are no errors
 
-  Scenario: Custom file system format options (mkfsFormatOption)
+  Scenario Outline: Custom file system format options (mkfsFormatOption)
     Given a VxFlexOS service
     And a capability with voltype <voltype> access <access> fstype <fstype>
     And a volume request "mkfs1" "8"
@@ -1046,7 +1042,7 @@ Feature: VxFlex OS CSI interface
     Then there are no errors
 
   @zone-integration
-  Scenario: Create zone volume with invalid zone information
+  Scenario Outline: Create zone volume with invalid zone information
     Given a VxFlexOS service with topology
     And I create an invalid zone volume request
     When I call CreateVolume

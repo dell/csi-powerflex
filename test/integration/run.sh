@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright © 2019-2022 Dell Inc. or its subsidiaries. All Rights Reserved.
+# Copyright © 2019-2025 Dell Inc. or its subsidiaries. All Rights Reserved.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -48,24 +48,23 @@ print_test_config()
   echo
   echo "Test configuration:"
   echo "==================="
-  echo "TEST_TAGS = $TEST_TAGS"
-  echo "VOL_NAME_SUFFIX = $VOL_NAME_SUFFIX"
-  echo "X_CSI_VXFLEXOS_THICKPROVISION = $X_CSI_VXFLEXOS_THICKPROVISION"
-  echo "X_CSI_VXFLEXOS_ENABLESNAPSHOTCGDELETE = $X_CSI_VXFLEXOS_ENABLESNAPSHOTCGDELETE"
+  echo "TEST_TAGS           = $TEST_TAGS"
+  echo "VOL_NAME_SUFFIX     = $VOL_NAME_SUFFIX"
+  echo "STORAGE_POOL        = $STORAGE_POOL"
+  echo "NFS_STORAGE_POOL    = $NFS_STORAGE_POOL"
+  echo "PROTECTION_DOMAIN   = $PROTECTION_DOMAIN"
+  echo "ALT_SYSTEM_NAME     = $ALT_SYSTEM_NAME
+  echo "ALT_STORAGE_POOL    = $ALT_STORAGE_POOL"
+  echo "X_CSI_VXFLEXOS_THICKPROVISION            = $X_CSI_VXFLEXOS_THICKPROVISION"
+  echo "X_CSI_VXFLEXOS_ENABLESNAPSHOTCGDELETE    = $X_CSI_VXFLEXOS_ENABLESNAPSHOTCGDELETE"
   echo "X_CSI_VXFLEXOS_ENABLELISTVOLUMESNAPSHOTS = $X_CSI_VXFLEXOS_ENABLELISTVOLUMESNAPSHOTS"
+  echo "X_CSI_POWERFLEX_KUBE_NODE_NAME           = $X_CSI_POWERFLEX_KUBE_NODE_NAME"
   echo "X_CSI_QUOTA_ENABLED = $X_CSI_QUOTA_ENABLED"
-  echo "PROTECTION_DOMAIN = $PROTECTION_DOMAIN"
-  echo "STORAGE_POOL = $STORAGE_POOL"
-  echo "NFS_STORAGE_POOL = $NFS_STORAGE_POOL"
-  echo "ALT_GUID = $ALT_GUID"
-  echo "X_CSI_POWERFLEX_KUBE_NODE_NAME = $X_CSI_POWERFLEX_KUBE_NODE_NAME"
-  echo "NODE_INTERFACES = $NODE_INTERFACES"
-  echo "ZONE_LABEL_KEY = $ZONE_LABEL_KEY"
-  echo "GOSCALEIO_SHOWHTTP = $GOSCALEIO_SHOWHTTP"
-  echo "ALT_SYSTEM_ID = $ALT_SYSTEM_ID"
-  echo
-  echo "SDC_GUID = $SDC_GUID"
-  echo "CSI_ENDPOINT = $CSI_ENDPOINT"
+  echo "GOSCALEIO_SHOWHTTP  = $GOSCALEIO_SHOWHTTP"
+  echo "NODE_INTERFACES     = $NODE_INTERFACES"
+  echo "ZONE_LABEL_KEY      = $ZONE_LABEL_KEY"
+  echo "SDC_GUID            = $SDC_GUID"
+  echo "CSI_ENDPOINT        = $CSI_ENDPOINT"
   echo
   echo "Array config:"
   cat "$array_config" | sed 's/"password":.*/"password": "*****"/'
