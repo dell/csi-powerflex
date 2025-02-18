@@ -2827,6 +2827,18 @@ func FeatureContext(ts *godog.TestSuiteContext) {
 		}
 	})
 
+	s.Before(func(ctx context.Context, sc *godog.Scenario) (context.Context, error) {
+		// For scenarios tagged with @multi-host make sure we have SDC GUID for the second (remote) host
+		for _, tag := range sc.Tags {
+			if tag.Name == "@multi-host" {
+				if os.Getenv("SECOND_SDC_GUID") == "" {
+					return ctx, fmt.Errorf("SDC GUID for the second host is not defined, cannot run this multi-host scenario, set SECOND_SDC_GUID in env.sh and re-run")
+				}
+			}
+		}
+		return ctx, nil
+	})
+
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
 	s.Step(`^a VxFlexOS service with default system (ID|Name) and alternative system (ID|Name)$`, f.aVxFlexOSServiceWithNames)
 	s.Step(`^a VxFlexOS service with topology$`, f.aVxFlexOSServiceWithZone)
