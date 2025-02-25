@@ -1984,6 +1984,7 @@ func (s *service) ListVolumes(
 	var entries []*csi.ListVolumesResponse_Entry
 	var nextToken string
 	var source []*siotypes.Volume
+	var volume []*siotypes.Volume
 
 	for _, arr := range s.opts.arrays {
 		systemID = arr.SystemID
@@ -2031,7 +2032,11 @@ func (s *service) ListVolumes(
 			}
 			i = i + 1
 		}
+
+		volume = append(volume, source...)
 	}
+
+	Log.Printf("List Volume: ", volume)
 
 	return &csi.ListVolumesResponse{
 		Entries:   entries,
