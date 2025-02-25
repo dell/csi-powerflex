@@ -1981,49 +1981,58 @@ func (s *service) ListVolumes(
 ) {
 	// TODO: Implement this method to get volumes from all systems. Currently we get volumes only from default system
 	systemID := s.opts.defaultSystemID
-	if systemID != "" {
-		if err := s.requireProbe(ctx, systemID); err != nil {
-			Log.Printf("Could not probe system: %s", systemID)
+	var entries []*csi.ListVolumesResponse_Entry
+	var nextToken string
+	var source []*siotypes.Volume
+
+	for _, arr := range s.opts.arrays {
+		systemID = arr.SystemID
+
+		if systemID != "" {
+			if err := s.requireProbe(ctx, systemID); err != nil {
+				Log.Printf("Could not probe system: %s", systemID)
+				return nil, err
+			}
+		} else {
+			// Default system is not set: not supported
+			Log.Printf("Default system is not set")
+			return nil, status.Error(codes.InvalidArgument, "There is no default system in controller to list volumes.")
+		}
+
+		var (
+			startToken int
+			err        error
+			maxEntries = int(req.MaxEntries)
+		)
+
+		if v := req.StartingToken; v != "" {
+			i, err := strconv.ParseInt(v, 10, 32)
+			if err != nil {
+				return nil, status.Errorf(
+					codes.Aborted,
+					"Unable to parse StartingToken: %v into uint32, err: %v",
+					req.StartingToken, err)
+			}
+			startToken = int(i)
+		}
+
+		// Call the common listVolumes code
+		source, nextToken, err = s.listVolumes(systemID, startToken, maxEntries, true, s.opts.EnableListVolumesSnapshots, "", "")
+		if err != nil {
 			return nil, err
 		}
-	} else {
-		// Default system is not set: not supported
-		Log.Printf("Default system is not set")
-		return nil, status.Error(codes.InvalidArgument, "There is no default system in controller to list volumes.")
-	}
 
-	var (
-		startToken int
-		err        error
-		maxEntries = int(req.MaxEntries)
-	)
-
-	if v := req.StartingToken; v != "" {
-		i, err := strconv.ParseInt(v, 10, 32)
-		if err != nil {
-			return nil, status.Errorf(
-				codes.Aborted,
-				"Unable to parse StartingToken: %v into uint32, err: %v",
-				req.StartingToken, err)
+		// Process the source volumes and make CSI Volumes
+		entries = make([]*csi.ListVolumesResponse_Entry, len(source))
+		i := 0
+		for _, vol := range source {
+			entries[i] = &csi.ListVolumesResponse_Entry{
+				Volume: s.getCSIVolume(vol, systemID),
+			}
+			i = i + 1
 		}
-		startToken = int(i)
 	}
 
-	// Call the common listVolumes code
-	source, nextToken, err := s.listVolumes(systemID, startToken, maxEntries, true, s.opts.EnableListVolumesSnapshots, "", "")
-	if err != nil {
-		return nil, err
-	}
-
-	// Process the source volumes and make CSI Volumes
-	entries := make([]*csi.ListVolumesResponse_Entry, len(source))
-	i := 0
-	for _, vol := range source {
-		entries[i] = &csi.ListVolumesResponse_Entry{
-			Volume: s.getCSIVolume(vol, systemID),
-		}
-		i = i + 1
-	}
 	return &csi.ListVolumesResponse{
 		Entries:   entries,
 		NextToken: nextToken,
