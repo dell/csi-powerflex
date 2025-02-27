@@ -1986,11 +1986,9 @@ func (s *service) ListVolumes(
 	var entries []*csi.ListVolumesResponse_Entry
 	var nextToken string
 	var source []*siotypes.Volume
-	var volume []*siotypes.Volume
 
 	for _, arr := range s.opts.arrays {
 		systemID = arr.SystemID
-		Log.Printf("ListVolumes: systemID: %s", systemID)
 
 		if systemID != "" {
 			if err := s.requireProbe(ctx, systemID); err != nil {
@@ -2022,7 +2020,6 @@ func (s *service) ListVolumes(
 
 		// Call the common listVolumes code
 		source, nextToken, err = s.listVolumes(systemID, startToken, maxEntries, true, s.opts.EnableListVolumesSnapshots, "", "")
-		Log.Printf("ListVolumes: source: %v%v", source, arr.SystemID)
 		if err != nil {
 			return nil, err
 		}
@@ -2034,16 +2031,8 @@ func (s *service) ListVolumes(
 			entries[i] = &csi.ListVolumesResponse_Entry{
 				Volume: s.getCSIVolume(vol, systemID),
 			}
-			Log.Printf("Inside List Volume response entry")
-			Log.Printf("Name: %s%s", vol.Name, arr.SystemID)
 			i = i + 1
 		}
-
-		volume = append(volume, source...)
-	}
-
-	for _, vol := range volume {
-		Log.Printf("List Volumes Name: %s", vol.Name)
 	}
 
 	return &csi.ListVolumesResponse{
