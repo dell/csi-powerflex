@@ -2028,6 +2028,10 @@ func (s *service) ListVolumes(
 		entries = make([]*csi.ListVolumesResponse_Entry, len(source))
 		i := 0
 		for _, vol := range source {
+			if vol == nil {
+				Log.Printf("Volume at index %d is nil", i)
+				continue
+			}
 			entries[i] = &csi.ListVolumesResponse_Entry{
 				Volume: s.getCSIVolume(vol, systemID),
 			}
