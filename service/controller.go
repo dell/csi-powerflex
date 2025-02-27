@@ -2576,7 +2576,7 @@ func (s *service) ControllerGetCapabilities(
 			// Indicates driver can report on volume condition in controller plugin
 			Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
-					Type: csi.ControllerServiceCapability_RPC_LIST_VOLUMES,
+					Type: csi.ControllerServiceCapability_RPC_VOLUME_CONDITION,
 				},
 			},
 		},
@@ -2585,7 +2585,7 @@ func (s *service) ControllerGetCapabilities(
 			// Optional if ListVolumes capabilty is also being returned
 			Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
-					Type: csi.ControllerServiceCapability_RPC_GET_VOLUME,
+					Type: csi.ControllerServiceCapability_RPC_LIST_VOLUMES,
 				},
 			},
 		},
