@@ -1980,9 +1980,9 @@ func (s *service) ListVolumes(
 	*csi.ListVolumesResponse, error,
 ) {
 	Log.Printf("ListVolumes called")
-	logrus.Infoln("ListVolumes called")
+
 	// TODO: Implement this method to get volumes from all systems. Currently we get volumes only from default system
-	systemID := s.opts.defaultSystemID
+	var systemID string
 	var entries []*csi.ListVolumesResponse_Entry
 	var nextToken string
 	var source []*siotypes.Volume
@@ -1990,6 +1990,7 @@ func (s *service) ListVolumes(
 
 	for _, arr := range s.opts.arrays {
 		systemID = arr.SystemID
+		Log.Printf("ListVolumes: systemID: %s", systemID)
 
 		if systemID != "" {
 			if err := s.requireProbe(ctx, systemID); err != nil {
@@ -2021,6 +2022,7 @@ func (s *service) ListVolumes(
 
 		// Call the common listVolumes code
 		source, nextToken, err = s.listVolumes(systemID, startToken, maxEntries, true, s.opts.EnableListVolumesSnapshots, "", "")
+		Log.Printf("ListVolumes: source: %v%v", source, arr.SystemID)
 		if err != nil {
 			return nil, err
 		}
@@ -2032,13 +2034,17 @@ func (s *service) ListVolumes(
 			entries[i] = &csi.ListVolumesResponse_Entry{
 				Volume: s.getCSIVolume(vol, systemID),
 			}
+			Log.Printf("Inside List Volume response entry")
+			Log.Printf("Name: %s%s", vol.Name, arr.SystemID)
 			i = i + 1
 		}
 
 		volume = append(volume, source...)
 	}
 
-	Log.Printf("List Volume: %v", volume)
+	for _, vol := range volume {
+		Log.Printf("List Volumes Name: %s", vol.Name)
+	}
 
 	return &csi.ListVolumesResponse{
 		Entries:   entries,
@@ -2583,6 +2589,14 @@ func (s *service) ControllerGetCapabilities(
 		{
 			// Required for ControllerGetVolume which is only required if health monitor is enabled
 			// Optional if ListVolumes capabilty is also being returned
+			Type: &csi.ControllerServiceCapability_Rpc{
+				Rpc: &csi.ControllerServiceCapability_RPC{
+					Type: csi.ControllerServiceCapability_RPC_GET_VOLUME,
+				},
+			},
+		},
+		{
+			// Required for ListVolumes
 			Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_LIST_VOLUMES,
