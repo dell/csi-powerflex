@@ -11,11 +11,11 @@ require (
 	github.com/apparentlymart/go-cidr v1.1.0
 	github.com/container-storage-interface/spec v1.6.0
 	github.com/cucumber/godog v0.15.0
-	github.com/dell/dell-csi-extensions/common v1.7.1-0.20250203173106-ccfc6911a3d0
-	github.com/dell/dell-csi-extensions/podmon v1.7.1-0.20250203173106-ccfc6911a3d0
-	github.com/dell/dell-csi-extensions/replication v1.10.2-0.20250203173106-ccfc6911a3d0
-	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.8.2-0.20250203173106-ccfc6911a3d0
-	github.com/dell/gocsi v1.13.1-0.20250203182942-fa7906dfa254
+	github.com/dell/dell-csi-extensions/common v1.7.1-0.20250220145508-51f739064290
+	github.com/dell/dell-csi-extensions/podmon v1.7.1-0.20250220145508-51f739064290
+	github.com/dell/dell-csi-extensions/replication v1.10.2-0.20250220145508-51f739064290
+	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.8.2-0.20250220145508-51f739064290
+	github.com/dell/gocsi v1.13.1-0.20250220151608-a42a0bd2c8cf
 	github.com/dell/gofsutil v1.18.0
 	github.com/dell/goscaleio v1.18.1-0.20250124161420-2463c983450d
 	github.com/fsnotify/fsnotify v1.8.0
@@ -73,7 +73,7 @@ require (
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/afero v1.12.0 // indirect
 	github.com/spf13/cast v1.7.1 // indirect
-	github.com/spf13/pflag v1.0.5 // indirect
+	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
