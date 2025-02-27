@@ -1979,6 +1979,8 @@ func (s *service) ListVolumes(
 	req *csi.ListVolumesRequest) (
 	*csi.ListVolumesResponse, error,
 ) {
+	Log.Printf("ListVolumes called")
+	logrus.Infoln("ListVolumes called")
 	// TODO: Implement this method to get volumes from all systems. Currently we get volumes only from default system
 	systemID := s.opts.defaultSystemID
 	var entries []*csi.ListVolumesResponse_Entry
@@ -2036,7 +2038,7 @@ func (s *service) ListVolumes(
 		volume = append(volume, source...)
 	}
 
-	Log.Printf("List Volume: ", volume)
+	Log.Printf("List Volume: %v", volume)
 
 	return &csi.ListVolumesResponse{
 		Entries:   entries,
@@ -2574,7 +2576,7 @@ func (s *service) ControllerGetCapabilities(
 			// Indicates driver can report on volume condition in controller plugin
 			Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
-					Type: csi.ControllerServiceCapability_RPC_VOLUME_CONDITION,
+					Type: csi.ControllerServiceCapability_RPC_LIST_VOLUMES,
 				},
 			},
 		},
