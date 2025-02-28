@@ -1991,7 +1991,7 @@ func (s *service) ListVolumes(
 
 		if systemID != "" {
 			if err := s.requireProbe(ctx, systemID); err != nil {
-				logrus.Warnf("Could not probe system: %s", systemID)
+				Log.Warnf("Could not probe system: %s", systemID)
 				continue
 			}
 		} else {
