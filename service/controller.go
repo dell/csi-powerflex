@@ -1995,7 +1995,7 @@ func (s *service) ListVolumes(
 				continue
 			}
 		} else {
-			Log.Printf("SystemID is empty in COntroller Array Configuration")
+			Log.Printf("SystemID is empty in Controller Array Configuration")
 			return nil, status.Error(codes.InvalidArgument, "There is no SystemID in Controller Array Configuration")
 		}
 
