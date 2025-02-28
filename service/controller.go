@@ -1979,9 +1979,9 @@ func (s *service) ListVolumes(
 	req *csi.ListVolumesRequest) (
 	*csi.ListVolumesResponse, error,
 ) {
+
 	Log.Printf("ListVolumes called")
 
-	// TODO: Implement this method to get volumes from all systems. Currently we get volumes only from default system
 	var systemID string
 	var entries []*csi.ListVolumesResponse_Entry
 	var nextToken string
@@ -1992,13 +1992,12 @@ func (s *service) ListVolumes(
 
 		if systemID != "" {
 			if err := s.requireProbe(ctx, systemID); err != nil {
-				Log.Printf("Could not probe system: %s", systemID)
-				return nil, err
+				logrus.Warnf("Could not probe system: %s", systemID)
+				continue
 			}
 		} else {
-			// Default system is not set: not supported
-			Log.Printf("Default system is not set")
-			return nil, status.Error(codes.InvalidArgument, "There is no default system in controller to list volumes.")
+			Log.Printf("SystemID is empty in ListVolumesRequest")
+			return nil, status.Error(codes.InvalidArgument, "There is no SystemID in ListVolumesRequest")
 		}
 
 		var (
@@ -2029,7 +2028,7 @@ func (s *service) ListVolumes(
 		i := 0
 		for _, vol := range source {
 			if vol == nil {
-				Log.Printf("Volume at index %d is nil", i)
+				Log.Printf("Volume[%d] is nil in ListVolumeResponse from system %s", i, systemID)
 				continue
 			}
 			entries[i] = &csi.ListVolumesResponse_Entry{
