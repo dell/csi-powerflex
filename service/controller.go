@@ -1979,7 +1979,6 @@ func (s *service) ListVolumes(
 	req *csi.ListVolumesRequest) (
 	*csi.ListVolumesResponse, error,
 ) {
-
 	Log.Printf("ListVolumes called")
 
 	var systemID string
