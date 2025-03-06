@@ -412,7 +412,7 @@ func (s *service) buildCreateVGSResponse(ctx context.Context, snapResponse *siot
 		for _, e := range existingSnap {
 			if e.ID == id && e.ConsistencyGroupID == snapResponse.SnapshotGroupID {
 				if e.Name == "" {
-					Log.Infof("debug set snap name for [%s]", e.ID)
+					Log.Debugf("set snap name for [%s]", e.ID)
 					arraySnapName = e.ID + "-snap-" + strconv.Itoa(index)
 					tgtVol := sio.NewVolume(s.adminClients[systemID])
 					tgtVol.Volume = e
@@ -421,7 +421,7 @@ func (s *service) buildCreateVGSResponse(ctx context.Context, snapResponse *siot
 						Log.Errorf("Error setting name of snapshot id=%s name=%s %s", e.ID, arraySnapName, err.Error())
 					}
 				} else {
-					Log.Infof("debug found snap name %s for %s", e.Name, e.ID)
+					Log.Debugf("found snap name %s for %s", e.Name, e.ID)
 					arraySnapName = e.Name
 				}
 			}
