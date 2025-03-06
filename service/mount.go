@@ -648,7 +648,7 @@ func unpublishVolume(
 				thisPodId := getPodIdFromTargetPath(targetPath)
 				thatPodId := getPodIdFromTargetPath(m.Path)
 				if thisPodId != "" && thatPodId != "" && thisPodId != thatPodId {
-					Log.Info("Will not unmount the private mount since another pod is using this volume: %s", m.Path)
+					Log.Infof("Will not unmount the private mount since another pod is using this volume: %s", m.Path)
 					keepPrivMnt = true
 				}
 			}
