@@ -102,8 +102,8 @@ github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc h1:U9qPSI2PIWSS1
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/dell/dell-csi-extensions/common v1.7.1-0.20250226203203-5dcd46c607b9 h1:Dhj/KEHuYE9uQgHzbHkGVB/MoQ+Sv6rvFaEACkD5wYw=
 github.com/dell/dell-csi-extensions/common v1.7.1-0.20250226203203-5dcd46c607b9/go.mod h1:1F9D9nja/HNFj9Fy2gu5NbP4l9J2FJgynmz22bYGdzI=
-github.com/dell/dell-csi-extensions/podmon v1.7.1-0.20250226203203-5dcd46c607b9 h1:IoU3jL51s/R/s4aG52KQhMm3dTuA+M8SJR1rXzuSLnw=
-github.com/dell/dell-csi-extensions/podmon v1.7.1-0.20250226203203-5dcd46c607b9/go.mod h1:ODlchec6u+c05nnQ/IlkY94ctnvcr4LATl2PuYt7Hfk=
+github.com/dell/dell-csi-extensions/podmon v1.7.1-0.20250306062548-1cc178c422f1 h1:pp++BlJUsImtadjZjrIFabDAE/SLb8XgljOX7cM3Mio=
+github.com/dell/dell-csi-extensions/podmon v1.7.1-0.20250306062548-1cc178c422f1/go.mod h1:IEsG8NVTcrnGIABF+yQmieHmLgzdFk5E/m5gOrM2g0o=
 github.com/dell/dell-csi-extensions/replication v1.10.2-0.20250226203203-5dcd46c607b9 h1:TMMbJK9LqWiE1i5KS5310ZTKwkAiN7HLY08AtgRKdi0=
 github.com/dell/dell-csi-extensions/replication v1.10.2-0.20250226203203-5dcd46c607b9/go.mod h1:OFdK+dJexaSSe4B2Sg8/V5ROTBVICZvgvYDeVTrIRWg=
 github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.8.2-0.20250226203203-5dcd46c607b9 h1:i6M42APx6W79DqA3U+yTf3dprSu8nB+eNi7S85ZeSl0=
@@ -112,8 +112,8 @@ github.com/dell/gocsi v1.13.1-0.20250226203119-f6c4e42fab09 h1:wYjkmD0nNVNgmmHxt
 github.com/dell/gocsi v1.13.1-0.20250226203119-f6c4e42fab09/go.mod h1:iZODT8g3FlH2R+umcn5J7uWsxERXOnokIj8UMGmUFE0=
 github.com/dell/gofsutil v1.18.0 h1:dZiZjBZLqHqEQw97yU4x0SR3ydF22dw7tqNS8Fvvl2c=
 github.com/dell/gofsutil v1.18.0/go.mod h1:2WiIEgoFs87REM1TbelGtpNX1Y5itopQuBlMgDLkgBg=
-github.com/dell/goscaleio v1.18.1-0.20250228161735-465b025daa00 h1:dtLWky7p2r/YZ+EXGkm+vW8SVdyt3t7n1bju5tOYhZI=
-github.com/dell/goscaleio v1.18.1-0.20250228161735-465b025daa00/go.mod h1:/oOlgaS8vJVwNqHfntAnLj8xJdDQCP7qK6bIaqb84P8=
+github.com/dell/goscaleio v1.18.1-0.20250307182825-586b6aef32bf h1:OfBl1bvnGCghx402QLzUC5ePVyRZRVfYJ32EjQtznCw=
+github.com/dell/goscaleio v1.18.1-0.20250307182825-586b6aef32bf/go.mod h1:XAHq2m2QNJH2l9gu47gQX2m6HjZZlzc1LIa0lrWvSkA=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible/go.mod h1:E3ru+11k8xSBh+hMPgOLZmtrrCbhqsmaPHjLKYnJCaQ=
 github.com/dgryski/go-sip13 v0.0.0-20181026042036-e10d5fee7954/go.mod h1:vAd38F8PWV+bWy6jNmig1y/TA+kYO4g3RSRF0IAv0no=
 github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815/go.mod h1:WwZ+bS3ebgob9U8Nd0kOddGdZWjyMGR8Wziv+TBNwSE=
