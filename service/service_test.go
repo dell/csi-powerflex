@@ -31,6 +31,15 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	defaultGetTargetPathPrefix := getTargetPathPrefix
+	defer func() {
+		getTargetPathPrefix = defaultGetTargetPathPrefix
+	}()
+
+	getTargetPathPrefix = func() string {
+		return "test/"
+	}
+
 	server := &http.Server{
 		Addr:              "localhost:6060",
 		ReadHeaderTimeout: 60 * time.Second,
@@ -42,7 +51,7 @@ func TestMain(m *testing.M) {
 	opts := godog.Options{
 		Format: "pretty",
 		Paths:  []string{"features"},
-		Tags:   "@aaron",
+		Tags:   "",
 	}
 
 	status := godog.TestSuite{

@@ -1120,7 +1120,7 @@ Feature: VxFlex OS CSI interface
       | "GOFSInduceResizeFSError"               | "test/tmp/datadir"  | "Failed to resize device"                   |
       | "NoVolumeIDError"                       | "test/tmp/datadir"  | "volume ID is required"                     |
       | "none"                                  | "not/a/path/1234"   | "Could not stat volume path"                |
-      | "none"                                  | "test/tmp/datafile" | "none"                                      |
+      | "none"                                  | "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d/d0f055a700000000" | "none"                                      |
       | "CorrectFormatBadCsiVolIDInNodeExpand"  | "test/tmp/datadir"  | "is not configured in the driver"           |
       | "VolumeIDTooShortErrorInNodeExpand"     | "test/tmp/datadir"  | "is shorter than 3 chars, returning error"  |
       | "TooManyDashesVolIDInNodeExpand"        | "test/tmp/datadir"  | "is not configured in the driver"           |

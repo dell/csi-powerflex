@@ -62,11 +62,11 @@ const (
 	goodArrayConfig            = "./features/array-config/config"
 	goodDriverConfig           = "./features/driver-config/logConfig.yaml"
 	altNodeID                  = "7E012974-3651-4DCB-9954-25975A3C3CDF"
-	datafile                   = "test/tmp/datafile"
-	datadir                    = "test/tmp/datadir"
+	datafile                   = "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d/d0f055a700000000"
+	datadir                    = "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d/datadir"
 	badtarget                  = "/nonexist/target"
-	altdatadir                 = "test/tmp/altdatadir"
-	altdatafile                = "test/tmp/altdatafile"
+	altdatadir                 = "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d/altdatadir"
+	altdatafile                = "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d/altdatafile"
 	sdcVolume1                 = "d0f055a700000000"
 	sdcVolume2                 = "c0f055aa00000000"
 	sdcVolume0                 = "0000000000000000"
@@ -2628,6 +2628,17 @@ func (f *feature) aControllerPublishedEphemeralVolume() error {
 }
 
 func (f *feature) aControllerPublishedVolume() error {
+	f.controllerPublishVolume()
+	return nil
+}
+
+func (f *feature) aControllerPublishedVolumeWithPrivateTargetEqualMountPath() error {
+	f.controllerPublishVolume()
+	f.service.privDir = "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d"
+	return nil
+}
+
+func (f *feature) controllerPublishVolume() {
 	fmt.Printf("setting up dev directory, block device, and symlink\n")
 	// Make the directories; on Windows these show up in C:/dev/...
 	_, err := os.Stat(nodePublishSymlinkDir)
@@ -2694,7 +2705,6 @@ func (f *feature) aControllerPublishedVolume() error {
 	gofsutil.GOFSMockMounts = gofsutil.GOFSMockMounts[:0]
 	// Set variables in mount for unit testing
 	unitTestEmulateBlockDevice = true
-	return nil
 }
 
 func (f *feature) twoIdenticalVolumesOnTwoDifferentSystems() error {
@@ -3191,6 +3201,20 @@ func (f *feature) thereAreNoRemainingMounts() error {
 		return errors.New("expected all mounts to be removed but one or more remained")
 	}
 	return nil
+}
+
+func (f *feature) thereAreRemainingMounts() error {
+	if len(gofsutil.GOFSMockMounts) == 0 {
+		return errors.New("expected mounts to exist")
+	}
+	return nil
+}
+
+func (f *feature) addMount() {
+	gofsutil.GOFSMockMounts = append(gofsutil.GOFSMockMounts, gofsutil.Info{
+		Device: "test/dev/scinia",
+		Path:   "test/070aa5c2-3a1a-4f55-836a-a7d81ab9cce5/d0f055a700000000",
+	})
 }
 
 func (f *feature) theConfigMapIsUpdated() error {
@@ -4958,6 +4982,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^undo setup Get SystemID to fail$`, f.undoSetupGetSystemIDtoFail)
 	s.Step(`^a capability with voltype "([^"]*)" access "([^"]*)" fstype "([^"]*)"$`, f.aCapabilityWithVoltypeAccessFstype)
 	s.Step(`^a controller published volume$`, f.aControllerPublishedVolume)
+	s.Step(`^a controller published volume with the private target equalling the mount path$`, f.aControllerPublishedVolumeWithPrivateTargetEqualMountPath)
 	s.Step(`^I call NodePublishVolume "([^"]*)"$`, f.iCallNodePublishVolume)
 	s.Step(`^I call NodePublishVolume NFS "([^"]*)"$`, f.iCallNodePublishVolumeNFS)
 	s.Step(`^I call CleanupPrivateTarget$`, f.iCallCleanupPrivateTarget)
@@ -4976,6 +5001,8 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I mark request read only$`, f.iMarkRequestReadOnly)
 	s.Step(`^I call NodeUnpublishVolume "([^"]*)"$`, f.iCallNodeUnpublishVolume)
 	s.Step(`^there are no remaining mounts$`, f.thereAreNoRemainingMounts)
+	s.Step(`^there are remaining mounts$`, f.thereAreRemainingMounts)
+	s.Step(`^another mount using this volume$`, f.addMount)
 	s.Step(`^I call BeforeServe$`, f.iCallBeforeServe)
 	s.Step(`^configMap is updated$`, f.theConfigMapIsUpdated)
 	s.Step(`^I induce SDC dependency$`, f.iInduceSDCDependency)

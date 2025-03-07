@@ -634,8 +634,6 @@ func unpublishVolume(
 	privMntExist := false
 	keepPrivMnt := false
 	var deviceMount gofsutil.Info
-	fmt.Println("#################")
-	fmt.Println(mnts)
 	for _, m := range mnts {
 		if m.Source == sysDevice.RealDev || m.Device == sysDevice.RealDev || m.Device == sysDevice.FullPath {
 			if m.Path == privTgt {
