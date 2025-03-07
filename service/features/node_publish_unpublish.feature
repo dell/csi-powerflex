@@ -448,6 +448,25 @@ Feature: VxFlex OS CSI interface
       | "mount" | "multi-pod-rw"    | "none" | "Mount volumes do not support AccessMode MULTI_NODE_MULTI_WRITER" |
       | "block" | "multi-pod-rw"    | "none" | "none"                                                            |
 
+  @aaron
+  Scenario Outline: Node Unpublish doesn't unmount private mount if another pod is using the volume
+    Given a VxFlexOS service
+    And a controller published volume
+    And a capability with voltype <voltype> access <access> fstype <fstype>
+    When I call Probe
+    And I call NodePublishVolume "SDC_GUID"
+    And I call NodeUnpublishVolume "SDC_GUID"
+    And there are no remaining mounts
+    Then the error contains <errormsg>
+
+    Examples:
+      | voltype | access            | fstype | errormsg                                                          |
+      | "block" | "single-writer"   | "none" | "none"                                                            |
+      | "block" | "multiple-writer" | "none" | "none"                                                            |
+      | "mount" | "single-writer"   | "xfs"  | "none"                                                            |
+      | "mount" | "multi-pod-rw"    | "none" | "Mount volumes do not support AccessMode MULTI_NODE_MULTI_WRITER" |
+      | "block" | "multi-pod-rw"    | "none" | "none"                                                            |
+
   Scenario Outline: Node Unpublish mount volumes various induced error use cases from examples
     Given a VxFlexOS service
     And a controller published volume

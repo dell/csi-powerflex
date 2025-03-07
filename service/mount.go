@@ -634,6 +634,8 @@ func unpublishVolume(
 	privMntExist := false
 	keepPrivMnt := false
 	var deviceMount gofsutil.Info
+	fmt.Println("#################")
+	fmt.Println(mnts)
 	for _, m := range mnts {
 		if m.Source == sysDevice.RealDev || m.Device == sysDevice.RealDev || m.Device == sysDevice.FullPath {
 			if m.Path == privTgt {
@@ -681,11 +683,15 @@ func unpublishVolume(
 	return nil
 }
 
+var getTargetPathPrefix = func() string {
+	return "/var/lib/kubelet/pods/"
+}
+
 // Parse the target path to get the pod ID
 // Assume target path looks like: /var/lib/kubelet/pods/{podID}/volumes/...
 func getPodIdFromTargetPath(targetPath string) string {
-	if strings.HasPrefix(targetPath, "/var/lib/kubelet/pods/") {
-		targetPath = strings.TrimPrefix(targetPath, "/var/lib/kubelet/pods/")
+	if strings.HasPrefix(targetPath, getTargetPathPrefix()) {
+		targetPath = strings.TrimPrefix(targetPath, getTargetPathPrefix())
 		parts := strings.Split(targetPath, "/")
 		if len(parts) > 1 {
 			// check if parts[0] is a UUID
