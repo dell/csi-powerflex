@@ -5,8 +5,6 @@ module github.com/dell/csi-vxflexos/v2
 
 go 1.24
 
-toolchain go1.24.1
-
 require (
 	github.com/apparentlymart/go-cidr v1.1.0
 	github.com/container-storage-interface/spec v1.6.0
