@@ -460,8 +460,9 @@ Feature: VxFlex OS CSI interface
     Then the error contains <errormsg>
 
     Examples:
-      | voltype | access            | fstype | errormsg                                                          |
-      | "block" | "multi-pod-rw"    | "none" | "none"                                                            |
+      | voltype | access                      | fstype | errormsg |
+      | "block" | "multi-pod-rw"              | "none" | "none"   |
+      | "mount" | "single-node-multi-writer"  | "none" | "none" 
 
   Scenario Outline: Node Unpublish mount volumes various induced error use cases from examples
     Given a VxFlexOS service
