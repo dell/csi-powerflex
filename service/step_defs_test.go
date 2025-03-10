@@ -3204,17 +3204,24 @@ func (f *feature) thereAreNoRemainingMounts() error {
 }
 
 func (f *feature) thereAreRemainingMounts() error {
+	fmt.Println("check mounts")
+	fmt.Println(gofsutil.GOFSMockMounts)
 	if len(gofsutil.GOFSMockMounts) == 0 {
 		return errors.New("expected mounts to exist")
 	}
 	return nil
 }
 
-func (f *feature) addMount() {
-	gofsutil.GOFSMockMounts = append(gofsutil.GOFSMockMounts, gofsutil.Info{
-		Device: "test/dev/scinia",
-		Path:   "test/070aa5c2-3a1a-4f55-836a-a7d81ab9cce5/d0f055a700000000",
-	})
+func (f *feature) thereIsMount(path string) {
+	if path != "" {
+		split := strings.Split(path, ",")
+		for _, p := range split {
+			gofsutil.GOFSMockMounts = append(gofsutil.GOFSMockMounts, gofsutil.Info{
+				Device: "test/dev/scinia",
+				Path:   p,
+			})
+		}
+	}
 }
 
 func (f *feature) theConfigMapIsUpdated() error {
@@ -5002,7 +5009,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call NodeUnpublishVolume "([^"]*)"$`, f.iCallNodeUnpublishVolume)
 	s.Step(`^there are no remaining mounts$`, f.thereAreNoRemainingMounts)
 	s.Step(`^there are remaining mounts$`, f.thereAreRemainingMounts)
-	s.Step(`^another mount using this volume$`, f.addMount)
+	s.Step(`^I create mount "([^"]*)"$`, f.thereIsMount)
 	s.Step(`^I call BeforeServe$`, f.iCallBeforeServe)
 	s.Step(`^configMap is updated$`, f.theConfigMapIsUpdated)
 	s.Step(`^I induce SDC dependency$`, f.iInduceSDCDependency)
