@@ -645,9 +645,9 @@ func unpublishVolume(
 				Log.Printf("Found target mount for device %#v, target mount path: %s .", sysDevice, targetPath)
 			} else {
 				// Check if this is a target mount for another pod in which case we should not unmount the private target
-				thisPodId := getPodIdFromTargetPath(targetPath)
-				thatPodId := getPodIdFromTargetPath(m.Path)
-				if thisPodId != "" && thatPodId != "" && thisPodId != thatPodId {
+				thisPodID := getPodIDFromTargetPath(targetPath)
+				thatPodID := getPodIDFromTargetPath(m.Path)
+				if thisPodID != "" && thatPodID != "" && thisPodID != thatPodID {
 					Log.Infof("Will not unmount the private mount since another pod is using this volume: %s", m.Path)
 					keepPrivMnt = true
 				}
@@ -687,7 +687,7 @@ var getTargetPathPrefix = func() string {
 
 // Parse the target path to get the pod ID
 // Assume target path looks like: /var/lib/kubelet/pods/{podID}/volumes/...
-func getPodIdFromTargetPath(targetPath string) string {
+func getPodIDFromTargetPath(targetPath string) string {
 	if strings.HasPrefix(targetPath, getTargetPathPrefix()) {
 		targetPath = strings.TrimPrefix(targetPath, getTargetPathPrefix())
 		parts := strings.Split(targetPath, "/")

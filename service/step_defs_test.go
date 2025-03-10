@@ -21,6 +21,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -46,7 +47,6 @@ import (
 	storage "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
-	"path/filepath"
 )
 
 const (
@@ -2895,7 +2895,7 @@ func (f *feature) iCallNodePublishVolume(arg1 string) error {
 		if err != nil {
 			return fmt.Errorf("failed to cleanup private target directory %s: %v", privTgt, err)
 		}
-		err = os.MkdirAll(f.service.privDir, 0700)
+		err = os.MkdirAll(f.service.privDir, 0o700)
 		if err != nil {
 			return fmt.Errorf("failed to ensure that the base private target directory %s exist: %v", f.service.privDir, err)
 		}
