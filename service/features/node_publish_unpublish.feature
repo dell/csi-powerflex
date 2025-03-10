@@ -462,7 +462,7 @@ Feature: VxFlex OS CSI interface
     Examples:
       | voltype | access                      | fstype | errormsg |
       | "block" | "multi-pod-rw"              | "none" | "none"   |
-      | "mount" | "single-node-multi-writer"  | "none" | "none" 
+      | "mount" | "single-node-multi-writer"  | "xfs" | "none" 
 
   Scenario Outline: Node Unpublish mount volumes various induced error use cases from examples
     Given a VxFlexOS service
