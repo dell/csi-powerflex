@@ -46,6 +46,7 @@ import (
 	storage "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
+	"path/filepath"
 )
 
 const (
@@ -2634,7 +2635,7 @@ func (f *feature) aControllerPublishedVolume() error {
 
 func (f *feature) aControllerPublishedVolumeWithPrivateTargetEqualMountPath() error {
 	f.controllerPublishVolume()
-	f.service.privDir = "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d"
+	f.service.privDir = "test/private"
 	return nil
 }
 
@@ -2887,6 +2888,19 @@ func (f *feature) iCallNodePublishVolume(arg1 string) error {
 		_ = f.getNodePublishVolumeRequest()
 		req = f.nodePublishVolumeRequest
 	}
+
+	if f.service.privDir != "" {
+		privTgt := filepath.Join(f.service.privDir, req.VolumeId)
+		err := os.RemoveAll(privTgt)
+		if err != nil {
+			return fmt.Errorf("failed to cleanup private target directory %s: %v", privTgt, err)
+		}
+		err = os.MkdirAll(f.service.privDir, 0700)
+		if err != nil {
+			return fmt.Errorf("failed to ensure that the base private target directory %s exist: %v", f.service.privDir, err)
+		}
+	}
+
 	fmt.Printf("Calling NodePublishVolume\n")
 	fmt.Printf("nodePV req is: %v \n", req)
 	_, err := f.service.NodePublishVolume(ctx, req)
@@ -4894,6 +4908,7 @@ func (f *feature) aNodeGetInfoIsReturnedWithoutZoneSystemTopology() error {
 
 func FeatureContext(s *godog.ScenarioContext) {
 	f := &feature{}
+
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
 	s.Step(`^a VxFlexOS service with timeout (\d+) milliseconds$`, f.aVxFlexOSServiceWithTimeoutMilliseconds)
 	s.Step(`^I call GetPluginInfo$`, f.iCallGetPluginInfo)
