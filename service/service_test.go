@@ -51,7 +51,7 @@ func TestMain(m *testing.M) {
 	opts := godog.Options{
 		Format: "pretty",
 		Paths:  []string{"features"},
-		Tags:   "aaron",
+		Tags:   "",
 	}
 
 	status := godog.TestSuite{
