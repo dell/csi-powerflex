@@ -10,7 +10,7 @@ require (
 	github.com/container-storage-interface/spec v1.6.0
 	github.com/cucumber/godog v0.15.0
 	github.com/dell/dell-csi-extensions/common v1.7.1-0.20250226203203-5dcd46c607b9
-	github.com/dell/dell-csi-extensions/podmon v1.7.1-0.20250226203203-5dcd46c607b9
+	github.com/dell/dell-csi-extensions/podmon v1.7.1-0.20250306062548-1cc178c422f1
 	github.com/dell/dell-csi-extensions/replication v1.10.2-0.20250226203203-5dcd46c607b9
 	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.8.2-0.20250226203203-5dcd46c607b9
 	github.com/dell/gocsi v1.13.1-0.20250226203119-f6c4e42fab09
