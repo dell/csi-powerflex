@@ -597,52 +597,38 @@ func (s *service) updateConfigMap(getIPAddressByInterfacefunc GetIPAddressByInte
 		}
 	}
 
-	// Get the Kubernetes ClientSet
-	if K8sClientset == nil {
-		err = k8sutils.CreateKubeClientSet()
-		if err != nil {
-			Log.Errorf("Failed to create Kubernetes ClientSet: %v", err)
-			return
-		}
-		K8sClientset = k8sutils.Clientset
-	}
-
-	// Get the vxflexos-config-params ConfigMap
-	cm, err := K8sClientset.CoreV1().ConfigMaps(DriverNamespace).Get(context.TODO(), DriverConfigMap, metav1.GetOptions{})
+	// Read the vxflexos-config-params ConfigMap from the volume mount
+	existingYaml, err := os.ReadFile(filepath.Clean(configFilePath))
 	if err != nil {
-		Log.Errorf("Failed to get ConfigMap: %v", err)
+		Log.Errorf("Failed to read ConfigMap file from volume mount: %v", err)
 		return
 	}
 
 	var configData map[string]interface{}
-	if existingYaml, ok := cm.Data["driver-config-params.yaml"]; ok {
+	err = yaml.Unmarshal(existingYaml, &configData)
+	if err != nil {
+		Log.Errorf("Failed to parse ConfigMap data: %v", err)
+		return
+	}
 
-		err := yaml.Unmarshal([]byte(existingYaml), &configData)
-		if err != nil {
-			Log.Errorf("Failed to parse ConfigMap data: %v", err)
-			return
+	// Check and update Interfaces with the IPs
+	if interfaceNames, ok := configData["interfaceNames"].(map[string]interface{}); ok {
+		for node, ipAddressList := range updateInterfaceNamesWithIPs {
+			interfaceNames[node] = ipAddressList
 		}
+	} else {
+		Log.Errorf("interfaceNames key missing or not in expected format")
+		return
+	}
 
-		// Check and update Interfaces with the IPs
-		if interfaceNames, ok := configData["interfaceNames"].(map[string]interface{}); ok {
-			for node, ipAddressList := range updateInterfaceNamesWithIPs {
-				interfaceNames[node] = ipAddressList
-			}
-		} else {
-			Log.Errorf("interfaceNames key missing or not in expected format")
-			return
-		}
-
-		updatedYaml, err := yaml.Marshal(configData)
-		if err != nil {
-			Log.Errorf("Failed to marshal updated data: %v", err)
-			return
-		}
-		cm.Data["driver-config-params.yaml"] = string(updatedYaml)
+	updatedYaml, err := yaml.Marshal(configData)
+	if err != nil {
+		Log.Errorf("Failed to marshal updated data: %v", err)
+		return
 	}
 
 	// Update the vxflexos-config-params ConfigMap
-	_, err = K8sClientset.CoreV1().ConfigMaps("vxflexos").Update(context.TODO(), cm, metav1.UpdateOptions{})
+	err = os.WriteFile(filepath.Clean(configFilePath), updatedYaml, 0644)
 	if err != nil {
 		Log.Errorf("Failed to update ConfigMap: %v", err)
 		return
