@@ -21,7 +21,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
-	"path/filepath"
+
 	"runtime"
 	"strconv"
 	"strings"
@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
+	"context"
 	"github.com/cucumber/godog"
 	"github.com/dell/dell-csi-extensions/podmon"
 	"github.com/dell/dell-csi-extensions/replication"
@@ -41,7 +42,6 @@ import (
 	"github.com/dell/gofsutil"
 	"github.com/dell/goscaleio"
 	types "github.com/dell/goscaleio/types/v1"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc/metadata"
 	v1 "k8s.io/api/core/v1"
 	storage "k8s.io/api/storage/v1"
@@ -50,6 +50,7 @@ import (
 )
 
 const (
+	testBaseDir                = "test"
 	arrayID                    = "14dbbf5617523654"
 	arrayID2                   = "15dbbf5617523655"
 	badVolumeID                = "Totally Fake ID"
@@ -2650,7 +2651,7 @@ func (f *feature) controllerPublishVolume() {
 		}
 	}
 
-	// Remove the private staging directory directory
+	// Remove the private staging directory
 	cmd := exec.Command("rm", "-rf", "features/"+sdcVolume1)
 	_, err = cmd.CombinedOutput()
 	if err != nil {
@@ -2887,18 +2888,6 @@ func (f *feature) iCallNodePublishVolume(arg1 string) error {
 		fmt.Printf("Request was Nil \n")
 		_ = f.getNodePublishVolumeRequest()
 		req = f.nodePublishVolumeRequest
-	}
-
-	if f.service.privDir != "" {
-		privTgt := filepath.Join(f.service.privDir, req.VolumeId)
-		err := os.RemoveAll(privTgt)
-		if err != nil {
-			return fmt.Errorf("failed to cleanup private target directory %s: %v", privTgt, err)
-		}
-		err = os.MkdirAll(f.service.privDir, 0o700)
-		if err != nil {
-			return fmt.Errorf("failed to ensure that the base private target directory %s exist: %v", f.service.privDir, err)
-		}
 	}
 
 	fmt.Printf("Calling NodePublishVolume\n")
@@ -5143,6 +5132,17 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^a NodeGetInfo is returned without zone topology$`, f.aNodeGetInfoIsReturnedWithoutZoneTopology)
 	s.Step(`^a NodeGetInfo is returned without zone system topology$`, f.aNodeGetInfoIsReturnedWithoutZoneSystemTopology)
 	s.Step(`^I call systemProbeAll in mode "([^"]*)"`, f.iCallSystemProbeAll)
+
+	s.Before(func(ctx context.Context, sc *godog.Scenario) (context.Context, error) {
+		// Cleanup test directory before each test
+		if err := os.RemoveAll(testBaseDir); err != nil {
+			return ctx, fmt.Errorf("failed to remove test directory: %v", err)
+		}
+		if err := os.MkdirAll(testBaseDir, 0o755); err != nil {
+			return ctx, fmt.Errorf("failed to create test directory: %v", err)
+		}
+		return ctx, nil
+	})
 
 	s.After(func(ctx context.Context, _ *godog.Scenario, _ error) (context.Context, error) {
 		if f.server != nil {
