@@ -93,7 +93,7 @@ Feature: VxFlex OS CSI interface
       | "a:b"    | "a:b"    |
       | ""       | ""       |
       | "a/b"    | ""       |
-    
+
   Scenario Outline: multi array getFilesystemIDFromCsiVolumeID for NFS volumes with different examples
     Given a VxFlexOS service
     And I call getFilesystemIDFromCsiVolumeID <csiVolID>
@@ -113,7 +113,7 @@ Feature: VxFlex OS CSI interface
       | "abcd/nfs123"      | "abcd"   |
       | "badSystemID"      | ""       |
       |  ""                | ""       |
-  
+
   Scenario Outline: multi array getSystemIDFromCsiVolumeID good and with errors
     Given a VxFlexOS service
     And I call getSystemIDFromCsiVolumeID <csiVolID>
@@ -190,7 +190,7 @@ Feature: VxFlex OS CSI interface
       | "volume1"                                           |
       | "thisnameiswaytoolongtopossiblybeunder31characters" |
 
-  
+
   Scenario: Create volume with admin error
     Given a VxFlexOS service
     When I call Probe
@@ -284,8 +284,8 @@ Feature: VxFlex OS CSI interface
       | sysID                      |
       | "f.service.opt.SystemName" |
 
-    
-  
+
+
   Scenario Outline: Create volume with Accessiblity Requirements NFS volumes Invalid topology error
     Given a VxFlexOS service
     When I call Probe
@@ -295,9 +295,9 @@ Feature: VxFlex OS CSI interface
     Examples:
       | sysID                      |
       | "f.service.opt.SystemName" |
-    
 
- 
+
+
   Scenario Outline: Create volume with Accessibility Requirements for NFS volumes with different examples
     Given a VxFlexOS service
     When I call Probe
@@ -345,36 +345,36 @@ Feature: VxFlex OS CSI interface
     When I specify CreateVolumeMountRequest "xfs"
     And I call CreateVolume "volume1"
     Then a valid CreateVolumeResponse is returned
-   
-   
-   Scenario: Create mount volume NFS no error
+
+
+  Scenario: Create mount volume NFS no error
     Given a VxFlexOS service
     When I call Probe
     When I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume1"
     Then a valid CreateVolumeResponse is returned
-    
-     
-     Scenario: Create Volume with invalid probe cache, no endpoint, and no admin NFS system ID not found error
-     Given a VxFlexOS service
-     When I induce error "NoAdminError"
-     And I induce error "NoEndpointError"
-     And I invalidate the Probe cache
-      When I specify CreateVolumeMountRequest "nfs"
-     And I call CreateVolume "volume1"
-     Then the error contains "No system ID is found in parameters or as default"
-    
-    
-    Scenario: Create mount volume NFS nas server not found error
+
+
+  Scenario: Create Volume with invalid probe cache, no endpoint, and no admin NFS system ID not found error
+    Given a VxFlexOS service
+    When I induce error "NoAdminError"
+    And I induce error "NoEndpointError"
+    And I invalidate the Probe cache
+    When I specify CreateVolumeMountRequest "nfs"
+    And I call CreateVolume "volume1"
+    Then the error contains "No system ID is found in parameters or as default"
+
+
+  Scenario: Create mount volume NFS nas server not found error
     Given a VxFlexOS service
     When I call Probe
     When I specify CreateVolumeMountRequest "nfs"
     And I induce error "NasNotFoundError"
     And I call CreateVolume "volume1"
     Then the error contains "nas server not found"
-    
-    
-    Scenario: Idempotent create mount volume NFS storage pool not found error
+
+
+  Scenario: Idempotent create mount volume NFS storage pool not found error
     Given a VxFlexOS service
     When I call Probe
     When I specify CreateVolumeMountRequest "nfs"
@@ -383,18 +383,18 @@ Feature: VxFlex OS CSI interface
     And I change the StoragePool "no_storage_pool"
     And I call CreateVolume "volume4"
     Then the error contains "Couldn't find storage pool"
-    
-    
-    
-    
-    Scenario: Create mount volume NFS with NoAdmin
+
+
+
+
+  Scenario: Create mount volume NFS with NoAdmin
     Given a VxFlexOS service
     When I call Probe
     When I specify CreateVolumeMountRequest "nfs"
     And I induce error "NoAdminError"
     And I call CreateVolume "volume1"
     Then a valid CreateVolumeResponse is returned
-   
+
   Scenario: Create mount volume idempotent test
     Given a VxFlexOS service
     When I call Probe
@@ -402,18 +402,18 @@ Feature: VxFlex OS CSI interface
     And I call CreateVolume "volume2"
     And I call CreateVolume "volume2"
     Then a valid CreateVolumeResponse is returned
-   
-   
-   Scenario: Create mount volume idempotent NFS no error
+
+
+  Scenario: Create mount volume idempotent NFS no error
     Given a VxFlexOS service
     When I call Probe
     When I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume2"
     And I call CreateVolume "volume2"
     Then a valid CreateVolumeResponse is returned
-    
-    
-    Scenario: Create mount volume with bad capacity NFS bad capacity error
+
+
+  Scenario: Create mount volume with bad capacity NFS bad capacity error
     Given a VxFlexOS service
     When I call Probe
     When I specify CreateVolumeMountRequest "nfs"
@@ -421,9 +421,9 @@ Feature: VxFlex OS CSI interface
     And I induce error "BadCapacityError"
     And I call CreateVolume "bad capacity"
     Then the error contains "bad capacity"
-    
-    
-    Scenario: Idempotent create mount volume with different sizes NFS different size error
+
+
+  Scenario: Idempotent create mount volume with different sizes NFS different size error
     Given a VxFlexOS service
     When I call Probe
     And I call CreateVolumeSize nfs "volume3" "8"
@@ -439,7 +439,7 @@ Feature: VxFlex OS CSI interface
   Scenario: Call GetNodeLabels with valid labels
     Given a VxFlexOS service
     When I call GetNodeLabels
-    Then a valid label is returned 
+    Then a valid label is returned
 
   Scenario: Call GetNodeLabels with invalid node
     Given a VxFlexOS service
@@ -469,7 +469,7 @@ Feature: VxFlex OS CSI interface
   Scenario: Call GetNodeUID
     Given a VxFlexOS service
     When I call GetNodeUID
-    Then a valid node uid is returned   
+    Then a valid node uid is returned
 
   Scenario: Call ParseInt64FromContext to validate EnvMaxVolumesPerNode
     Given a VxFlexOS service
@@ -481,7 +481,7 @@ Feature: VxFlex OS CSI interface
     When I call GetNodeLabels with unset KubernetesClient
     Then the error contains "init client failed with error"
 
- Scenario: Call GetNodeUID with invalid KubernetesClient
+  Scenario: Call GetNodeUID with invalid KubernetesClient
     Given a VxFlexOS service
     When I call GetNodeUID with unset KubernetesClient
     Then the error contains "init client failed with error"
@@ -502,7 +502,7 @@ Feature: VxFlex OS CSI interface
       | config             | zone-key                         | zone-name   | errorMsg                                              |
       | "multi_az"         | "zone.csi-vxflexos.dellemc.com"  | "zoneA"     | "none"                                                |
       | "multi_az"         | "zone.csi-vxflexos.dellemc.com"  | "badZone"   | "could not find an array assigned to zone 'badZone'"  |
-  
+
   Scenario: Call GetCapacity with valid Storage Pool Name
     Given a VxFlexOS service
     When I call Probe
@@ -516,8 +516,8 @@ Feature: VxFlex OS CSI interface
     Then a valid CreateVolumeResponse is returned
     And I call GetCapacity with storage pool "viki_pool_HDD_20181031"
     And I call get GetMaximumVolumeSize with systemid "14dbbf5617523654"
-    Then a valid GetCapacityResponse1 is returned 
-  
+    Then a valid GetCapacityResponse1 is returned
+
   Scenario: Call GetCapacity with invalid Storage Pool name
     Given a VxFlexOS service
     When I call Probe
@@ -530,12 +530,12 @@ Feature: VxFlex OS CSI interface
     And I induce error "GetStatisticsError"
     And I call GetCapacity with storage pool "viki_pool_HDD_20181031"
     Then the error contains "unable to get system stats"
-  
+
   Scenario: Call ControllerGetCapabilities with health monitor enabled
     Given a VxFlexOS service
     When I call ControllerGetCapabilities "true"
     Then a valid ControllerGetCapabilitiesResponse is returned
-  
+
   Scenario: Call ControllerGetCapabilities with health monitor disabled
     Given a VxFlexOS service
     When I call ControllerGetCapabilities "false"
@@ -610,13 +610,13 @@ Feature: VxFlex OS CSI interface
       | "NoStagingTarget" | "StagingTargetPath is required"        |
       | "EphemeralVolume" | "none"                                 |
       | "UnmountError"    | "Unable to remove staging target path" |
-  
+
   Scenario: Call NodeGetCapabilities with health monitor feature enabled
     Given a VxFlexOS service
     And I call Probe
     When I call NodeGetCapabilities "true"
     Then a valid NodeGetCapabilitiesResponse is returned
-  
+
   Scenario: Call NodeGetCapabilities with health monitor feature disabled
     Given a VxFlexOS service
     And I call Probe
@@ -659,7 +659,7 @@ Feature: VxFlex OS CSI interface
     And I induce error "WrongVolIDError"
     And I call CreateSnapshot "snap1"
     Then the error contains "Failed to create snapshot"
-  
+
   Scenario: Snapshot a single fileSystem Volume
     Given a VxFlexOS service
     When I call Probe
@@ -668,8 +668,8 @@ Feature: VxFlex OS CSI interface
     Then a valid CreateVolumeResponse is returned
     And I call CreateSnapshot NFS "snap1"
     And no error was received
-     
-   Scenario: Idempotent Snapshot a single fileSystem Volume
+
+  Scenario: Idempotent Snapshot a single fileSystem Volume
     Given a VxFlexOS service
     When I call Probe
     And I specify CreateVolumeMountRequest "nfs"
@@ -679,8 +679,8 @@ Feature: VxFlex OS CSI interface
     And no error was received
     And I call CreateSnapshot NFS "snap1"
     And no error was received
-  
-   Scenario: Snapshot a single fileSystem Volume large name
+
+  Scenario: Snapshot a single fileSystem Volume large name
     Given a VxFlexOS service
     When I call Probe
     And I specify CreateVolumeMountRequest "nfs"
@@ -688,8 +688,8 @@ Feature: VxFlex OS CSI interface
     Then a valid CreateVolumeResponse is returned
     And I call CreateSnapshot NFS "snap-3m7xvJ-5dT4sPqfzY1Mv9KaZXc2Wb9A-"
     And no error was received
-  
-  Scenario: Request to create NFS Snapshot with same name and different SourceVolumeID 
+
+  Scenario: Request to create NFS Snapshot with same name and different SourceVolumeID
     Given a VxFlexOS service
     When I call Probe
     And I specify CreateVolumeMountRequest "nfs"
@@ -718,8 +718,8 @@ Feature: VxFlex OS CSI interface
     When I call Probe
     And I call CreateSnapshot "snap1"
     Then the error contains "volume not found"
-   
-  
+
+
   Scenario: Call snapshot create with GetFileSystemsByIdError
     Given a VxFlexOS service
     When I call Probe
@@ -729,8 +729,8 @@ Feature: VxFlex OS CSI interface
     And I induce error "GetFileSystemsByIdError"
     And I call CreateSnapshot NFS "snap1"
     Then the error contains "rpc error: code = NotFound desc = NFS volume 766f6c756d6531 not found"
-  
-    
+
+
   Scenario: Call snapshot create but recieve create snapshot error
     Given a VxFlexOS service
     When I call Probe
@@ -740,9 +740,9 @@ Feature: VxFlex OS CSI interface
     And I induce error "CreateSnapshotsError"
     And I call CreateSnapshot NFS "snap1"
     Then the error contains "error creating snapshot with name"
-    
 
-   Scenario: Call snapshot create but recieve snapshot with id not found error
+
+  Scenario: Call snapshot create but recieve snapshot with id not found error
     Given a VxFlexOS service
     When I call Probe
     And I specify CreateVolumeMountRequest "nfs"
@@ -751,7 +751,7 @@ Feature: VxFlex OS CSI interface
     And I induce error "GetSnashotByIdError"
     And I call CreateSnapshot NFS "snap1"
     Then the error contains " snapshot with ID 736e617031 was not found"
-    
+
 
   Scenario: Call snapshot create with no volume
     Given a VxFlexOS service
@@ -785,7 +785,7 @@ Feature: VxFlex OS CSI interface
     When I call Probe
     And I call DeleteSnapshot
     Then no error was received
-  
+
   Scenario: Delete a NFS snapshot no error
     Given a VxFlexOS service
     When I call Probe
@@ -793,8 +793,8 @@ Feature: VxFlex OS CSI interface
     And I call CreateVolume "volume1"
     Then a valid CreateVolumeResponse is returned
     And I call CreateSnapshot NFS "snap1"
-    And no error was received 
-     When I call Probe
+    And no error was received
+    When I call Probe
     And I call DeleteSnapshot NFS
     Then no error was received
 
@@ -806,16 +806,16 @@ Feature: VxFlex OS CSI interface
     Then no error was received
     And I call DeleteSnapshot
     Then no error was received
-    
-    Scenario: Idempotent delete a NFS snapshot no error
+
+  Scenario: Idempotent delete a NFS snapshot no error
     Given a VxFlexOS service
     When I call Probe
     And I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume1"
     Then a valid CreateVolumeResponse is returned
     And I call CreateSnapshot NFS "snap1"
-    And no error was received 
-     When I call Probe
+    And no error was received
+    When I call Probe
     And I call DeleteSnapshot NFS
     Then no error was received
     And I call DeleteSnapshot NFS
@@ -865,17 +865,17 @@ Feature: VxFlex OS CSI interface
     When I call Probe
     And I call DeleteSnapshot
     Then the error contains "error removing snapshot"
-  
-   Scenario: Delete a NFS snapshot delete snapshot error
+
+  Scenario: Delete a NFS snapshot delete snapshot error
     Given a VxFlexOS service
     When I call Probe
     And I specify CreateVolumeMountRequest "nfs"
     And I call CreateVolume "volume1"
     Then a valid CreateVolumeResponse is returned
     And I call CreateSnapshot NFS "snap1"
-    And no error was received 
+    And no error was received
     When I call Probe
-    And I induce error "DeleteSnapshotError" 
+    And I induce error "DeleteSnapshotError"
     And I call DeleteSnapshot NFS
     Then the error contains "error while deleting the filesystem snapshot"
 
@@ -948,11 +948,11 @@ Feature: VxFlex OS CSI interface
     And I call Create Volume from SnapshotNFS
     Then a valid CreateVolumeResponse is returned
     And no error was received
-     When I call Probe
+    When I call Probe
     And I call Create Volume from SnapshotNFS
     Then a valid CreateVolumeResponse is returned
     And no error was received
-    
+
   Scenario: Create a volume from a snapshot NFS snapshot not found error
     Given a VxFlexOS service
     And I call Probe
@@ -965,7 +965,7 @@ Feature: VxFlex OS CSI interface
     And I induce error "GetFileSystemsByIdError"
     And I call Create Volume from SnapshotNFS
     Then the error contains "Snapshot not found"
-    
+
   Scenario: Create a volume from a snapshot NFS incompatible size error
     Given a VxFlexOS service
     And I call Probe
@@ -978,7 +978,7 @@ Feature: VxFlex OS CSI interface
     When I call Probe
     And I call Create Volume from SnapshotNFS
     Then the error contains "incompatible size"
-  
+
   Scenario: Create a volume from a snapshot NFS different storage pool error
     Given a VxFlexOS service
     And I call Probe
@@ -991,7 +991,7 @@ Feature: VxFlex OS CSI interface
     When I call Probe
     And I call Create Volume from SnapshotNFS
     Then the error contains "different than the requested storage pool"
-   
+
   Scenario: Create a volume from a snapshot NFS restoreVolumeError
     Given a VxFlexOS service
     And I call Probe
@@ -1082,7 +1082,7 @@ Feature: VxFlex OS CSI interface
     And get Node Publish Volume Request
     And I call NodePublishVolume "SDC_GUID"
     And I induce error "EmptySysIDInNodeExpand"
-    When I call NodeExpandVolume with volumePath as "test/tmp/datadir"
+    When I call NodeExpandVolume with volumePath as "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d/datadir"
     Then the error contains "systemID is not found in the request and there is no default system"
 
   Scenario Outline: Call NodeExpandVolume with invalid volID
@@ -1096,7 +1096,7 @@ Feature: VxFlex OS CSI interface
     And I call NodePublishVolume "SDC_GUID"
     And no error was received
     And I induce error "WrongVolIDErrorInNodeExpand"
-    When I call NodeExpandVolume with volumePath as "test/tmp/datadir"
+    When I call NodeExpandVolume with volumePath as "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d/datadir"
     Then the error contains "not published to node"
 
   Scenario Outline: Call NodeExpandVolume
@@ -1115,39 +1115,39 @@ Feature: VxFlex OS CSI interface
     Examples:
       | error                                   | volPath             | errormsg                                    |
       | "none"                                  | ""                  | "Volume path required"                      |
-      | "none"                                  | "test/tmp/datadir"  | "none"                                      |
-      | "GOFSInduceFSTypeError"                 | "test/tmp/datadir"  | "Failed to fetch filesystem"                |
-      | "GOFSInduceResizeFSError"               | "test/tmp/datadir"  | "Failed to resize device"                   |
-      | "NoVolumeIDError"                       | "test/tmp/datadir"  | "volume ID is required"                     |
-      | "none"                                  | "not/a/path/1234"   | "Could not stat volume path"                |
-      | "none"                                  | "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d/d0f055a700000000" | "none"                                      |
-      | "CorrectFormatBadCsiVolIDInNodeExpand"  | "test/tmp/datadir"  | "is not configured in the driver"           |
-      | "VolumeIDTooShortErrorInNodeExpand"     | "test/tmp/datadir"  | "is shorter than 3 chars, returning error"  |
-      | "TooManyDashesVolIDInNodeExpand"        | "test/tmp/datadir"  | "is not configured in the driver"           |
-  
+      | "none"                                  | "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d/datadir"  | "none"                                      |
+      | "GOFSInduceFSTypeError"                 | "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d/datadir"  | "Failed to fetch filesystem"                |
+      | "GOFSInduceResizeFSError"               | "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d/datadir"  | "Failed to resize device"                   |
+      | "NoVolumeIDError"                       | "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d/datadir"  | "volume ID is required"                     |
+      | "none"                                  | "test/unexisting/target/path" | "Could not stat volume path"                |
+      | "none"                                  | "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d/datafile" | "none"                                      |
+      | "CorrectFormatBadCsiVolIDInNodeExpand"  | "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d/datadir"  | "is not configured in the driver"           |
+      | "VolumeIDTooShortErrorInNodeExpand"     | "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d/datadir"  | "is shorter than 3 chars, returning error"  |
+      | "TooManyDashesVolIDInNodeExpand"        | "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d/datadir"  | "is not configured in the driver"           |
+
   Scenario Outline: Call NodeGetVolumeStats with various errors
     Given a VxFlexOS service
     And a controller published volume
     And a capability with voltype "mount" access "single-writer" fstype "ext4"
     When I call Probe
     And I call NodePublishVolume "SDC_GUID"
-    And I induce error <error> 
+    And I induce error <error>
     And I call NodeGetVolumeStats
     Then the error contains <errormsg>
     And a correct NodeGetVolumeStats Response is returned
-    
+
     Examples:
-      | error                    | errormsg                          | 
-      | "none"                   | "none"                            | 
-      | "BadVolIDError"          | "id must be a hexadecimal"        | 
+      | error                    | errormsg                          |
+      | "none"                   | "none"                            |
+      | "BadVolIDError"          | "id must be a hexadecimal"        |
       | "NoVolIDError"           | "no volume ID  provided"          |
-      | "BadMountPathError"      | "none"                            | 
-      | "NoMountPathError"       | "no volume Path provided"         | 
-      | "NoVolIDSDCError"        | "none"                            |   
+      | "BadMountPathError"      | "none"                            |
+      | "NoMountPathError"       | "no volume Path provided"         |
+      | "NoVolIDSDCError"        | "none"                            |
       | "GOFSMockGetMountsError" | "none"                            |
       | "NoVolError"             | "none"                            |
       | "NoSysNameError"         | "systemID is not found"           |
-      | "WrongSystemError"       | "is not configured in the driver" | 
+      | "WrongSystemError"       | "is not configured in the driver" |
 
   Scenario: Call getSystemNameMatchingError, should get error in log but no error returned
     Given a VxFlexOS service
@@ -1287,29 +1287,29 @@ Feature: VxFlex OS CSI interface
     And I call Probe
     When I call ControllerGetVolume
     Then a valid ControllerGetVolumeResponse is returned
-  
+
   Scenario: Call ControllerGetVolume bad scenario
     Given a VxFlexOS service
     And I call Probe
     And I induce error "NoVolumeIDError"
     When I call ControllerGetVolume
     Then the error contains "volume ID is required"
-  
-  
+
+
   Scenario: getProtectionDomainIDFromName, everything works
     Given a VxFlexOS service
     And I call Probe
     When I call getProtectionDomainIDFromName "15dbbf5617523655" "mocksystem"
     Then the error contains "none"
 
-   
+
   Scenario: getProtectionDomainIDFromName, bad name
     Given a VxFlexOS service
     And I call Probe
     When I call getProtectionDomainIDFromName "15dbbf5617523655" "DoesNotExist"
     Then the error contains "Couldn't find protection domain"
- 
-   
+
+
   Scenario: getProtectionDomainIDFromName, no name provided
     Given a VxFlexOS service
     And I call Probe
@@ -1355,21 +1355,21 @@ Feature: VxFlex OS CSI interface
     When I call Probe
     And I call setQoSParameters with systemID "15dbbf5617523655" sdcID "d0f055a700000000" bandwidthLimit "10240" iopsLimit "10" volumeName "k8s-a031818af5" csiVolID "15dbbf5617523655-456ca4fc00000009" nodeID "9E56672F-2F4B-4A42-BFF4-88B6846FBFDA"
     Then the error contains "error setting QoS parameters"
-    
+
   Scenario: Call probe for renaming SDC with prefix
     Given a VxFlexOS service
     And I set renameSDC with renameEnabled "true" prefix "t"
     And I call Probe
     When I call Node Probe
     Then the error contains "none"
-    
+
   Scenario: Call probe for renaming SDC without prefix
-     Given a VxFlexOS service
-     And I set renameSDC with renameEnabled "true" prefix ""
-     And I call Probe
-     When I call Node Probe
-     Then the error contains "none"
-  
+    Given a VxFlexOS service
+    And I set renameSDC with renameEnabled "true" prefix ""
+    And I call Probe
+    When I call Node Probe
+    Then the error contains "none"
+
   Scenario: Call probe for renaming SDC, renameSdc error
     Given a VxFlexOS service
     And I induce error "SetSdcNameError"
@@ -1377,7 +1377,7 @@ Feature: VxFlex OS CSI interface
     And I call Probe
     When I call Node Probe
     Then the error contains "Failed to rename SDC"
-    
+
   Scenario: Call probe for renaming SDC, sdc error
     Given a VxFlexOS service
     And I induce error "GetSdcInstancesError"
@@ -1385,15 +1385,15 @@ Feature: VxFlex OS CSI interface
     And I call Probe
     When I call Node Probe
     Then the error contains "induced error"
-  
+
   Scenario: Call Probe for approving sdc
     Given a VxFlexOS service
     And I set approveSDC with approveSDCEnabled "true"
     And I call Probe
     When I call Node Probe
     Then the error contains "none"
-      
-   Scenario: Call Probe for approving sdc, invalid guid 
+
+  Scenario: Call Probe for approving sdc, invalid guid
     Given a VxFlexOS service
     And I induce error "ApproveSdcError"
     And I set approveSDC with approveSDCEnabled "true"
@@ -1549,11 +1549,11 @@ Feature: VxFlex OS CSI interface
     When I call Get NAS server from name <systemid> <nasservername>
     And I induce error <error>
     Then the error contains <errorMsg>
-     Examples:
+    Examples:
       |  systemid                  | nasservername                      |   error               |  errorMsg                                   |
-      |  "15dbbf5617523655"        | "dummy-nas-server"                 |   ""                  |  "none"                                     | 
-      |  "15dbbf5617523655"        | "invalid-nas-server-id"            |   "NasNotFoundError"  |  "could not find given NAS server by name"  | 
-      |  "15dbbf5617523655"        | ""                                 |   ""                  |  "NAS server not provided"                  |     
+      |  "15dbbf5617523655"        | "dummy-nas-server"                 |   ""                  |  "none"                                     |
+      |  "15dbbf5617523655"        | "invalid-nas-server-id"            |   "NasNotFoundError"  |  "could not find given NAS server by name"  |
+      |  "15dbbf5617523655"        | ""                                 |   ""                  |  "NAS server not provided"                  |
 
   Scenario: Ping a NAS server by name
     Given a VxFlexOS service
@@ -1563,9 +1563,9 @@ Feature: VxFlex OS CSI interface
     Then the error contains <errorMsg>
     Examples:
       |  systemid                  | nasserver                                |   error                         |  errorMsg                   |
-      |  "15dbbf5617523655"        | "63ec8e0d-4551-29a7-e79c-b202f2b914f3"   |   ""                            | "none"                      |   
-      |  "15dbbf5617523655"        | "invalid-nas-server"                     |   "NasNotFoundError"            |  "NAS server not found"     |  
-  
+      |  "15dbbf5617523655"        | "63ec8e0d-4551-29a7-e79c-b202f2b914f3"   |   ""                            | "none"                      |
+      |  "15dbbf5617523655"        | "invalid-nas-server"                     |   "NasNotFoundError"            |  "NAS server not found"     |
+
   Scenario: Create Volume for multi-available zone
     Given a VxFlexOS service
     And I use config <config>
@@ -1592,7 +1592,7 @@ Feature: VxFlex OS CSI interface
       | config             |
       | "multi_az"         |
       | "multi_az_custom_labels" |
-  
+
   Scenario: Snapshot a single volume in zone
     Given a VxFlexOS service
     And I use config <config>
@@ -1604,20 +1604,20 @@ Feature: VxFlex OS CSI interface
     And I call Create Volume for zones from Snapshot <name>
     Then a valid CreateVolumeResponse is returned
     Examples:
-      | name      | config             | errorMsg       |    
+      | name      | config             | errorMsg       |
       | "snap1"   | "multi_az"         | "none"         |
-      
+
   Scenario: Clone a single volume in zone
     Given a VxFlexOS service
     And I use config <config>
     When I call Probe
     And I call CreateVolume <name> with zones
-    And a valid CreateVolumeResponse is returned    
+    And a valid CreateVolumeResponse is returned
     And I call Clone volume for zones <name>
     Then a valid CreateVolumeResponse is returned
     Examples:
-      | name      | config             | errorMsg       |    
-      | "volume1"   | "multi_az"       | "none"         |     
+      | name      | config             | errorMsg       |
+      | "volume1"   | "multi_az"       | "none"         |
 
   Scenario: Probe all systems using availability zones
     Given a VxFlexOS service

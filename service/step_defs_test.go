@@ -21,6 +21,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"path/filepath"
 
 	"runtime"
 	"strconv"
@@ -47,7 +48,6 @@ import (
 	storage "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
-	"path/filepath"
 )
 
 const (
@@ -65,9 +65,9 @@ const (
 	goodArrayConfig            = "./features/array-config/config"
 	goodDriverConfig           = "./features/driver-config/logConfig.yaml"
 	altNodeID                  = "7E012974-3651-4DCB-9954-25975A3C3CDF"
-	datafile                   = "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d/d0f055a700000000"
+	datafile                   = "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d/datafile"
 	datadir                    = "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d/datadir"
-	badtarget                  = "/nonexist/target"
+	badtarget                  = "unexisting/target/path"
 	altdatadir                 = "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d/altdatadir"
 	altdatafile                = "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d/altdatafile"
 	sdcVolume1                 = "d0f055a700000000"
@@ -1275,7 +1275,7 @@ func (f *feature) iInduceError(errtype string) error {
 	case "NodePublishNoTargetPath":
 		f.nodePublishVolumeRequest.TargetPath = ""
 	case "NodePublishBadTargetPath":
-		f.nodePublishVolumeRequest.TargetPath = badtarget
+		f.nodePublishVolumeRequest.TargetPath = filepath.Join(testBaseDir, badtarget)
 	case "NodePublishBlockTargetNotFile":
 		f.nodePublishVolumeRequest.TargetPath = datadir
 	case "NodePublishFileTargetNotDir":
@@ -2916,6 +2916,15 @@ func (f *feature) iCallNodePublishVolumeNFS(arg1 string) error {
 		_ = f.getNodePublishVolumeRequestNFS()
 		req = f.nodePublishVolumeRequest
 	}
+
+	// Ensure that the targetPath parent directory exists
+	targetPath := req.GetTargetPath()
+	if !strings.HasSuffix(targetPath, badtarget) {
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+			return fmt.Errorf("failed to create parent directory for targetPath %s: %v", targetPath, err)
+		}
+	}
+
 	fmt.Printf("Calling NodePublishVolume\n")
 	fmt.Printf("nodePV req is: %v \n", req)
 	_, err := f.service.NodePublishVolume(ctx, req)
