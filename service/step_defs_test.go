@@ -14,6 +14,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -22,7 +23,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-
 	"runtime"
 	"strconv"
 	"strings"
@@ -35,7 +35,6 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
-	"context"
 	"github.com/cucumber/godog"
 	"github.com/dell/dell-csi-extensions/podmon"
 	"github.com/dell/dell-csi-extensions/replication"
@@ -5144,7 +5143,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^a NodeGetInfo is returned without zone system topology$`, f.aNodeGetInfoIsReturnedWithoutZoneSystemTopology)
 	s.Step(`^I call systemProbeAll in mode "([^"]*)"`, f.iCallSystemProbeAll)
 
-	s.Before(func(ctx context.Context, sc *godog.Scenario) (context.Context, error) {
+	s.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
 		// Cleanup test directory before each test
 		if err := os.RemoveAll(testBaseDir); err != nil {
 			return ctx, fmt.Errorf("failed to remove test directory: %v", err)
