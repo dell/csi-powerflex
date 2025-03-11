@@ -47,6 +47,7 @@ import (
 	storage "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
+	"path/filepath"
 )
 
 const (
@@ -1242,7 +1243,8 @@ func (f *feature) iInduceError(errtype string) error {
 			return err
 		}
 	case "PrivateDirectoryNotExistForNodePublish":
-		f.service.privDir = "xxx/yyy"
+		// Assign an unexisting path
+		f.service.privDir = filepath.Join(testBaseDir, "xxx/yyy")
 	case "BlockMkfilePrivateDirectoryNodePublish":
 		f.service.privDir = datafile
 	case "NodePublishNoVolumeCapability":
