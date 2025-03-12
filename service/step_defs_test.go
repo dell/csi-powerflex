@@ -2919,7 +2919,8 @@ func (f *feature) iCallNodePublishVolumeNFS(arg1 string) error {
 	// Ensure that the targetPath parent directory exists
 	targetPath := req.GetTargetPath()
 	if !strings.HasSuffix(targetPath, badtarget) {
-		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+		err := os.MkdirAll(filepath.Dir(filepath.Clean(targetPath)), 0o755)
+		if err != nil {
 			return fmt.Errorf("failed to create parent directory for targetPath %s: %v", targetPath, err)
 		}
 	}
@@ -5143,7 +5144,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^a NodeGetInfo is returned without zone system topology$`, f.aNodeGetInfoIsReturnedWithoutZoneSystemTopology)
 	s.Step(`^I call systemProbeAll in mode "([^"]*)"`, f.iCallSystemProbeAll)
 
-	s.Before(func(ctx context.Context, sc *godog.Scenario) (context.Context, error) {
+	s.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
 		// Cleanup test directory before each test
 		if err := os.RemoveAll(testBaseDir); err != nil {
 			return ctx, fmt.Errorf("failed to remove test directory: %v", err)
