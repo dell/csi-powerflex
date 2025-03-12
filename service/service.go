@@ -561,7 +561,6 @@ func (s *service) BeforeServe(
 func (s *service) updateConfigMap(getIPAddressByInterfacefunc GetIPAddressByInterfacefunc, configFilePath string) {
 	v := viper.New()
 	v.SetConfigFile(configFilePath)
-	v.AutomaticEnv()
 
 	// Read the configmap file
 	if err := v.ReadInConfig(); err != nil {
@@ -570,18 +569,18 @@ func (s *service) updateConfigMap(getIPAddressByInterfacefunc GetIPAddressByInte
 	}
 
 	// Unmarshal the configmap into a map
-	var config map[string]interface{}
+	var config Config
 	if err := v.Unmarshal(&config); err != nil {
 		Log.Errorf("Failed to parse configMap data: %v", err)
 		return
 	}
 
 	updateInterfaceNamesWithIPs := map[string]string{}
-	for node, interfaceList := range config["InterfaceNames"].(map[string]interface{}) {
+	for node, interfaceList := range config.InterfaceNames {
 		if !strings.EqualFold(node, s.opts.KubeNodeName) {
 			continue
 		}
-		interfaces := strings.Split(interfaceList.(string), ",")
+		interfaces := strings.Split(interfaceList, ",")
 		var ipAddresses []string
 
 		for _, interfaceName := range interfaces {
@@ -602,7 +601,7 @@ func (s *service) updateConfigMap(getIPAddressByInterfacefunc GetIPAddressByInte
 
 	// Update the config data with the new Interface IPs
 	for node, ipAddressList := range updateInterfaceNamesWithIPs {
-		config["InterfaceNames"].(map[string]interface{})[node] = ipAddressList
+		config.InterfaceNames[node] = ipAddressList
 	}
 
 	// Marshal the updated configuration back to YAML
