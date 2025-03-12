@@ -1082,7 +1082,7 @@ Feature: VxFlex OS CSI interface
     And get Node Publish Volume Request
     And I call NodePublishVolume "SDC_GUID"
     And I induce error "EmptySysIDInNodeExpand"
-    When I call NodeExpandVolume with volumePath as "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d/datadir"
+    When I call NodeExpandVolume with volumePath as "test/00000000-1111-0000-0000-000000000000/datadir"
     Then the error contains "systemID is not found in the request and there is no default system"
 
   Scenario Outline: Call NodeExpandVolume with invalid volID
@@ -1096,7 +1096,7 @@ Feature: VxFlex OS CSI interface
     And I call NodePublishVolume "SDC_GUID"
     And no error was received
     And I induce error "WrongVolIDErrorInNodeExpand"
-    When I call NodeExpandVolume with volumePath as "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d/datadir"
+    When I call NodeExpandVolume with volumePath as "test/00000000-1111-0000-0000-000000000000/datadir"
     Then the error contains "not published to node"
 
   Scenario Outline: Call NodeExpandVolume
@@ -1115,15 +1115,15 @@ Feature: VxFlex OS CSI interface
     Examples:
       | error                                   | volPath             | errormsg                                    |
       | "none"                                  | ""                  | "Volume path required"                      |
-      | "none"                                  | "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d/datadir"  | "none"                                      |
-      | "GOFSInduceFSTypeError"                 | "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d/datadir"  | "Failed to fetch filesystem"                |
-      | "GOFSInduceResizeFSError"               | "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d/datadir"  | "Failed to resize device"                   |
-      | "NoVolumeIDError"                       | "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d/datadir"  | "volume ID is required"                     |
+      | "none"                                 | "test/00000000-1111-0000-0000-000000000000/datadir"  | "none"                                     |
+      | "GOFSInduceFSTypeError"                | "test/00000000-1111-0000-0000-000000000000/datadir"  | "Failed to fetch filesystem"               |
+      | "GOFSInduceResizeFSError"              | "test/00000000-1111-0000-0000-000000000000/datadir"  | "Failed to resize device"                  |
+      | "NoVolumeIDError"                      | "test/00000000-1111-0000-0000-000000000000/datadir"  | "volume ID is required"                    |
       | "none"                                  | "test/unexisting/target/path" | "Could not stat volume path"                |
-      | "none"                                  | "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d/datafile" | "none"                                      |
-      | "CorrectFormatBadCsiVolIDInNodeExpand"  | "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d/datadir"  | "is not configured in the driver"           |
-      | "VolumeIDTooShortErrorInNodeExpand"     | "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d/datadir"  | "is shorter than 3 chars, returning error"  |
-      | "TooManyDashesVolIDInNodeExpand"        | "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d/datadir"  | "is not configured in the driver"           |
+      | "none"                                 | "test/00000000-1111-0000-0000-000000000000/datafile" | "none"                                     |
+      | "CorrectFormatBadCsiVolIDInNodeExpand" | "test/00000000-1111-0000-0000-000000000000/datadir"  | "is not configured in the driver"          |
+      | "VolumeIDTooShortErrorInNodeExpand"    | "test/00000000-1111-0000-0000-000000000000/datadir"  | "is shorter than 3 chars, returning error" |
+      | "TooManyDashesVolIDInNodeExpand"       | "test/00000000-1111-0000-0000-000000000000/datadir"  | "is not configured in the driver"          |
 
   Scenario Outline: Call NodeGetVolumeStats with various errors
     Given a VxFlexOS service

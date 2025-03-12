@@ -64,11 +64,11 @@ const (
 	goodArrayConfig            = "./features/array-config/config"
 	goodDriverConfig           = "./features/driver-config/logConfig.yaml"
 	altNodeID                  = "7E012974-3651-4DCB-9954-25975A3C3CDF"
-	datafile                   = "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d/datafile"
-	datadir                    = "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d/datadir"
+	datafile                   = "test/00000000-1111-0000-0000-000000000000/datafile"
+	datadir                    = "test/00000000-1111-0000-0000-000000000000/datadir"
 	badtarget                  = "unexisting/target/path"
-	altdatadir                 = "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d/altdatadir"
-	altdatafile                = "test/d420f00c-65a0-46d9-99a5-40fd0cbeb96d/altdatafile"
+	altdatadir                 = "test/00000000-1111-0000-0000-000000000000/altdatadir"
+	altdatafile                = "test/00000000-1111-0000-0000-000000000000/altdatafile"
 	sdcVolume1                 = "d0f055a700000000"
 	sdcVolume2                 = "c0f055aa00000000"
 	sdcVolume0                 = "0000000000000000"
@@ -5143,7 +5143,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^a NodeGetInfo is returned without zone system topology$`, f.aNodeGetInfoIsReturnedWithoutZoneSystemTopology)
 	s.Step(`^I call systemProbeAll in mode "([^"]*)"`, f.iCallSystemProbeAll)
 
-	s.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
+	s.Before(func(ctx context.Context, sc *godog.Scenario) (context.Context, error) {
 		// Cleanup test directory before each test
 		if err := os.RemoveAll(testBaseDir); err != nil {
 			return ctx, fmt.Errorf("failed to remove test directory: %v", err)
