@@ -66,7 +66,7 @@ const (
 	altNodeID                  = "7E012974-3651-4DCB-9954-25975A3C3CDF"
 	datafile                   = "test/00000000-1111-0000-0000-000000000000/datafile"
 	datadir                    = "test/00000000-1111-0000-0000-000000000000/datadir"
-	badtarget                  = "unexisting/target/path"
+	badtarget                  = "nonexistent/target/path"
 	altdatadir                 = "test/00000000-1111-0000-0000-000000000000/altdatadir"
 	altdatafile                = "test/00000000-1111-0000-0000-000000000000/altdatafile"
 	sdcVolume1                 = "d0f055a700000000"
@@ -1242,7 +1242,7 @@ func (f *feature) iInduceError(errtype string) error {
 			return err
 		}
 	case "PrivateDirectoryNotExistForNodePublish":
-		// Assign an unexisting path
+		// Assign a non-existent path
 		f.service.privDir = filepath.Join(testBaseDir, "xxx/yyy")
 	case "BlockMkfilePrivateDirectoryNodePublish":
 		f.service.privDir = datafile
