@@ -559,26 +559,29 @@ func (s *service) BeforeServe(
 }
 
 func (s *service) updateConfigMap(getIPAddressByInterfacefunc GetIPAddressByInterfacefunc, configFilePath string) {
-	configFileData, err := os.ReadFile(filepath.Clean(configFilePath))
-	if err != nil {
+	v := viper.New()
+	v.SetConfigFile(configFilePath)
+	v.AutomaticEnv()
+
+	// Read the configmap file
+	if err := v.ReadInConfig(); err != nil {
 		Log.Errorf("Failed to read ConfigMap file: %v", err)
 		return
 	}
 
-	var config Config
-	err = yaml.Unmarshal(configFileData, &config)
-	if err != nil {
+	// Unmarshal the configmap into a map
+	var config map[string]interface{}
+	if err := v.Unmarshal(&config); err != nil {
 		Log.Errorf("Failed to parse configMap data: %v", err)
 		return
 	}
 
 	updateInterfaceNamesWithIPs := map[string]string{}
-	for node, interfaceList := range config.InterfaceNames {
-
+	for node, interfaceList := range config["InterfaceNames"].(map[string]interface{}) {
 		if !strings.EqualFold(node, s.opts.KubeNodeName) {
 			continue
 		}
-		interfaces := strings.Split(interfaceList, ",")
+		interfaces := strings.Split(interfaceList.(string), ",")
 		var ipAddresses []string
 
 		for _, interfaceName := range interfaces {
@@ -597,39 +600,25 @@ func (s *service) updateConfigMap(getIPAddressByInterfacefunc GetIPAddressByInte
 		}
 	}
 
-	// Read the vxflexos-config-params ConfigMap from the volume mount
-	existingYaml, err := os.ReadFile(filepath.Clean(configFilePath))
-	if err != nil {
-		Log.Errorf("Failed to read ConfigMap file from volume mount: %v", err)
-		return
+	// Update the config data with the new Interface IPs
+	for node, ipAddressList := range updateInterfaceNamesWithIPs {
+		config["InterfaceNames"].(map[string]interface{})[node] = ipAddressList
 	}
 
-	var configData map[string]interface{}
-	err = yaml.Unmarshal(existingYaml, &configData)
-	if err != nil {
-		Log.Errorf("Failed to parse ConfigMap data: %v", err)
-		return
-	}
-
-	// Check and update Interfaces with the IPs
-	if interfaceNames, ok := configData["interfaceNames"].(map[string]interface{}); ok {
-		for node, ipAddressList := range updateInterfaceNamesWithIPs {
-			interfaceNames[node] = ipAddressList
-		}
-	} else {
-		Log.Errorf("interfaceNames key missing or not in expected format")
-		return
-	}
-
-	updatedYaml, err := yaml.Marshal(configData)
+	// Marshal the updated configuration back to YAML
+	updatedYaml, err := yaml.Marshal(config)
 	if err != nil {
 		Log.Errorf("Failed to marshal updated data: %v", err)
 		return
 	}
 
-	// Update the vxflexos-config-params ConfigMap
-	err = os.WriteFile(filepath.Clean(configFilePath), updatedYaml, 0644)
-	if err != nil {
+	// Write the updated configmap
+	v.SetConfigType("yaml")
+	if err := v.ReadConfig(strings.NewReader(string(updatedYaml))); err != nil {
+		Log.Errorf("Failed to read updated config: %v", err)
+		return
+	}
+	if err := v.WriteConfig(); err != nil {
 		Log.Errorf("Failed to update ConfigMap: %v", err)
 		return
 	}
