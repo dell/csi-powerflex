@@ -1,4 +1,4 @@
-// Copyright © 2019-2024 Dell Inc. or its subsidiaries. All Rights Reserved.
+// Copyright © 2019-2025 Dell Inc. or its subsidiaries. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -21,6 +22,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -40,7 +42,6 @@ import (
 	"github.com/dell/gofsutil"
 	"github.com/dell/goscaleio"
 	types "github.com/dell/goscaleio/types/v1"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc/metadata"
 	v1 "k8s.io/api/core/v1"
 	storage "k8s.io/api/storage/v1"
@@ -49,6 +50,7 @@ import (
 )
 
 const (
+	testBaseDir                = "test"
 	arrayID                    = "14dbbf5617523654"
 	arrayID2                   = "15dbbf5617523655"
 	badVolumeID                = "Totally Fake ID"
@@ -62,11 +64,11 @@ const (
 	goodArrayConfig            = "./features/array-config/config"
 	goodDriverConfig           = "./features/driver-config/logConfig.yaml"
 	altNodeID                  = "7E012974-3651-4DCB-9954-25975A3C3CDF"
-	datafile                   = "test/tmp/datafile"
-	datadir                    = "test/tmp/datadir"
-	badtarget                  = "/nonexist/target"
-	altdatadir                 = "test/tmp/altdatadir"
-	altdatafile                = "test/tmp/altdatafile"
+	datafile                   = "test/00000000-1111-0000-0000-000000000000/datafile"
+	datadir                    = "test/00000000-1111-0000-0000-000000000000/datadir"
+	badtarget                  = "nonexistent/target/path"
+	altdatadir                 = "test/00000000-1111-0000-0000-000000000000/altdatadir"
+	altdatafile                = "test/00000000-1111-0000-0000-000000000000/altdatafile"
 	sdcVolume1                 = "d0f055a700000000"
 	sdcVolume2                 = "c0f055aa00000000"
 	sdcVolume0                 = "0000000000000000"
@@ -1240,7 +1242,8 @@ func (f *feature) iInduceError(errtype string) error {
 			return err
 		}
 	case "PrivateDirectoryNotExistForNodePublish":
-		f.service.privDir = "xxx/yyy"
+		// Assign a non-existent path
+		f.service.privDir = filepath.Join(testBaseDir, "xxx/yyy")
 	case "BlockMkfilePrivateDirectoryNodePublish":
 		f.service.privDir = datafile
 	case "NodePublishNoVolumeCapability":
@@ -1271,7 +1274,7 @@ func (f *feature) iInduceError(errtype string) error {
 	case "NodePublishNoTargetPath":
 		f.nodePublishVolumeRequest.TargetPath = ""
 	case "NodePublishBadTargetPath":
-		f.nodePublishVolumeRequest.TargetPath = badtarget
+		f.nodePublishVolumeRequest.TargetPath = filepath.Join(testBaseDir, badtarget)
 	case "NodePublishBlockTargetNotFile":
 		f.nodePublishVolumeRequest.TargetPath = datadir
 	case "NodePublishFileTargetNotDir":
@@ -2628,6 +2631,17 @@ func (f *feature) aControllerPublishedEphemeralVolume() error {
 }
 
 func (f *feature) aControllerPublishedVolume() error {
+	f.controllerPublishVolume()
+	return nil
+}
+
+func (f *feature) aControllerPublishedVolumeWithPrivateTargetEqualMountPath() error {
+	f.controllerPublishVolume()
+	f.service.privDir = "test/private"
+	return nil
+}
+
+func (f *feature) controllerPublishVolume() {
 	fmt.Printf("setting up dev directory, block device, and symlink\n")
 	// Make the directories; on Windows these show up in C:/dev/...
 	_, err := os.Stat(nodePublishSymlinkDir)
@@ -2638,7 +2652,7 @@ func (f *feature) aControllerPublishedVolume() error {
 		}
 	}
 
-	// Remove the private staging directory directory
+	// Remove the private staging directory
 	cmd := exec.Command("rm", "-rf", "features/"+sdcVolume1)
 	_, err = cmd.CombinedOutput()
 	if err != nil {
@@ -2694,7 +2708,6 @@ func (f *feature) aControllerPublishedVolume() error {
 	gofsutil.GOFSMockMounts = gofsutil.GOFSMockMounts[:0]
 	// Set variables in mount for unit testing
 	unitTestEmulateBlockDevice = true
-	return nil
 }
 
 func (f *feature) twoIdenticalVolumesOnTwoDifferentSystems() error {
@@ -2877,6 +2890,7 @@ func (f *feature) iCallNodePublishVolume(arg1 string) error {
 		_ = f.getNodePublishVolumeRequest()
 		req = f.nodePublishVolumeRequest
 	}
+
 	fmt.Printf("Calling NodePublishVolume\n")
 	fmt.Printf("nodePV req is: %v \n", req)
 	_, err := f.service.NodePublishVolume(ctx, req)
@@ -2901,6 +2915,16 @@ func (f *feature) iCallNodePublishVolumeNFS(arg1 string) error {
 		_ = f.getNodePublishVolumeRequestNFS()
 		req = f.nodePublishVolumeRequest
 	}
+
+	// Ensure that the targetPath parent directory exists
+	targetPath := req.GetTargetPath()
+	if !strings.HasSuffix(targetPath, badtarget) {
+		err := os.MkdirAll(filepath.Dir(filepath.Clean(targetPath)), 0o755)
+		if err != nil {
+			return fmt.Errorf("failed to create parent directory for targetPath %s: %v", targetPath, err)
+		}
+	}
+
 	fmt.Printf("Calling NodePublishVolume\n")
 	fmt.Printf("nodePV req is: %v \n", req)
 	_, err := f.service.NodePublishVolume(ctx, req)
@@ -3191,6 +3215,27 @@ func (f *feature) thereAreNoRemainingMounts() error {
 		return errors.New("expected all mounts to be removed but one or more remained")
 	}
 	return nil
+}
+
+func (f *feature) thereAreRemainingMounts() error {
+	fmt.Println("check mounts")
+	fmt.Println(gofsutil.GOFSMockMounts)
+	if len(gofsutil.GOFSMockMounts) == 0 {
+		return errors.New("expected mounts to exist")
+	}
+	return nil
+}
+
+func (f *feature) thereIsMount(path string) {
+	if path != "" {
+		split := strings.Split(path, ",")
+		for _, p := range split {
+			gofsutil.GOFSMockMounts = append(gofsutil.GOFSMockMounts, gofsutil.Info{
+				Device: "test/dev/scinia",
+				Path:   p,
+			})
+		}
+	}
 }
 
 func (f *feature) theConfigMapIsUpdated() error {
@@ -4863,6 +4908,7 @@ func (f *feature) aNodeGetInfoIsReturnedWithoutZoneSystemTopology() error {
 
 func FeatureContext(s *godog.ScenarioContext) {
 	f := &feature{}
+
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
 	s.Step(`^a VxFlexOS service with timeout (\d+) milliseconds$`, f.aVxFlexOSServiceWithTimeoutMilliseconds)
 	s.Step(`^I call GetPluginInfo$`, f.iCallGetPluginInfo)
@@ -4958,6 +5004,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^undo setup Get SystemID to fail$`, f.undoSetupGetSystemIDtoFail)
 	s.Step(`^a capability with voltype "([^"]*)" access "([^"]*)" fstype "([^"]*)"$`, f.aCapabilityWithVoltypeAccessFstype)
 	s.Step(`^a controller published volume$`, f.aControllerPublishedVolume)
+	s.Step(`^a controller published volume with the private target equalling the mount path$`, f.aControllerPublishedVolumeWithPrivateTargetEqualMountPath)
 	s.Step(`^I call NodePublishVolume "([^"]*)"$`, f.iCallNodePublishVolume)
 	s.Step(`^I call NodePublishVolume NFS "([^"]*)"$`, f.iCallNodePublishVolumeNFS)
 	s.Step(`^I call CleanupPrivateTarget$`, f.iCallCleanupPrivateTarget)
@@ -4976,6 +5023,8 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I mark request read only$`, f.iMarkRequestReadOnly)
 	s.Step(`^I call NodeUnpublishVolume "([^"]*)"$`, f.iCallNodeUnpublishVolume)
 	s.Step(`^there are no remaining mounts$`, f.thereAreNoRemainingMounts)
+	s.Step(`^there are remaining mounts$`, f.thereAreRemainingMounts)
+	s.Step(`^I create mount "([^"]*)"$`, f.thereIsMount)
 	s.Step(`^I call BeforeServe$`, f.iCallBeforeServe)
 	s.Step(`^configMap is updated$`, f.theConfigMapIsUpdated)
 	s.Step(`^I induce SDC dependency$`, f.iInduceSDCDependency)
@@ -5094,6 +5143,17 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^a NodeGetInfo is returned without zone topology$`, f.aNodeGetInfoIsReturnedWithoutZoneTopology)
 	s.Step(`^a NodeGetInfo is returned without zone system topology$`, f.aNodeGetInfoIsReturnedWithoutZoneSystemTopology)
 	s.Step(`^I call systemProbeAll in mode "([^"]*)"`, f.iCallSystemProbeAll)
+
+	s.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
+		// Cleanup test directory before each test
+		if err := os.RemoveAll(testBaseDir); err != nil {
+			return ctx, fmt.Errorf("failed to remove test directory: %v", err)
+		}
+		if err := os.MkdirAll(testBaseDir, 0o755); err != nil {
+			return ctx, fmt.Errorf("failed to create test directory: %v", err)
+		}
+		return ctx, nil
+	})
 
 	s.After(func(ctx context.Context, _ *godog.Scenario, _ error) (context.Context, error) {
 		if f.server != nil {
