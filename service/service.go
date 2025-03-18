@@ -541,7 +541,9 @@ func (s *service) BeforeServe(
 	s.systems = make(map[string]*sio.System)
 
 	// Update the ConfigMap with the Interface IPs
-	s.updateConfigMap(s.getIPAddressByInterface, ConfigMapFilePath)
+	if s.mode == "node" {
+		s.updateConfigMap(s.getIPAddressByInterface, ConfigMapFilePath)
+	}
 
 	if _, ok := csictx.LookupEnv(ctx, "X_CSI_VXFLEXOS_NO_PROBE_ON_START"); !ok {
 		Log.Printf("BeforeServe probing starting %s", time.Now().Format("15:04:05.000000000"))
@@ -559,6 +561,10 @@ func (s *service) BeforeServe(
 }
 
 func (s *service) updateConfigMap(getIPAddressByInterfacefunc GetIPAddressByInterfacefunc, configFilePath string) {
+	// Prepare driverConfigMap name using the release name
+	releaseName := os.Getenv("RELEASE_NAME")
+	driverConfigMap := releaseName + "-config-params"
+
 	configFileData, err := os.ReadFile(filepath.Clean(configFilePath))
 	if err != nil {
 		Log.Errorf("Failed to read ConfigMap file: %v", err)
@@ -608,7 +614,7 @@ func (s *service) updateConfigMap(getIPAddressByInterfacefunc GetIPAddressByInte
 	}
 
 	// Get the vxflexos-config-params ConfigMap
-	cm, err := K8sClientset.CoreV1().ConfigMaps(DriverNamespace).Get(context.TODO(), DriverConfigMap, metav1.GetOptions{})
+	cm, err := K8sClientset.CoreV1().ConfigMaps(DriverNamespace).Get(context.TODO(), driverConfigMap, metav1.GetOptions{})
 	if err != nil {
 		Log.Errorf("Failed to get ConfigMap: %v", err)
 		return
