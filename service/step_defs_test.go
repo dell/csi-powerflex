@@ -3334,6 +3334,7 @@ func (f *feature) iCallBeforeServe() error {
 		K8sClientset = nil
 	}
 	os.Setenv(gocsi.EnvVarMode, "node")
+	defer os.Unsetenv(gocsi.EnvVarMode)
 	f.err = f.service.BeforeServe(ctx, nil, listener)
 	listener.Close()
 	return nil
