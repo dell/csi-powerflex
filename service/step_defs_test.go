@@ -39,6 +39,7 @@ import (
 	"github.com/dell/dell-csi-extensions/podmon"
 	"github.com/dell/dell-csi-extensions/replication"
 	volGroupSnap "github.com/dell/dell-csi-extensions/volumeGroupSnapshot"
+	"github.com/dell/gocsi"
 	"github.com/dell/gofsutil"
 	"github.com/dell/goscaleio"
 	types "github.com/dell/goscaleio/types/v1"
@@ -3294,6 +3295,7 @@ func (f *feature) theConfigMapIsUpdated() error {
 
 	s := &service{}
 	s.opts.KubeNodeName = "worker1"
+	os.Setenv("RELEASE_NAME", "vxflexos")
 	s.updateConfigMap(GetIPAddressByInterface, "driver-config-params.yaml")
 	return nil
 }
@@ -3331,6 +3333,7 @@ func (f *feature) iCallBeforeServe() error {
 	if stepHandlersErrors.UpdateConfigK8sClientError {
 		K8sClientset = nil
 	}
+	os.Setenv(gocsi.EnvVarMode, "node")
 	f.err = f.service.BeforeServe(ctx, nil, listener)
 	listener.Close()
 	return nil
