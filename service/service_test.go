@@ -1,4 +1,4 @@
-// Copyright © 2019-2022 Dell Inc. or its subsidiaries. All Rights Reserved.
+// Copyright © 2019-2025 Dell Inc. or its subsidiaries. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,15 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	defaultGetTargetPathPrefix := getTargetPathPrefix
+	defer func() {
+		getTargetPathPrefix = defaultGetTargetPathPrefix
+	}()
+
+	getTargetPathPrefix = func() string {
+		return "test/"
+	}
+
 	server := &http.Server{
 		Addr:              "localhost:6060",
 		ReadHeaderTimeout: 60 * time.Second,

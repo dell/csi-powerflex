@@ -21,8 +21,9 @@ import (
 	"strings"
 	"time"
 
-	csi "github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/dell/gofsutil"
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -470,24 +471,19 @@ func isVolumeMounted(ctx context.Context, filterStr string, target string) (bool
 
 	if len(mnts) != 0 {
 		// Idempotence check not to return error if not published
-		mounted := false
 		for _, m := range mnts {
 			if strings.Contains(m.Device, filterStr) {
 				if m.Path == target {
-					mounted = true
-					return mounted, nil
+					return true, nil
 				}
 			}
 		}
-		if mounted == false {
-			Log.Debugf("target '%s' does not exist", target)
-			return mounted, nil
-		}
-	} else {
-		// No mount exists also means not published
 		Log.Debugf("target '%s' does not exist", target)
 		return false, nil
 	}
+
+	// No mount exists also means not published
+	Log.Debugf("target '%s' does not exist", target)
 	return false, nil
 }
 
@@ -638,6 +634,7 @@ func unpublishVolume(
 
 	tgtMntExist := false
 	privMntExist := false
+	keepPrivMnt := false
 	var deviceMount gofsutil.Info
 	for _, m := range mnts {
 		if m.Source == sysDevice.RealDev || m.Device == sysDevice.RealDev || m.Device == sysDevice.FullPath {
@@ -648,6 +645,14 @@ func unpublishVolume(
 				tgtMntExist = true
 				deviceMount = m
 				Log.Printf("Found target mount for device %#v, target mount path: %s .", sysDevice, target)
+			} else {
+				// Check if this is a target mount for another pod in which case we should not unmount the private target
+				thisPodID := getPodIDFromTargetPath(target)
+				thatPodID := getPodIDFromTargetPath(m.Path)
+				if thisPodID != "" && thatPodID != "" && thisPodID != thatPodID {
+					Log.Infof("Will not unmount the private mount since another pod is using this volume: %s", m.Path)
+					keepPrivMnt = true
+				}
 			}
 		}
 	}
@@ -667,7 +672,7 @@ func unpublishVolume(
 		}
 	}
 
-	if privMntExist {
+	if privMntExist && !keepPrivMnt {
 		Log.WithFields(f).Debug(fmt.Sprintf("Unmounting %s", privTgt))
 		if err := unmountPrivMount(ctx, sysDevice, privTgt); err != nil {
 			return status.Errorf(codes.Internal,
@@ -676,6 +681,26 @@ func unpublishVolume(
 	}
 
 	return nil
+}
+
+var getTargetPathPrefix = func() string {
+	return "/var/lib/kubelet/pods/"
+}
+
+// Parse the target path to get the pod ID
+// Assume target path looks like: /var/lib/kubelet/pods/{podID}/volumes/...
+func getPodIDFromTargetPath(targetPath string) string {
+	if strings.HasPrefix(targetPath, getTargetPathPrefix()) {
+		targetPath = strings.TrimPrefix(targetPath, getTargetPathPrefix())
+		parts := strings.Split(targetPath, "/")
+		if len(parts) > 1 {
+			// check if parts[0] is a UUID
+			if _, err := uuid.Parse(parts[0]); err == nil {
+				return parts[0]
+			}
+		}
+	}
+	return ""
 }
 
 func unmountPrivMount(

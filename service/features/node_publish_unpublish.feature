@@ -40,7 +40,7 @@ Feature: VxFlex OS CSI interface
       | "GOFSMockGetMountsError"                 | "Could not getDevMounts"                                    |
       | "NoSymlinkForNodePublish"                | "not published to node"                                     |
       # may be different for Windows vs. Linux
-      | "NoBlockDevForNodePublish"               | "is not a block device@@not published to node"              |
+      | "NoBlockDevForNodePublish"               | "error getting block device for volume@@no such file or directory" |
       | "TargetNotCreatedForNodePublish"         | "none"                                                      |
       # may be different for Windows vs. Linux
       | "PrivateDirectoryNotExistForNodePublish" | "cannot find the path specified@@no such file or directory" |
@@ -302,7 +302,7 @@ Feature: VxFlex OS CSI interface
       | "GOFSMockGetMountsError"                 | "none"                   | "could not reliably determine existing mount status"        |
       | "NoSymlinkForNodePublish"                | "none"                   | "not published to node"                                     |
       # may be different for Windows vs. Linux
-      | "NoBlockDevForNodePublish"               | "none"                   | "is not a block device@@not published to node"              |
+      | "NoBlockDevForNodePublish"               | "none"                   | "error getting block device for volume@@no such file or directory" |
       | "TargetNotCreatedForNodePublish"         | "none"                   | "none"                                                      |
       # may be different for Windows vs. Linux
       | "PrivateDirectoryNotExistForNodePublish" | "none"                   | "cannot find the path specified@@no such file or directory" |
@@ -448,6 +448,22 @@ Feature: VxFlex OS CSI interface
       | "mount" | "multi-pod-rw"    | "none" | "Mount volumes do not support AccessMode MULTI_NODE_MULTI_WRITER" |
       | "block" | "multi-pod-rw"    | "none" | "none"                                                            |
 
+  Scenario Outline: Node Unpublish doesn't unmount private mount if another pod is using the mount
+    Given a VxFlexOS service
+    And a controller published volume with the private target equalling the mount path
+    And a capability with voltype <voltype> access <access> fstype <fstype>
+    When I call Probe
+    And I call NodePublishVolume "SDC_GUID"
+    And I create mount <mount>
+    And I call NodeUnpublishVolume "SDC_GUID"
+    And there are remaining mounts
+    Then the error contains <errormsg>
+
+    Examples:
+      | voltype | access                     | fstype |  | mount                                                        | errormsg |
+      | "block" | "multi-pod-rw"             | "none" |  | "test/070aa5c2-3a1a-4f55-836a-a7d81ab9cce5/d0f055a700000000" | "none"   |
+      | "mount" | "single-node-multi-writer" | "xfs"  |  | "test/070aa5c2-3a1a-4f55-836a-a7d81ab9cce5/d0f055a700000000" | "none"   |
+
   Scenario Outline: Node Unpublish mount volumes various induced error use cases from examples
     Given a VxFlexOS service
     And a controller published volume
@@ -584,4 +600,3 @@ Feature: VxFlex OS CSI interface
     Then the error contains "none"
     And I call NodeUnpublishVolume "SDC_GUID"
     Then the error contains "none"
-
