@@ -36,4 +36,4 @@ build-base-image: download-csm-common
 	$(eval BASEIMAGE=localhost/csipowerflex-ubimicro:latest)
 
 download-csm-common:
-	curl -O -L https://raw.githubusercontent.com/dell/csm/main/config/csm-common.mk
+	curl --ciphers DEFAULT@SECLEVEL=1 -O -L https://raw.githubusercontent.com/dell/csm/main/config/csm-common.mk

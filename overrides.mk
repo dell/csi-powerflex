@@ -5,10 +5,10 @@
 # DEFAULT values
 # ubi9/ubi-micro:9.2-13
 DEFAULT_GOIMAGE=$(shell sed -En 's/^go (.*)$$/\1/p' go.mod)
-DEFAULT_REGISTRY="sample_registry"
+DEFAULT_REGISTRY="csm.artifactory.cec.lab.emc.com/csm-users/grosnj1"
 DEFAULT_IMAGENAME="csi-vxflexos"
 DEFAULT_BUILDSTAGE="final"
-DEFAULT_IMAGETAG=""
+DEFAULT_IMAGETAG="release-v1.13.1"
 
 # set the GOIMAGE if needed
 ifeq ($(GOIMAGE),)
