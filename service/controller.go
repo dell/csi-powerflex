@@ -3372,12 +3372,18 @@ func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.Controlle
 		return &csi.ControllerExpandVolumeResponse{}, nil
 	}
 
+	nodeExpansionRequired := false
+	if len(vol.MappedSdcInfo) > 0 {
+		// Volume is in use
+		nodeExpansionRequired = true
+	}
+
 	if requestedSize == allocatedSize {
 		Log.Infof("Idempotent call detected for volume (%s) with requested size (%d) SizeInKb and allocated size (%d) SizeInKb",
 			volName, requestedSize, allocatedSize)
 		return &csi.ControllerExpandVolumeResponse{
 			CapacityBytes:         requestedSize * bytesInKiB,
-			NodeExpansionRequired: true,
+			NodeExpansionRequired: nodeExpansionRequired,
 		}, nil
 	}
 
@@ -3389,7 +3395,6 @@ func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.Controlle
 		Log.Errorf("Failed to execute ExpandVolume() with error (%s)", err.Error())
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-
 	// If volume is marked for replication, remove the replication pair first.
 	if vol.VolumeReplicationState != "UnmarkedForReplication" {
 		Log.Printf("[ControllerExpandVolume] - vol: %+v", vol)
@@ -3404,7 +3409,7 @@ func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.Controlle
 	// NodeExpandVolume subsequently
 	csiResp := &csi.ControllerExpandVolumeResponse{
 		CapacityBytes:         requestedSize * bytesInKiB,
-		NodeExpansionRequired: true,
+		NodeExpansionRequired: nodeExpansionRequired,
 	}
 	return csiResp, nil
 }
