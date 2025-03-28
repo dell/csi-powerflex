@@ -3352,6 +3352,7 @@ func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.Controlle
 	}
 
 	volName := vol.Name
+
 	cr := req.GetCapacityRange()
 	Log.Printf("cr:%d", cr)
 	requestedSize, err := validateVolSize(cr)
@@ -3372,12 +3373,19 @@ func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.Controlle
 		return &csi.ControllerExpandVolumeResponse{}, nil
 	}
 
+	// check for host access if there is any host attached to the volume, if yes set to true else false
+	nodeExpansionRequired := false
+	// TODO: check here if the volume has 1 or more host access
+	if len(vol) >= 1 { // If the volume has 1 or more host access  then set nodeExpansionRequired as true
+		nodeExpansionRequired = true
+	}
+
 	if requestedSize == allocatedSize {
 		Log.Infof("Idempotent call detected for volume (%s) with requested size (%d) SizeInKb and allocated size (%d) SizeInKb",
 			volName, requestedSize, allocatedSize)
 		return &csi.ControllerExpandVolumeResponse{
 			CapacityBytes:         requestedSize * bytesInKiB,
-			NodeExpansionRequired: true,
+			NodeExpansionRequired: nodeExpansionRequired,
 		}, nil
 	}
 
