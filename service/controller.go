@@ -3372,11 +3372,7 @@ func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.Controlle
 		return &csi.ControllerExpandVolumeResponse{}, nil
 	}
 
-	nodeExpansionRequired := false
-	if len(vol.MappedSdcInfo) > 0 {
-		// Volume is in use
-		nodeExpansionRequired = true
-	}
+	nodeExpansionRequired := len(vol.MappedSdcInfo) > 0
 
 	if requestedSize == allocatedSize {
 		Log.Infof("Idempotent call detected for volume (%s) with requested size (%d) SizeInKb and allocated size (%d) SizeInKb",
