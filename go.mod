@@ -9,13 +9,13 @@ require (
 	github.com/apparentlymart/go-cidr v1.1.0
 	github.com/container-storage-interface/spec v1.6.0
 	github.com/cucumber/godog v0.15.0
-	github.com/dell/dell-csi-extensions/common v1.7.1-0.20250313134726-f26e38d74d14
-	github.com/dell/dell-csi-extensions/podmon v1.7.1-0.20250313134726-f26e38d74d14
-	github.com/dell/dell-csi-extensions/replication v1.10.2-0.20250313134726-f26e38d74d14
-	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.8.2-0.20250313134726-f26e38d74d14
-	github.com/dell/gocsi v1.13.1-0.20250226203119-f6c4e42fab09
-	github.com/dell/gofsutil v1.18.0
-	github.com/dell/goscaleio v1.18.1-0.20250313190335-a4cb3a199725
+	github.com/dell/dell-csi-extensions/common v1.7.1-0.20250325135746-bee5d830cdce
+	github.com/dell/dell-csi-extensions/podmon v1.7.1-0.20250325135746-bee5d830cdce
+	github.com/dell/dell-csi-extensions/replication v1.10.2-0.20250325135746-bee5d830cdce
+	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.8.2-0.20250325135746-bee5d830cdce
+	github.com/dell/gocsi v1.13.1-0.20250327070427-854e59aaa95d
+	github.com/dell/gofsutil v1.18.1-0.20250327105432-7491c13030fd
+	github.com/dell/goscaleio v1.19.0
 	github.com/fsnotify/fsnotify v1.8.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
