@@ -37,7 +37,7 @@ LABEL vendor="Dell Technologies" \
     name="csi-powerflex" \
     summary="CSI Driver for Dell EMC PowerFlex" \
     description="CSI Driver for provisioning persistent storage from Dell EMC PowerFlex" \
-    release="1.13.0" \
-    version="2.13.0" \
+    release="1.14.0" \
+    version="2.14.0" \
     license="Apache-2.0"
 COPY ./licenses /licenses
