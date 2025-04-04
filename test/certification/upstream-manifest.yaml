@@ -1,0 +1,81 @@
+ShortName: powerflex
+StorageClass:
+  # Load a StorageClass from the given file. This file must be in the same directory as this one
+  FromFile: storageclass.yaml
+
+SnapshotClass:
+  FromName: true
+  FromFile: snapclass.yaml
+
+DriverInfo:
+  # Internal name of the driver, this is used as a display name in the test case and test objects
+  Name: csi-vxflexos.dellemc.com
+
+  # The range of disk size supported by this driver
+  SupportedSizeRange:
+    Min: 8Gi
+    Max: 16Ti
+
+  # Map of strings for supported FS types
+  SupportedFsType:
+    ext4: {}
+    xfs: {}
+
+  # Map of strings for supported mount options
+  SupportedMountOption:
+    dirsync: {}
+
+  # Optional list of topology keys that the driver supports
+  TopologyKeys: ["csi-vxflexos.dellemc.com/[INSERT SYSTEM ID]"]
+  # Optional number of allowed topologies that the driver requires. Only relevant if TopologyKeys is set
+  NumAllowedTopologies: 1
+
+  # Map of strings for required mount options
+  # RequiredMountOption:
+
+  # Optional list of access modes required for provisiong. Default is RWO
+  RequiredAccessModes:
+    - ReadWriteOnce
+
+  # Map that represents the capabilities the driver supports
+  Capabilities:
+    # Data is persistest accross pod restarts
+    persistence: true
+
+    # Volume ownership via fsGroup
+    fsGroup: true
+
+    # Raw block mode
+    block: true
+
+    # Exec a file in the volume
+    exec: true
+
+    # Support for volume limits
+    volumeLimits: false
+
+    # Support for volume expansion in controllers
+    controllerExpansion: true
+
+    # Support for volume expansion in nodes
+    nodeExpansion: true
+
+    # Support volume that an run on single node only (like hostpath)
+    singleNodeVolume: false
+
+    # Support ReadWriteMany access modes
+    RWX: false
+
+    # Support topology
+    topology: true
+
+    # Support populate data from snapshot
+    snapshotDataSource: true
+
+    # Support populated data from PVC
+    pvcDataSource: true
+
+  StressTestOptions:
+    NumPods: 10
+    NumRestarts: 20
+    NumSnapshots: 10
