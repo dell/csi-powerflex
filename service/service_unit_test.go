@@ -585,6 +585,42 @@ func TestGetZoneKeyLabelFromSecret(t *testing.T) {
 			expectedLabel: "",
 			expectedErr:   fmt.Errorf("array system-2 zone key custom-zone-2.io/area does not match custom-zone-1.io/area"),
 		},
+		{
+			name: "Array connection data with first array without zone config",
+			arrays: map[string]*ArrayConnectionData{
+				"array1": {
+					SystemID:         "system-1",
+					AvailabilityZone: nil,
+				},
+				"array2": {
+					SystemID: "system-2",
+					AvailabilityZone: &AvailabilityZone{
+						Name:     "zone2",
+						LabelKey: "custom-zone-2.io/area",
+					},
+				},
+			},
+			expectedLabel: "",
+			expectedErr:   fmt.Errorf("zone configuration is missing for some arrays"),
+		},
+		{
+			name: "Array connection data with second array without zone config",
+			arrays: map[string]*ArrayConnectionData{
+				"array1": {
+					SystemID: "system-1",
+					AvailabilityZone: &AvailabilityZone{
+						Name:     "zone1",
+						LabelKey: "custom-zone-1.io/area",
+					},
+				},
+				"array2": {
+					SystemID:         "system-2",
+					AvailabilityZone: nil,
+				},
+			},
+			expectedLabel: "",
+			expectedErr:   fmt.Errorf("system-2 zone configuration is missing"),
+		},
 	}
 
 	for _, tt := range tests {
@@ -595,7 +631,7 @@ func TestGetZoneKeyLabelFromSecret(t *testing.T) {
 			} else {
 				assert.NotNil(t, err)
 			}
-			assert.Equal(t, label, tt.expectedLabel)
+			assert.Equal(t, tt.expectedLabel, label)
 		})
 	}
 }
