@@ -16,14 +16,14 @@ require (
 	github.com/dell/gocsi v1.13.1-0.20250327070427-854e59aaa95d
 	github.com/dell/gofsutil v1.18.1-0.20250327105432-7491c13030fd
 	github.com/dell/goscaleio v1.19.0
-	github.com/fsnotify/fsnotify v1.8.0
+	github.com/fsnotify/fsnotify v1.9.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/kubernetes-csi/csi-lib-utils v0.11.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/viper v1.20.0
 	github.com/stretchr/testify v1.10.0
-	golang.org/x/net v0.37.0
+	golang.org/x/net v0.38.0
 	google.golang.org/grpc v1.71.0
 	google.golang.org/protobuf v1.36.4
 	k8s.io/api v0.32.0
