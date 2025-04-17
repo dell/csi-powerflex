@@ -2138,8 +2138,28 @@ func (f *feature) aValidDeleteVolumeResponseIsReturned() error {
 }
 
 func (f *feature) aValidListVolumesResponseIsReturned() error {
+	return f.aValidListVolumesResponseIsReturnedWith("", "")
+}
+
+func (f *feature) aValidListVolumesResponseIsReturnedWith(entryNum, nextToken string) error {
 	if f.listVolumesResponse == nil {
 		return errors.New("expected a non-nil listVolumesResponse, but it was nil")
+	}
+	if entryNum != "" {
+		num, err := strconv.Atoi(entryNum)
+		if err != nil {
+			return fmt.Errorf("invalid scenario parameter, expected a number: %s", entryNum)
+		}
+		if len(f.listVolumesResponse.Entries) != num {
+			return fmt.Errorf("expected %d volume entries, but received %d",
+				num, len(f.listVolumesResponse.Entries))
+		}
+	}
+	if nextToken != "" {
+		if f.listVolumesResponse.NextToken != nextToken {
+			return fmt.Errorf("expected %s as nextToken, but received %s",
+				nextToken, f.listVolumesResponse.NextToken)
+		}
 	}
 	return nil
 }
@@ -2304,7 +2324,10 @@ func (f *feature) iCallListVolumesWith(maxEntriesString, startingToken string) e
 		case "larger":
 			startingToken = "9999"
 		default:
-			return fmt.Errorf(`want start token of "next", "none", "invalid", "larger", got %q`, st)
+			_, err := strconv.Atoi(startingToken)
+			if err != nil {
+				return fmt.Errorf(`want start token of "next", "none", "invalid", "larger", or a number, but got %q`, st)
+			}
 		}
 
 		// ignoring integer overflow issue, will not be an issue if maxEntries is less than 2147483647
@@ -4999,6 +5022,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^a valid ControllerGetCapabilitiesResponse is returned$`, f.aValidControllerGetCapabilitiesResponseIsReturned)
 	s.Step(`^I call ValidateVolumeCapabilities with voltype "([^"]*)" access "([^"]*)" fstype "([^"]*)"$`, f.iCallValidateVolumeCapabilitiesWithVoltypeAccessFstype)
 	s.Step(`^a valid ListVolumesResponse is returned$`, f.aValidListVolumesResponseIsReturned)
+	s.Step(`^a valid ListVolumesResponse is returned with "([^"]*)" entries and next_token "([^"]*)"$`, f.aValidListVolumesResponseIsReturnedWith)
 	s.Step(`^I call ListVolumes with max_entries "([^"]*)" and starting_token "([^"]*)"$`, f.iCallListVolumesWith)
 	s.Step(`^I call ListVolumes again with max_entries "([^"]*)" and starting_token "([^"]*)"$`, f.iCallListVolumesAgainWith)
 	s.Step(`^there (?:are|is) (\d+) valid volumes?$`, f.thereAreValidVolumes)
