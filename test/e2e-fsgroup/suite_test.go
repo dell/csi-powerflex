@@ -28,7 +28,7 @@ import (
 func init() {
 	var yamlError error
 
-	testParameters, yamlError = readYaml("e2e-values.yaml")
+	testParameters, yamlError = readYaml()
 	if yamlError != nil {
 		framework.Failf("Unable to read yaml e2e-values.yaml: %s", yamlError.Error())
 	}

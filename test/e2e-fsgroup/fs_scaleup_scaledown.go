@@ -15,8 +15,9 @@ package e2e
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
-	"math/rand"
+	"math/big"
 	"strconv"
 	"strings"
 	"time"
@@ -77,7 +78,8 @@ var _ = ginkgo.Describe("Nodes Scale-up and Scale-down", ginkgo.Label("csi-fsg")
 	*/
 	ginkgo.It("[csi-adv-fsg] Statefulset with Nodes Scale-up and Scale-down", func() {
 		curtime := time.Now().Unix()
-		randomValue := rand.Int()
+		bigInt, err := rand.Int(rand.Reader, big.NewInt(64))
+		randomValue := bigInt.Int64()
 		val := strconv.FormatInt(int64(randomValue), 10)
 		val = string(val[1:3])
 		curtimestring := strconv.FormatInt(curtime, 10)
