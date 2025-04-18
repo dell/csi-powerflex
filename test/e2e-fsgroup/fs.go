@@ -11,9 +11,6 @@
 // limitations under the License.
 //
 
-//go:build integration
-// +build integration
-
 package e2e
 
 import (
@@ -56,6 +53,7 @@ var (
 	client         clientset.Interface
 	namespace      string
 	testParameters map[string]string
+	valueFilename  = "e2e-values.yaml"
 )
 
 // ginkgo suite is kicked off in suite_test.go  RunSpecsWithDefaultAndCustomReporters
@@ -115,7 +113,10 @@ var _ = ginkgo.Describe("Volume Filesystem Group Test", ginkgo.Label("csi-fsg"),
 	ginkgo.It("[csi-fsg] Verify Pod FSGroup with fsPolicy=ReadWriteOnceWithFSType", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		updateFSGroupPolicyCSIDriver(client, testParameters["e2eCSIDriverName"], "fsPolicy=ReadWriteOnceWithFSType")
+		err := updateFSGroupPolicyCSIDriver(client, testParameters["e2eCSIDriverName"], "fsPolicy=ReadWriteOnceWithFSType")
+		if err != nil {
+			framework.Failf("error updating CSIDriver: %v", err)
+		}
 		doOneCyclePVCTest(ctx, "ReadWriteOnceWithFSType", "")
 		doOneCyclePVCTest(ctx, "ReadWriteOnceWithFSType", v1.ReadOnlyMany)
 	})
@@ -123,7 +124,10 @@ var _ = ginkgo.Describe("Volume Filesystem Group Test", ginkgo.Label("csi-fsg"),
 	ginkgo.It("[csi-fsg] Verify Pod FSGroup with fsPolicy=None", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		updateFSGroupPolicyCSIDriver(client, testParameters["e2eCSIDriverName"], "fsPolicy=None")
+		err := updateFSGroupPolicyCSIDriver(client, testParameters["e2eCSIDriverName"], "fsPolicy=None")
+		if err != nil {
+			framework.Failf("error updating CSIDriver: %v", err)
+		}
 		doOneCyclePVCTest(ctx, "None", v1.ReadOnlyMany)
 		doOneCyclePVCTest(ctx, "None", "")
 	})
@@ -131,7 +135,10 @@ var _ = ginkgo.Describe("Volume Filesystem Group Test", ginkgo.Label("csi-fsg"),
 	ginkgo.It("[csi-fsg] Verify Pod FSGroup with fsPolicy=File", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		updateFSGroupPolicyCSIDriver(client, testParameters["e2eCSIDriverName"], "fsPolicy=File")
+		err := updateFSGroupPolicyCSIDriver(client, testParameters["e2eCSIDriverName"], "fsPolicy=File")
+		if err != nil {
+			framework.Failf("error updating CSIDriver: %v", err)
+		}
 		doOneCyclePVCTest(ctx, "File", v1.ReadOnlyMany)
 		doOneCyclePVCTest(ctx, "File", "")
 	})
@@ -140,7 +147,10 @@ var _ = ginkgo.Describe("Volume Filesystem Group Test", ginkgo.Label("csi-fsg"),
 	ginkgo.It("[csi-fsg] Verify Pod FSGroup with fsPolicy not set (should default)", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		updateFSGroupPolicyCSIDriver(client, testParameters["e2eCSIDriverName"], "fsPolicy=")
+		err := updateFSGroupPolicyCSIDriver(client, testParameters["e2eCSIDriverName"], "fsPolicy=")
+		if err != nil {
+			framework.Failf("error updating CSIDriver: %v", err)
+		}
 		doOneCyclePVCTest(ctx, "", "")
 	})
 })
@@ -316,8 +326,8 @@ func doOneCyclePVCTest(ctx context.Context, policy string, accessMode v1.Persist
 	}
 }
 
-func readYaml(values string) (map[string]string, error) {
-	yfile, err := os.ReadFile(values)
+func readYaml() (map[string]string, error) {
+	yfile, err := os.ReadFile(valueFilename)
 	if err != nil {
 		return nil, err
 	}

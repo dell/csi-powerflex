@@ -545,7 +545,7 @@ Feature: VxFlex OS CSI interface
   Scenario: Call removeWithRetry negative test
     Given a VxFlexOS service
     And I call removeWithRetry
-    Then the error contains "read-only file system"
+    Then the error contains "failed to remove directory:"
 
   Scenario: Call I call unmountPrivMount negative test
     Given a VxFlexOS service

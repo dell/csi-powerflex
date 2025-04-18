@@ -783,7 +783,10 @@ func removeWithRetry(target string) error {
 			break
 		}
 	}
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to remove directory: %v", err)
+	}
+	return nil
 }
 
 // Evaulate symlinks to a resolution. In case of an error,

@@ -138,6 +138,10 @@ const (
 	DriverConfigParamsYaml = "driver-config-params.yaml"
 
 	DefaultAPITimeout = 5 * time.Second
+
+	// MaxVolumeListEntries limits the page size for ListVolumes, since even a few hundred volumes
+	// in the ListVolumeResponse will cause gRPC connection failure between the driver and CO.
+	MaxVolumeListEntries = 100
 )
 
 // Extra metadata field names for propagating to goscaleio and beyond.
@@ -2004,6 +2008,12 @@ func (s *service) ListVolumes(
 			err        error
 			maxEntries = int(req.MaxEntries)
 		)
+
+		// To prevent DOS in the gRPC server, enforcing list volumes pagination
+		// with the limit of MaxVolumeListEntries entries per request.
+		if maxEntries == 0 || maxEntries > MaxVolumeListEntries {
+			maxEntries = MaxVolumeListEntries
+		}
 
 		if v := req.StartingToken; v != "" {
 			i, err := strconv.ParseInt(v, 10, 32)
