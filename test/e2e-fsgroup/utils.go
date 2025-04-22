@@ -118,8 +118,8 @@ func getPvFromClaim(client clientset.Interface, namespace string, claimName stri
 func CreateStatefulSet(ns string, ss *apps.StatefulSet, c clientset.Interface) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	framework.Logf(fmt.Sprintf("Creating statefulset %v/%v with %d replicas and selector %+v",
-		ss.Namespace, ss.Name, *(ss.Spec.Replicas), ss.Spec.Selector))
+	fmtString := "Creating statefulset %v/%v with %d replicas and selector %+v"
+	framework.Logf(fmtString, ss.Namespace, ss.Name, *(ss.Spec.Replicas), ss.Spec.Selector)
 
 	_, err := c.AppsV1().StatefulSets(ns).Create(ctx, ss, metav1.CreateOptions{})
 	framework.ExpectNoError(err)

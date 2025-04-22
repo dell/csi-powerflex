@@ -50,7 +50,26 @@ Feature: VxFlex OS CSI interface
     And I call ListVolumes with max_entries "1" and starting_token "larger"
     Then an invalid ListVolumesResponse is returned
 
-  Scenario: List snapshots
+  Scenario Outline: Driver enforced ListVolumes pagination
+    Given a VxFlex OS service
+    And there are <volnum> valid volumes
+    When I call Probe
+    And I call ListVolumes with max_entries <volreq> and starting_token <starttok>
+    Then a valid ListVolumesResponse is returned with <volres> entries and next_token <nexttok>
+
+    Examples:
+      | volnum    | volreq   | starttok   | volres    | nexttok |
+      | 0         | "0"      | "0"        | "0"       | ""      |
+      | 100       | "0"      | "0"        | "100"     | ""      |
+      | 100       | "75"     | "0"        | "75"      | "75"    |
+      | 100       | "75"     | "75"       | "25"      | ""      |
+      | 100       | "300"    | "0"        | "100"     | ""      |
+      | 205       | "0"      | "0"        | "100"     | "100"   |
+      | 205       | "0"      | "100"      | "100"     | "200"   |
+      | 205       | "0"      | "200"      | "5"       | ""      |
+
+
+   Scenario: List snapshots
     Given a VxFlexOS service
     And there are 5 valid snapshots of "default" volume
     When I call Probe
