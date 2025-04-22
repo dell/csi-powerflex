@@ -75,7 +75,10 @@ var _ = ginkgo.Describe("PowerFlex Volume Filesystem Group Test", ginkgo.Label("
 	ginkgo.It("[csi-fsg] Verify Pod Ephemeral FSGroup", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		updateFSGroupPolicyCSIDriver(client, testParameters["e2eCSIDriverName"], "fsPolicy=File")
+		err := updateFSGroupPolicyCSIDriver(client, testParameters["e2eCSIDriverName"], "fsPolicy=File")
+		if err != nil {
+			framework.Failf("Failed to update CSIDriver with fsPolicy=File: %v", err)
+		}
 		doOneCycleEphemeralTest(ctx, "ReadWriteOnceWithFSType")
 	})
 })
