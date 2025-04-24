@@ -112,8 +112,8 @@ github.com/dell/gocsi v1.13.1-0.20250414071115-766d65b365dd h1:j4KosqyEFngUDAfjM
 github.com/dell/gocsi v1.13.1-0.20250414071115-766d65b365dd/go.mod h1:iZODT8g3FlH2R+umcn5J7uWsxERXOnokIj8UMGmUFE0=
 github.com/dell/gofsutil v1.18.1-0.20250411160933-31c9602b5620 h1:im/usQYXxxH0rcL6KXU1PoJW5gy+RTNzLo625z3CfgU=
 github.com/dell/gofsutil v1.18.1-0.20250411160933-31c9602b5620/go.mod h1:tAt/uPiEK3aZ8kKvGJs4HnOoZv8qLXtuDoIwQsw5qfA=
-github.com/dell/goscaleio v1.19.1-0.20250414070958-6e7259f340df h1:d66qX9kldMFCsdFwHQzReAqr4hlHg3j0vGstpEYvZkI=
-github.com/dell/goscaleio v1.19.1-0.20250414070958-6e7259f340df/go.mod h1:XAHq2m2QNJH2l9gu47gQX2m6HjZZlzc1LIa0lrWvSkA=
+github.com/dell/goscaleio v1.19.1 h1:FZQAAu+A5/prbGQfuHarTLuDny6g/PqA9bbNYRh9pmU=
+github.com/dell/goscaleio v1.19.1/go.mod h1:RTBLZAFRVeAvaqoJoUyzftGOE1L09irvOwIOFn/JPhw=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible/go.mod h1:E3ru+11k8xSBh+hMPgOLZmtrrCbhqsmaPHjLKYnJCaQ=
 github.com/dgryski/go-sip13 v0.0.0-20181026042036-e10d5fee7954/go.mod h1:vAd38F8PWV+bWy6jNmig1y/TA+kYO4g3RSRF0IAv0no=
 github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815/go.mod h1:WwZ+bS3ebgob9U8Nd0kOddGdZWjyMGR8Wziv+TBNwSE=
