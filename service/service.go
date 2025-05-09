@@ -1406,7 +1406,7 @@ func (s *service) exportFilesystem(_ context.Context, _ *csi.ControllerPublishVo
 
 	// Create NFS export if it doesn't exist
 	if !nfsExportExists {
-		Log.Debugf("NFS Export does not exist for fs: %s ,proceeding to create NFS Export", fs.Name)
+		Log.Debugf("NFS Export does not exist for fs %s, proceeding to create NFS Export", fs.Name)
 		resp, err := client.CreateNFSExport(&siotypes.NFSExportCreate{
 			Name:         nfsExportName,
 			FileSystemID: fs.ID,
@@ -1859,7 +1859,7 @@ func (s *service) GetNodeLabels(_ context.Context) (map[string]string, error) {
 		nodeName = os.Getenv("NODENAME")
 	}
 
-	Log.Infof("Using: %s as nodeName", nodeName)
+	Log.Debugf("Using %s as nodeName", nodeName)
 
 	// access the API to fetch node object
 	node, err := K8sClientset.CoreV1().Nodes().Get(context.TODO(), nodeName, v1.GetOptions{})
@@ -1954,15 +1954,26 @@ func lookupEnv(ctx context.Context, key string) (string, bool) {
 
 func getZoneKeyLabelFromSecret(arrays map[string]*ArrayConnectionData) (string, error) {
 	zoneKeyLabel := ""
+	foundEmptyZone := false
 
 	for _, array := range arrays {
 		if array.AvailabilityZone != nil {
+			if foundEmptyZone {
+				// Inconsistency: previous array(s) did not have availability zone
+				return "", fmt.Errorf("zone configuration is missing for some arrays")
+			}
 			if zoneKeyLabel == "" {
 				// Assumes that the key parameter is not empty
 				zoneKeyLabel = array.AvailabilityZone.LabelKey
 			} else if zoneKeyLabel != array.AvailabilityZone.LabelKey {
 				Log.Warnf("array %s zone key %s does not match %s", array.SystemID, array.AvailabilityZone.LabelKey, zoneKeyLabel)
 				return "", fmt.Errorf("array %s zone key %s does not match %s", array.SystemID, array.AvailabilityZone.LabelKey, zoneKeyLabel)
+			}
+		} else {
+			foundEmptyZone = true
+			if zoneKeyLabel != "" {
+				// Inconsistency: previous array(s) had availability zone
+				return "", fmt.Errorf("%s zone configuration is missing", array.SystemID)
 			}
 		}
 	}
