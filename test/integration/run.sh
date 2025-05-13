@@ -102,7 +102,8 @@ export TEST_TAGS="$2"
 
 print_test_config
 
-GOOS=linux CGO_ENABLED=0 GO111MODULE=on go test -v -coverprofile=c.linux.out -timeout 180m -coverpkg=github.com/dell/csi-vxflexos/service -run "^$testRun\$\$" &
+GOOS=linux CGO_ENABLED=0 GO111MODULE=on go test -tags=integration -v -coverprofile=c.linux.out -timeout 180m -coverpkg=github.com/dell/csi-vxflexos/service -run "^$testRun\$\$" &
+
 if [ -f ./csi-sanity ] ; then
   echo "Running csi-sanity test..."
   sleep 5
@@ -112,4 +113,3 @@ wait
 
 echo "Writing test report to /root/vxflexos/logs/integration.xml"
 mv integration*.xml /root/vxflexos/logs/
-
