@@ -39,6 +39,9 @@ check_test_config()
   # For NFS tests, check if mount.nfs is installed
   ! which mount.nfs &>/dev/null && echo "mount.nfs is not installed and it is required for NFS tests"  && config_valid=false
 
+  # Check if mkfs.xfs is installed
+  ! which mkfs.xfs &>/dev/null && echo "mkfs.xfs is not installed"  && config_valid=false
+
   ! $config_valid && echo "Invalid test configuration. Review values in env.sh and $array_config." && exit 1 || true
 
 }
