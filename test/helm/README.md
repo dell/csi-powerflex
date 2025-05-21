@@ -37,19 +37,19 @@ Additionally, some tests create cloned volumes using a source `Volume` or a `Vol
 The starttest.sh script is used to deploy Helm charts that test the deployment of a simple pod
 with various storage configurations. The stoptest.sh script will delete the Helm chart and cleanup after the test.
 
-  * Example -> bash stoptest.sh 2vols
-
 Procedure
 1. Navigate to the test/helm directory, which contains the starttest.sh and various Helm charts.
 
 2. Run the starttest.sh script with an argument of the specific Helm chart to deploy and test. For example:
 > bash starttest.sh <testname>
+
   Example:
     ```
    bash starttest.sh 2vols
     ```
 3. After the test has completed, run the stoptest.sh script to delete the Helm chart and cleanup the volumes.
 > bash stoptest.sh <testname>
+
   Example:
     ```
    bash stoptest.sh 2vols
@@ -59,6 +59,7 @@ To run the tests, follow the procedure given below:
 1. Navigate to the test/helm directory
 2. Run the desired script with the following command
 > bash <script-name>
+
   Example:
     ```
    bash snaptest.sh
