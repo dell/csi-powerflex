@@ -23,24 +23,23 @@ Additionally, some tests create cloned volumes using a source `Volume` or a `Vol
 ## Scripts
 | Name           | Description |
 |----------------|-------|
-| starttest.sh  | Script to instantiate one of the Helm charts above. Requires argument of directory name (e.g. 2vols)
-| stoptest.sh | Stops currently running Helm chart
+| starttest.sh  | Script to instantiate one of the Helm charts above. Requires an argument of a helm chart name
+| stoptest.sh | Stops currently running Helm chart. Requires an argument of a helm chart name
 | snapcgtest.sh       | Used after starting a Helm chart; tests snapping the persistent volumes into a consistency group
-| snaprestoretest.sh    | Used without previously starting a Helm test; instantiates 2vols; then upgrades it to 2vols+restore (with volume from snapshot)
+| snaprestoretest.sh    | Used without previously starting a Helm chart; instantiates 2vols; then upgrades it to 2vols+restore (with volume from snapshot)
 | snaptest.sh   | Used after starting 2vols; snaps pvol0 twice
 | volumeclonetest.sh   | Used after starting 2vols; snaps pvol0 twice
 
 
 ## Usage
 
-### starttest.sh
 The starttest.sh script is used to deploy Helm charts that test the deployment of a simple pod
 with various storage configurations. The stoptest.sh script will delete the Helm chart and cleanup after the test.
 
 Procedure
 1. Navigate to the test/helm directory, which contains the starttest.sh and various Helm charts.
 
-2. Run the starttest.sh script with an argument of the specific Helm chart to deploy and test: `bash starttest.sh <testname>`
+2. Run the starttest.sh script with an argument of the specific Helm chart to deploy and test: `bash starttest.sh <helmchart-name>`
 
 Example:
 
@@ -48,7 +47,7 @@ Example:
 bash starttest.sh 2vols
 ```
 
-3. After the test has completed, run the stoptest.sh script to delete the Helm chart and cleanup the volumes: `bash stoptest.sh <testname>`
+3. After the test has completed, run the stoptest.sh script to delete the Helm chart and cleanup the volumes: `bash stoptest.sh <helmchart-name>`
 
 Example:
 
