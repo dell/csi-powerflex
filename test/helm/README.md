@@ -17,7 +17,7 @@ Additionally, some tests create cloned volumes using a source `Volume` or a `Vol
 |2replicas | Creates 2 filesystem mounts like 2vols but with Replicas = 2 |
 |2vols+restore | Upgraded version of 2vols that also mounts a volume created from snap |
 |2vols-multi-array | Creates 2 volumes, each on a different array. You must fill in 2vols-multi-array/templates/pvc1.yaml first |
-| 2vols + clone | 
+| 2vols + clone | Creates 2 initial volumes and a third volume that is a clone of one of the initial volumes. |
 
 
 ## Scripts
@@ -40,27 +40,28 @@ with various storage configurations. The stoptest.sh script will delete the Helm
 Procedure
 1. Navigate to the test/helm directory, which contains the starttest.sh and various Helm charts.
 
-2. Run the starttest.sh script with an argument of the specific Helm chart to deploy and test. For example:
-> bash starttest.sh <testname>
+2. Run the starttest.sh script with an argument of the specific Helm chart to deploy and test: `bash starttest.sh <testname>`
 
-  Example:
-    ```
-   bash starttest.sh 2vols
-    ```
-3. After the test has completed, run the stoptest.sh script to delete the Helm chart and cleanup the volumes.
-> bash stoptest.sh <testname>
+Example:
 
-  Example:
-    ```
-   bash stoptest.sh 2vols
-    ```
+```
+bash starttest.sh 2vols
+```
+
+3. After the test has completed, run the stoptest.sh script to delete the Helm chart and cleanup the volumes: `bash stoptest.sh <testname>`
+
+Example:
+
+```
+ bash stoptest.sh 2vols
+```
 
 To run the tests, follow the procedure given below:
 1. Navigate to the test/helm directory
-2. Run the desired script with the following command
-> bash <script-name>
+2. Run the desired script with the following command: `bash <script-name>`
 
-  Example:
-    ```
-   bash snaptest.sh
-    ```
+Example:
+
+```
+bash snaptest.sh
+```
