@@ -16,21 +16,21 @@ spec:
     spec:
       containers:
         - name: container1
-          image: docker.io/centos:latest
+          image: quay.io/centos/centos:latest
           imagePullPolicy: IfNotPresent
           command: ["/bin/sleep", "3600"]
           volumeMounts:
             - mountPath: "/data0"
               name: pvolx1
         - name: container2
-          image: docker.io/centos:latest
+          image: quay.io/centos/centos:latest
           imagePullPolicy: IfNotPresent
           command: ["/bin/sleep", "3600"]
           volumeMounts:
             - mountPath: "/data0"
               name: pvolx1
         - name: container3
-          image: docker.io/centos:latest
+          image: quay.io/centos/centos:latest
           imagePullPolicy: IfNotPresent
           command: ["/bin/sleep", "3600"]
           volumeMounts:

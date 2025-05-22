@@ -22,7 +22,7 @@ spec:
       serviceAccount: vxflextest
       containers:
         - name: test
-          image: docker.io/centos:latest
+          image: quay.io/centos/centos:latest
           command: ["/bin/sleep", "3600"]
           volumeMounts:
             - mountPath: "/data0"
