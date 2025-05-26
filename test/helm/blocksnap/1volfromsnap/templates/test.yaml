@@ -34,7 +34,7 @@ spec:
       serviceAccount: vol
       containers:
         - name: copy
-          image: docker.io/centos:latest
+          image: quay.io/centos/centos:latest
           command: ["/bin/sleep", "3600"]
           securityContext:
             capabilities:
