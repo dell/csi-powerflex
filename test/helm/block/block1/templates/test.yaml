@@ -22,7 +22,7 @@ spec:
       serviceAccount: { { .Values.name } }
       containers:
         - name: test
-          image: docker.io/centos:latest
+          image: quay.io/centos/centos:latest
           command: ["/bin/sleep", "3600"]
           volumeDevices:
             - devicePath: "/dev/data0"
