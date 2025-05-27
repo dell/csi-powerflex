@@ -279,7 +279,7 @@ func (s *service) ProcessMapSecretChange() error {
 
 func (s *service) logCsiNodeTopologyKeys() error {
 	if K8sClientset == nil {
-		err := k8sutils.CreateKubeClientSet()
+		err := k8sutils.CreateKubeClientSet(KubeConfig)
 		if err != nil {
 			Log.WithError(err).Error("unable to create k8s clientset for query")
 			return err
