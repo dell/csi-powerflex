@@ -27,6 +27,7 @@ import (
 func Test_CreateKubeClientSet(t *testing.T) {
 	var tempConfigFunc func() (*rest.Config, error)                               // must return getInClusterConfig to its original value
 	var tempClientsetFunc func(config *rest.Config) (kubernetes.Interface, error) // must return getK8sClientset to its original value
+	const kubeConfig = "/test/path/to/kubeconfig"
 	tests := []struct {
 		name    string
 		before  func() error
@@ -79,6 +80,15 @@ func Test_CreateKubeClientSet(t *testing.T) {
 			defer tt.after()
 
 			err := CreateKubeClientSet()
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Nil(t, Clientset)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, Clientset)
+			}
+
+			err = CreateKubeClientSet(kubeConfig)
 			if tt.wantErr {
 				assert.Error(t, err)
 				assert.Nil(t, Clientset)
