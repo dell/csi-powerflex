@@ -34,6 +34,9 @@ type leaderElection interface {
 func CreateKubeClientSet(kubeConfig ...string) error {
 	config, err := InClusterConfigFunc()
 	if err != nil {
+		if len(kubeConfig) == 0 {
+			return err
+		}
 		config, err = clientcmd.BuildConfigFromFlags("", kubeConfig[0])
 		if err != nil {
 			return err
