@@ -2806,7 +2806,7 @@ func (s *service) requireProbe(ctx context.Context, systemID string) error {
 					"failed to probe system: %s, error: %s", systemID, err.Error())
 			}
 		} else {
-			return status.Errorf(codes.InvalidArgument,
+			return status.Errorf(codes.NotFound,
 				"system %s is not configured in the driver", systemID)
 		}
 	}
