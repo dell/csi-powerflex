@@ -987,7 +987,7 @@ func (s *service) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolum
 	// If not a directory, assume it's a raw block device mount and return ok.
 	volumePathInfo, err := os.Lstat(volumePath)
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "Could not stat volume path: "+volumePath)
+		return nil, status.Error(codes.NotFound, "Could not stat volume path: "+volumePath)
 	}
 	if !volumePathInfo.Mode().IsDir() {
 		Log.Infof("Volume path %s is not a directory- assuming a raw block device mount", volumePath)
