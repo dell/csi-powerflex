@@ -937,7 +937,7 @@ func (s *service) getCSISnapshot(vol *siotypes.Volume, systemID string) *csi.Sna
 	snapshot := &csi.Snapshot{
 		SizeBytes:      int64(vol.SizeInKb) * bytesInKiB,
 		SnapshotId:     systemID + dash + vol.ID,
-		SourceVolumeId: vol.AncestorVolumeID,
+		SourceVolumeId: systemID + dash + vol.AncestorVolumeID,
 		ReadyToUse:     true,
 	}
 	// Convert array timestamp to CSI timestamp and add
