@@ -11,3 +11,4 @@ gofsutil/
 .idea
 .vscode
 *.log
+go-code-tester
