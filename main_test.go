@@ -326,7 +326,7 @@ func Test_driverRun(t *testing.T) {
 			setup: func() {
 				enableLE := true
 				LENamespace := "vxflexos"
-				kubeconfigFilepath := "./some/path"
+				kubeconfigFilepath := os.Getenv("KUBECONFIG")
 
 				// assign values to necessary flags
 				flags.enableLeaderElection = &enableLE
@@ -346,7 +346,7 @@ func Test_driverRun(t *testing.T) {
 			setup: func() {
 				enableLE := true
 				LENamespace := "vxflexos"
-				kubeconfigFilepath := "./some/path"
+				kubeconfigFilepath := os.Getenv("KUBECONFIG")
 
 				// assign values to necessary flags
 				flags.enableLeaderElection = &enableLE
@@ -370,7 +370,7 @@ func Test_driverRun(t *testing.T) {
 			setup: func() {
 				enableLE := true
 				LENamespace := "vxflexos"
-				kubeconfigFilepath := "./some/path"
+				kubeconfigFilepath := os.Getenv("KUBECONFIG")
 
 				// assign values to necessary flags
 				flags.enableLeaderElection = &enableLE
@@ -394,7 +394,7 @@ func Test_driverRun(t *testing.T) {
 			setup: func() {
 				enableLE := true
 				LENamespace := "vxflexos"
-				kubeconfigFilepath := "./some/path"
+				kubeconfigFilepath := os.Getenv("KUBECONFIG")
 				k8sutils.LeaderElectionFunc = func(_ *kubernetes.Interface, _ string, _ string, _ func(context.Context)) error {
 					return errors.New("error, leader election failed")
 				}
