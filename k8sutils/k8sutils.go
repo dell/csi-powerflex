@@ -19,6 +19,7 @@ import (
 	"github.com/kubernetes-csi/csi-lib-utils/leaderelection"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 // Clientset - Interface to kubernetes
@@ -30,10 +31,16 @@ type leaderElection interface {
 }
 
 // CreateKubeClientSet - Returns kubeclient set
-func CreateKubeClientSet() error {
+func CreateKubeClientSet(kubeConfig ...string) error {
 	config, err := InClusterConfigFunc()
 	if err != nil {
-		return err
+		if len(kubeConfig) == 0 {
+			return err
+		}
+		config, err = clientcmd.BuildConfigFromFlags("", kubeConfig[0])
+		if err != nil {
+			return err
+		}
 	}
 
 	// creates the clientset
