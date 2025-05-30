@@ -15,6 +15,7 @@ package k8sutils
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -27,7 +28,7 @@ import (
 func Test_CreateKubeClientSet(t *testing.T) {
 	var tempConfigFunc func() (*rest.Config, error)                               // must return getInClusterConfig to its original value
 	var tempClientsetFunc func(config *rest.Config) (kubernetes.Interface, error) // must return getK8sClientset to its original value
-	const kubeConfig = "$HOME/.kube/config"
+	kubeConfig := os.Getenv("KUBECONFIG")
 	tests := []struct {
 		name    string
 		before  func() error
