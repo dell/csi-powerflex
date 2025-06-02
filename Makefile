@@ -49,8 +49,9 @@ push: docker
 	make -f docker.mk push
 
 # Windows or Linux; requires no hardware
-unit-test:
-	( cd service; go clean -cache; CGO_ENABLED=1 GO111MODULE=on go test -v -race -coverprofile=c.out ./... )
+unit-test: go-code-tester
+	GITHUB_OUTPUT=/dev/null \
+	./go-code-tester 90 "." "" "true" "" "" "./test"
 
 # Linux only; populate env.sh with the hardware parameters
 integration-test:
@@ -66,6 +67,10 @@ actions: ## Run all GitHub Action checks that run on a pull request creation
 		echo "Running workflow: $${WF}"; \
 		act pull_request --no-cache-server --platform ubuntu-latest=ghcr.io/catthehacker/ubuntu:act-latest --job "$${WF}"; \
 	done
+
+go-code-tester:
+	curl -o go-code-tester -L https://raw.githubusercontent.com/dell/common-github-actions/main/go-code-tester/entrypoint.sh \
+	&& chmod +x go-code-tester
 
 action-help: ## Echo instructions to run one specific workflow locally
 	@echo "GitHub Workflows can be run locally with the following command:"
