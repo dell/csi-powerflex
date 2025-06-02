@@ -2113,6 +2113,11 @@ func (s *service) ListSnapshots(
 
 	if err := s.requireProbe(ctx, systemID); err != nil {
 		Log.Printf("Could not probe system: %s", systemID)
+		code := status.Code(err)
+		if code == codes.NotFound {
+			return &csi.ListSnapshotsResponse{}, nil
+		}
+
 		return nil, err
 	}
 
