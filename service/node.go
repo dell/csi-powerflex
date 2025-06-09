@@ -23,7 +23,7 @@ import (
 	"strings"
 	"time"
 
-	csi "github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/dell/gofsutil"
 	"github.com/dell/goscaleio"
 	"github.com/sirupsen/logrus"
@@ -38,7 +38,7 @@ var (
 	connectedSystemID             = make([]string, 0)
 	publishGetMappedVolMaxRetry   = 30
 	unpublishGetMappedVolMaxRetry = 5
-	getMappedVolDelay             = (1 * time.Second)
+	getMappedVolDelay             = 1 * time.Second
 
 	// GetNodeLabels - Get the node labels
 	GetNodeLabels = getNodelabels
@@ -345,8 +345,8 @@ func (s *service) NodeUnpublishVolume(
 
 	sdcMappedVol, err := s.getSDCMappedVol(volID, systemID, unpublishGetMappedVolMaxRetry)
 	if err != nil {
-		Log.Infof("Error from getSDCMappedVol is: %#v", err)
-		Log.Infof("Error message from getSDCMappedVol is: %s", err.Error())
+		Log.Info(err.Error())
+
 		// fix k8s 19 bug: ControllerUnpublishVolume is called before NodeUnpublishVolume
 		// cleanup target from pod
 		if err := gofsutil.Unmount(ctx, targetPath); err != nil {
@@ -394,23 +394,24 @@ func (s *service) getSDCMappedVol(volumeID string, systemID string, maxRetry int
 	// communicate with SDC that it has volume
 	var sdcMappedVol *goscaleio.SdcMappedVolume
 	var err error
+
+	if id, ok := s.connectedSystemNameToID[systemID]; ok {
+		Log.Infof("Resolved system name %s to id %s", systemID, id)
+		systemID = id
+	}
+
 	for i := 0; i < maxRetry; i++ {
-		if id, ok := s.connectedSystemNameToID[systemID]; ok {
-			Log.Printf("Node publish getMappedVol name: %s id: %s", systemID, id)
-			systemID = id
-		}
 		sdcMappedVol, err = getMappedVol(volumeID, systemID)
 		if sdcMappedVol != nil {
 			break
 		}
-		Log.Printf("Node publish getMappedVol retry: %d", i)
+		Log.Debugf("Volume mapping not found, retry: %d", i)
 		time.Sleep(getMappedVolDelay)
 	}
 	if err != nil {
-		Log.Printf("SDC returned volume %s on system %s not published to node", volumeID, systemID)
 		return nil, err
 	}
-	return sdcMappedVol, err
+	return sdcMappedVol, nil
 }
 
 // Get the volumes published to the SDC (given by SdcMappedVolume) and scan for requested vol id
@@ -419,18 +420,17 @@ func getMappedVol(volID string, systemID string) (*goscaleio.SdcMappedVolume, er
 	localVols, _ := goscaleio.GetLocalVolumeMap()
 	var sdcMappedVol *goscaleio.SdcMappedVolume
 	if len(localVols) == 0 {
-		Log.Printf("Length of localVols (goscaleio.GetLocalVolumeMap()) is 0 \n")
+		Log.Debugf("No volumes are mapped to this node.")
 	}
 	for _, v := range localVols {
 		if v.VolumeID == volID && v.MdmID == systemID {
 			sdcMappedVol = v
-			Log.Printf("Found matching SDC mapped volume %v", sdcMappedVol)
+			Log.Debugf("Found matching SDC mapped volume: %v", sdcMappedVol)
 			break
 		}
 	}
 	if sdcMappedVol == nil {
-		return nil, status.Errorf(codes.Unavailable,
-			"volume: %s on system: %s not published to node", volID, systemID)
+		return nil, fmt.Errorf("volume %s on system %s is not mapped to this node", volID, systemID)
 	}
 	return sdcMappedVol, nil
 }
@@ -501,6 +501,7 @@ func (s *service) nodeProbe(ctx context.Context) error {
 
 		// make sure privDir is pre-created
 		if _, err := mkdir(s.privDir); err != nil {
+			Log.WithField("path", s.privDir).WithError(err).Error("Failed to create private mount dir")
 			return status.Errorf(codes.Internal,
 				"plugin private dir: %s creation error: %s",
 				s.privDir, err.Error())
@@ -769,7 +770,7 @@ func (s *service) NodeGetInfo(
 
 		err = s.SetPodZoneLabel(ctx, topology)
 		if err != nil {
-			Log.Warnf("Unable to set availability zone label '%s:%s' for this pod", topology[s.opts.zoneLabelKey], zone)
+			Log.Warnf("Unable to set availability zone label '%s:%s' for this pod: %v", s.opts.zoneLabelKey, topology[s.opts.zoneLabelKey], err)
 		}
 	}
 
@@ -877,7 +878,7 @@ func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolume
 	// check if volume path is accessible
 	if healthy {
 		_, err = os.ReadDir(volPath)
-		if err != nil && healthy {
+		if err != nil {
 			healthy = false
 			message = fmt.Sprintf("volume path: %s is not accessible: %v", volPath, err)
 		}
