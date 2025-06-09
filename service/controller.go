@@ -1801,8 +1801,8 @@ func (s *service) ControllerUnpublishVolume(
 	vol, err := s.getVolByID(volID, systemID)
 	if err != nil {
 		if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) {
-			return nil, status.Error(codes.NotFound,
-				"Volume not found")
+			Log.Debugf("volume %s is already deleted", volID)
+			return &csi.ControllerUnpublishVolumeResponse{}, nil
 		}
 		return nil, status.Errorf(codes.Internal,
 			"failure checking volume status before controller unpublish: %s",
