@@ -1,4 +1,4 @@
-// Copyright © 2019-2024 Dell Inc. or its subsidiaries. All Rights Reserved.
+// Copyright © 2019-2025 Dell Inc. or its subsidiaries. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1483,7 +1483,8 @@ func (s *service) ControllerPublishVolume(
 	volID := getVolumeIDFromCsiVolumeID(csiVolID)
 	vol, err := s.getVolByID(volID, systemID)
 	if err != nil {
-		if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
+		if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") ||
+			strings.Contains(err.Error(), "Invalid volume") {
 			return nil, status.Error(codes.NotFound,
 				"volume not found")
 		}
@@ -1879,7 +1880,8 @@ func (s *service) ValidateVolumeCapabilities(
 	volID := getVolumeIDFromCsiVolumeID(csiVolID)
 	_, err = s.getVolByID(volID, systemID)
 	if err != nil {
-		if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
+		if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") ||
+			strings.Contains(err.Error(), "Invalid volume") {
 			return nil, status.Error(codes.NotFound,
 				"volume not found")
 		}
