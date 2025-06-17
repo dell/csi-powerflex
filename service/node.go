@@ -783,12 +783,12 @@ func (s *service) NodeGetInfo(
 	}
 
 	for _, array := range s.opts.arrays {
-		isNFS, err := s.checkNFS(ctx, array.SystemID)
+		// Check if NFS protocol is enabled on the array
+		isNFSEnabled, err := s.IsNFSEnabled(ctx, array.SystemID)
 		if err != nil {
 			return nil, err
 		}
-
-		if isNFS {
+		if isNFSEnabled {
 			topology[Name+"/"+array.SystemID+"-nfs"] = "true"
 		}
 
