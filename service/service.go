@@ -1174,14 +1174,15 @@ func (s *service) getFileInterface(systemID string, fs *siotypes.FileSystem, cli
 
 // getSystemIDFromCsiVolumeId returns PowerFlex volume ID from CSI volume ID
 func (s *service) getSystemIDFromCsiVolumeID(csiVolID string) string {
-	containsHyphen := strings.Contains(csiVolID, "/")
-	if containsHyphen {
+	containsSlash := strings.Contains(csiVolID, "/")
+	if containsSlash {
 		i := strings.LastIndex(csiVolID, "/")
 		if i == -1 {
 			return ""
 		}
 		tokens := strings.Split(csiVolID, "/")
-		if len(tokens) > 1 {
+		// expected format: sysId/fsId
+		if len(tokens) == 2 {
 			sys := csiVolID[:i]
 			if id, ok := s.connectedSystemNameToID[sys]; ok {
 				return id
@@ -1194,7 +1195,8 @@ func (s *service) getSystemIDFromCsiVolumeID(csiVolID string) string {
 			return ""
 		}
 		tokens := strings.Split(csiVolID, "-")
-		if len(tokens) > 1 {
+		// expected format: sysId-volId
+		if len(tokens) == 2 {
 			sys := csiVolID[:i]
 			if id, ok := s.connectedSystemNameToID[sys]; ok {
 				return id
