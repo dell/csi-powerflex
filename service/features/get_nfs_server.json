@@ -1,0 +1,15 @@
+[
+    {
+        "id": "6553752b-1281-1e74-9726-4ec4ea9bb086",
+        "host_name": null,
+        "nas_server_id": "63ec8e0d-4551-29a7-e79c-b202f2b914f3",
+        "is_nfsv3_enabled": true,
+        "is_nfsv4_enabled": true,
+        "is_secure_enabled": false,
+        "is_use_smb_config_enabled": null,
+        "service_principal_name": null,
+        "is_joined": false,
+        "is_extended_credentials_enabled": false,
+        "credentials_cache_TTL": 15
+    }
+]

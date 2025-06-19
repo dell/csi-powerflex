@@ -1197,6 +1197,8 @@ func (f *feature) iInduceError(errtype string) error {
 		stepHandlersErrors.GetFileSystemsByIDError = true
 	case "NasNotFoundError":
 		stepHandlersErrors.NasServerNotFoundError = true
+	case "SystemNotFoundError":
+		stepHandlersErrors.SystemNotFoundError = true
 	case "fileInterfaceNotFoundError":
 		stepHandlersErrors.FileInterfaceNotFoundError = true
 	case "NoVolumeIDError":
@@ -4836,8 +4838,10 @@ func (f *feature) iCallGetNASServerIDFromName(systemID string, name string) erro
 	return nil
 }
 
-func (f *feature) iCallPingNASServer(systemID string, name string) error {
-	f.err = f.service.pingNAS(systemID, name)
+func (f *feature) iCallCheckNFSEnabled(systemID string, name string) error {
+	isNFSEnabled := false
+	isNFSEnabled, f.err = f.service.checkNFSEnabled(systemID, name)
+	fmt.Printf("NFS Status for %s is : %t\n", name, isNFSEnabled)
 	return nil
 }
 
@@ -5159,7 +5163,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^an NFSExport instance with nfsexporthost "([^"]*)"`, f.iCallGivenNFSExport)
 	s.Step(`^I specify External Access "([^"]*)"`, f.iSpecifyExternalAccess)
 	s.Step(`^I call Get NAS server from name "([^"]*)" "([^"]*)"$`, f.iCallGetNASServerIDFromName)
-	s.Step(`^I call ping NAS server "([^"]*)" "([^"]*)"$`, f.iCallPingNASServer)
+	s.Step(`^I call check NFS enabled "([^"]*)" "([^"]*)"$`, f.iCallCheckNFSEnabled)
 	s.Step(`^I call GetNodeUID$`, f.iCallGetNodeUID)
 	s.Step(`^a valid node uid is returned$`, f.aValidNodeUIDIsReturned)
 	s.Step(`^I call GetNodeUID with invalid node$`, f.iCallGetNodeUIDWithInvalidNode)
