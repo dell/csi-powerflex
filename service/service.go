@@ -720,13 +720,7 @@ func (s *service) IsNFSEnabled(ctx context.Context, systemID string) (bool, erro
 		return false, nil
 	}
 
-	// Validate NAS server if configured
-	nasserver, err := s.getNASServerIDFromName(systemID, array.NasName)
-	if err != nil {
-		return false, err
-	}
-
-	return s.checkNFSEnabled(systemID, nasserver)
+	return s.checkNFSEnabled(systemID)
 }
 
 // Probe all systems managed by driver
@@ -1821,7 +1815,7 @@ func (s *service) getNASServerIDFromName(systemID, nasName string) (string, erro
 	return nas.ID, nil
 }
 
-func (s *service) checkNFSEnabled(systemID string, nasID string) (bool, error) {
+func (s *service) checkNFSEnabled(systemID string) (bool, error) {
 	system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
 	if err != nil {
 		return false, errors.New("system not found: " + systemID)
