@@ -29,7 +29,10 @@ import (
 func Test_CreateKubeClientSet(t *testing.T) {
 	var tempConfigFunc func() (*rest.Config, error)                               // must return getInClusterConfig to its original value
 	var tempClientsetFunc func(config *rest.Config) (kubernetes.Interface, error) // must return getK8sClientset to its original value
-	kubeConfig := os.Getenv("KUBECONFIG")
+
+	// Save original KUBECONFIG for restoration
+	originalKubeConfig := os.Getenv("KUBECONFIG")
+
 	tests := []struct {
 		name    string
 		before  func() error
@@ -52,21 +55,19 @@ func Test_CreateKubeClientSet(t *testing.T) {
 			before: func() error {
 				Clientset = nil // reset Clientset before each run
 				tempConfigFunc = InClusterConfigFunc
-				// Force the unmocked function to fail by setting it to return an error
+				// Mock InClusterConfigFunc to return an error to simulate failure
 				InClusterConfigFunc = func() (*rest.Config, error) {
-					return nil, errors.New("not running in cluster")
+					return nil, errors.New("unable to load in-cluster configuration")
 				}
-				// Clear KUBECONFIG environment variable to force in-cluster config usage
-				os.Setenv("KUBECONFIG", "")
+				// Clear KUBECONFIG to ensure fallback also fails
+				os.Unsetenv("KUBECONFIG")
 				return nil
 			},
 			after: func() {
 				InClusterConfigFunc = tempConfigFunc
 				// Restore original KUBECONFIG
-				if kubeConfig != "" {
-					os.Setenv("KUBECONFIG", kubeConfig)
-				} else {
-					os.Unsetenv("KUBECONFIG")
+				if originalKubeConfig != "" {
+					os.Setenv("KUBECONFIG", originalKubeConfig)
 				}
 			},
 			wantErr: true,
@@ -96,6 +97,7 @@ func Test_CreateKubeClientSet(t *testing.T) {
 			tt.before()
 			defer tt.after()
 
+			// Test 1: Call CreateKubeClientSet() without parameters
 			err := CreateKubeClientSet()
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -105,16 +107,24 @@ func Test_CreateKubeClientSet(t *testing.T) {
 				assert.NotNil(t, Clientset)
 			}
 
-			// Reset Clientset before second test
+			// Reset Clientset for the second test call
 			Clientset = nil
 
-			// For the unmocked config function test, skip the kubeConfig test
-			// since it uses a different code path that might succeed
+			// Test 2: Call CreateKubeClientSet(kubeConfig) with parameters
+			// For the failure test case, we need to ensure this also fails
 			if tt.name == "failure: unmocked config function" {
-				return
+				// For this test case, pass an invalid kubeconfig path to ensure failure
+				err = CreateKubeClientSet("/invalid/path/to/kubeconfig")
+			} else {
+				// For other tests, use the original kubeconfig (if any)
+				if originalKubeConfig != "" {
+					err = CreateKubeClientSet(originalKubeConfig)
+				} else {
+					// If no original kubeconfig, test without parameters again
+					err = CreateKubeClientSet()
+				}
 			}
 
-			err = CreateKubeClientSet(kubeConfig)
 			if tt.wantErr {
 				assert.Error(t, err)
 				assert.Nil(t, Clientset)
