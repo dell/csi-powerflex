@@ -363,7 +363,7 @@ func (s *service) CreateStorageProtectionGroup(ctx context.Context, req *replica
 	remoteVolumeName := "replicated-" + vol.Name
 
 	if len(remoteVolumeName) > 31 {
-		Log.Printf("remoteVolumeName: %s longer than 31 character max, will search for truncated name: %s\n", remoteVolumeName, remoteVolumeName[0:31])
+		Log.Printf("remoteVolumeName: %s longer than 31 character max, will search for truncated name: %s", remoteVolumeName, remoteVolumeName[0:31])
 		remoteVolumeName = remoteVolumeName[0:31]
 	}
 
