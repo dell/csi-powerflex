@@ -270,7 +270,7 @@ func getRouter() http.Handler {
 	scaleioRouter.HandleFunc("/rest/v1/file-tree-quotas", handleFileTreeQuotas)
 	scaleioRouter.HandleFunc("/rest/v1/file-tree-quotas/{id}", handleGetFileTreeQuotas)
 	scaleioRouter.HandleFunc("/api/instances/System/action/querySystemLimits", handleGetSystemLimits)
-	scaleioRouter.HandleFunc("/rest/v1/nas-servers/{id}/ping", handleNasServerPing)
+	scaleioRouter.HandleFunc("/rest/v1/nfs-servers", handleIsNFSEnabled)
 	return scaleioRouter
 }
 
@@ -395,7 +395,7 @@ func handleNFSSnapshots(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleSystemInstances implements GET /api/types/System/instances
+// handleNasInstances implements GET /api/types/System/instances
 func handleNasInstances(w http.ResponseWriter, _ *http.Request) {
 	if stepHandlersErrors.NasServerNotFoundError {
 		writeError(w, "nas server not found", http.StatusNotFound, codes.NotFound)
@@ -405,14 +405,9 @@ func handleNasInstances(w http.ResponseWriter, _ *http.Request) {
 	returnJSONFile("features", "get_nas_servers.json", w, nil)
 }
 
-// handleSystemInstances implements POST /rest/v1/nas-servers/{id}/ping
-func handleNasServerPing(w http.ResponseWriter, r *http.Request) {
-	handleGetFileInterface(w, r)
-
-	if inducedError.Error() == "NasNotFoundError" {
-		writeError(w, "nas server not found", http.StatusNotFound, codes.NotFound)
-		return
-	}
+// handleIsNFSEnabled implements GET rest/v1/nfs-servers?select=*
+func handleIsNFSEnabled(w http.ResponseWriter, _ *http.Request) {
+	returnJSONFile("features", "get_nfs_server.json", w, nil)
 }
 
 func handleGetNasInstances(w http.ResponseWriter, _ *http.Request) {

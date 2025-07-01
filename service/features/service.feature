@@ -1555,16 +1555,15 @@ Feature: VxFlex OS CSI interface
       |  "15dbbf5617523655"        | "invalid-nas-server-id"            |   "NasNotFoundError"  |  "could not find given NAS server by name"  |
       |  "15dbbf5617523655"        | ""                                 |   ""                  |  "NAS server not provided"                  |
 
-  Scenario: Ping a NAS server by name
+  Scenario: Check NFS enabled on Array
     Given a VxFlexOS service
     And I call Probe
     And I induce error <error>
-    When I call ping NAS server <systemid> <nasserver>
+    When I call check NFS enabled <systemid> <nasserver>
     Then the error contains <errorMsg>
     Examples:
       |  systemid                  | nasserver                                |   error                         |  errorMsg                   |
       |  "15dbbf5617523655"        | "63ec8e0d-4551-29a7-e79c-b202f2b914f3"   |   ""                            | "none"                      |
-      |  "15dbbf5617523655"        | "invalid-nas-server"                     |   "NasNotFoundError"            |  "NAS server not found"     |
 
   Scenario: Create Volume for multi-available zone
     Given a VxFlexOS service
