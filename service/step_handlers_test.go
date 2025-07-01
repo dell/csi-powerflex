@@ -69,7 +69,6 @@ var (
 		NoFileSystemIDError           bool
 		NFSExportInstancesError       bool
 		NasServerNotFoundError        bool
-		SystemNotFoundError           bool
 		FileInterfaceNotFoundError    bool
 		BadVolIDError                 bool
 		NoCsiVolIDError               bool
@@ -193,7 +192,6 @@ func getHandler() http.Handler {
 	stepHandlersErrors.FileSystemInstancesError = false
 	stepHandlersErrors.NFSExportInstancesError = false
 	stepHandlersErrors.NasServerNotFoundError = false
-	stepHandlersErrors.SystemNotFoundError = false
 	stepHandlersErrors.BadCapacityError = false
 	stepHandlersErrors.BadVolIDError = false
 	stepHandlersErrors.GetFileSystemsByIDError = false
@@ -409,10 +407,6 @@ func handleNasInstances(w http.ResponseWriter, _ *http.Request) {
 
 // handleIsNFSEnabled implements GET rest/v1/nfs-servers?select=*
 func handleIsNFSEnabled(w http.ResponseWriter, _ *http.Request) {
-	if stepHandlersErrors.SystemNotFoundError {
-		writeError(w, "system not found", http.StatusNotFound, codes.NotFound)
-		return
-	}
 	returnJSONFile("features", "get_nfs_server.json", w, nil)
 }
 

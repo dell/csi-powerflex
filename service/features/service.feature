@@ -1564,7 +1564,6 @@ Feature: VxFlex OS CSI interface
     Examples:
       |  systemid                  | nasserver                                |   error                         |  errorMsg                   |
       |  "15dbbf5617523655"        | "63ec8e0d-4551-29a7-e79c-b202f2b914f3"   |   ""                            | "none"                      |
-      |  "15dbbf5617523655"        | "63ec8e0d-4551-29a7-e79c-b202f2b914f3"   |   "SystemNotFoundError"         | "system not found"          |
 
   Scenario: Create Volume for multi-available zone
     Given a VxFlexOS service

@@ -784,7 +784,7 @@ func (s *service) NodeGetInfo(
 
 	for _, array := range s.opts.arrays {
 		// Check if NFS protocol is enabled on the array
-		isNFSEnabled, err := s.IsNFSEnabled(ctx, array.SystemID)
+		isNFSEnabled, err := s.isNFSEnabled(ctx, array.SystemID)
 		if err != nil {
 			return nil, err
 		}

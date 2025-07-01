@@ -681,7 +681,7 @@ func (s *service) getIPAddressByInterface(interfaceName string, networkInterface
 	return "", fmt.Errorf("no IPv4 address found for interface %s", interfaceName)
 }
 
-func (s *service) IsNFSEnabled(ctx context.Context, systemID string) (bool, error) {
+func (s *service) isNFSEnabled(ctx context.Context, systemID string) (bool, error) {
 	if err := s.systemProbeAll(ctx); err != nil {
 		return false, err
 	}
@@ -720,7 +720,12 @@ func (s *service) IsNFSEnabled(ctx context.Context, systemID string) (bool, erro
 		return false, nil
 	}
 
-	return s.checkNFSEnabled(systemID)
+	system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
+	if err != nil {
+		return false, errors.New("system not found: " + systemID)
+	}
+
+	return system.IsNFSEnabled()
 }
 
 // Probe all systems managed by driver
@@ -1813,15 +1818,6 @@ func (s *service) getNASServerIDFromName(systemID, nasName string) (string, erro
 		return "", err
 	}
 	return nas.ID, nil
-}
-
-func (s *service) checkNFSEnabled(systemID string) (bool, error) {
-	system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
-	if err != nil {
-		return false, errors.New("system not found: " + systemID)
-	}
-
-	return system.IsNFSEnabled()
 }
 
 func (s *service) GetNfsTopology(systemID string) []*csi.Topology {
