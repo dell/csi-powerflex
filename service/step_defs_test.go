@@ -4836,8 +4836,11 @@ func (f *feature) iCallGetNASServerIDFromName(systemID string, name string) erro
 	return nil
 }
 
-func (f *feature) iCallPingNASServer(systemID string, name string) error {
-	f.err = f.service.pingNAS(systemID, name)
+func (f *feature) iCallIsNFSEnabled(systemID string) error {
+	isNFSEnabled := false
+	ctx := context.Background()
+	isNFSEnabled, f.err = f.service.isNFSEnabled(ctx, systemID)
+	fmt.Printf("NFS Status: %t\n", isNFSEnabled)
 	return nil
 }
 
@@ -5159,7 +5162,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^an NFSExport instance with nfsexporthost "([^"]*)"`, f.iCallGivenNFSExport)
 	s.Step(`^I specify External Access "([^"]*)"`, f.iSpecifyExternalAccess)
 	s.Step(`^I call Get NAS server from name "([^"]*)" "([^"]*)"$`, f.iCallGetNASServerIDFromName)
-	s.Step(`^I call ping NAS server "([^"]*)" "([^"]*)"$`, f.iCallPingNASServer)
+	s.Step(`^I call check NFS enabled "([^"]*)"$`, f.iCallIsNFSEnabled)
 	s.Step(`^I call GetNodeUID$`, f.iCallGetNodeUID)
 	s.Step(`^a valid node uid is returned$`, f.aValidNodeUIDIsReturned)
 	s.Step(`^I call GetNodeUID with invalid node$`, f.iCallGetNodeUIDWithInvalidNode)
