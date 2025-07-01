@@ -681,9 +681,8 @@ func (s *service) getIPAddressByInterface(interfaceName string, networkInterface
 	return "", fmt.Errorf("no IPv4 address found for interface %s", interfaceName)
 }
 
-func (s *service) checkNFS(ctx context.Context, systemID string) (bool, error) {
-	err := s.systemProbeAll(ctx)
-	if err != nil {
+func (s *service) isNFSEnabled(ctx context.Context, systemID string) (bool, error) {
+	if err := s.systemProbeAll(ctx); err != nil {
 		return false, err
 	}
 
@@ -699,29 +698,34 @@ func (s *service) checkNFS(ctx context.Context, systemID string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if ver >= 4.0 {
-		arrayConData, err := getArrayConfig(ctx)
-		if err != nil {
-			return false, err
-		}
-		array := arrayConData[systemID]
-		if strings.TrimSpace(array.NasName) == "" {
-			Log.Warnf("nasName value not found in secret, it is mandatory parameter for NFS volume operations")
-		} else {
-			nasserver, err := s.getNASServerIDFromName(systemID, array.NasName)
-			if err != nil {
-				return false, err
-			}
 
-			err = s.pingNAS(systemID, nasserver)
-			if err != nil {
-				return false, err
-			}
-		}
-		// Even though NasName is not present in secret but PowerFlex version is >=4.0; we support NFS.
-		return true, nil
+	// NFS is only supported in PowerFlex version 4.0+
+	if ver < 4.0 {
+		return false, nil
 	}
-	return false, nil
+
+	arrayConData, err := getArrayConfig(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	array, exists := arrayConData[systemID]
+	if !exists {
+		return false, errors.New("array configuration not found for system: " + systemID)
+	}
+
+	// If no NAS name configured, NFS cannot be used
+	if strings.TrimSpace(array.NasName) == "" {
+		Log.Warnf("nasName value not found in secret, it is mandatory parameter for NFS volume operations")
+		return false, nil
+	}
+
+	system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
+	if err != nil {
+		return false, errors.New("system not found: " + systemID)
+	}
+
+	return system.IsNFSEnabled()
 }
 
 // Probe all systems managed by driver
@@ -1814,30 +1818,6 @@ func (s *service) getNASServerIDFromName(systemID, nasName string) (string, erro
 		return "", err
 	}
 	return nas.ID, nil
-}
-
-func (s *service) pingNAS(systemID string, nasID string) error {
-	system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
-	if err != nil {
-		return errors.New("system not found: " + systemID)
-	}
-
-	nas, err := system.GetNASByIDName(nasID, "")
-	if err != nil {
-		return errors.New("NAS server not found: " + nasID)
-	}
-
-	fileInterface, err := system.GetFileInterface(nas.CurrentPreferredIPv4InterfaceID)
-	if fileInterface.IPAddress == "" || err != nil {
-		return errors.New("file interface not found for NAS server " + nasID)
-	}
-
-	err = system.PingNAS(nas.ID, fileInterface.IPAddress)
-	if err != nil {
-		return errors.New("could not ping NAS server " + nas.ID)
-	}
-
-	return nil
 }
 
 func (s *service) GetNfsTopology(systemID string) []*csi.Topology {
