@@ -362,6 +362,11 @@ func (s *service) CreateStorageProtectionGroup(ctx context.Context, req *replica
 
 	remoteVolumeName := "replicated-" + vol.Name
 
+	if len(remoteVolumeName) > 31 {
+		Log.Printf("remoteVolumeName: %s longer than 31 character max, will search for truncated name: %s", remoteVolumeName, remoteVolumeName[0:31])
+		remoteVolumeName = remoteVolumeName[0:31]
+	}
+
 	if err := s.requireProbe(ctx, remoteSystem.ID); err != nil {
 		return nil, status.Errorf(codes.Internal, "can't probe remote system: %s", err.Error())
 	}

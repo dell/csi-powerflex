@@ -80,30 +80,31 @@ Scenario Outline: Test CreateStorageProtectionGroup
   Then the error contains <errormsg>
 
   Examples:
-  | name        | error                                       | errormsg                                            |
-  | "sourcevol" | "none"                                      | "none"                                              |
-  | "sourcevol" | "NoVolIDError"                              | "volume ID is required"                             |
-  | "sourcevol" | "BadVolIDError"                             | "failed to provide"                                 |
-  | "sourcevol" | "EmptyParametersListError"                  | "empty parameters list"                             |
-  | "sourcevol" | "controller-probe"                          | "PodmonControllerProbeError"                        |
-  | "sourcevol" | "GetVolByIDError"                           | "can't query volume"                                |
-  | "sourcevol" | "ReplicationConsistencyGroupError"          | "create rcg induced error"                          |
-  | "sourcevol" | "GetReplicationConsistencyGroupsError"      | "could not GET ReplicationConsistencyGroups"        |
-  | "sourcevol" | "GetRCGByIdError"                           | "could not GET RCG by ID"                           |
-  | "sourcevol" | "ProbePrimaryError"                         | "PodmonControllerProbeError"                        |
-  | "sourcevol" | "ProbeSecondaryError"                       | "PodmonControllerProbeError"                        |
-  | "sourcevol" | "NoProtectionDomainError"                   | "NoProtectionDomainError"                           |
-  | "sourcevol" | "ReplicationPairError"                      | "POST ReplicationPair induced error"                |
-  | "sourcevol" | "PeerMdmError"                              | "PeerMdmError"                                      |
-  | "sourcevol" | "BadRemoteSystem"                           | "couldn't getSystem (remote)"                       |
-  | "sourcevol" | "FindVolumeIDError"                         | "can't find volume replicated-sourcevol by name"    |
-  | "sourcevol" | "StorageGroupAlreadyExists"                 | "none"                                              |
-  | "sourcevol" | "StorageGroupAlreadyExistsUnretriavable"    | "couldn't find replication consistency group"       |
-  | "sourcevol" | "ReplicationPairAlreadyExists"              | "none"                                              |
-  | "sourcevol" | "ReplicationPairAlreadyExistsUnretrievable" | "couldn't find replication pair"                    |
-  | "sourcevol" | "NoRemoteSystem"                            | "no remote system specified"                        |
-  | "sourcevol" | "NoRPOSpecified"                            | "no RPO specified"                                  |
-  | "sourcevol" | "NoRemoteClusterID"                         | "no remote cluster ID specified"                    |
+  | name                     | error                                       | errormsg                                            |
+  | "sourcevol"              | "none"                                      | "none"                                              |
+  | "sourcevol"              | "NoVolIDError"                              | "volume ID is required"                             |
+  | "sourcevol"              | "BadVolIDError"                             | "failed to provide"                                 |
+  | "sourcevol"              | "EmptyParametersListError"                  | "empty parameters list"                             |
+  | "sourcevol"              | "controller-probe"                          | "PodmonControllerProbeError"                        |
+  | "sourcevol"              | "GetVolByIDError"                           | "can't query volume"                                |
+  | "sourcevol"              | "ReplicationConsistencyGroupError"          | "create rcg induced error"                          |
+  | "sourcevol"              | "GetReplicationConsistencyGroupsError"      | "could not GET ReplicationConsistencyGroups"        |
+  | "sourcevol"              | "GetRCGByIdError"                           | "could not GET RCG by ID"                           |
+  | "sourcevol"              | "ProbePrimaryError"                         | "PodmonControllerProbeError"                        |
+  | "sourcevol"              | "ProbeSecondaryError"                       | "PodmonControllerProbeError"                        |
+  | "sourcevol"              | "NoProtectionDomainError"                   | "NoProtectionDomainError"                           |
+  | "sourcevol"              | "ReplicationPairError"                      | "POST ReplicationPair induced error"                |
+  | "sourcevol"              | "PeerMdmError"                              | "PeerMdmError"                                      |
+  | "sourcevol"              | "BadRemoteSystem"                           | "couldn't getSystem (remote)"                       |
+  | "sourcevol"              | "FindVolumeIDError"                         | "can't find volume replicated-sourcevol by name"    |
+  | "sourcevol"              | "StorageGroupAlreadyExists"                 | "none"                                              |
+  | "sourcevol"              | "StorageGroupAlreadyExistsUnretriavable"    | "couldn't find replication consistency group"       |
+  | "sourcevol"              | "ReplicationPairAlreadyExists"              | "none"                                              |
+  | "sourcevol"              | "ReplicationPairAlreadyExistsUnretrievable" | "couldn't find replication pair"                    |
+  | "sourcevol"              | "NoRemoteSystem"                            | "no remote system specified"                        |
+  | "sourcevol"              | "NoRPOSpecified"                            | "no RPO specified"                                  |
+  | "sourcevol"              | "NoRemoteClusterID"                         | "no remote cluster ID specified"                    |
+  | "thisnameisabout22chars" | "none"                                      | "none"                                               |
 
 @replication
 Scenario Outline: Test CreateStorageProtectionGroup with arguments
