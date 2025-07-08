@@ -15,4 +15,4 @@ jobs:
   # checks unit tests, package coverage, and gosec
   common:
     name: Run gosec, unit tests, and check package coverage
-    uses: dell/common-github-actions/.github/workflows/go-common.yml@main
+    uses: dell/common-github-actions/.github/workflows/go-common.yml@usr/falfaroc/add-gosec-dep
