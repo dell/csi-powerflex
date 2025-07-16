@@ -359,6 +359,8 @@ MDM-ID 14dbbf5617523654 SDC ID d0f33bd700000004 INSTALLATION ID 1c078b073d75512c
 
 	opts.replicationPrefix = "replication.storage.dell.com"
 
+	opts.probeTimeout = 10 * time.Second
+
 	svc.opts = opts
 
 	if f.system != nil {
@@ -3297,7 +3299,7 @@ func (f *feature) theConfigMapIsUpdated() error {
 	return nil
 }
 
-func (f *feature) iCallBeforeServe() error {
+func setUpBeforeServeContext() (interface{}, []string) {
 	ctxOSEnviron := interface{}("os.Environ")
 	stringSlice := make([]string, 0)
 	stringSlice = append(stringSlice, "X_CSI_PRIVATE_MOUNT_DIR=/csi")
@@ -3316,20 +3318,43 @@ func (f *feature) iCallBeforeServe() error {
 		fmt.Printf("debug set ALLOW_RWO_MULTI_POD\n")
 		stringSlice = append(stringSlice, "X_CSI_ALLOW_RWO_MULTI_POD_ACCESS=true")
 	}
+
+	return ctxOSEnviron, stringSlice
+}
+
+func (f *feature) iCallBeforeServe() error {
+	ctxOSEnviron, stringSlice := setUpBeforeServeContext()
 	ctx := context.WithValue(context.Background(), ctxOSEnviron, stringSlice)
+	return f.executeBeforeServe(ctx)
+}
+
+func (f *feature) iCallBeforeServeButChangeWithValue(arg1 string, arg2 string) error {
+	ctxOSEnviron, stringSlice := setUpBeforeServeContext()
+	ctx := context.WithValue(context.Background(), ctxOSEnviron, stringSlice)
+
+	// Setting the appropriate value.
+	os.Setenv(arg1, arg2)
+
+	return f.executeBeforeServe(ctx)
+}
+
+func (f *feature) executeBeforeServe(ctx context.Context) error {
 	listener, err := net.Listen("tcp", "127.0.0.1:65000")
 	if err != nil {
 		return err
 	}
+
 	os.Setenv(EnvAutoProbe, "true")
 	presp, perr := f.service.ProbeController(ctx, nil)
 	fmt.Printf("ProbeController resp %#v \n", presp)
 	if perr != nil {
 		f.err = perr
 	}
+
 	if stepHandlersErrors.UpdateConfigK8sClientError {
 		K8sClientset = nil
 	}
+
 	f.err = f.service.BeforeServe(ctx, nil, listener)
 	listener.Close()
 	return nil
@@ -5141,6 +5166,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^a NodeGetInfo is returned without zone topology$`, f.aNodeGetInfoIsReturnedWithoutZoneTopology)
 	s.Step(`^a NodeGetInfo is returned without zone system topology$`, f.aNodeGetInfoIsReturnedWithoutZoneSystemTopology)
 	s.Step(`^I call systemProbeAll in mode "([^"]*)"`, f.iCallSystemProbeAll)
+	s.Step(`^I call BeforeServe but change "([^"]*)" with "([^"]*)"$`, f.iCallBeforeServeButChangeWithValue)
 
 	s.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
 		// Cleanup test directory before each test

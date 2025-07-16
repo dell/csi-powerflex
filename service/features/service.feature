@@ -1265,6 +1265,15 @@ Feature: VxFlex OS CSI interface
     # Get different error message on Windows vs. Linux
     Then the error contains "unable to login to PowerFlex Gateway"
 
+  Scenario: Test BeforeServe with Env variable modification
+    Given a VxFlexOS service
+    When I call GetPluginInfo
+    When I call BeforeServe but change <envVar> with <value>
+    Examples:
+      | envVar                   | value     |
+      | "X_CSI_PROBE_TIMEOUT"    | "myValue" |
+      | "X_CSI_PROBE_TIMEOUT"    | "5s"      |
+
   Scenario: Test getArrayConfig with invalid config file
     Given an invalid config <configPath>
     When I call getArrayConfig
