@@ -115,7 +115,7 @@ func publishVolume(
 	}
 
 	// Make sure target is created. The spec says the driver is responsible
-	// for creating the target, but Kubernetes generallly creates the target.
+	// for creating the target, but Kubernetes generally creates the target.
 	privTgt := getPrivateMountPoint(privDir, id)
 	err = createTarget(target, isBlock)
 	if err != nil {
@@ -130,6 +130,7 @@ func publishVolume(
 
 	// make sure privDir exists and is a directory
 	if _, err := mkdir(privDir); err != nil {
+		Log.WithField("path", privDir).WithError(err).Error("Failed to create private mount dir")
 		return err
 	}
 
@@ -171,6 +172,7 @@ func publishVolume(
 		// Make sure private mount point exists
 		created, err := mkdir(privTgt)
 		if err != nil {
+			Log.WithField("path", privTgt).WithError(err).Error("Failed to create private mount dir")
 			return status.Errorf(codes.Internal,
 				"Unable to create private mount point: %s",
 				err.Error())
@@ -365,6 +367,7 @@ func publishNFS(ctx context.Context, req *csi.NodePublishVolumeRequest, nfsExpor
 	// make sure target is created
 	_, err := mkdir(target)
 	if err != nil {
+		Log.WithField("path", target).WithError(err).Error("Failed to create target dir")
 		return status.Error(codes.FailedPrecondition, fmt.Sprintf("Could not create '%s': '%s'", target, err.Error()))
 	}
 	roFlag := req.GetReadonly()
@@ -542,28 +545,27 @@ func contains(list []string, item string) bool {
 func mkfile(path string) (bool, error) {
 	st, err := os.Stat(path)
 	if err != nil {
-		Log.Warnf("Unable to check stat of file: %s with error: %v", path, err.Error())
 		if os.IsNotExist(err) {
+			Log.WithField("path", path).Infof("File does not exist, creating it")
 			/* #nosec G302 G304 */
 			file, err := os.OpenFile(path, os.O_CREATE, 0o755)
 			if err != nil {
-				Log.WithField("dir", path).WithError(
-					err).Error("Unable to create dir")
-				return false, err
+				return false, fmt.Errorf("failed to create file: %w", err)
 			}
 			err = file.Close()
 			if err != nil {
 				// Log the error but keep going
-				Log.WithField("file", path).WithError(
-					err).Error("Unable to close file")
+				Log.WithField("path", path).WithError(err).Error("Failed to close file")
 			}
-			Log.WithField("path", path).Debug("created file")
+			Log.WithField("path", path).Debug("Created file")
 			return true, nil
 		}
+		return false, fmt.Errorf("failed to stat file: %w", err)
 	}
 	if st.IsDir() {
 		return false, fmt.Errorf("existing path is a directory")
 	}
+	Log.WithField("path", path).Debug("File already exists, not creating")
 	return false, nil
 }
 
@@ -572,21 +574,21 @@ func mkfile(path string) (bool, error) {
 func mkdir(path string) (bool, error) {
 	st, err := os.Stat(path)
 	if err != nil {
-		Log.Warnf("Unable to check stat of file: %s with error: %v", path, err.Error())
 		if os.IsNotExist(err) {
-			err := os.Mkdir(path, 0o755) // #nosec G301
+			Log.WithField("path", path).Infof("Directory does not exist, creating it")
+			err := os.MkdirAll(path, 0o755) // #nosec G301
 			if err != nil {
-				Log.WithField("dir", path).WithError(
-					err).Error("Unable to create dir")
-				return false, err
+				return false, fmt.Errorf("failed to create directory: %w", err)
 			}
-			Log.WithField("path", path).Debug("created directory")
+			Log.WithField("path", path).Debug("Created directory")
 			return true, nil
 		}
+		return false, fmt.Errorf("failed to stat directory: %w", err)
 	}
 	if !st.IsDir() {
 		return false, fmt.Errorf("existing path is not a directory")
 	}
+	Log.WithField("path", path).Debug("Directory already exists, not creating")
 	return false, nil
 }
 
@@ -883,11 +885,13 @@ func createTarget(target string, isBlock bool) error {
 	if isBlock {
 		_, err = mkfile(target)
 		if err != nil {
+			Log.WithField("path", target).WithError(err).Error("Failed to create target file")
 			return status.Error(codes.FailedPrecondition, fmt.Sprintf("Could not create %s: %s", target, err.Error()))
 		}
 	} else {
 		_, err = mkdir(target)
 		if err != nil {
+			Log.WithField("path", target).WithError(err).Error("Failed to create target dir")
 			return status.Error(codes.FailedPrecondition, fmt.Sprintf("Could not create %s: %s", target, err.Error()))
 		}
 	}
