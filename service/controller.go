@@ -137,7 +137,7 @@ const (
 
 	DriverConfigParamsYaml = "driver-config-params.yaml"
 
-	DefaultAPITimeout = 5 * time.Second
+	DefaultAPITimeout = 10 * time.Second
 )
 
 // Extra metadata field names for propagating to goscaleio and beyond.
@@ -2630,7 +2630,7 @@ func (s *service) systemProbeAll(ctx context.Context) error {
 		Log.Infof("probing zoneLabel '%s', zone value: '%s'", s.opts.zoneLabelKey, zoneName)
 	}
 
-	newCtx, cancel := createProbeContextWithDeadline(ctx)
+	newCtx, cancel := s.createProbeContextWithDeadline(ctx)
 	defer cancel()
 
 	for _, array := range s.opts.arrays {
@@ -3760,12 +3760,12 @@ func (s *service) verifySystem(systemID string) (*goscaleio.Client, error) {
 	return adminClient, nil
 }
 
-func createProbeContextWithDeadline(ctx context.Context) (context.Context, context.CancelFunc) {
-	defaultProbeDeadline := time.Now().Add(DefaultAPITimeout)
+func (s *service) createProbeContextWithDeadline(ctx context.Context) (context.Context, context.CancelFunc) {
+	defaultProbeDeadline := time.Now().Add(s.opts.probeTimeout)
 	probeDeadline, ok := ctx.Deadline()
 	if !ok {
 		Log.Println("Probe deadline not in context, using default")
-		probeDeadline = time.Now().Add(DefaultAPITimeout)
+		probeDeadline = time.Now().Add(s.opts.probeTimeout)
 	}
 
 	// Set the deadline to be the lowest of the two times.
