@@ -29,7 +29,7 @@ import (
 	"github.com/cucumber/godog"
 	"github.com/dell/csi-vxflexos/v2/provider"
 	"github.com/dell/csi-vxflexos/v2/service"
-	"github.com/dell/gocsi/utils"
+	csiutils "github.com/dell/gocsi/utils/csi"
 	"google.golang.org/grpc"
 )
 
@@ -187,7 +187,7 @@ func startServer(ctx context.Context, cFile string) (*grpc.ClientConn, func()) {
 	// Create a new SP instance and serve it with a piped connection.
 	service.ArrayConfigFile = cFile
 	sp := provider.New()
-	lis, err := utils.GetCSIEndpointListener()
+	lis, err := csiutils.GetCSIEndpointListener()
 	if err != nil {
 		fmt.Printf("couldn't open listener: %s\n", err.Error())
 		return nil, nil
@@ -199,7 +199,7 @@ func startServer(ctx context.Context, cFile string) (*grpc.ClientConn, func()) {
 			fmt.Printf("http: Server closed")
 		}
 	}()
-	network, addr, err := utils.GetCSIEndpoint()
+	network, addr, err := csiutils.GetCSIEndpoint()
 	if err != nil {
 		return nil, nil
 	}
