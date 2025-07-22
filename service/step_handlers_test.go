@@ -81,6 +81,7 @@ var (
 		NoSysNameError                bool
 		NoAdminError                  bool
 		WrongSysNameError             bool
+		WrongSystemIDError            bool
 		BadCapacityError              bool
 		NoVolumeIDError               bool
 		SetVolumeSizeError            bool
@@ -206,6 +207,7 @@ func getHandler() http.Handler {
 	stepHandlersErrors.NoSysNameError = false
 	stepHandlersErrors.NoAdminError = false
 	stepHandlersErrors.WrongSysNameError = false
+	stepHandlersErrors.WrongSystemIDError = false
 	stepHandlersErrors.NoVolumeIDError = false
 	stepHandlersErrors.SetVolumeSizeError = false
 	stepHandlersErrors.systemNameMatchingError = false
@@ -341,7 +343,7 @@ func handleSystemInstances(w http.ResponseWriter, _ *http.Request) {
 	if stepHandlersErrors.systemNameMatchingError {
 		count++
 	}
-	if count == 2 || stepHandlersErrors.WrongSysNameError {
+	if count == 2 || stepHandlersErrors.WrongSysNameError || stepHandlersErrors.WrongSystemIDError {
 		fmt.Printf("DEBUG send bad system\n")
 		returnJSONFile("features", "bad_system.json", w, nil)
 		count = 0

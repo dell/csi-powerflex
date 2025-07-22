@@ -2804,7 +2804,7 @@ func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) e
 }
 
 func (s *service) requireProbe(ctx context.Context, systemID string) error {
-	if s.adminClients[systemID] == nil {
+	if s.adminClients[systemID] == nil || s.systems[systemID] == nil {
 		Log.Debugf("probing system %s automatically", systemID)
 		array, ok := s.opts.arrays[systemID]
 		if ok {
