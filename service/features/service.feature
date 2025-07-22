@@ -156,6 +156,7 @@ Feature: VxFlex OS CSI interface
       | "NoPasswordError"   | "missing PowerFlex MDM password"                |
       | "NoSysNameError"    | "missing PowerFlex system name"                 |
       | "WrongSysNameError" | "unable to find matching PowerFlex system name" |
+      | "WrongSystemIDError"| "systemid or systemname not found"              |
 
 
   # This injected error fails on Windows with no SDC but passes on Linux with SDC

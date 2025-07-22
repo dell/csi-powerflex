@@ -1093,6 +1093,8 @@ func (f *feature) iInduceError(errtype string) error {
 	switch errtype {
 	case "WrongSysNameError":
 		stepHandlersErrors.WrongSysNameError = true
+	case "WrongSystemIDError":
+		stepHandlersErrors.WrongSystemIDError = true
 	case "BadCapacityError":
 		stepHandlersErrors.BadCapacityError = true
 	case "NoAdminError":
@@ -4116,6 +4118,9 @@ func (f *feature) iInvalidateTheProbeCache() error {
 	} else if stepHandlersErrors.WrongSysNameError {
 		f.service.opts.arrays[arrayID].SystemID = "WrongSystemName"
 		f.service.opts.arrays[arrayID2].SystemID = "WrongSystemName"
+	} else if stepHandlersErrors.WrongSystemIDError {
+		f.service.opts.arrays[arrayID].SystemID = "WrongSystemID"
+		f.service.opts.arrays[arrayID2].SystemID = "WrongSystemID"
 	} else if testControllerHasNoConnection {
 		f.service.adminClients[arrayID] = nil
 		f.service.adminClients[arrayID2] = nil
