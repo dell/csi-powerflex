@@ -562,7 +562,7 @@ func (s *service) BeforeServe(
 
 	if _, ok := csictx.LookupEnv(ctx, "X_CSI_VXFLEXOS_NO_PROBE_ON_START"); !ok {
 		Log.Infof("BeforeServe probing starting %s", time.Now().Format("15:04:05.000000000"))
-		newContext, cancel := context.WithDeadline(ctx, time.Now().Add(s.opts.probeTimeout))
+		newContext, cancel := context.WithTimeout(ctx, s.opts.probeTimeout)
 		defer cancel()
 
 		err := s.doProbe(newContext)
