@@ -69,4 +69,7 @@ const (
 
 	// EnvKubeNodeName is the name of the environment variable which stores current kubernetes node name
 	EnvKubeNodeName = "X_CSI_POWERFLEX_KUBE_NODE_NAME"
+
+	// EnvMaxProbeTimeout is the name of the environment variable which stores the maximum probe timeout
+	EnvMaxProbeTimeout = "X_CSI_PROBE_TIMEOUT"
 )
