@@ -189,6 +189,7 @@ type Opts struct {
 	ExternalAccess             string // used for adding extra IP/IP range to the NFS export
 	KubeNodeName               string
 	zoneLabelKey               string
+	probeTimeout               time.Duration
 }
 
 type service struct {
@@ -518,6 +519,20 @@ func (s *service) BeforeServe(
 		Log.WithError(err).Error("unable to log csiNode topology keys")
 	}
 
+	opts.probeTimeout = DefaultAPITimeout
+	if envProbeTimeout, ok := csictx.LookupEnv(ctx, EnvMaxProbeTimeout); ok {
+		duration, err := time.ParseDuration(envProbeTimeout)
+		if err != nil {
+			Log.Warnf("error while parsing env variable '%s', %s, defaulting to %s", EnvMaxProbeTimeout, err, DefaultAPITimeout)
+			opts.probeTimeout = DefaultAPITimeout
+		} else {
+			Log.Infof("env variable '%s' provided with value %s", EnvMaxProbeTimeout, envProbeTimeout)
+			opts.probeTimeout = duration
+		}
+	} else {
+		Log.Infof("env variable '%s' not provided, defaulting to %s", EnvMaxProbeTimeout, DefaultAPITimeout)
+	}
+
 	// pb parses an environment variable into a boolean value. If an error
 	// is encountered, default is set to false, and error is logged
 	pb := func(n string) bool {
@@ -546,14 +561,13 @@ func (s *service) BeforeServe(
 	}
 
 	if _, ok := csictx.LookupEnv(ctx, "X_CSI_VXFLEXOS_NO_PROBE_ON_START"); !ok {
-		Log.Printf("BeforeServe probing starting %s", time.Now().Format("15:04:05.000000000"))
-		// probe before the server starts, to avoid errors in the controller, we must return before 2 seconds.
-		beforeServeMaxTimeout := 1 * time.Second
-		newContext, cancel := context.WithDeadline(ctx, time.Now().Add(beforeServeMaxTimeout))
+		Log.Infof("BeforeServe probing starting %s", time.Now().Format("15:04:05.000000000"))
+		newContext, cancel := context.WithTimeout(ctx, s.opts.probeTimeout)
 		defer cancel()
 
 		err := s.doProbe(newContext)
-		Log.Printf("BeforeServe probing complete %s", time.Now().Format("15:04:05.000000000"))
+
+		Log.Infof("BeforeServe probing complete %s", time.Now().Format("15:04:05.000000000"))
 		return err
 	}
 
