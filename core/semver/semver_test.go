@@ -49,7 +49,7 @@ func TestMainFunction(t *testing.T) {
 			outputFile: "test_output.mk",
 			setup: func() {
 				gitDescribeFunc = func() ([]byte, error) {
-					return []byte("v2.14.0-notes-12-gd058795-dirty"), nil
+					return []byte("v2.14.1-notes-12-gd058795-dirty"), nil
 				}
 			},
 		},
@@ -59,7 +59,7 @@ func TestMainFunction(t *testing.T) {
 			outputFile: "test_output.env",
 			setup: func() {
 				gitDescribeFunc = func() ([]byte, error) {
-					return []byte("v2.14.0-notes-12-gd058795-dirty"), nil
+					return []byte("v2.14.1-notes-12-gd058795-dirty"), nil
 				}
 			},
 		},
@@ -69,7 +69,7 @@ func TestMainFunction(t *testing.T) {
 			outputFile: "test_output.json",
 			setup: func() {
 				gitDescribeFunc = func() ([]byte, error) {
-					return []byte("v2.14.0-notes-12-gd058795-dirty"), nil
+					return []byte("v2.14.1-notes-12-gd058795-dirty"), nil
 				}
 			},
 		},
@@ -79,7 +79,7 @@ func TestMainFunction(t *testing.T) {
 			outputFile: "test_output.ver",
 			setup: func() {
 				gitDescribeFunc = func() ([]byte, error) {
-					return []byte("v2.14.0-notes-12-gd058795-dirty"), nil
+					return []byte("v2.14.1-notes-12-gd058795-dirty"), nil
 				}
 			},
 		},
@@ -89,7 +89,7 @@ func TestMainFunction(t *testing.T) {
 			outputFile: "test_output.rpm",
 			setup: func() {
 				gitDescribeFunc = func() ([]byte, error) {
-					return []byte("v2.14.0-notes-12-gd058795-dirty"), nil
+					return []byte("v2.14.1-notes-12-gd058795-dirty"), nil
 				}
 			},
 		},
@@ -99,7 +99,7 @@ func TestMainFunction(t *testing.T) {
 			outputFile: "test_output.rpm",
 			setup: func() {
 				gitDescribeFunc = func() ([]byte, error) {
-					return []byte("v2.14.0-notes-12-gd058795-dirty"), nil
+					return []byte("v2.14.1-notes-12-gd058795-dirty"), nil
 				}
 			},
 		},
@@ -109,7 +109,7 @@ func TestMainFunction(t *testing.T) {
 			outputFile: "test_output.rpm",
 			setup: func() {
 				gitDescribeFunc = func() ([]byte, error) {
-					return []byte("v2.14.0-notes-12-gd058795-dirty"), nil
+					return []byte("v2.14.1-notes-12-gd058795-dirty"), nil
 				}
 			},
 			readFileFunc: func(_ string) ([]byte, error) {
@@ -123,7 +123,7 @@ func TestMainFunction(t *testing.T) {
 			format: "go",
 			setup: func() {
 				gitDescribeFunc = func() ([]byte, error) {
-					return []byte("v2.14.0-notes-12-gd058795-dirty"), nil
+					return []byte("v2.14.1-notes-12-gd058795-dirty"), nil
 				}
 			},
 			outputFile:      "test_output.go",
