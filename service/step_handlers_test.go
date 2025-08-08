@@ -1335,7 +1335,7 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("error decoding json: %s\n", err.Error())
 		}
-		resp := types.ApproveSdcByGUIDResponse{SdcID: "d0f055a700000000"}
+		resp := types.ApproveSdcResponse{SdcID: "d0f055a700000000"}
 		encoder := json.NewEncoder(w)
 		err = encoder.Encode(resp)
 		if err != nil {

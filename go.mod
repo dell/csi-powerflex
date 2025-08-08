@@ -17,7 +17,7 @@ require (
 	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.8.1
 	github.com/dell/gocsi v1.14.1-0.20250718150756-9e598eb9e012
 	github.com/dell/gofsutil v1.19.1-0.20250715050132-d6bd228cbcb0
-	github.com/dell/goscaleio v1.20.1-0.20250718053742-2b7cae5f1142
+	github.com/dell/goscaleio v1.20.1-0.20250807130152-6bad4213574f
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1

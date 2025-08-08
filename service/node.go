@@ -26,6 +26,7 @@ import (
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/dell/gofsutil"
 	"github.com/dell/goscaleio"
+	siotypes "github.com/dell/goscaleio/types/v1"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
@@ -521,31 +522,26 @@ func (s *service) approveSDC(opts Opts) error {
 		}
 
 		// fetch SDC details
-		sdc, err := s.systems[systemID].FindSdc("SdcGUID", opts.SdcGUID)
+		sdc, err := system.FindSdc("SdcGUID", opts.SdcGUID)
 		if err != nil {
 			return status.Errorf(codes.FailedPrecondition, "%s", err)
 		}
 
-		// fetch the restrictedSdcMode
-		if system.System.RestrictedSdcMode == "Guid" {
-			if !sdc.Sdc.SdcApproved {
-				resp, err := system.ApproveSdcByGUID(sdc.Sdc.SdcGUID)
-				if err != nil {
-					return status.Errorf(codes.FailedPrecondition, "%s", err)
-				}
-				Log.Infof("SDC Approved, SDC Id: %s and SDC GUID: %s", resp.SdcID, sdc.Sdc.SdcGUID)
-			} else {
-				Log.Infof("SDC already approved, SDC GUID: %s", sdc.Sdc.SdcGUID)
+		// approve if not already approved
+		if !sdc.Sdc.SdcApproved {
+			resp, err := system.ApproveSdc(&siotypes.ApproveSdcParam{
+				SdcGUID: sdc.Sdc.SdcGUID,
+				SdcIP:   sdc.Sdc.SdcIP,
+				SdcIps:  sdc.Sdc.SdcIPs,
+				Name:    sdc.Sdc.Name,
+			})
+			if err != nil {
+				return status.Errorf(codes.FailedPrecondition, "%s", err)
 			}
+			Log.Infof("SDC approved successfully, SDC Id: %s and SDC GUID: %s", resp.SdcID, sdc.Sdc.SdcGUID)
 		} else {
-			if !sdc.Sdc.SdcApproved {
-				return status.Errorf(codes.FailedPrecondition, "Array RestrictedSdcMode is %s, driver only supports GUID RestrictedSdcMode cannot approve SDC %s",
-					system.System.RestrictedSdcMode, sdc.Sdc.SdcGUID)
-			}
-			Log.Warnf("Array RestrictedSdcMode is %s, driver only supports GUID RestrictedSdcMode If SDC becomes restricted again, driver will not be able to approve",
-				system.System.RestrictedSdcMode)
+			Log.Infof("SDC already approved, SDC GUID: %s", sdc.Sdc.SdcGUID)
 		}
-
 	}
 	return nil
 }
