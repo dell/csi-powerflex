@@ -11,12 +11,12 @@ require (
 	github.com/apparentlymart/go-cidr v1.1.0
 	github.com/container-storage-interface/spec v1.6.0
 	github.com/cucumber/godog v0.15.0
-	github.com/dell/dell-csi-extensions/common v1.8.1-0.20250717054012-23ceaf9c9606
-	github.com/dell/dell-csi-extensions/podmon v1.8.1-0.20250717054012-23ceaf9c9606
-	github.com/dell/dell-csi-extensions/replication v1.11.1-0.20250717054012-23ceaf9c9606
+	github.com/dell/dell-csi-extensions/common v1.8.1-0.20250804115738-13401bbd0ec4
+	github.com/dell/dell-csi-extensions/podmon v1.8.1-0.20250804115738-13401bbd0ec4
+	github.com/dell/dell-csi-extensions/replication v1.11.1-0.20250804115738-13401bbd0ec4
 	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.8.1
 	github.com/dell/gocsi v1.14.1-0.20250718150756-9e598eb9e012
-	github.com/dell/gofsutil v1.19.1-0.20250715050132-d6bd228cbcb0
+	github.com/dell/gofsutil v1.19.1-0.20250808101846-511ec63df403
 	github.com/dell/goscaleio v1.20.1-0.20250718053742-2b7cae5f1142
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/google/uuid v1.6.0
