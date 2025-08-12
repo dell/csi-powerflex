@@ -538,7 +538,7 @@ func (s *service) approveSDC(opts Opts) error {
 			if err != nil {
 				return status.Errorf(codes.FailedPrecondition, "%s", err)
 			}
-			Log.Infof("SDC approved successfully, SDC Id: %s and SDC GUID: %s", resp.SdcID, sdc.Sdc.SdcGUID)
+			Log.Infof("SDC ID %s approved successfully using mode: %s", resp.SdcID, system.System.RestrictedSdcMode)
 		} else {
 			Log.Infof("SDC already approved, SDC GUID: %s", sdc.Sdc.SdcGUID)
 		}
