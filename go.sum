@@ -120,6 +120,8 @@ github.com/dell/goscaleio v1.20.1-0.20250812153453-55c4b294a429 h1:HNt2Mz4Teerw2
 github.com/dell/goscaleio v1.20.1-0.20250812153453-55c4b294a429/go.mod h1:XAHq2m2QNJH2l9gu47gQX2m6HjZZlzc1LIa0lrWvSkA=
 github.com/dell/goscaleio v1.20.1-0.20250812161350-94819b22aec3 h1:adR82aweeNZ9qfufE+6q99kxz0Rw9qjm3zfa1FgWIF0=
 github.com/dell/goscaleio v1.20.1-0.20250812161350-94819b22aec3/go.mod h1:XAHq2m2QNJH2l9gu47gQX2m6HjZZlzc1LIa0lrWvSkA=
+github.com/dell/goscaleio v1.20.1-0.20250812161548-e4520eb66214 h1:kDeky18KggCpxz9jKPMMQWRnqr89rtRE1kVAfqKv8XE=
+github.com/dell/goscaleio v1.20.1-0.20250812161548-e4520eb66214/go.mod h1:XAHq2m2QNJH2l9gu47gQX2m6HjZZlzc1LIa0lrWvSkA=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible/go.mod h1:E3ru+11k8xSBh+hMPgOLZmtrrCbhqsmaPHjLKYnJCaQ=
 github.com/dgryski/go-sip13 v0.0.0-20181026042036-e10d5fee7954/go.mod h1:vAd38F8PWV+bWy6jNmig1y/TA+kYO4g3RSRF0IAv0no=
 github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815/go.mod h1:WwZ+bS3ebgob9U8Nd0kOddGdZWjyMGR8Wziv+TBNwSE=
