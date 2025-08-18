@@ -17,6 +17,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"strconv"
@@ -516,34 +517,115 @@ func (s *service) nodeProbe(ctx context.Context) error {
 func (s *service) approveSDC(opts Opts) error {
 	for _, systemID := range connectedSystemID {
 		system := s.systems[systemID]
-
+		// When system is nil and systemID is "0000000000000000" in ApprovedIp mode
 		if system == nil {
+			if systemID == "0000000000000000" && s.opts.defaultSystemID != "" {
+				system = s.systems[s.opts.defaultSystemID]
+				if system == nil {
+					continue
+				}
+			} else {
+				continue
+			}
+		}
+		var sdc *goscaleio.Sdc
+		var sdcGUID string
+
+		// Try to fetch SDC details, but handle case where it might not exist yet
+		foundSdc, err := system.FindSdc("SdcGUID", opts.SdcGUID)
+		if err != nil {
+			// SDC not found in ApprovedIp mode, using the GUID from opts
+			if system.System.RestrictedSdcMode == "ApprovedIp" {
+				sdcGUID = s.opts.SdcGUID
+			} else {
+				return status.Errorf(codes.FailedPrecondition, "%s", err)
+			}
+		} else {
+			sdc = foundSdc
+			sdcGUID = foundSdc.Sdc.SdcGUID
+		}
+
+		// Check if SDC is already approved (only if SDC is found)
+		if sdc != nil && sdc.Sdc.SdcApproved {
+			Log.Infof("SDC already approved, SDC GUID: %s", sdc.Sdc.SdcGUID)
 			continue
 		}
 
-		// fetch SDC details
-		sdc, err := system.FindSdc("SdcGUID", opts.SdcGUID)
-		if err != nil {
-			return status.Errorf(codes.FailedPrecondition, "%s", err)
-		}
-
-		// approve if not already approved
-		if !sdc.Sdc.SdcApproved {
+		switch system.System.RestrictedSdcMode {
+		case "Guid":
+			// Approve with just SdcGUID
 			resp, err := system.ApproveSdc(&siotypes.ApproveSdcParam{
-				SdcGUID: sdc.Sdc.SdcGUID,
-				SdcIP:   sdc.Sdc.SdcIP,
-				SdcIps:  sdc.Sdc.SdcIPs,
-				Name:    sdc.Sdc.Name,
+				SdcGUID: sdcGUID,
 			})
 			if err != nil {
 				return status.Errorf(codes.FailedPrecondition, "%s", err)
 			}
 			Log.Infof("SDC ID %s approved successfully using mode: %s", resp.SdcID, system.System.RestrictedSdcMode)
-		} else {
-			Log.Infof("SDC already approved, SDC GUID: %s", sdc.Sdc.SdcGUID)
+
+		case "ApprovedIp":
+			// First approve with GUID
+			resp, err := system.ApproveSdc(&siotypes.ApproveSdcParam{
+				SdcGUID: sdcGUID,
+			})
+			if err != nil {
+				return status.Errorf(codes.FailedPrecondition, "%s", err)
+			}
+			Log.Infof("SDC ID %s approved successfully using mode: %s", resp.SdcID, system.System.RestrictedSdcMode)
+
+			ipAddresses, err := s.getNodeIP()
+			if err != nil {
+				return status.Errorf(codes.FailedPrecondition, "failed to find network interface IPs: %s", err)
+			}
+
+			// Then set approved IPs
+			err = system.SetApprovedIps(resp.SdcID, ipAddresses)
+			if err != nil {
+				return status.Errorf(codes.FailedPrecondition, "failed to set approved IPs: %s", err)
+			}
+			Log.Infof("Approved IPs added successfully for SDC ID: %s", resp.SdcID)
+
+		case "None":
+			Log.Infof("Approval not required, RestrictedSdcMode is: %s", system.System.RestrictedSdcMode)
 		}
 	}
 	return nil
+}
+
+func (s *service) getNodeIP() ([]string, error) {
+	var ips []string
+
+	// Get interface IPs from ConfigMap
+	configInterfaceIPs, err := s.findNetworkInterfaceIPs()
+	if err == nil && len(configInterfaceIPs) > 0 {
+		return configInterfaceIPs, nil
+	}
+
+	// Fallback: Get all network interfaces
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return nil, err
+	}
+	for _, iface := range interfaces {
+		// Skip loopback and down interfaces
+		if iface.Flags&net.FlagLoopback != 0 || iface.Flags&net.FlagUp == 0 {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+				if ipnet.IP.To4() != nil { // IPv4
+					ips = append(ips, ipnet.IP.String())
+				}
+			}
+		}
+	}
+	if len(ips) == 0 {
+		return nil, fmt.Errorf("no valid IP addresses found")
+	}
+	return ips, nil
 }
 
 func (s *service) renameSDC(opts Opts) error {

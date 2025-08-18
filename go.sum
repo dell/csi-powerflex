@@ -112,8 +112,12 @@ github.com/dell/gocsi v1.14.1-0.20250718150756-9e598eb9e012 h1:wXYL0fhnxfJ3kPcJL
 github.com/dell/gocsi v1.14.1-0.20250718150756-9e598eb9e012/go.mod h1:1ThOqVoOZ6B6fMgWWFlv6sGO9ATH5A7sCgRvR40HmVA=
 github.com/dell/gofsutil v1.19.1-0.20250715050132-d6bd228cbcb0 h1:VTI7M+mjSxZStvloljmNT2ad/B6Mt1/1RaND5G+uf8s=
 github.com/dell/gofsutil v1.19.1-0.20250715050132-d6bd228cbcb0/go.mod h1:AV9LrUbYHbd7CYn22wCF3JuvU3jGFgToEozjTembxsw=
+github.com/dell/goscaleio v1.20.1-0.20250814114541-13dfc255a9ed h1:M813f9LiTiFiWcPVz+mecbMBodFVAC9tWyj7F7eukbI=
+github.com/dell/goscaleio v1.20.1-0.20250814114541-13dfc255a9ed/go.mod h1:XAHq2m2QNJH2l9gu47gQX2m6HjZZlzc1LIa0lrWvSkA=
 github.com/dell/goscaleio v1.20.1-0.20250818053934-7aaf17435923 h1:oYiusoxHlel4vRp/Hyt7JPhCswFlchlHJwdNXpu7STQ=
 github.com/dell/goscaleio v1.20.1-0.20250818053934-7aaf17435923/go.mod h1:XAHq2m2QNJH2l9gu47gQX2m6HjZZlzc1LIa0lrWvSkA=
+github.com/dell/goscaleio v1.20.1-0.20250818150445-b6fbb5ba8c3e h1:x/DpBQkX1D3pfng4OBsNZS/uEYzJTzOkGu4jtIt1A3k=
+github.com/dell/goscaleio v1.20.1-0.20250818150445-b6fbb5ba8c3e/go.mod h1:XAHq2m2QNJH2l9gu47gQX2m6HjZZlzc1LIa0lrWvSkA=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible/go.mod h1:E3ru+11k8xSBh+hMPgOLZmtrrCbhqsmaPHjLKYnJCaQ=
 github.com/dgryski/go-sip13 v0.0.0-20181026042036-e10d5fee7954/go.mod h1:vAd38F8PWV+bWy6jNmig1y/TA+kYO4g3RSRF0IAv0no=
 github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815/go.mod h1:WwZ+bS3ebgob9U8Nd0kOddGdZWjyMGR8Wziv+TBNwSE=
