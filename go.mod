@@ -11,9 +11,9 @@ require (
 	github.com/apparentlymart/go-cidr v1.1.0
 	github.com/container-storage-interface/spec v1.6.0
 	github.com/cucumber/godog v0.15.0
-	github.com/dell/dell-csi-extensions/common v1.8.1-0.20250804115738-13401bbd0ec4
-	github.com/dell/dell-csi-extensions/podmon v1.8.1-0.20250804115738-13401bbd0ec4
-	github.com/dell/dell-csi-extensions/replication v1.11.1-0.20250804115738-13401bbd0ec4
+	github.com/dell/dell-csi-extensions/common v1.8.1-0.20250811191959-eb2cab02fb75
+	github.com/dell/dell-csi-extensions/podmon v1.8.1-0.20250811191959-eb2cab02fb75
+	github.com/dell/dell-csi-extensions/replication v1.11.1-0.20250811191959-eb2cab02fb75
 	github.com/dell/dell-csi-extensions/volumeGroupSnapshot v1.8.1
 	github.com/dell/gocsi v1.14.1-0.20250718150756-9e598eb9e012
 	github.com/dell/gofsutil v1.19.1-0.20250715050132-d6bd228cbcb0
@@ -26,7 +26,7 @@ require (
 	github.com/spf13/viper v1.20.0
 	github.com/stretchr/testify v1.10.0
 	golang.org/x/net v0.43.0
-	google.golang.org/grpc v1.74.0
+	google.golang.org/grpc v1.74.2
 	google.golang.org/protobuf v1.36.6
 	k8s.io/api v0.33.0
 	k8s.io/apimachinery v0.33.0
