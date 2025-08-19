@@ -491,7 +491,7 @@ func (s *service) nodeProbe(ctx context.Context) error {
 		//	case2: if IsSdcRenameEnabled=true and prefix not given then set worker_node_name for sdc name.
 		//
 		if s.opts.IsSdcRenameEnabled {
-			err := s.renameSDC(s.opts)
+			err = s.renameSDC(s.opts)
 			if err != nil {
 				return err
 			}
