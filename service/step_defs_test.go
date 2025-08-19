@@ -4540,6 +4540,16 @@ func (f *feature) iSetApproveSdcEnabled(approveSDCEnabled string) error {
 	return nil
 }
 
+func (f *feature) iSetRestrictedSDCMode(mode string) error {
+	if f.service == nil {
+		return fmt.Errorf("service is not initialized")
+	}
+
+	system := f.service.systems[arrayID]
+	system.System.RestrictedSdcMode = mode
+	return nil
+}
+
 func (f *feature) iCallCreateRemoteVolume() error {
 	ctx := context.Background()
 	req := &replication.CreateRemoteVolumeRequest{}
@@ -5169,6 +5179,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^a "([^"]*)" replication capabilities structure is returned$`, f.aReplicationCapabilitiesStructureIsReturned)
 	s.Step(`^I set renameSDC with renameEnabled "([^"]*)" prefix "([^"]*)"$`, f.iSetRenameSdcEnabledWithPrefix)
 	s.Step(`^I set approveSDC with approveSDCEnabled "([^"]*)"`, f.iSetApproveSdcEnabled)
+	s.Step(`^I set RestrictedSDCMode with "([^"]*)"`, f.iSetRestrictedSDCMode)
 	s.Step(`^I call CreateRemoteVolume$`, f.iCallCreateRemoteVolume)
 	s.Step(`^I call DeleteLocalVolume "([^"]*)"$`, f.iCallDeleteLocalVolume)
 	s.Step(`^I call CreateStorageProtectionGroup$`, f.iCallCreateStorageProtectionGroup)
