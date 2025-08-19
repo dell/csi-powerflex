@@ -564,6 +564,7 @@ func (s *service) approveSDC(opts Opts) error {
 	}
 	return nil
 }
+
 func (s *service) getNodeIP() ([]string, error) {
 	var ips []string
 
