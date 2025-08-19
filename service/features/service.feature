@@ -1411,6 +1411,30 @@ Feature: VxFlex OS CSI interface
     When I call Node Probe
     Then the error contains "The given GUID is invalid"
 
+  Scenario: Approve SDC using defaultSystemID fallback
+    Given a VxFlexOS service
+    And I set approveSDC with approveSDCEnabled "true"
+    And I call Probe
+    And I set RestrictedSDCMode with "ApprovedIp"
+    And I call Node Probe
+    Then the error contains "none"
+
+  Scenario: Skip approval when system is nil and no defaultSystemID
+    Given a VxFlexOS service
+    And I set approveSDC with approveSDCEnabled "true"
+    And I call Probe
+    And I set RestrictedSDCMode with "ApprovedIp"
+    And I call Node Probe
+    Then the error contains "none"
+
+  Scenario: No approval required when RestrictedSDCMode is None
+    Given a VxFlexOS service
+    And I set approveSDC with approveSDCEnabled "true"
+    And I call Probe
+    And I set RestrictedSDCMode with "None"
+    And I call Node Probe
+    Then the error contains "none"
+
   Scenario: Controller expand volume for NFS
     Given a VxFlexOS service
     And a capability with voltype "mount" access "single-node-single-writer" fstype "nfs"

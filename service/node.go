@@ -17,6 +17,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"strconv"
@@ -26,6 +27,7 @@ import (
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/dell/gofsutil"
 	"github.com/dell/goscaleio"
+	siotypes "github.com/dell/goscaleio/types/v1"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
@@ -468,7 +470,14 @@ func (s *service) nodeProbe(ctx context.Context) error {
 			Log.WithField("guid", s.opts.SdcGUID).Info("set SDC GUID")
 		}
 
-		// fetch the systemIDs
+		// support for pre-approved guid
+		if s.opts.IsApproveSDCEnabled {
+			Log.Infof("Approve SDC enabled")
+			if err := s.approveSDC(s.opts); err != nil {
+				return err
+			}
+		}
+
 		var err error
 		if len(connectedSystemID) == 0 {
 			connectedSystemID, err = getSystemsKnownToSDC()
@@ -484,14 +493,6 @@ func (s *service) nodeProbe(ctx context.Context) error {
 		if s.opts.IsSdcRenameEnabled {
 			err = s.renameSDC(s.opts)
 			if err != nil {
-				return err
-			}
-		}
-
-		// support for pre-approved guid
-		if s.opts.IsApproveSDCEnabled {
-			Log.Infof("Approve SDC enabled")
-			if err := s.approveSDC(s.opts); err != nil {
 				return err
 			}
 		}
@@ -513,41 +514,104 @@ func (s *service) nodeProbe(ctx context.Context) error {
 }
 
 func (s *service) approveSDC(opts Opts) error {
-	for _, systemID := range connectedSystemID {
-		system := s.systems[systemID]
-
+	for _, system := range s.systems {
 		if system == nil {
 			continue
 		}
 
-		// fetch SDC details
-		sdc, err := s.systems[systemID].FindSdc("SdcGUID", opts.SdcGUID)
-		if err != nil {
-			return status.Errorf(codes.FailedPrecondition, "%s", err)
-		}
+		var sdc *goscaleio.Sdc
+		var sdcGUID string
 
-		// fetch the restrictedSdcMode
-		if system.System.RestrictedSdcMode == "Guid" {
-			if !sdc.Sdc.SdcApproved {
-				resp, err := system.ApproveSdcByGUID(sdc.Sdc.SdcGUID)
-				if err != nil {
-					return status.Errorf(codes.FailedPrecondition, "%s", err)
-				}
-				Log.Infof("SDC Approved, SDC Id: %s and SDC GUID: %s", resp.SdcID, sdc.Sdc.SdcGUID)
+		// Try to fetch SDC details, but handle case where it might not exist yet
+		foundSdc, err := system.FindSdc("SdcGUID", opts.SdcGUID)
+		if err != nil {
+			// SDC not found in ApprovedIp mode, using the GUID from opts
+			if system.System.RestrictedSdcMode == "ApprovedIp" {
+				sdcGUID = opts.SdcGUID
 			} else {
-				Log.Infof("SDC already approved, SDC GUID: %s", sdc.Sdc.SdcGUID)
+				return status.Errorf(codes.FailedPrecondition, "%s", err)
 			}
 		} else {
-			if !sdc.Sdc.SdcApproved {
-				return status.Errorf(codes.FailedPrecondition, "Array RestrictedSdcMode is %s, driver only supports GUID RestrictedSdcMode cannot approve SDC %s",
-					system.System.RestrictedSdcMode, sdc.Sdc.SdcGUID)
-			}
-			Log.Warnf("Array RestrictedSdcMode is %s, driver only supports GUID RestrictedSdcMode If SDC becomes restricted again, driver will not be able to approve",
-				system.System.RestrictedSdcMode)
+			sdc = foundSdc
+			sdcGUID = foundSdc.Sdc.SdcGUID
 		}
 
+		// Check if SDC is already approved (only if SDC is found)
+		if sdc != nil && sdc.Sdc.SdcApproved {
+			Log.Infof("SDC already approved, SDC GUID: %s", sdc.Sdc.SdcGUID)
+			continue
+		}
+
+		mode := system.System.RestrictedSdcMode
+
+		switch mode {
+		case "None":
+			Log.Infof("Approval not required, RestrictedSdcMode is: %s", mode)
+		case "Guid", "ApprovedIp":
+			// Approve with SdcGUID (common for both modes)
+			resp, err := system.ApproveSdc(&siotypes.ApproveSdcParam{
+				SdcGUID: sdcGUID,
+			})
+			if err != nil {
+				return status.Errorf(codes.FailedPrecondition, "%s", err)
+			}
+			Log.Infof("SDC ID %s approved successfully using mode: %s", resp.SdcID, mode)
+
+			// Additional step for ApprovedIp mode
+			if mode == "ApprovedIp" {
+				ipAddresses, err := s.getNodeIP()
+				if err != nil {
+					return status.Errorf(codes.FailedPrecondition, "failed to find network interface IPs: %s", err)
+				}
+
+				err = system.SetApprovedIps(resp.SdcID, ipAddresses)
+				if err != nil {
+					return status.Errorf(codes.FailedPrecondition, "failed to set approved IPs: %s", err)
+				}
+				Log.Infof("Approved IPs added successfully for SDC ID: %s", resp.SdcID)
+			}
+		default:
+			return status.Errorf(codes.InvalidArgument, "unsupported RestrictedSdcMode: %s", mode)
+		}
 	}
 	return nil
+}
+
+func (s *service) getNodeIP() ([]string, error) {
+	var ips []string
+
+	// Get interface IPs from ConfigMap
+	configInterfaceIPs, err := s.findNetworkInterfaceIPs()
+	if err == nil && len(configInterfaceIPs) > 0 {
+		return configInterfaceIPs, nil
+	}
+
+	// Fallback: Get all network interfaces
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return nil, err
+	}
+	for _, iface := range interfaces {
+		// Skip loopback and down interfaces
+		if iface.Flags&net.FlagLoopback != 0 || iface.Flags&net.FlagUp == 0 {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+				if ipnet.IP.To4() != nil { // IPv4
+					ips = append(ips, ipnet.IP.String())
+				}
+			}
+		}
+	}
+	if len(ips) == 0 {
+		return nil, fmt.Errorf("no valid IP addresses found")
+	}
+	return ips, nil
 }
 
 func (s *service) renameSDC(opts Opts) error {
