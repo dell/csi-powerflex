@@ -532,9 +532,10 @@ func (s *service) approveSDC(opts Opts) error {
 
 		mode := system.System.RestrictedSdcMode
 
-		if mode == "None" {
+		switch mode {
+		case "None":
 			Log.Infof("Approval not required, RestrictedSdcMode is: %s", mode)
-		} else if mode == "Guid" || mode == "ApprovedIp" {
+		case "Guid", "ApprovedIp":
 			// Approve with SdcGUID (common for both modes)
 			resp, err := system.ApproveSdc(&siotypes.ApproveSdcParam{
 				SdcGUID: sdcGUID,
@@ -557,7 +558,7 @@ func (s *service) approveSDC(opts Opts) error {
 				}
 				Log.Infof("Approved IPs added successfully for SDC ID: %s", resp.SdcID)
 			}
-		} else {
+		default:
 			return status.Errorf(codes.InvalidArgument, "unsupported RestrictedSdcMode: %s", mode)
 		}
 	}
