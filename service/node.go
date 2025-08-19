@@ -515,6 +515,10 @@ func (s *service) nodeProbe(ctx context.Context) error {
 
 func (s *service) approveSDC(opts Opts) error {
 	for _, system := range s.systems {
+		if system == nil {
+			continue
+		}
+
 		var sdc *goscaleio.Sdc
 		var sdcGUID string
 
