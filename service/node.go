@@ -470,6 +470,22 @@ func (s *service) nodeProbe(ctx context.Context) error {
 			Log.WithField("guid", s.opts.SdcGUID).Info("set SDC GUID")
 		}
 
+		// support for pre-approved guid
+		if s.opts.IsApproveSDCEnabled {
+			Log.Infof("Approve SDC enabled")
+			if err := s.approveSDC(s.opts); err != nil {
+				return err
+			}
+		}
+
+		var err error
+		if len(connectedSystemID) == 0 {
+			connectedSystemID, err = getSystemsKnownToSDC()
+			if err != nil {
+				return status.Errorf(codes.FailedPrecondition, "%s", err.Error())
+			}
+		}
+
 		// 	rename SDC
 		//	case1: if IsSdcRenameEnabled=true and prefix given then set the prefix+worker_node_name for sdc name.
 		//	case2: if IsSdcRenameEnabled=true and prefix not given then set worker_node_name for sdc name.
@@ -477,14 +493,6 @@ func (s *service) nodeProbe(ctx context.Context) error {
 		if s.opts.IsSdcRenameEnabled {
 			err := s.renameSDC(s.opts)
 			if err != nil {
-				return err
-			}
-		}
-
-		// support for pre-approved guid
-		if s.opts.IsApproveSDCEnabled {
-			Log.Infof("Approve SDC enabled")
-			if err := s.approveSDC(s.opts); err != nil {
 				return err
 			}
 		}
@@ -681,6 +689,31 @@ func kmodLoaded(opts Opts) bool {
 	}
 
 	return false
+}
+
+func getSystemsKnownToSDC() ([]string, error) {
+	systems := make([]string, 0)
+
+	discoveredSystems, err := goscaleio.DrvCfgQuerySystems()
+	if err != nil {
+		return systems, err
+	}
+
+	set := make(map[string]struct{}, len(*discoveredSystems))
+
+	for _, s := range *discoveredSystems {
+		_, ok := set[s.SystemID]
+		// duplicate SDC ID found
+		if ok {
+			return nil, fmt.Errorf("duplicate systems found that are known to SDC: %s", s.SystemID)
+		}
+		set[s.SystemID] = struct{}{}
+
+		systems = append(systems, s.SystemID)
+		Log.WithField("ID", s.SystemID).Info("Found connected system")
+	}
+
+	return systems, nil
 }
 
 func (s *service) NodeGetCapabilities(
