@@ -470,21 +470,12 @@ func (s *service) nodeProbe(ctx context.Context) error {
 			Log.WithField("guid", s.opts.SdcGUID).Info("set SDC GUID")
 		}
 
-		// fetch the systemIDs
-		var err error
-		if len(connectedSystemID) == 0 {
-			connectedSystemID, err = getSystemsKnownToSDC()
-			if err != nil {
-				return status.Errorf(codes.FailedPrecondition, "%s", err.Error())
-			}
-		}
-
 		// 	rename SDC
 		//	case1: if IsSdcRenameEnabled=true and prefix given then set the prefix+worker_node_name for sdc name.
 		//	case2: if IsSdcRenameEnabled=true and prefix not given then set worker_node_name for sdc name.
 		//
 		if s.opts.IsSdcRenameEnabled {
-			err = s.renameSDC(s.opts)
+			err := s.renameSDC(s.opts)
 			if err != nil {
 				return err
 			}
@@ -515,19 +506,7 @@ func (s *service) nodeProbe(ctx context.Context) error {
 }
 
 func (s *service) approveSDC(opts Opts) error {
-	for _, systemID := range connectedSystemID {
-		system := s.systems[systemID]
-		// When system is nil and systemID is "0000000000000000" in ApprovedIp mode
-		if system == nil {
-			if systemID == "0000000000000000" && s.opts.defaultSystemID != "" {
-				system = s.systems[s.opts.defaultSystemID]
-				if system == nil {
-					continue
-				}
-			} else {
-				continue
-			}
-		}
+	for _, system := range s.systems {
 		var sdc *goscaleio.Sdc
 		var sdcGUID string
 
@@ -536,7 +515,7 @@ func (s *service) approveSDC(opts Opts) error {
 		if err != nil {
 			// SDC not found in ApprovedIp mode, using the GUID from opts
 			if system.System.RestrictedSdcMode == "ApprovedIp" {
-				sdcGUID = s.opts.SdcGUID
+				sdcGUID = opts.SdcGUID
 			} else {
 				return status.Errorf(codes.FailedPrecondition, "%s", err)
 			}
@@ -551,46 +530,39 @@ func (s *service) approveSDC(opts Opts) error {
 			continue
 		}
 
-		switch system.System.RestrictedSdcMode {
-		case "Guid":
-			// Approve with just SdcGUID
+		mode := system.System.RestrictedSdcMode
+
+		if mode == "None" {
+			Log.Infof("Approval not required, RestrictedSdcMode is: %s", mode)
+		} else if mode == "Guid" || mode == "ApprovedIp" {
+			// Approve with SdcGUID (common for both modes)
 			resp, err := system.ApproveSdc(&siotypes.ApproveSdcParam{
 				SdcGUID: sdcGUID,
 			})
 			if err != nil {
 				return status.Errorf(codes.FailedPrecondition, "%s", err)
 			}
-			Log.Infof("SDC ID %s approved successfully using mode: %s", resp.SdcID, system.System.RestrictedSdcMode)
+			Log.Infof("SDC ID %s approved successfully using mode: %s", resp.SdcID, mode)
 
-		case "ApprovedIp":
-			// First approve with GUID
-			resp, err := system.ApproveSdc(&siotypes.ApproveSdcParam{
-				SdcGUID: sdcGUID,
-			})
-			if err != nil {
-				return status.Errorf(codes.FailedPrecondition, "%s", err)
+			// Additional step for ApprovedIp mode
+			if mode == "ApprovedIp" {
+				ipAddresses, err := s.getNodeIP()
+				if err != nil {
+					return status.Errorf(codes.FailedPrecondition, "failed to find network interface IPs: %s", err)
+				}
+
+				err = system.SetApprovedIps(resp.SdcID, ipAddresses)
+				if err != nil {
+					return status.Errorf(codes.FailedPrecondition, "failed to set approved IPs: %s", err)
+				}
+				Log.Infof("Approved IPs added successfully for SDC ID: %s", resp.SdcID)
 			}
-			Log.Infof("SDC ID %s approved successfully using mode: %s", resp.SdcID, system.System.RestrictedSdcMode)
-
-			ipAddresses, err := s.getNodeIP()
-			if err != nil {
-				return status.Errorf(codes.FailedPrecondition, "failed to find network interface IPs: %s", err)
-			}
-
-			// Then set approved IPs
-			err = system.SetApprovedIps(resp.SdcID, ipAddresses)
-			if err != nil {
-				return status.Errorf(codes.FailedPrecondition, "failed to set approved IPs: %s", err)
-			}
-			Log.Infof("Approved IPs added successfully for SDC ID: %s", resp.SdcID)
-
-		case "None":
-			Log.Infof("Approval not required, RestrictedSdcMode is: %s", system.System.RestrictedSdcMode)
+		} else {
+			return status.Errorf(codes.InvalidArgument, "unsupported RestrictedSdcMode: %s", mode)
 		}
 	}
 	return nil
 }
-
 func (s *service) getNodeIP() ([]string, error) {
 	var ips []string
 
@@ -707,31 +679,6 @@ func kmodLoaded(opts Opts) bool {
 	}
 
 	return false
-}
-
-func getSystemsKnownToSDC() ([]string, error) {
-	systems := make([]string, 0)
-
-	discoveredSystems, err := goscaleio.DrvCfgQuerySystems()
-	if err != nil {
-		return systems, err
-	}
-
-	set := make(map[string]struct{}, len(*discoveredSystems))
-
-	for _, s := range *discoveredSystems {
-		_, ok := set[s.SystemID]
-		// duplicate SDC ID found
-		if ok {
-			return nil, fmt.Errorf("duplicate systems found that are known to SDC: %s", s.SystemID)
-		}
-		set[s.SystemID] = struct{}{}
-
-		systems = append(systems, s.SystemID)
-		Log.WithField("ID", s.SystemID).Info("Found connected system")
-	}
-
-	return systems, nil
 }
 
 func (s *service) NodeGetCapabilities(
