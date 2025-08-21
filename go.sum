@@ -112,10 +112,6 @@ github.com/dell/gocsi v1.14.1-0.20250718150756-9e598eb9e012 h1:wXYL0fhnxfJ3kPcJL
 github.com/dell/gocsi v1.14.1-0.20250718150756-9e598eb9e012/go.mod h1:1ThOqVoOZ6B6fMgWWFlv6sGO9ATH5A7sCgRvR40HmVA=
 github.com/dell/gofsutil v1.19.1-0.20250715050132-d6bd228cbcb0 h1:VTI7M+mjSxZStvloljmNT2ad/B6Mt1/1RaND5G+uf8s=
 github.com/dell/gofsutil v1.19.1-0.20250715050132-d6bd228cbcb0/go.mod h1:AV9LrUbYHbd7CYn22wCF3JuvU3jGFgToEozjTembxsw=
-github.com/dell/goscaleio v1.20.1-0.20250814114541-13dfc255a9ed h1:M813f9LiTiFiWcPVz+mecbMBodFVAC9tWyj7F7eukbI=
-github.com/dell/goscaleio v1.20.1-0.20250814114541-13dfc255a9ed/go.mod h1:XAHq2m2QNJH2l9gu47gQX2m6HjZZlzc1LIa0lrWvSkA=
-github.com/dell/goscaleio v1.20.1-0.20250818053934-7aaf17435923 h1:oYiusoxHlel4vRp/Hyt7JPhCswFlchlHJwdNXpu7STQ=
-github.com/dell/goscaleio v1.20.1-0.20250818053934-7aaf17435923/go.mod h1:XAHq2m2QNJH2l9gu47gQX2m6HjZZlzc1LIa0lrWvSkA=
 github.com/dell/goscaleio v1.20.1-0.20250818150445-b6fbb5ba8c3e h1:x/DpBQkX1D3pfng4OBsNZS/uEYzJTzOkGu4jtIt1A3k=
 github.com/dell/goscaleio v1.20.1-0.20250818150445-b6fbb5ba8c3e/go.mod h1:XAHq2m2QNJH2l9gu47gQX2m6HjZZlzc1LIa0lrWvSkA=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible/go.mod h1:E3ru+11k8xSBh+hMPgOLZmtrrCbhqsmaPHjLKYnJCaQ=
@@ -174,8 +170,8 @@ github.com/go-openapi/swag v0.23.0/go.mod h1:esZ8ITTYEsH1V2trKHjAN8Ai7xHb8RV+YSZ
 github.com/go-stack/stack v1.8.0/go.mod h1:v0f6uXyyMGvRgIKkXu+yp6POWl0qKG85gN/melR3HDY=
 github.com/go-task/slim-sprig/v3 v3.0.0 h1:sUs3vkvUymDpBKi3qH1YSqBQk9+9D/8M2mN1vB6EwHI=
 github.com/go-task/slim-sprig/v3 v3.0.0/go.mod h1:W848ghGpv3Qj3dhTPRyJypKRiqCdHZiAzKg9hl15HA8=
-github.com/go-viper/mapstructure/v2 v2.3.0 h1:27XbWsHIqhbdR5TIC911OfYvgSaW93HM+dX7970Q7jk=
-github.com/go-viper/mapstructure/v2 v2.3.0/go.mod h1:oJDH3BJKyqBA2TXFhDsKDGDTlndYOZ6rGS0BRZIxGhM=
+github.com/go-viper/mapstructure/v2 v2.4.0 h1:EBsztssimR/CONLSZZ04E8qAkxNYq4Qp9LvH92wZUgs=
+github.com/go-viper/mapstructure/v2 v2.4.0/go.mod h1:oJDH3BJKyqBA2TXFhDsKDGDTlndYOZ6rGS0BRZIxGhM=
 github.com/godbus/dbus/v5 v5.0.4/go.mod h1:xhWf0FNVPg57R7Z0UbKHbJfkEywrmjJnf7w5xrFpKfA=
 github.com/gofrs/uuid v4.2.0+incompatible/go.mod h1:b2aQJv3Z4Fp6yNu3cdSllBxTCLRxnplIgP/c0N/04lM=
 github.com/gofrs/uuid v4.3.1+incompatible/go.mod h1:b2aQJv3Z4Fp6yNu3cdSllBxTCLRxnplIgP/c0N/04lM=
@@ -388,8 +384,8 @@ github.com/onsi/ginkgo/v2 v2.21.0/go.mod h1:7Du3c42kxCUegi0IImZ1wUQzMBVecgIHjR1C
 github.com/onsi/gomega v0.0.0-20170829124025-dcabb60a477c/go.mod h1:C1qb7wdrVGGVU+Z6iS04AVkA3Q65CEZX59MT0QO5uiA=
 github.com/onsi/gomega v1.7.1/go.mod h1:XdKZgCCFLUoM/7CFJVPcG8C1xQ1AJ0vpAezJrB7JYyY=
 github.com/onsi/gomega v1.10.1/go.mod h1:iN09h71vgCQne3DLsj+A5owkum+a2tYe+TOCB1ybHNo=
-github.com/onsi/gomega v1.38.0 h1:c/WX+w8SLAinvuKKQFh77WEucCnPk4j2OTUr7lt7BeY=
-github.com/onsi/gomega v1.38.0/go.mod h1:OcXcwId0b9QsE7Y49u+BTrL4IdKOBOKnD6VQNTJEB6o=
+github.com/onsi/gomega v1.37.0 h1:CdEG8g0S133B4OswTDC/5XPSzE1OeP29QOioj2PID2Y=
+github.com/onsi/gomega v1.37.0/go.mod h1:8D9+Txp43QWKhM24yyOBEdpkzN8FvJyAwecBgsU4KU0=
 github.com/pascaldekloe/goe v0.0.0-20180627143212-57f6aae5913c/go.mod h1:lzWF7FIEvWOWxwDKqyGYQf6ZUaNfKdP144TG7ZOy1lc=
 github.com/pelletier/go-toml v1.2.0/go.mod h1:5z9KED0ma1S8pY6P1sdut58dfprrGBbd/94hg7ilaic=
 github.com/pelletier/go-toml/v2 v2.2.3 h1:YmeHyLY8mFWbdkNWwpr+qIL2bEqT0o95WSdkNHvL12M=
