@@ -3,9 +3,7 @@ module github.com/dell/csi-vxflexos/v2
 // In order to run unit tests on Windows, you need a stubbed Windows implementation
 // of the gofsutil package. Use the following replace statements if necessary.
 
-go 1.24.0
-
-toolchain go1.24.5
+go 1.25
 
 require (
 	github.com/apparentlymart/go-cidr v1.1.0
