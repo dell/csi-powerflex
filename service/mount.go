@@ -560,6 +560,7 @@ func mkfile(path string) (bool, error) {
 			Log.WithField("path", path).Debug("created file")
 			return true, nil
 		}
+		return false, err
 	}
 	if st.IsDir() {
 		return false, fmt.Errorf("existing path is a directory")
@@ -583,6 +584,7 @@ func mkdir(path string) (bool, error) {
 			Log.WithField("path", path).Debug("created directory")
 			return true, nil
 		}
+		return false, err
 	}
 	if !st.IsDir() {
 		return false, fmt.Errorf("existing path is not a directory")
