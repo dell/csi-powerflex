@@ -27,6 +27,6 @@ jobs:
     name: Create Tag and Release
     uses: dell/common-github-actions/.github/workflows/create-tag-release.yaml@main
     with:
-      option: ${{ inputs.option || "minor" }}
-      version: ${{ inputs.version || "" }}
+      option: ${{ inputs.option || 'minor' }}
+      version: ${{ inputs.version || '' }}
     secrets: inherit
