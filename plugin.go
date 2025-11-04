@@ -11,7 +11,6 @@
 // limitations under the License.
 //
 //go:build linux && plugin
-// +build linux,plugin
 
 //go:generate go generate ./core
 
