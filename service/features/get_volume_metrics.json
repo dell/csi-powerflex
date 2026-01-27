@@ -1,0 +1,320 @@
+{
+  "format": "ID_TIMESTAMP_METRIC",
+  "resource_type": "storage_pool",
+  "timestamps": [
+    "2025-11-06T06:06:08Z"
+  ],
+  "resources": [
+    {
+      "id": "e4aed8d700000000",
+      "metrics": [
+        {
+          "name": "avg_host_read_latency",
+          "values": [
+            0
+          ]
+        },
+        {
+          "name": "physical_free",
+          "values": [
+            4340531632128
+          ]
+        },
+        {
+          "name": "raw_used",
+          "values": [
+            8793945538560
+          ]
+        },
+        {
+          "name": "logical_used",
+          "values": [
+            3607101440
+          ]
+        },
+        {
+          "name": "host_write_bandwidth",
+          "values": [
+            1
+          ]
+        },
+        {
+          "name": "host_write_iops",
+          "values": [
+            0
+          ]
+        },
+        {
+          "name": "storage_fe_write_bandwidth",
+          "values": [
+            0
+          ]
+        },
+        {
+          "name": "storage_fe_write_iops",
+          "values": [
+            0
+          ]
+        },
+        {
+          "name": "avg_fe_write_io_size",
+          "values": [
+            0
+          ]
+        },
+        {
+          "name": "storage_fe_read_bandwidth",
+          "values": [
+            0
+          ]
+        },
+        {
+          "name": "storage_fe_read_iops",
+          "values": [
+            0
+          ]
+        },
+        {
+          "name": "avg_fe_read_io_size",
+          "values": [
+            0
+          ]
+        },
+        {
+          "name": "utilization_ratio",
+          "values": [
+            0.014172318
+          ]
+        },
+        {
+          "name": "host_read_bandwidth",
+          "values": [
+            1
+          ]
+        },
+        {
+          "name": "host_read_iops",
+          "values": [
+            0
+          ]
+        },
+        {
+          "name": "compression_reducible_ratio",
+          "values": [
+            0.0
+          ]
+        },
+        {
+          "name": "data_reduction_ratio",
+          "values": [
+            0.41805917
+          ]
+        },
+        {
+          "name": "thin_provisioning_ratio",
+          "values": [
+            85.73023
+          ]
+        },
+        {
+          "name": "avg_wrc_read_latency",
+          "values": [
+            0
+          ]
+        },
+        {
+          "name": "storage_fe_read_latency",
+          "values": [
+            0
+          ]
+        },
+        {
+          "name": "unreducible_data",
+          "values": [
+            8302329856
+          ]
+        },
+        {
+          "name": "avg_wrc_write_latency",
+          "values": [
+            0
+          ]
+        },
+        {
+          "name": "over_provisioning_limit",
+          "values": [
+            4611686017353646080
+          ]
+        },
+        {
+          "name": "patterns_saving_ratio",
+          "values": [
+            1.0
+          ]
+        },
+        {
+          "name": "avg_host_write_latency",
+          "values": [
+            0
+          ]
+        },
+        {
+          "name": "storage_fe_write_latency",
+          "values": [
+            0
+          ]
+        },
+        {
+          "name": "logical_provisioned",
+          "values": [
+            309237645312
+          ]
+        },
+        {
+          "name": "efficiency_ratio",
+          "values": [
+            35.840313
+          ]
+        },
+        {
+          "name": "storage_fe_trim_latency",
+          "values": [
+            0
+          ]
+        },
+        {
+          "name": "physical_system",
+          "values": [
+            53687091200
+          ]
+        },
+        {
+          "name": "data_reduction_reducible_ratio",
+          "values": [
+            0.0
+          ]
+        },
+        {
+          "name": "compression_ratio",
+          "values": [
+            0.41805917
+          ]
+        },
+        {
+          "name": "reducible_ratio",
+          "values": [
+            1.0
+          ]
+        },
+        {
+          "name": "storage_fe_trim_bandwidth",
+          "values": [
+            0
+          ]
+        },
+        {
+          "name": "storage_fe_trim_iops",
+          "values": [
+            0
+          ]
+        },
+        {
+          "name": "avg_fe_trim_io_size",
+          "values": [
+            0
+          ]
+        },
+        {
+          "name": "physical_used",
+          "values": [
+            8628207616
+          ]
+        },
+        {
+          "name": "snapshot_saving_ratio",
+          "values": [
+            1.0
+          ]
+        },
+        {
+          "name": "physical_free",
+          "values": [
+            4334657470464
+          ]
+        },
+        {
+          "name": "host_trim_bandwidth",
+          "values": [
+            0
+          ]
+        },
+        {
+          "name": "host_trim_iops",
+          "values": [
+            0
+          ]
+        },
+        {
+          "name": "total_wrc_write_bandwidth",
+          "values": [
+            0
+          ]
+        },
+        {
+          "name": "total_wrc_write_iops",
+          "values": [
+            0
+          ]
+        },
+        {
+          "name": "avg_wrc_write_io_size",
+          "values": [
+            0
+          ]
+        },
+        {
+          "name": "total_wrc_read_bandwidth",
+          "values": [
+            0
+          ]
+        },
+        {
+          "name": "total_wrc_read_iops",
+          "values": [
+            0
+          ]
+        },
+        {
+          "name": "avg_wrc_read_io_size",
+          "values": [
+            0
+          ]
+        },
+        {
+          "name": "physical_total",
+          "values": [
+            4396972769280
+          ]
+        },
+        {
+          "name": "logical_owned",
+          "values": [
+            3607101440
+          ]
+        },
+        {
+          "name": "patterns_saving_reducible_ratio",
+          "values": [
+            0.0
+          ]
+        },
+        {
+          "name": "avg_host_trim_latency",
+          "values": [
+            0
+          ]
+        }
+      ]
+    }
+  ]
+}

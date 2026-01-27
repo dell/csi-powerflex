@@ -42,7 +42,7 @@ Scenario: Controller Unpublish Ephemeral Volume Fails
     And I call NodePublishVolume "SDC_GUID"
     And I induce error "BadVolIDError"
     And I call NodeUnpublishVolume "SDC_GUID"
-    Then the error contains "Inline ephemeral controller unpublish failed"
+    And no error was received
  
 Scenario Outline: Node publish and unpublish ephemeral volume
     Given a VxFlexOS service
@@ -66,6 +66,35 @@ Examples:
  | "csi-d0f055a700000000"  | "30Gi"         | "viki_pool_HDD_20181031" | "does-not-exist"   | "not recgonized"                        |
  | "csi-d0f055a700012345"  | "30Gi"         | "viki_pool_HDD_20181031" | "15dbbf5617523655" | "not published"             |
 
+Scenario Outline: Node publish and unpublish ephemeral volume for NVMeTCP Fails
+    Given a VxFlexOS service
+    And a controller published ephemeral volume
+    And a capability with voltype "mount" access "single-reader" fstype "none"
+    And I set protocol to "NVMeTCP"
+    And get Node Publish Ephemeral Volume Request with name <name> size <size> storagepool <storagepool> and systemName <systemName>
+    And I call Probe
+    And I call NodePublishVolume NVME "mount"
+    And I call NodeUnpublishVolume "NVMeTCP"
+    Then the error contains <errormsg>
+Examples:
+ |  name                   | size           | storagepool              | systemName         | errormsg                                |
+ | "csi-d0f055a700000000"  | "30Gi"         | "viki_pool_HDD_20181031" | "14dbbf5617523654" | "volumeID must be 16 characters"        |
+
+Scenario Outline: Ephemeral Node Unpublish NVMeTCP with errors
+	Given a VxFlexOS service
+	And a controller published ephemeral volume
+    And a capability with voltype "mount" access "single-reader" fstype "none"
+    And I set protocol to "NVMeTCP"
+    And get Node Publish Ephemeral Volume Request with name <name> size <size> storagepool <storagepool> and systemName <systemName>
+    And I call Probe
+    And I call NodePublishVolume NVME "mount"
+    And I call NodeUnpublishVolume "NVMeTCP"
+	And I call EphemeralNodeUnpublish
+	Then the error contains <errormsg>
+Examples:
+ |  name                   | size           | storagepool              | systemName         | errormsg                                          |
+ | "csi-d0f055a700000000"  | "30Gi"         | "viki_pool_HDD_20181031" | "14dbbf5617523654" | "inline NVMe ephemeral node stage volume failed"  |
+
 Scenario Outline: Ephemeral Node Unpublish with errors
 	Given a VxFlexOS service
 	And I induce error <error>
@@ -75,9 +104,19 @@ Scenario Outline: Ephemeral Node Unpublish with errors
 Examples:
       | error             | errormsg                                        |
       | "NoVolumeIDError" | "volume ID is required"                         |
-      | "none"            | "Inline ephemeral. Was unable to read lockfile" |
+      | "none"            | "Inline ephemeral controller unpublish failed"  |
 
 Scenario Outline: Ephemeral Node Publish with errors
         Given a VxFlexOS service
         And I call EphemeralNodePublish
         Then the error contains "not recgonized"
+
+Scenario: Controller Unpublish Ephemeral NVME Volume Fails
+    Given a VxFlexOS service
+    And a controller published ephemeral volume
+    And a capability with voltype "mount" access "single-reader" fstype "none"
+    And get Node Publish Ephemeral Volume Request with name "csi-d0f055a700000000" size "30Gi" storagepool "viki_pool_HDD_20181031" and systemName "14dbbf5617523654"
+    And I call Probe
+    And I call NodePublishVolume NVME "mount"
+    And  I call NodeUnpublishVolume "NVMeTCP"
+    Then the error contains "node ID is required"

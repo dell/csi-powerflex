@@ -15,22 +15,29 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
+	"net/http/httptest"
+	"os"
 	"testing"
+	"time"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 
-	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	siotypes "github.com/dell/goscaleio/types/v1"
+	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/stretchr/testify/assert"
 )
 
-type mockService struct{}
+type mockService struct {
+	service
+}
 
 func (s *mockService) InterfaceByName(interfaceName string) (*net.Interface, error) {
 	if interfaceName == "" {
@@ -602,15 +609,19 @@ func TestGetZoneKeyLabelFromSecret(t *testing.T) {
 
 func TestFindNetworkInterfaceIPs(t *testing.T) {
 	tests := []struct {
-		name            string
-		expectedError   string
-		client          kubernetes.Interface
-		configMapData   map[string]string
-		createConfigMap func(map[string]string, kubernetes.Interface)
+		name               string
+		expectedError      string
+		client             kubernetes.Interface
+		createK8sClientSet func(kubeConfig ...string) error
+		configMapData      map[string]string
+		createConfigMap    func(map[string]string, kubernetes.Interface)
 	}{
 		{
 			name:          "Error getting K8sClient",
 			expectedError: "unable to load in-cluster configuration, KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT must be defined",
+			createK8sClientSet: func(_ ...string) error {
+				return fmt.Errorf("unable to load in-cluster configuration, KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT must be defined")
+			},
 			client:        nil,
 			configMapData: nil,
 			createConfigMap: func(map[string]string, kubernetes.Interface) {
@@ -643,7 +654,7 @@ func TestFindNetworkInterfaceIPs(t *testing.T) {
 				// Create a ConfigMap using fake ClientSet
 				_, err := clientSet.CoreV1().ConfigMaps(DriverNamespace).Create(context.TODO(), configMap, metav1.CreateOptions{})
 				if err != nil {
-					Log.Fatalf("failed to create configMaps: %v", err)
+					log.Fatalf("failed to create configMaps: %v", err)
 				}
 			},
 		},
@@ -665,7 +676,7 @@ func TestFindNetworkInterfaceIPs(t *testing.T) {
 				// Create a ConfigMap using fake ClientSet
 				_, err := clientSet.CoreV1().ConfigMaps(DriverNamespace).Create(context.TODO(), configMap, metav1.CreateOptions{})
 				if err != nil {
-					Log.Fatalf("failed to create configMaps: %v", err)
+					log.Fatalf("failed to create configMaps: %v", err)
 				}
 			},
 		},
@@ -687,7 +698,7 @@ func TestFindNetworkInterfaceIPs(t *testing.T) {
 				// Create a ConfigMap using fake ClientSet
 				_, err := clientSet.CoreV1().ConfigMaps(DriverNamespace).Create(context.TODO(), configMap, metav1.CreateOptions{})
 				if err != nil {
-					Log.Fatalf("failed to create configMaps: %v", err)
+					log.Fatalf("failed to create configMaps: %v", err)
 				}
 			},
 		},
@@ -696,6 +707,16 @@ func TestFindNetworkInterfaceIPs(t *testing.T) {
 	for _, tt := range tests {
 		s := &service{}
 		t.Run(tt.name, func(t *testing.T) {
+			defaultCreateKubeClientSet := CreateKubeClientSet
+			if tt.createK8sClientSet != nil {
+				CreateKubeClientSet = tt.createK8sClientSet
+			}
+			defer func() {
+				if tt.createK8sClientSet != nil {
+					CreateKubeClientSet = defaultCreateKubeClientSet
+				}
+			}()
+
 			K8sClientset = tt.client
 			tt.createConfigMap(tt.configMapData, tt.client)
 			_, err := s.findNetworkInterfaceIPs()
@@ -703,6 +724,214 @@ func TestFindNetworkInterfaceIPs(t *testing.T) {
 				assert.NoError(t, err)
 			} else {
 				assert.EqualError(t, err, tt.expectedError)
+			}
+		})
+	}
+}
+
+func TestConfigureAutoBlockProtocol(t *testing.T) {
+	tests := []struct {
+		name            string
+		version         float64
+		nvmeInitiators  int
+		sdcGUID         string
+		nodeProbeErr    error
+		expectedUseSDC  bool
+		expectedUseNVME bool
+	}{
+		{
+			name:           "Both SDC and NVMeTCP available",
+			version:        4.5,
+			nvmeInitiators: 1,
+			sdcGUID:        "some-guid",
+			expectedUseSDC: true,
+		},
+		{
+			name:            "Only NVMeTCP available",
+			version:         4.5,
+			nvmeInitiators:  1,
+			sdcGUID:         "",
+			expectedUseNVME: true,
+		},
+		{
+			name:           "Only SDC available",
+			version:        3.9,
+			nvmeInitiators: 0,
+			sdcGUID:        "some-guid",
+			expectedUseSDC: true,
+		},
+		{
+			name:           "Neither SDC nor NVMeTCP available",
+			version:        3.9,
+			nvmeInitiators: 0,
+			sdcGUID:        "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := &mockService{
+				service: service{
+					opts: Opts{
+						SdcGUID: tt.sdcGUID,
+					},
+				},
+			}
+
+			svc.configureAutoBlockProtocol(context.Background(), tt.version, tt.nvmeInitiators)
+
+			if svc.useSDC != tt.expectedUseSDC {
+				t.Errorf("expected useSDC=%v, got %v", tt.expectedUseSDC, svc.useSDC)
+			}
+			if svc.useNVME != tt.expectedUseNVME {
+				t.Errorf("expected useNVME=%v, got %v", tt.expectedUseNVME, svc.useNVME)
+			}
+		})
+	}
+}
+
+// helper to build a server returning the given status and code
+func newStatusServer(status ArrayConnectivityStatus, httpCode int) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(httpCode)
+		if httpCode == http.StatusOK {
+			_ = json.NewEncoder(w).Encode(status)
+		} else {
+			_, _ = w.Write([]byte(`{"error":"error message"}`))
+		}
+	}))
+}
+
+func TestQueryArrayStatus_AllScenarios(t *testing.T) {
+	ctx := context.Background()
+	os.Setenv(EnvPodmonArrayConnectivityPollRate, "60")
+	defer os.Unsetenv(EnvPodmonArrayConnectivityPollRate)
+
+	tol := SetPollingFrequency(ctx)
+	type tc struct {
+		name     string
+		makeURL  func(t *testing.T) string
+		wantConn bool
+		wantErr  bool
+	}
+
+	now := time.Now().Unix()
+
+	cases := []tc{
+		{
+			name: "Connected_timeDiff<=tolerance+2",
+			makeURL: func(t *testing.T) string {
+				// timeDiff = LastAttempt - LastSuccess = 0 => connected
+				resp := ArrayConnectivityStatus{
+					LastAttempt: now,
+					LastSuccess: now,
+				}
+				srv := newStatusServer(resp, http.StatusOK)
+				t.Cleanup(srv.Close)
+				return srv.URL
+			},
+			wantConn: true,
+			wantErr:  false,
+		},
+		{
+			name: "NotConnected_timeDiff>tolerance+2",
+			makeURL: func(t *testing.T) string {
+				// Make timeDiff strictly greater than tolerance+2
+				// timeDiff = (now-1) - ((now-1) - (tol+3)) = tol+3
+				resp := ArrayConnectivityStatus{
+					LastAttempt: now - 1,
+					LastSuccess: (now - 1) - (tol + 3),
+				}
+				srv := newStatusServer(resp, http.StatusOK)
+				t.Cleanup(srv.Close)
+				return srv.URL
+			},
+			wantConn: false,
+			wantErr:  false,
+		},
+		{
+			name: "Stale_currTime-LastAttempt>tolerance*2",
+			makeURL: func(t *testing.T) string {
+				// Stale branch: (currTime - LastAttempt) > 2*tol
+				resp := ArrayConnectivityStatus{
+					LastAttempt: now - (2*tol + 1),
+					LastSuccess: now - 100, // arbitrary older success
+				}
+				srv := newStatusServer(resp, http.StatusOK)
+				t.Cleanup(srv.Close)
+				return srv.URL
+			},
+			wantConn: false,
+			wantErr:  false,
+		},
+		{
+			name: "HTTPNon200_returns_error",
+			makeURL: func(t *testing.T) string {
+				resp := ArrayConnectivityStatus{
+					LastAttempt: now,
+					LastSuccess: now,
+				}
+				srv := newStatusServer(resp, http.StatusInternalServerError)
+				t.Cleanup(srv.Close)
+				return srv.URL
+			},
+			wantConn: false,
+			wantErr:  true,
+		},
+		{
+			name: "BadJSON_returns_error",
+			makeURL: func(t *testing.T) string {
+				// 200 OK but invalid JSON to exercise unmarshal error path
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					w.WriteHeader(http.StatusOK)
+					_, _ = w.Write([]byte(`{invalid json`))
+				}))
+				t.Cleanup(srv.Close)
+				return srv.URL
+			},
+			wantConn: false,
+			wantErr:  true,
+		},
+		{
+			name: "HTTPClientError_connection_refused",
+			makeURL: func(_ *testing.T) string {
+				// Unreachable port typically triggers client.Get error
+				return "http://127.0.0.1:1"
+			},
+			wantConn: false,
+			wantErr:  true,
+		},
+		{
+			name: "PanicRecovery_server_panics",
+			makeURL: func(t *testing.T) string {
+				// The server panics; your function has a defer recover() that logs.
+				// Behavior should result in an error (no crash).
+				srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+					panic("test panic")
+				}))
+				t.Cleanup(srv.Close)
+				return srv.URL
+			},
+			wantConn: false,
+			wantErr:  true,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			s := &service{} // same package => can instantiate unexported type
+
+			url := c.makeURL(t)
+			connected, err := s.QueryArrayStatus(ctx, url)
+
+			if c.wantErr && err == nil {
+				t.Fatalf("expected error; got nil (connected=%v)", connected)
+			}
+			if !c.wantErr && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if connected != c.wantConn {
+				t.Fatalf("connected: got %v, want %v (err=%v)", connected, c.wantConn, err)
 			}
 		})
 	}

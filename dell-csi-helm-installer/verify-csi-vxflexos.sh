@@ -31,6 +31,14 @@ function verify_sdc_installation() {
   if [ ${NODE_VERIFY} -eq 0 ]; then
     return
   fi
+  JSON=$(kubectl get secret "${RELEASE}-config" -n ${NS} -o go-template='{{ .data.config }}' | base64 --decode)
+  BLOCK_PROTOCOL=$(echo "${JSON}" | grep -v '^#' | grep blockProtocol | awk -F "\"" '{ print $(NF-1)}' | head -n1)
+  BLOCK_PROTOCOL=${BLOCK_PROTOCOL:-auto}
+  if [[ "${BLOCK_PROTOCOL}" == "NVMeTCP" ]]; then
+    log step "Skipping SDC verification (protocol=${BLOCK_PROTOCOL})"
+    log step_success
+    return
+  fi
   log step "Verifying the SDC installation"
 
   local SDC_MINION_NODES=$(run_command kubectl get nodes -o wide | grep -v -e master -e INTERNAL -e infra | awk ' { print $6; }')

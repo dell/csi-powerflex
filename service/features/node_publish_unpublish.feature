@@ -599,3 +599,63 @@ Feature: VxFlex OS CSI interface
     Then the error contains "none"
     And I call NodeUnpublishVolume "SDC_GUID"
     Then the error contains "none"
+
+   Scenario: a Basic NVME Node Publish Volume no error
+    Given a VxFlexOS service
+    And a controller published volume
+    And a capability with voltype <voltype> access <access> fstype <fstype>
+    And get Node Publish Volume Request for NVME <voltype>
+    When I call Probe
+    When I call NodePublishVolume NVME <voltype>
+    Then the error contains "none"
+
+    Examples:
+    | voltype | access                      | fstype  | errormsg |
+    | "block" | "single-writer"             | "none"  | "none"   |
+    | "mount" | "single-writer"             | "xfs"   | "none"   |
+
+  Scenario Outline: Node publish NVME volumes various induced error use cases from examples
+    Given a VxFlexOS service
+    And a controller published volume
+    And a capability with voltype <voltype> access "single-writer" fstype "none"
+    And get Node Publish Volume Request for NVME <voltype>
+    And I induce error <error>
+    When I call Probe
+    When I call NodePublishVolume NVME <voltype>
+    Then the error contains <errormsg>
+
+    Examples:
+    | voltype  | error                                    | errormsg                                                    |
+    | "block"  | "GOFSMockMountError"                     | "failed to publish NVMe block volume"                       |
+    | "mount"  | "GOFSMockMountError"                     | "failed to publish NVMe filesystem volume"                  |
+    | "block"  | "NodePublishNoTargetPath"                | "target path required"                                      |
+    | "block"  | "NodePublishNoStagingTargetPath"         | "staging target path required"                              |
+    | "block"  | "NodePublishNoVolumeCapability"          | "volume capability required"                                |
+    | "block"  | "NodePublishNoAccessMode"                | "Volume Access Mode is required"                            |
+    | "block"  | "NodePublishNoAccessType"                | "Volume Access Type is required"                            |
+    | "block"  | "NodePublishBadTargetPath"               | "cannot find the path specified@@no such file or directory" |
+
+Scenario: a Basic NVME Node Unpublish Volume no error
+    Given a VxFlexOS service
+    And a controller published volume
+    And a capability with voltype "mount" access "single-writer" fstype "xfs"
+    And get Node Publish Volume Request for NVME "mount"
+    When I call Probe
+    When I call NodeUnpublishVolume "NVMeTCP"
+    Then the error contains "none"
+
+  Scenario Outline: Node unpublish NVME volumes various induced error use cases from examples
+    Given a VxFlexOS service
+    And a controller published volume
+    And a capability with voltype "mount" access "single-writer" fstype "none"
+    And get Node Publish Volume Request for NVME "mount"
+    And I induce error <error>
+    When I call Probe
+    When I call NodeUnpublishVolume "NVMeTCP"
+    Then the error contains <errormsg>
+
+    Examples:
+    | error                                    | errormsg                                        |
+    | "none"                                   | "none"                                          |
+    | "GOFSMockGetMounts_targetpath"           | "none"                                          |
+    | "GOFSMockGetMountsError"                 | "could not reliably determine existing mount"   |

@@ -18,27 +18,56 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/cucumber/godog"
 	sio "github.com/dell/goscaleio"
 	siotypes "github.com/dell/goscaleio/types/v1"
+	"github.com/cucumber/godog"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 )
 
+var (
+	testStatus    int
+	testStartTime time.Time
+)
+
 func TestMain(m *testing.M) {
+	testStatus = 0
+	testStartTime = time.Now()
+
+	if st := m.Run(); st > testStatus {
+		testStatus = st
+	}
+
+	fmt.Printf("status %d\n", testStatus)
+
+	os.Exit(testStatus)
+}
+
+func TestFeatures(t *testing.T) {
 	defaultGetTargetPathPrefix := getTargetPathPrefix
+	defaultEphemeralStagingMountPath := ephemeralStagingMountPath
+	unitTestEmulateBlockDevice = true
 	defer func() {
 		getTargetPathPrefix = defaultGetTargetPathPrefix
+		ephemeralStagingMountPath = defaultEphemeralStagingMountPath
+		unitTestEmulateBlockDevice = false
 	}()
 
+	tempTargetPathPrefix := t.TempDir()
 	getTargetPathPrefix = func() string {
-		return "test/"
+		return tempTargetPathPrefix
 	}
+
+	nodePublishBlockDevicePath = filepath.Join(tempTargetPathPrefix, nodePublishBlockDevicePath)
+	nodePublishAltBlockDevPath = filepath.Join(tempTargetPathPrefix, nodePublishAltBlockDevPath)
+	nodePublishEphemDevPath = filepath.Join(tempTargetPathPrefix, nodePublishEphemDevPath)
+	ephemeralStagingMountPath = tempTargetPathPrefix
 
 	server := &http.Server{
 		Addr:              "localhost:6060",
@@ -60,17 +89,9 @@ func TestMain(m *testing.M) {
 		Options:             &opts,
 	}.Run()
 
-	fmt.Printf("godog finished\n")
-
-	if st := m.Run(); st > status {
-		fmt.Printf("godog.TestSuite status %d\n", status)
-		fmt.Printf("m.Run status %d\n", st)
-		status = st
+	if status > 0 {
+		t.Error("godog tests failed")
 	}
-
-	fmt.Printf("status %d\n", status)
-
-	os.Exit(status)
 }
 
 func Test_service_SetPodZoneLabel(t *testing.T) {

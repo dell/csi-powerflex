@@ -17,7 +17,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"net/http/httptest"
 	"os"
@@ -26,6 +25,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -35,61 +35,84 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
-	"github.com/cucumber/godog"
 	"github.com/dell/dell-csi-extensions/podmon"
 	"github.com/dell/dell-csi-extensions/replication"
 	volGroupSnap "github.com/dell/dell-csi-extensions/volumeGroupSnapshot"
+	"github.com/dell/gobrick"
 	"github.com/dell/gocsi"
 	"github.com/dell/gofsutil"
+	"github.com/dell/gonvme"
 	"github.com/dell/goscaleio"
 	types "github.com/dell/goscaleio/types/v1"
+	"github.com/cucumber/godog"
 	"google.golang.org/grpc/metadata"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	storage "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 )
 
 const (
-	testBaseDir                = "test"
-	arrayID                    = "14dbbf5617523654"
-	arrayID2                   = "15dbbf5617523655"
-	badVolumeID                = "Totally Fake ID"
-	badCsiVolumeID             = "ffff-f250"
-	goodVolumeID               = "111"
-	badVolumeID2               = "9999"
-	badVolumeID3               = "99"
-	goodVolumeName             = "vol1"
-	altVolumeID                = "222"
-	goodNodeID                 = "9E56672F-2F4B-4A42-BFF4-88B6846FBFDA"
-	goodArrayConfig            = "./features/array-config/config"
-	goodDriverConfig           = "./features/driver-config/logConfig.yaml"
-	altNodeID                  = "7E012974-3651-4DCB-9954-25975A3C3CDF"
-	datafile                   = "test/00000000-1111-0000-0000-000000000000/datafile"
-	datadir                    = "test/00000000-1111-0000-0000-000000000000/datadir"
-	badtarget                  = "nonexistent/target/path"
-	altdatadir                 = "test/00000000-1111-0000-0000-000000000000/altdatadir"
-	altdatafile                = "test/00000000-1111-0000-0000-000000000000/altdatafile"
-	sdcVolume1                 = "d0f055a700000000"
-	sdcVolume2                 = "c0f055aa00000000"
-	sdcVolume0                 = "0000000000000000"
-	ephemVolumeSDC             = "6373692d64306630353561373030303030303030"
-	mdmID                      = "14dbbf5617523654"
-	mdmIDEphem                 = "14dbbf5617523654"
-	mdmID1                     = "24dbbf5617523654"
-	mdmID2                     = "34dbbf5617523654"
-	badMdmID                   = "9999"
-	nodePublishBlockDevicePath = "test/dev/scinia"
-	nodePublishAltBlockDevPath = "test/dev/scinib"
-	nodePublishEphemDevPath    = "test/dev/scinic"
-	nodePublishSymlinkDir      = "test/dev/disk/by-id"
-	goodSnapID                 = "444"
-	altSnapID                  = "555"
+	testBaseDir           = "test"
+	arrayID               = "14dbbf5617523654"
+	arrayID2              = "15dbbf5617523655"
+	badVolumeID           = "999999"
+	badCsiVolumeID        = "ffff-f250"
+	goodVolumeID          = "111"
+	badVolumeID2          = "9999"
+	badVolumeID3          = "99"
+	goodVolumeName        = "vol1"
+	altVolumeID           = "222"
+	goodNodeID            = "9E56672F-2F4B-4A42-BFF4-88B6846FBFDA"
+	goodNodeIDNVMe        = "192.168.0.1-513fda498aaf35e883d"
+	goodNodeIDNVMe1       = "192.168.0.2-25eb4476103ff9daccc"
+	goodSdcIDNVMe         = "15d2cc7400010000"
+	goodArrayConfig       = "./features/array-config/config"
+	goodDriverConfig      = "./features/driver-config/logConfig.yaml"
+	altNodeID             = "7E012974-3651-4DCB-9954-25975A3C3CDF"
+	altNodeIDNVMe         = "192.168.0.2-25eb4476103ff9daccc"
+	altSdcIDNVMe          = "15d2cc7500010001"
+	datafile              = "test/00000000-1111-0000-0000-000000000000/datafile"
+	datadir               = "test/00000000-1111-0000-0000-000000000000/datadir"
+	stageDir              = "test/0efa4456de923f95192c0544979ba4c11d421e9368163084969db878af2394fc/globalmount"
+	nodePublishWWN        = "77d3b2750000002064b94e6077518e0f"
+	badtarget             = "nonexistent/target/path"
+	altdatadir            = "test/00000000-1111-0000-0000-000000000000/altdatadir"
+	altdatafile           = "test/00000000-1111-0000-0000-000000000000/altdatafile"
+	sdcVolume1            = "d0f055a700000000"
+	sdcVolume2            = "c0f055aa00000000"
+	sdcVolume0            = "0000000000000000"
+	ephemVolumeSDC        = "6373692d64306630353561373030303030303030"
+	mdmID                 = "14dbbf5617523654"
+	mdmIDEphem            = "14dbbf5617523654"
+	mdmID1                = "24dbbf5617523654"
+	mdmID2                = "34dbbf5617523654"
+	badMdmID              = "9999"
+	nodePublishSymlinkDir = "test/dev/disk/by-id"
+	goodSnapID            = "444"
+	altSnapID             = "555"
+	nvmeNguid             = "d0f055a70000000064b94e5617523654"
+	nodeInternalIP        = "10.20.30.40"
+	imageVersion          = "1.0.0"
+)
+
+var (
+	nodePublishBlockDevicePath = "scinia"
+	nodePublishAltBlockDevPath = "scinib"
+	nodePublishEphemDevPath    = "scinic"
+	mockGobrickInducedErrors   struct {
+		ConnectVolumeError    bool
+		DisconnectVolumeError bool
+	}
 )
 
 var setupGetSystemIDtoFail bool
 
 type feature struct {
+	t                                     *testing.T
+	protocol                              string
 	nGoRoutines                           int
 	server                                *httptest.Server
 	server2                               *httptest.Server
@@ -99,6 +122,8 @@ type feature struct {
 	adminClient2                          *goscaleio.Client
 	countOfArrays                         int
 	system2                               *goscaleio.System
+	nvmeLibMock                           *gonvme.MockNVMe
+	nvmeConnectorMock                     *mockNVMeTCPConnector
 	err                                   error // return from the preceding call
 	getPluginInfoResponse                 *csi.GetPluginInfoResponse
 	getPluginCapabilitiesResponse         *csi.GetPluginCapabilitiesResponse
@@ -134,6 +159,7 @@ type feature struct {
 	useAccessTypeMount                    bool
 	capability                            *csi.VolumeCapability
 	capabilities                          []*csi.VolumeCapability
+	nodeStageVolumeRequest                *csi.NodeStageVolumeRequest
 	nodePublishVolumeRequest              *csi.NodePublishVolumeRequest
 	createSnapshotRequest                 *csi.CreateSnapshotRequest
 	volumeIDList                          []string
@@ -154,10 +180,74 @@ type feature struct {
 	nas                                   types.NAS
 }
 
+type mockNVMeTCPConnector struct{}
+
+func (m *mockNVMeTCPConnector) ConnectVolume(_ context.Context, _ gobrick.NVMeVolumeInfo, _ bool) (gobrick.Device, error) {
+	if mockGobrickInducedErrors.ConnectVolumeError {
+		return gobrick.Device{}, fmt.Errorf("induced ConnectVolumeError")
+	}
+	return gobrick.Device{}, nil
+}
+
+func (m *mockNVMeTCPConnector) DisconnectVolumeByDeviceName(_ context.Context, _ string) error {
+	if mockGobrickInducedErrors.DisconnectVolumeError {
+		return fmt.Errorf("induced DisconnectVolumeError")
+	}
+	fmt.Printf("Removing WWN %s to path entry\n", nodePublishWWN)
+	delete(gofsutil.GOFSMockWWNToDevice, nodePublishWWN)
+	return nil
+}
+
+func (m *mockNVMeTCPConnector) GetInitiatorName(_ context.Context) ([]string, error) {
+	result := make([]string, 0)
+	return result, nil
+}
+
 func (f *feature) checkGoRoutines(tag string) {
 	goroutines := runtime.NumGoroutine()
 	fmt.Printf("goroutines %s new %d old groutines %d\n", tag, goroutines, f.nGoRoutines)
 	f.nGoRoutines = goroutines
+}
+
+func (f *feature) setPlatformInfo(sourceVersion, sourceGenType, targetVersion, targetGenType string) error {
+	sourceVersionFloat, err := strconv.ParseFloat(sourceVersion, 64)
+	if err != nil {
+		return err
+	}
+
+	f.service.platformInfos[arrayID] = &PlatformInfo{
+		SystemID:     arrayID,
+		ArrayVersion: sourceVersionFloat,
+		GenType:      sourceGenType,
+	}
+
+	targetVersionFloat, err := strconv.ParseFloat(targetVersion, 64)
+	if err != nil {
+		return err
+	}
+
+	f.service.platformInfos[arrayID2] = &PlatformInfo{
+		SystemID:     arrayID2,
+		ArrayVersion: targetVersionFloat,
+		GenType:      targetGenType,
+	}
+
+	return nil
+}
+
+func (f *feature) resetPlatformInfo() error {
+	// Remove platform info
+	delete(f.service.platformInfos, arrayID)
+	delete(f.service.platformInfos, arrayID2)
+	return nil
+}
+
+func (f *feature) iSetProvisionTo(isThickProvision string) error {
+	f.service.opts.Thick = false
+	if isThickProvision == "Thick" {
+		f.service.opts.Thick = true
+	}
+	return nil
 }
 
 func (f *feature) aVxFlexOSService() error {
@@ -225,12 +315,19 @@ func (f *feature) aVxFlexOSServiceWithTimeoutMilliseconds(millis int) error {
 	f.listedVolumeIDs = make(map[string]bool)
 	f.capability = nil
 	f.capabilities = make([]*csi.VolumeCapability, 0)
+	f.nodeStageVolumeRequest = nil
 	f.nodePublishVolumeRequest = nil
 	f.createSnapshotRequest = nil
 	f.createSnapshotResponse = nil
 	f.volumeIDList = f.volumeIDList[:0]
 	f.snapshotIndex = 0
 	f.maxVolSize = 0
+	f.nvmeLibMock = gonvme.NewMockNVMe(nil)
+	f.nvmeConnectorMock = new(mockNVMeTCPConnector)
+	f.protocol = SDC
+	gonvme.GONVMEMock.InduceDiscoveryError = false
+	mockGobrickInducedErrors.ConnectVolumeError = false
+	mockGobrickInducedErrors.DisconnectVolumeError = false
 
 	// configure gofsutil; we use a mock interface
 	gofsutil.UseMockFS()
@@ -245,18 +342,22 @@ func (f *feature) aVxFlexOSServiceWithTimeoutMilliseconds(millis int) error {
 	gofsutil.GOFSMock.InduceFSTypeError = false
 	gofsutil.GOFSMock.InduceResizeFSError = false
 	gofsutil.GOFSMockMounts = gofsutil.GOFSMockMounts[:0]
+	gofsutil.GOFSWWNPath = nodePublishSymlinkDir + "/nvme-eui."
+	clear(gofsutil.GOFSMockWWNToDevice)
 
 	// configure variables in the driver
 	publishGetMappedVolMaxRetry = 2
 	getMappedVolDelay = 10 * time.Millisecond
 
 	// Get or reuse the cached service
-	f.getService()
+	f.getService(goodNodeID)
 
 	goscaleio.SCINIMockMode = true
 
 	// Get the httptest mock handler. Only set
 	// a new server if there isn't one already.
+	// set with default api version.
+	apiVersion = "4.0"
 	handler := getHandler()
 	if handler != nil {
 		if f.server == nil {
@@ -289,16 +390,21 @@ func (f *feature) aVxFlexOSServiceWithTimeoutMilliseconds(millis int) error {
 
 	systemArrays[addr].Link(systemArrays[addr2])
 
+	// Configure ManifestSemver
+	ManifestSemver = imageVersion
+
 	f.checkGoRoutines("end aVxFlexOSService")
 	return nil
 }
 
-func (f *feature) getService() *service {
+func (f *feature) getService(csiNodeID string) *service {
 	testControllerHasNoConnection = false
 	svc := new(service)
 
 	svc.adminClients = make(map[string]*goscaleio.Client)
 	svc.systems = make(map[string]*goscaleio.System)
+	svc.platformInfos = make(map[string]*PlatformInfo)
+	svc.nvmeTargetNqn = make(map[string]string)
 
 	if f.adminClient != nil {
 		svc.adminClients[arrayID] = f.adminClient
@@ -309,11 +415,18 @@ func (f *feature) getService() *service {
 
 	if f.system != nil {
 		svc.systems[arrayID] = f.system
-	}
-	if f.system2 != nil {
-		svc.systems[arrayID2] = f.system2
+	} else {
+		log.Infof("System is Empty: %s", arrayID)
 	}
 
+	if f.system2 != nil {
+		svc.systems[arrayID2] = f.system2
+	} else {
+		log.Infof("System 2 is Empty: %s", arrayID)
+	}
+
+	svc.nvmeLib = f.nvmeLibMock
+	svc.nvmeConnector = f.nvmeConnectorMock
 	svc.storagePoolIDToName = map[string]string{}
 	svc.volumePrefixToSystems = map[string][]string{}
 	svc.connectedSystemNameToID = map[string]string{}
@@ -333,7 +446,7 @@ func (f *feature) getService() *service {
 	var err error
 	opts.arrays, err = getArrayConfig(ctx)
 	if err != nil {
-		log.Printf("Read arrays from config file failed: %s\n", err)
+		log.Infof("Read arrays from config file failed: %s\n", err)
 	}
 
 	opts.AutoProbe = true
@@ -367,12 +480,17 @@ MDM-ID 14dbbf5617523654 SDC ID d0f33bd700000004 INSTALLATION ID 1c078b073d75512c
 	if f.system != nil {
 		svc.systems[arrayID] = f.system
 	}
+
+	if f.system2 != nil {
+		svc.systems[arrayID2] = f.system2
+	}
+
 	f.service = svc
 	f.countOfArrays = len(svc.systems)
 	svc.statisticsCounter = 99
 	svc.logStatistics()
 	if K8sClientset == nil {
-		f.CreateCSINode()
+		f.CreateCSINode(csiNodeID, "node1")
 		svc.ProcessMapSecretChange()
 	}
 	server := grpc.NewServer()
@@ -381,7 +499,7 @@ MDM-ID 14dbbf5617523654 SDC ID d0f33bd700000004 INSTALLATION ID 1c078b073d75512c
 }
 
 // CreateCSINode uses fakeclient to make csinode with topology key
-func (f *feature) CreateCSINode() (*storage.CSINode, error) {
+func (f *feature) CreateCSINode(csiNodeID string, nodeName string) (*storage.CSINode, error) {
 	K8sClientset = fake.NewSimpleClientset()
 
 	// csiKubeClient := nim.volumeHost.GetKubeClient()
@@ -389,12 +507,12 @@ func (f *feature) CreateCSINode() (*storage.CSINode, error) {
 
 	fakeCSINode := &storage.CSINode{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "node1",
+			Name: nodeName,
 			OwnerReferences: []metav1.OwnerReference{
 				{
 					APIVersion: nodeKind.Version,
 					Kind:       nodeKind.Kind,
-					Name:       "node1",
+					Name:       nodeName,
 				},
 			},
 		},
@@ -402,7 +520,7 @@ func (f *feature) CreateCSINode() (*storage.CSINode, error) {
 			Drivers: []storage.CSINodeDriver{
 				{
 					Name:         "csi-vxflexos.dellemc.com",
-					NodeID:       "9E56672F-2F4B-4A42-BFF4-88B6846FBFDA",
+					NodeID:       csiNodeID,
 					TopologyKeys: []string{"csi-vxflexos.dellemc.com/14dbbf5617523654"},
 				},
 			},
@@ -411,10 +529,32 @@ func (f *feature) CreateCSINode() (*storage.CSINode, error) {
 	return K8sClientset.StorageV1().CSINodes().Create(context.TODO(), fakeCSINode, metav1.CreateOptions{})
 }
 
+// CreateKubernetesNode creates a Node object in the fake kubernetes client
+func (f *feature) CreateKubernetesNode(k8s kubernetes.Interface, nodeName string) (*corev1.Node, error) {
+	internalIPs := []string{nodeInternalIP}
+	addrs := make([]corev1.NodeAddress, 0, len(internalIPs))
+	for _, ip := range internalIPs {
+		addrs = append(addrs, corev1.NodeAddress{
+			Type:    corev1.NodeInternalIP,
+			Address: ip,
+		})
+	}
+
+	node := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: nodeName,
+		},
+		Status: corev1.NodeStatus{
+			Addresses: addrs,
+		},
+	}
+	return k8s.CoreV1().Nodes().Create(context.TODO(), node, metav1.CreateOptions{})
+}
+
 func (f *feature) aValidDynamicArrayChange() error {
 	count := 0
 	for _, array := range f.service.opts.arrays {
-		log.Printf("array after config change array details %#v", array.SystemID)
+		log.Infof("array after config change array details %#v", array.SystemID)
 		count++
 	}
 	if count != 3 {
@@ -430,36 +570,36 @@ func (f *feature) aValidDynamicArrayChange() error {
 
 func (f *feature) iCallDynamicArrayChange() error {
 	f.countOfArrays = len(f.service.adminClients)
-	log.Printf("before config change array count=%d", f.countOfArrays)
+	log.Infof("before config change array count=%d", f.countOfArrays)
 	for key := range f.service.adminClients {
-		log.Printf("before config change array ID %s", key)
+		log.Infof("before config change array ID %s", key)
 	}
 	backup := "features/config"
 	os.Rename(ArrayConfigFile, backup)
 	err := os.Rename("features/array-config/config.2", ArrayConfigFile)
-	log.Printf("wait for config change %s %#v", backup, err)
+	log.Infof("wait for config change %s %#v", backup, err)
 	time.Sleep(10 * time.Second)
 	return nil
 }
 
 func (f *feature) iCallDynamicLogChange(file string) error {
-	log.Printf("level before change: %s", Log.GetLevel())
+	log.Infof("level before change: %s", log.GetLevel())
 	backup := "features/driver-config/logBackup.json"
 	_ = os.Rename(DriverConfigParamsFile, backup)
 	_ = os.Rename("features/driver-config/"+file, DriverConfigParamsFile)
-	log.Printf("wait for config change %s", backup)
+	log.Infof("wait for config change %s", backup)
 	time.Sleep(10 * time.Second)
 	return nil
 }
 
 func (f *feature) aValidDynamicLogChange(file, expectedLevel string) error {
-	log.Printf("level after change: %s", Log.GetLevel())
+	log.Infof("level after change: %s", log.GetLevel())
 	backup := "features/driver-config/logBackup.json"
-	if Log.GetLevel().String() != expectedLevel {
-		err := fmt.Errorf("level was expected to be %s, but was %s instead", expectedLevel, Log.GetLevel().String())
+	if log.GetLevel().String() != expectedLevel {
+		err := fmt.Errorf("level was expected to be %s, but was %s instead", expectedLevel, log.GetLevel().String())
 		return err
 	}
-	log.Printf("Reverting log changes made")
+	log.Infof("Reverting log changes made")
 	_ = os.Rename(DriverConfigParamsFile, "features/driver-config/"+file)
 	_ = os.Rename(backup, DriverConfigParamsFile)
 	return nil
@@ -509,11 +649,11 @@ func (f *feature) theVolumeIsFromTheCorrectSystem(volID, sysID string) error {
 
 func (f *feature) aValidGetPlugInfoResponseIsReturned() error {
 	rep := f.getPluginInfoResponse
-	url := rep.GetManifest()["url"]
-	if rep.GetName() == "" || rep.GetVendorVersion() == "" || url == "" {
+	if rep.GetName() == "" || rep.GetVendorVersion() == "" {
 		return errors.New("Expected GetPluginInfo to return name and version")
 	}
-	log.Printf("Name %s Version %s URL %s", rep.GetName(), rep.GetVendorVersion(), url)
+
+	fmt.Printf("Name %s Version %s", rep.GetName(), rep.GetVendorVersion())
 	return nil
 }
 
@@ -722,21 +862,58 @@ func (f *feature) iCallCreateVolume(name string) error {
 
 	f.createVolumeResponse, f.err = f.service.CreateVolume(ctx, req)
 	if f.err != nil {
-		log.Printf("CreateVolume called failed: %s\n", f.err.Error())
+		log.Infof("CreateVolume called failed: %s\n", f.err.Error())
 	}
 
 	if f.createVolumeResponse != nil {
-		log.Printf("vol id %s\n", f.createVolumeResponse.GetVolume().VolumeId)
+		log.Infof("vol id %s\n", f.createVolumeResponse.GetVolume().VolumeId)
 	}
+	return nil
+}
+
+func (f *feature) iCallCreateVolumeWithError(name, errorMessage string) error {
+	ctx := context.Background()
+	if f.createVolumeRequest == nil {
+		fmt.Println("createVolumeRequest is nil")
+		req := getTypicalCreateVolumeRequest()
+		f.createVolumeRequest = req
+	} else {
+		fmt.Println("createVolumeRequest is not nil")
+	}
+
+	req := f.createVolumeRequest
+	req.Name = name
+
+	req.Parameters = map[string]string{
+		f.service.WithRP(KeyReplicationRemoteStoragePool): "viki_pool_HDD_20181031",
+		f.service.WithRP(KeyReplicationRemoteSystem):      "15dbbf5617523655",
+	}
+
+	fmt.Println("I am in iCallCreateVolumeWithError fn.....")
+
+	f.createVolumeResponse, f.err = f.service.CreateVolume(ctx, req)
+	if f.err != nil {
+		if strings.Contains(f.err.Error(), errorMessage) {
+			log.Infof("Expected Error Message Found: %s\n", f.err.Error())
+		} else {
+			return fmt.Errorf("expected error message not found: %s in the error: %s", errorMessage, f.err.Error())
+		}
+	}
+
 	return nil
 }
 
 func (f *feature) iCallValidateVolumeHostConnectivity() error {
 	ctx := context.Background()
-
-	sdcID := f.service.opts.SdcGUID
-	sdcGUID := strings.ToUpper(sdcID)
-	csiNodeID := sdcGUID
+	var csiNodeID string
+	if f.service.useNVME {
+		f.service.opts.SdcGUID = ""
+		csiNodeID = goodNodeIDNVMe1
+	} else {
+		sdcID := f.service.opts.SdcGUID
+		sdcGUID := strings.ToUpper(sdcID)
+		csiNodeID = sdcGUID
+	}
 
 	volIDs := make([]string, 0)
 
@@ -763,6 +940,11 @@ func (f *feature) iCallValidateVolumeHostConnectivity() error {
 		volIDs = volIDs[:0]
 		volIDs = append(volIDs, volid)
 	}
+
+	clientSet := fake.NewSimpleClientset()
+	K8sClientset = clientSet
+	f.CreateCSINode(csiNodeID, "node2")
+	f.CreateKubernetesNode(K8sClientset, "node2")
 
 	req := &podmon.ValidateVolumeHostConnectivityRequest{
 		NodeId:    csiNodeID,
@@ -823,11 +1005,28 @@ func (f *feature) iSpecifyAccessibilityRequirementsWithASystemIDOf(requestedSyst
 	capacityRange := new(csi.CapacityRange)
 	capacityRange.RequiredBytes = 32 * 1024 * 1024 * 1024
 	req.CapacityRange = capacityRange
-	req.AccessibilityRequirements = new(csi.TopologyRequirement)
+	block := new(csi.VolumeCapability_BlockVolume)
+	capability := new(csi.VolumeCapability)
+	accessType := new(csi.VolumeCapability_Block)
+	accessType.Block = block
+	capability.AccessType = accessType
+	accessMode := new(csi.VolumeCapability_AccessMode)
+	accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER
+	capability.AccessMode = accessMode
+	capabilities := make([]*csi.VolumeCapability, 0)
+	capabilities = append(capabilities, capability)
+	req.VolumeCapabilities = capabilities
 	top := new(csi.Topology)
-	top.Segments = map[string]string{
-		"csi-vxflexos.dellemc.com/" + requestedSystem: "powerflex.dellemc.com",
+	if f.protocol == NVMeTCP {
+		top.Segments = map[string]string{
+			"csi-vxflexos.dellemc.com/" + requestedSystem + "-nvmetcp": "powerflex.dellemc.com",
+		}
+	} else {
+		top.Segments = map[string]string{
+			"csi-vxflexos.dellemc.com/" + requestedSystem: "powerflex.dellemc.com",
+		}
 	}
+	req.AccessibilityRequirements = new(csi.TopologyRequirement)
 	req.AccessibilityRequirements.Preferred = append(req.AccessibilityRequirements.Preferred, top)
 	f.createVolumeRequest = req
 	return nil
@@ -872,7 +1071,7 @@ func (f *feature) iSpecifyAccessibilityRequirementsNFSWithASystemIDOf(requestedS
 	return nil
 }
 
-func (f *feature) iSpecifyBadAccessibilityRequirementsNFSWithASystemIDOf(requestedSystem string) error {
+func (f *feature) iSpecifyBadAccessibilityRequirementsWithASystemIDOf(requestedSystem string) error {
 	if requestedSystem == "f.service.opt.SystemName" {
 		requestedSystem = f.service.opts.defaultSystemID
 	}
@@ -893,9 +1092,7 @@ func (f *feature) iSpecifyBadAccessibilityRequirementsNFSWithASystemIDOf(request
 	capability := new(csi.VolumeCapability)
 	mountVolume := new(csi.VolumeCapability_MountVolume)
 	mountVolume.FsType = "nfs"
-	if mountVolume.FsType == "nfs" {
-		req.Parameters["nasName"] = "dummy-nas-server"
-	}
+	req.Parameters["nasName"] = "dummy-nas-server"
 	mountVolume.MountFlags = make([]string, 0)
 	mount := new(csi.VolumeCapability_Mount)
 	mount.Mount = mountVolume
@@ -948,19 +1145,18 @@ func (f *feature) aValidCreateVolumeResponseWithTopologyIsReturned() error {
 				constraint = tokens[1]
 			}
 
-			log.Printf("Found topology constraint: VxFlex OS system: %s", constraint)
-			if isNFS {
-				nfsTokens := strings.Split(constraint, "-")
-				nfsLabel := ""
-				if len(nfsTokens) > 1 {
-					constraint = nfsTokens[0]
-					nfsLabel = nfsTokens[1]
-					if nfsLabel != "nfs" {
-						return status.Errorf(codes.InvalidArgument,
-							"Invalid topology requested for NFS Volume. Please validate your storage class has nfs topology.")
-					}
+			log.Infof("Found topology constraint: VxFlex OS system: %s", constraint)
+			constraints := strings.Split(constraint, "-")
+			if len(constraints) > 1 {
+				constraint = constraints[0]
+				if isNFS && constraints[1] != "nfs" {
+					return status.Errorf(codes.InvalidArgument,
+						"Invalid topology requested for NFS Volume. Please validate your storage class has nfs topology.")
+				} else if !isNFS && constraints[1] != "nvmetcp" {
+					return status.Errorf(codes.InvalidArgument, "Invalid topology \"%s\" requested. Please validate your storage class has correct topology.", constraints[1])
 				}
 			}
+
 			if constraint != requestedSystem {
 				fmt.Printf("Volume topology segement should have system %s. Found %s.", requestedSystem, constraint)
 				return errors.New("wrong systemID in AccessibleTopology")
@@ -1047,10 +1243,10 @@ func (f *feature) iCallCreateVolumeSize(name string, size int64) error {
 
 	f.createVolumeResponse, f.err = f.service.CreateVolume(ctx, req)
 	if f.err != nil {
-		log.Printf("CreateVolumeSize called failed: %s\n", f.err.Error())
+		log.Infof("CreateVolumeSize called failed: %s\n", f.err.Error())
 	}
 	if f.createVolumeResponse != nil {
-		log.Printf("vol id %s\n", f.createVolumeResponse.GetVolume().VolumeId)
+		log.Infof("vol id %s\n", f.createVolumeResponse.GetVolume().VolumeId)
 	}
 
 	return nil
@@ -1073,10 +1269,10 @@ func (f *feature) iCallCreateVolumeSizeNFS(name string, size int64) error {
 
 	f.createVolumeResponse, f.err = f.service.CreateVolume(ctx, req)
 	if f.err != nil {
-		log.Printf("CreateVolumeSize called failed: %s\n", f.err.Error())
+		log.Infof("CreateVolumeSize called failed: %s\n", f.err.Error())
 	}
 	if f.createVolumeResponse != nil {
-		log.Printf("vol id %s\n", f.createVolumeResponse.GetVolume().VolumeId)
+		log.Infof("vol id %s\n", f.createVolumeResponse.GetVolume().VolumeId)
 	}
 
 	return nil
@@ -1090,7 +1286,7 @@ func (f *feature) iChangeTheStoragePool(storagePoolName string) error {
 }
 
 func (f *feature) iInduceError(errtype string) error {
-	log.Printf("set induce error %s\n", errtype)
+	log.Infof("set induce error %s\n", errtype)
 	inducedError = errors.New(errtype)
 	switch errtype {
 	case "WrongSysNameError":
@@ -1140,7 +1336,7 @@ func (f *feature) iInduceError(errtype string) error {
 	case "EmptySysIDInNodeExpand":
 		stepHandlersErrors.EmptySysID = true
 	case "WrongVolIDErrorInNodeExpand":
-		stepHandlersErrors.BadVolIDError = true
+		stepHandlersErrors.IncorrectVolID = true
 	case "EmptyEphemeralID":
 		f.nodePublishVolumeRequest.VolumeId = mdmID
 		stepHandlersErrors.EmptyEphemeralID = true
@@ -1157,8 +1353,12 @@ func (f *feature) iInduceError(errtype string) error {
 		stepHandlersErrors.GetSdcInstancesError = true
 	case "MapSdcError":
 		stepHandlersErrors.MapSdcError = true
+	case "MapNVMeError":
+		stepHandlersErrors.MapNVMeError = true
 	case "RemoveMappedSdcError":
 		stepHandlersErrors.RemoveMappedSdcError = true
+	case "RemoveMappedHostError":
+		stepHandlersErrors.RemoveMappedHostError = true
 	case "SDCLimitsError":
 		stepHandlersErrors.SDCLimitsError = true
 	case "require-probe":
@@ -1230,7 +1430,6 @@ func (f *feature) iInduceError(errtype string) error {
 			return err
 		}
 	case "NoBlockDevForNodePublish":
-		unitTestEmulateBlockDevice = false
 		cmd := exec.Command("rm", nodePublishBlockDevicePath)
 		_, err := cmd.CombinedOutput()
 		if err != nil {
@@ -1251,6 +1450,33 @@ func (f *feature) iInduceError(errtype string) error {
 		f.service.privDir = filepath.Join(testBaseDir, "xxx/yyy")
 	case "BlockMkfilePrivateDirectoryNodePublish":
 		f.service.privDir = datafile
+	case "NodeStageNoVolumeID":
+		f.nodeStageVolumeRequest.VolumeId = ""
+	case "NodeStageInValidVolumeID":
+		f.nodeStageVolumeRequest.VolumeId = "invalid"
+	case "NodeStageNoCapability":
+		f.nodeStageVolumeRequest.VolumeCapability = nil
+	case "NodeStageNoAccessMode":
+		f.nodeStageVolumeRequest.VolumeCapability.AccessMode = nil
+	case "NodeStageNoStagingPath":
+		f.nodeStageVolumeRequest.StagingTargetPath = ""
+	case "GobrickConnectError":
+		mockGobrickInducedErrors.ConnectVolumeError = true
+	case "GobrickDisconnectError":
+		mockGobrickInducedErrors.DisconnectVolumeError = true
+		gofsutil.GOFSMockMounts = []gofsutil.Info{
+			{
+				Source: "/dev/nvme0n1",
+				Path:   stageDir,
+				Device: "nvme0n1",
+			},
+		}
+	case "GobrickConnectError2":
+		f.nodeStageVolumeRequest.StagingTargetPath = ""
+	case "GobrickConnectError3":
+		f.nodeStageVolumeRequest.StagingTargetPath = ""
+	case "GobrickConnectError4":
+		f.nodeStageVolumeRequest.StagingTargetPath = ""
 	case "NodePublishNoVolumeCapability":
 		f.nodePublishVolumeRequest.VolumeCapability = nil
 	case "NodePublishNoAccessMode":
@@ -1263,11 +1489,20 @@ func (f *feature) iInduceError(errtype string) error {
 			fmt.Printf("Couldn't make: %s\n", datadir+"/"+sdcVolume1)
 		}
 	case "NodePublishPrivateTargetAlreadyMounted":
-		cmd := exec.Command("mknod", nodePublishAltBlockDevPath, "b", "0", "0")
-		_, err := cmd.CombinedOutput()
+		file, err := os.Create(nodePublishAltBlockDevPath)
 		if err != nil {
-			fmt.Printf("Couldn't create block dev: %s\n", nodePublishAltBlockDevPath)
+			fmt.Printf("couldn't create file: %s: %v\n", nodePublishAltBlockDevPath, err)
 		}
+
+		defer func() {
+			file.Close()
+		}()
+
+		// Optionally set permissions to mimic a device node
+		if err := os.Chmod(nodePublishAltBlockDevPath, 0o750); err != nil {
+			fmt.Printf("Failed to set permissions on mock device file %s: %v\n", nodePublishAltBlockDevPath, err)
+		}
+
 		err = os.MkdirAll("features/"+sdcVolume1, 0o777)
 		if err != nil {
 			fmt.Printf("Couldn't make: %s\n", datadir+"/"+sdcVolume1)
@@ -1278,6 +1513,8 @@ func (f *feature) iInduceError(errtype string) error {
 		}
 	case "NodePublishNoTargetPath":
 		f.nodePublishVolumeRequest.TargetPath = ""
+	case "NodePublishNoStagingTargetPath":
+		f.nodePublishVolumeRequest.StagingTargetPath = ""
 	case "NodePublishBadTargetPath":
 		f.nodePublishVolumeRequest.TargetPath = filepath.Join(testBaseDir, badtarget)
 	case "NodePublishBlockTargetNotFile":
@@ -1306,12 +1543,48 @@ func (f *feature) iInduceError(errtype string) error {
 		gofsutil.GOFSMock.InduceMountError = true
 	case "GOFSMockGetMountsError":
 		gofsutil.GOFSMock.InduceGetMountsError = true
+	case "GOFSMockGetMounts_deleted":
+		gofsutil.GOFSMockMounts = []gofsutil.Info{
+			{
+				Source: "/dev/nvme0n1-deleted",
+				Path:   stageDir,
+				Device: "nvme0n1-deleted",
+			},
+		}
+	case "GOFSMockGetMounts_unknowndevice":
+		gofsutil.GOFSMockMounts = []gofsutil.Info{
+			{
+				Source: "/dev/unkowndevice",
+				Path:   stageDir,
+				Device: "unkowndevice",
+			},
+		}
+	case "GOFSMockGetMounts_targetpath":
+		gofsutil.GOFSMockMounts = []gofsutil.Info{
+			{
+				Path: datadir,
+			},
+		}
 	case "GOFSMockUnmountError":
 		gofsutil.GOFSMock.InduceUnmountError = true
 	case "GOFSMockGetDiskFormatError":
 		gofsutil.GOFSMock.InduceGetDiskFormatError = true
+		gofsutil.GOFSMockMounts = []gofsutil.Info{
+			{
+				Source: "/dev/nvme0n1",
+				Path:   stageDir,
+			},
+		}
 	case "GOFSMockGetDiskFormatType":
 		gofsutil.GOFSMock.InduceGetDiskFormatType = "unknown-fs"
+	case "GOFSMockGetDiskFormatType_mpath_member":
+		gofsutil.GOFSMock.InduceGetDiskFormatType = "mpath_member"
+		gofsutil.GOFSMockMounts = []gofsutil.Info{
+			{
+				Source: "/dev/nvme0n1",
+				Path:   stageDir,
+			},
+		}
 	case "GOFSMockFormatError":
 		gofsutil.GOFSMock.InduceFormatError = true
 	case "GOFSInduceFSTypeError":
@@ -1360,6 +1633,16 @@ func (f *feature) iInduceError(errtype string) error {
 		stepHandlersErrors.UpdateConfigFormatError = true
 	case "ConfigMapNotFoundError":
 		stepHandlersErrors.ConfigMapNotFoundError = true
+	case "NoNfsServer":
+		stepHandlersErrors.NoNfsServer = true
+	case "SdtNotFoundError":
+		stepHandlersErrors.SdtNotFoundError = true
+	case "EmptySdtError":
+		stepHandlersErrors.EmptySdtError = true
+	case "NvmeDiscoveryError":
+		stepHandlersErrors.NvmeDiscoveryError = true
+	case "GetMetricsError":
+		stepHandlersErrors.GetMetricsError = true
 	default:
 		fmt.Println("Ensure that the error is handled in the handlers section.")
 	}
@@ -1422,11 +1705,15 @@ func (f *feature) getControllerPublishVolumeRequest(accessType string) *csi.Cont
 
 	if !f.noNodeID {
 		req.NodeId = goodNodeID
+		if f.protocol == NVMeTCP {
+			req.NodeId = goodNodeIDNVMe
+		}
 	}
 	req.Readonly = false
 	if !f.omitVolumeCapability {
 		req.VolumeCapability = capability
 	}
+	req.VolumeContext = make(map[string]string)
 	return req
 }
 
@@ -1625,10 +1912,10 @@ func (f *feature) iCallPublishVolumeWith(arg1 string) error {
 		f.publishVolumeRequest = req
 	}
 
-	log.Printf("Calling controllerPublishVolume")
+	log.Infof("Calling controllerPublishVolume")
 	f.publishVolumeResponse, f.err = f.service.ControllerPublishVolume(ctx, req)
 	if f.err != nil {
-		log.Printf("PublishVolume call failed: %s\n", f.err.Error())
+		log.Infof("PublishVolume call failed: %s\n", f.err.Error())
 	}
 	return nil
 }
@@ -1690,10 +1977,10 @@ func (f *feature) iCallPublishVolumeWithNFS(arg1 string) error {
 		log.Fatalf("failed to create configMap: %v", err)
 	}
 
-	log.Printf("Calling controllerPublishVolume")
+	log.Infof("Calling controllerPublishVolume")
 	f.publishVolumeResponse, f.err = f.service.ControllerPublishVolume(ctx, req)
 	if f.err != nil {
-		log.Printf("PublishVolume call failed: %s\n", f.err.Error())
+		log.Infof("PublishVolume call failed: %s\n", f.err.Error())
 	}
 	return nil
 }
@@ -1764,9 +2051,13 @@ func (f *feature) noAccessMode() error {
 }
 
 func (f *feature) thenIUseADifferentNodeID() error {
-	f.publishVolumeRequest.NodeId = altNodeID
+	nodeID := altNodeID
+	if f.protocol == NVMeTCP {
+		nodeID = altNodeIDNVMe
+	}
+	f.publishVolumeRequest.NodeId = nodeID
 	if f.unpublishVolumeRequest != nil {
-		f.unpublishVolumeRequest.NodeId = altNodeID
+		f.unpublishVolumeRequest.NodeId = nodeID
 	}
 	return nil
 }
@@ -1793,7 +2084,12 @@ func (f *feature) getControllerUnpublishVolumeRequest() *csi.ControllerUnpublish
 		}
 	}
 	if !f.noNodeID {
-		req.NodeId = goodNodeID
+		if f.protocol == NVMeTCP {
+			req.NodeId = goodNodeIDNVMe
+		}
+		if f.protocol == SDC {
+			req.NodeId = goodNodeID
+		}
 	}
 	return req
 }
@@ -1820,10 +2116,11 @@ func (f *feature) iCallUnpublishVolume() error {
 		req = f.getControllerUnpublishVolumeRequest()
 		f.unpublishVolumeRequest = req
 	}
-	log.Printf("Calling controllerUnpublishVolume: %s", req.VolumeId)
+	log.Infof("Calling controllerUnpublishVolume: %s", req.NodeId)
+	log.Infof("Calling controllerUnpublishVolume: %s", req.VolumeId)
 	f.unpublishVolumeResponse, f.err = f.service.ControllerUnpublishVolume(ctx, req)
 	if f.err != nil {
-		log.Printf("UnpublishVolume call failed: %s\n", f.err.Error())
+		log.Infof("UnpublishVolume call failed: %s\n", f.err.Error())
 	}
 	return nil
 }
@@ -1859,13 +2156,13 @@ func (f *feature) iCallUnpublishVolumeNFS() error {
 	// Create a ConfigMap using fake ClientSet
 	_, err := clientSet.CoreV1().ConfigMaps(DriverNamespace).Create(context.TODO(), configMap, metav1.CreateOptions{})
 	if err != nil {
-		Log.Fatalf("failed to create configMaps: %v", err)
+		log.Fatalf("failed to create configMaps: %v", err)
 	}
 
-	log.Printf("Calling controllerUnpublishVolume: %s", req.VolumeId)
+	log.Infof("Calling controllerUnpublishVolume: %s", req.VolumeId)
 	f.unpublishVolumeResponse, f.err = f.service.ControllerUnpublishVolume(ctx, req)
 	if f.err != nil {
-		log.Printf("UnpublishVolume call failed: %s\n", f.err.Error())
+		log.Infof("UnpublishVolume call failed: %s\n", f.err.Error())
 	}
 	return nil
 }
@@ -1920,6 +2217,18 @@ func (f *feature) iCallNodeGetInfoWithValidNodeUID() error {
 	GetNodeUID = mockGetNodeUID
 	f.service.opts.SdcGUID = ""
 	f.nodeGetInfoResponse, f.err = f.service.NodeGetInfo(ctx, req)
+	fmt.Printf("NodeGetInfoResponse: %v", f.nodeGetInfoResponse)
+	return nil
+}
+
+func (f *feature) iCallNodeGetInfoWithNVMeFlagTrue() error {
+	ctx := context.Background()
+	req := new(csi.NodeGetInfoRequest)
+	f.service.useNVME = true
+	gonvme.GONVMEMock.InduceDiscoveryError = stepHandlersErrors.NvmeDiscoveryError
+	f.nodeGetInfoResponse, f.err = f.service.NodeGetInfo(ctx, req)
+	f.nodeGetInfoResponse.NodeId = goodNodeIDNVMe
+	f.nodeGetInfoResponse.MaxVolumesPerNode = 0
 	fmt.Printf("NodeGetInfoResponse: %v", f.nodeGetInfoResponse)
 	return nil
 }
@@ -2019,6 +2328,15 @@ func (f *feature) iCallGetNodeLabelsWithInvalidNode() error {
 }
 
 func (f *feature) iCallGetNodeLabelsWithUnsetKubernetesClient() error {
+	defaultKubernetesHost := os.Getenv("KUBERNETES_SERVICE_HOST")
+	defaultKubernetesPort := os.Getenv("KUBERNETES_SERVICE_PORT")
+	defer func() {
+		os.Setenv("KUBERNETES_SERVICE_HOST", defaultKubernetesHost)
+		os.Setenv("KUBERNETES_SERVICE_PORT", defaultKubernetesPort)
+	}()
+
+	os.Unsetenv("KUBERNETES_SERVICE_HOST")
+	os.Unsetenv("KUBERNETES_SERVICE_PORT")
 	K8sClientset = nil
 	ctx := context.Background()
 	f.nodeLabels, f.err = f.service.GetNodeLabels(ctx)
@@ -2031,16 +2349,26 @@ func (f *feature) iCallGetNodeUIDWithInvalidNode() error {
 	return nil
 }
 
-func (f *feature) iCallGetNodeUIDWithUnsetKubernetesClient() error {
-	K8sClientset = nil
-	ctx := context.Background()
-	f.nodeUID, f.err = f.service.GetNodeUID(ctx)
+func (f *feature) iCallGetNodeUIDWithoutKubeNodeName() error {
+	f.service.opts.KubeNodeName = ""
+	f.nodeUID, f.err = f.service.GetNodeUID(context.Background())
 	return nil
 }
 
 func (f *feature) iCallNodeProbe() error {
 	ctx := context.Background()
 	req := new(csi.ProbeRequest)
+	f.checkGoRoutines("before probe")
+	f.service.mode = "node"
+	f.probeResponse, f.err = f.service.Probe(ctx, req)
+	f.checkGoRoutines("after probe")
+	return nil
+}
+
+func (f *feature) iCallNodeProbeNVMeFlagEnabled() error {
+	ctx := context.Background()
+	req := new(csi.ProbeRequest)
+	f.service.useNVME = true
 	f.checkGoRoutines("before probe")
 	f.service.mode = "node"
 	f.probeResponse, f.err = f.service.Probe(ctx, req)
@@ -2074,6 +2402,56 @@ func (f *feature) aValidNodeGetInfoResponseWithNodeUIDIsReturned() error {
 	return nil
 }
 
+func (f *feature) aValidNodeGetInfoResponseWithTopologyIsReturned(protocols string) error {
+	if f.err != nil {
+		return f.err
+	}
+
+	fmt.Printf("node: %s", f.nodeGetInfoResponse)
+	if f.nodeGetInfoResponse.NodeId == "" {
+		return errors.New("expected NodeGetInfoResponse to contain NodeID but it was null")
+	}
+
+	if f.nodeGetInfoResponse.MaxVolumesPerNode != 0 {
+		return errors.New("expected NodeGetInfoResponse MaxVolumesPerNode to be 0")
+	}
+
+	if f.nodeGetInfoResponse.AccessibleTopology == nil || len(f.nodeGetInfoResponse.AccessibleTopology.Segments) == 0 {
+		return errors.New("expected NodeGetInfoResponse AccessibleTopology to be not empty")
+	}
+
+	expectedTopology := make(map[string]string)
+	for _, protocol := range strings.Split(protocols, ",") {
+		expectedTopology[Name+"/"+arrayID+"-"+protocol] = "true"
+		expectedTopology[Name+"/"+arrayID2+"-"+protocol] = "true"
+	}
+
+	for key, expectedValue := range expectedTopology {
+		segment, ok := f.nodeGetInfoResponse.AccessibleTopology.Segments[key]
+		if !ok {
+			return fmt.Errorf("expected NodeGetInfoResponse AccessibleTopology to contain segment %s", key)
+		}
+		if segment != expectedValue {
+			return fmt.Errorf("expected NodeGetInfoResponse AccessibleTopology segment %s to be %s, but got %s", key, expectedValue, segment)
+		}
+	}
+
+	// Check that no extra topologies are present
+	if len(f.nodeGetInfoResponse.AccessibleTopology.Segments) != len(expectedTopology) {
+		return fmt.Errorf("expected NodeGetInfoResponse AccessibleTopology to have %d segments, but got %d",
+			len(expectedTopology), len(f.nodeGetInfoResponse.AccessibleTopology.Segments))
+	}
+
+	for key := range f.nodeGetInfoResponse.AccessibleTopology.Segments {
+		if _, ok := expectedTopology[key]; !ok {
+			return fmt.Errorf("unexpected NodeGetInfoResponse AccessibleTopology segment %s", key)
+		}
+	}
+
+	fmt.Printf("NodeID %s\n", f.nodeGetInfoResponse.NodeId)
+	return nil
+}
+
 func (f *feature) theVolumeLimitIsSet() error {
 	if f.err != nil {
 		return f.err
@@ -2096,10 +2474,10 @@ func (f *feature) iCallDeleteVolumeWith(arg1 string) error {
 		req = f.getControllerDeleteVolumeRequest(arg1)
 		f.deleteVolumeRequest = req
 	}
-	log.Printf("Calling DeleteVolume")
+	log.Infof("Calling DeleteVolume")
 	f.deleteVolumeResponse, f.err = f.service.DeleteVolume(ctx, req)
 	if f.err != nil {
-		log.Printf("DeleteVolume called failed: %s\n", f.err.Error())
+		log.Infof("DeleteVolume called failed: %s\n", f.err.Error())
 	}
 	return nil
 }
@@ -2111,10 +2489,10 @@ func (f *feature) iCallDeleteVolumeWithBad(arg1 string) error {
 		req = f.getControllerDeleteVolumeRequestBad(arg1)
 		f.deleteVolumeRequest = req
 	}
-	log.Printf("Calling DeleteVolume")
+	log.Infof("Calling DeleteVolume")
 	f.deleteVolumeResponse, f.err = f.service.DeleteVolume(ctx, req)
 	if f.err != nil {
-		log.Printf("DeleteVolume called failed: %s\n", f.err.Error())
+		log.Infof("DeleteVolume called failed: %s\n", f.err.Error())
 	}
 	return nil
 }
@@ -2126,10 +2504,10 @@ func (f *feature) iCallDeleteVolumeNFSWith(arg1 string) error {
 		req = f.getControllerDeleteVolumeRequestNFS(arg1)
 		f.deleteVolumeRequest = req
 	}
-	log.Printf("Calling DeleteVolume")
+	log.Infof("Calling DeleteVolume")
 	f.deleteVolumeResponse, f.err = f.service.DeleteVolume(ctx, req)
 	if f.err != nil {
-		log.Printf("DeleteVolume called failed: %s\n", f.err.Error())
+		log.Infof("DeleteVolume called failed: %s\n", f.err.Error())
 	}
 	return nil
 }
@@ -2182,10 +2560,10 @@ func (f *feature) iCallGetCapacityWithStoragePool(arg1 string) error {
 		parameters[KeyStoragePool] = arg1
 		req.Parameters = parameters
 	}
-	log.Printf("Calling GetCapacity")
+	log.Infof("Calling GetCapacity")
 	f.getCapacityResponse, f.err = f.service.GetCapacity(ctx, req)
 	if f.err != nil {
-		log.Printf("GetCapacity call failed: %s\n", f.err.Error())
+		log.Infof("GetCapacity call failed: %s\n", f.err.Error())
 		return nil
 	}
 	return nil
@@ -2206,10 +2584,10 @@ func (f *feature) iCallGetCapacityWithAvailabilityZone(zoneLabelKey, zoneName st
 		},
 	}
 
-	log.Printf("Calling GetCapacity")
+	log.Infof("Calling GetCapacity")
 	f.getCapacityResponse, f.err = f.service.GetCapacity(ctx, req)
 	if f.err != nil {
-		log.Printf("GetCapacity call failed: %s\n", f.err.Error())
+		log.Infof("GetCapacity call failed: %s\n", f.err.Error())
 		return nil
 	}
 	return nil
@@ -2219,7 +2597,7 @@ func (f *feature) iCallGetMaximumVolumeSize(arg1 string) {
 	systemid := arg1
 	f.maxVolSize, f.err = f.service.getMaximumVolumeSize(systemid)
 	if f.err != nil {
-		log.Printf("err while getting max vol size: %s\n", f.err.Error())
+		log.Infof("err while getting max vol size: %s\n", f.err.Error())
 	}
 }
 
@@ -2259,10 +2637,10 @@ func (f *feature) iCallControllerGetCapabilities(isHealthMonitorEnabled string) 
 	}
 	ctx := context.Background()
 	req := new(csi.ControllerGetCapabilitiesRequest)
-	log.Printf("Calling ControllerGetCapabilities")
+	log.Infof("Calling ControllerGetCapabilities")
 	f.controllerGetCapabilitiesResponse, f.err = f.service.ControllerGetCapabilities(ctx, req)
 	if f.err != nil {
-		log.Printf("ControllerGetCapabilities call failed: %s\n", f.err.Error())
+		log.Infof("ControllerGetCapabilities call failed: %s\n", f.err.Error())
 		return f.err
 	}
 	return nil
@@ -2340,10 +2718,10 @@ func (f *feature) iCallListVolumesWith(maxEntriesString, startingToken string) e
 
 		f.listVolumesRequest = req
 	}
-	log.Printf("Calling ListVolumes with req=%+v", f.listVolumesRequest)
+	log.Infof("Calling ListVolumes with req=%+v", f.listVolumesRequest)
 	f.listVolumesResponse, f.err = f.service.ListVolumes(ctx, req)
 	if f.err != nil {
-		log.Printf("ListVolume called failed: %s\n", f.err.Error())
+		log.Infof("ListVolume called failed: %s\n", f.err.Error())
 	} else {
 		f.listVolumesNextTokenCache = f.listVolumesResponse.NextToken
 	}
@@ -2471,7 +2849,7 @@ func (f *feature) iCallValidateVolumeCapabilitiesWithVoltypeAccessFstype(voltype
 	capabilities := make([]*csi.VolumeCapability, 0)
 	capabilities = append(capabilities, capability)
 	req.VolumeCapabilities = capabilities
-	log.Printf("Calling ValidateVolumeCapabilities %#v", accessMode)
+	log.Infof("Calling ValidateVolumeCapabilities %#v", accessMode)
 	f.validateVolumeCapabilitiesResponse, f.err = f.service.ValidateVolumeCapabilities(ctx, req)
 	if f.err != nil {
 		return nil
@@ -2611,17 +2989,24 @@ func (f *feature) aControllerPublishedEphemeralVolume() error {
 	_, err = os.Stat(nodePublishEphemDevPath)
 	_, err2 := os.Stat(nodePublishSymlinkDir + "/emc-vol" + "-" + mdmIDEphem + "-" + ephemVolumeSDC)
 	if err != nil || err2 != nil {
-		cmd := exec.Command("mknod", nodePublishEphemDevPath, "b", "0", "0")
-		output, err := cmd.CombinedOutput()
+		file, err := os.Create(nodePublishEphemDevPath)
 		if err != nil {
-			fmt.Printf("scinic: %s\n", err.Error())
+			fmt.Printf("couldn't create file: %s: %v\n", nodePublishEphemDevPath, err)
 		}
-		fmt.Printf("mknod output: %s\n", output)
+
+		defer func() {
+			file.Close()
+		}()
+
+		// Optionally set permissions to mimic a device node
+		if err := os.Chmod(nodePublishEphemDevPath, 0o750); err != nil {
+			fmt.Printf("Failed to set permissions on mock device file %s: %v\n", nodePublishEphemDevPath, err)
+		}
 
 		// Make the symlink
-		cmdstring := fmt.Sprintf("cd %s; ln -s ../../scinic emc-vol-%s-%s", nodePublishSymlinkDir, mdmIDEphem, ephemVolumeSDC)
+		cmdstring := fmt.Sprintf("cd %s; ln -s %s emc-vol-%s-%s", nodePublishSymlinkDir, nodePublishEphemDevPath, mdmIDEphem, ephemVolumeSDC)
 		cmd = exec.Command("sh", "-c", cmdstring)
-		output, err = cmd.CombinedOutput()
+		output, err := cmd.CombinedOutput()
 		fmt.Printf("symlink output: %s\n", output)
 		if err != nil {
 			fmt.Printf("link: %s\n", err.Error())
@@ -2653,8 +3038,6 @@ func (f *feature) aControllerPublishedEphemeralVolume() error {
 	goscaleio.FSDevDirectoryPrefix = "test"
 	// Empty WindowsMounts in gofsutil
 	gofsutil.GOFSMockMounts = gofsutil.GOFSMockMounts[:0]
-	// Set variables in mount for unit testing
-	unitTestEmulateBlockDevice = true
 	return nil
 }
 
@@ -2689,18 +3072,49 @@ func (f *feature) controllerPublishVolume() {
 		fmt.Printf("removed private staging directory\n")
 	}
 
+	// remove the devices so that they can be re-created for each test
+	dir, err := os.ReadDir(getTargetPathPrefix())
+	if err != nil {
+		fmt.Printf("couldn't read device directory: %s: %v\n", getTargetPathPrefix(), err)
+	}
+	for _, d := range dir {
+		os.RemoveAll(filepath.Join(getTargetPathPrefix(), d.Name()))
+	}
+
 	// Make the block device
 	_, err = os.Stat(nodePublishBlockDevicePath)
 	if err != nil {
-		cmd := exec.Command("mknod", nodePublishBlockDevicePath, "b", "0", "0")
-		output, err := cmd.CombinedOutput()
+		file, err := os.Create(nodePublishBlockDevicePath)
 		if err != nil {
-			fmt.Printf("scinia: %s\n", err.Error())
+			fmt.Printf("couldn't create file: %s: %v\n", nodePublishBlockDevicePath, err)
 		}
-		fmt.Printf("mknod output: %s\n", output)
+
+		defer func() {
+			file.Close()
+		}()
+
+		// Optionally set permissions to mimic a device node
+		if err := os.Chmod(nodePublishBlockDevicePath, 0o750); err != nil {
+			fmt.Printf("Failed to set permissions on mock device file %s: %v\n", nodePublishBlockDevicePath, err)
+		}
 
 		// Make the symlink
-		cmdstring := fmt.Sprintf("cd %s; ln -s ../../scinia emc-vol-%s-%s", nodePublishSymlinkDir, mdmID, sdcVolume1)
+		cmdstring := fmt.Sprintf("cd %s; ln -s %s emc-vol-%s-%s", nodePublishSymlinkDir, nodePublishBlockDevicePath, mdmID, sdcVolume1)
+		cmd = exec.Command("sh", "-c", cmdstring)
+		output, err := cmd.CombinedOutput()
+		fmt.Printf("symlink output: %s\n", output)
+		if err != nil {
+			fmt.Printf("link: %s\n", err.Error())
+			err = nil
+		}
+
+		linkTarget, err := os.Readlink(fmt.Sprintf("%s/emc-vol-%s-%s", nodePublishSymlinkDir, mdmID, sdcVolume1))
+		if err != nil {
+			fmt.Printf("Symlink not created correctly: %v\n", err)
+		}
+		fmt.Printf("Symlink points to: %s\n", linkTarget)
+
+		cmdstring = fmt.Sprintf("cd %s; ln -s %s nvme-eui.%s", nodePublishSymlinkDir, nodePublishBlockDevicePath, nvmeNguid)
 		cmd = exec.Command("sh", "-c", cmdstring)
 		output, err = cmd.CombinedOutput()
 		fmt.Printf("symlink output: %s\n", output)
@@ -2708,6 +3122,12 @@ func (f *feature) controllerPublishVolume() {
 			fmt.Printf("link: %s\n", err.Error())
 			err = nil
 		}
+
+		linkTarget, err = os.Readlink(fmt.Sprintf("%s/nvme-eui.%s", nodePublishSymlinkDir, nvmeNguid))
+		if err != nil {
+			fmt.Printf("Symlink not created correctly: %v\n", err)
+		}
+		fmt.Printf("Symlink points to: %s\n", linkTarget)
 	}
 
 	// Make the target directory if required
@@ -2734,8 +3154,6 @@ func (f *feature) controllerPublishVolume() {
 	goscaleio.FSDevDirectoryPrefix = "test"
 	// Empty WindowsMounts in gofsutil
 	gofsutil.GOFSMockMounts = gofsutil.GOFSMockMounts[:0]
-	// Set variables in mount for unit testing
-	unitTestEmulateBlockDevice = true
 }
 
 func (f *feature) twoIdenticalVolumesOnTwoDifferentSystems() error {
@@ -2762,7 +3180,7 @@ func (f *feature) twoIdenticalVolumesOnTwoDifferentSystems() error {
 }
 
 func (f *feature) iCreateFalseEphemeralID() error {
-	fakeEphemeralIDFolder := ephemeralStagingMountPath + mdmIDEphem
+	fakeEphemeralIDFolder := filepath.Join(ephemeralStagingMountPath, mdmIDEphem)
 
 	_, err := os.Stat(fakeEphemeralIDFolder)
 	if err != nil {
@@ -2805,12 +3223,24 @@ func (f *feature) iCreateFalseEphemeralID() error {
 	return nil
 }
 
+func (f *feature) getNodeStageVolumeRequest() error {
+	req := new(csi.NodeStageVolumeRequest)
+	req.VolumeId = sdcVolume1
+	req.StagingTargetPath = stageDir
+	req.VolumeCapability = f.capability
+	f.nodeStageVolumeRequest = req
+	return nil
+}
+
 func (f *feature) getNodeEphemeralVolumePublishRequest(name, size, sp, systemName string) error {
 	req := new(csi.NodePublishVolumeRequest)
 	req.VolumeId = sdcVolume1
 	req.Readonly = false
 	req.VolumeCapability = f.capability
 	f.service.opts.defaultSystemID = ""
+	if f.service.useNVME {
+		f.service.nodeID = goodNodeIDNVMe
+	}
 	req.VolumeContext = map[string]string{"csi.storage.k8s.io/ephemeral": "true", "volumeName": name, "size": size, "storagepool": sp, "systemID": systemName}
 
 	// remove ephemeral mounting path before starting test
@@ -2843,6 +3273,33 @@ func (f *feature) getNodePublishVolumeRequest() error {
 		req.TargetPath = datadir
 	}
 
+	f.nodePublishVolumeRequest = req
+	return nil
+}
+
+func (f *feature) getNodePublishVolumeRequestNVME(voltype string) error {
+	req := new(csi.NodePublishVolumeRequest)
+	req.VolumeId = sdcVolume1
+
+	switch voltype {
+	case "block":
+		req.Readonly = false
+	case "mount":
+		req.Readonly = true
+	}
+
+	gofsutil.GOFSMockWWNToDevice = map[string]string{nvmeNguid: nodePublishBlockDevicePath}
+
+	req.VolumeCapability = f.capability
+	block := f.capability.GetBlock()
+	if block != nil {
+		req.TargetPath = datafile
+	}
+	mount := f.capability.GetMount()
+	if mount != nil {
+		req.TargetPath = datadir
+	}
+	req.StagingTargetPath = stageDir
 	f.nodePublishVolumeRequest = req
 	return nil
 }
@@ -2934,6 +3391,32 @@ func (f *feature) iCallNodePublishVolume(arg1 string) error {
 }
 
 //nolint:revive
+func (f *feature) iCallNodePublishVolumeNVME(volType string) error {
+	header := metadata.New(map[string]string{"csi.requestid": "1"})
+	ctx := metadata.NewIncomingContext(context.Background(), header)
+	req := f.nodePublishVolumeRequest
+	f.service.useNVME = true
+	if req == nil {
+		fmt.Printf("Request was Nil \n")
+		_ = f.getNodePublishVolumeRequestNVME(volType)
+		req = f.nodePublishVolumeRequest
+	}
+
+	fmt.Printf("Calling NodePublishVolume\n")
+	fmt.Printf("nodePV req is: %v \n", req)
+	_, err := f.service.NodePublishVolume(ctx, req)
+	if err != nil {
+		fmt.Printf("NodePublishVolume failed: %s\n", err.Error())
+		if f.err == nil {
+			f.err = err
+		}
+	} else {
+		fmt.Printf("NodePublishVolume completed successfully\n")
+	}
+	return nil
+}
+
+//nolint:revive
 func (f *feature) iCallNodePublishVolumeNFS(arg1 string) error {
 	header := metadata.New(map[string]string{"csi.requestid": "1"})
 	ctx := metadata.NewIncomingContext(context.Background(), header)
@@ -3002,7 +3485,7 @@ func (f *feature) iCallUnmountPrivMount() error {
 
 func (f *feature) iCallGetPathMounts() error {
 	gofsutil.GOFSMock.InduceGetMountsError = true
-	_, err := getPathMounts("/foo/bar")
+	_, err := getPathMounts(context.Background(), "/foo/bar")
 	fmt.Printf(" getPathMounts error : %s\n", err)
 	// getMounts induced err
 	if err != nil {
@@ -3118,7 +3601,7 @@ func (f *feature) iCallMountValidateVolCapabilities() error {
 
 func (f *feature) iCallCleanupPrivateTargetForErrors() error {
 	gofsutil.GOFSMock.InduceDevMountsError = true
-	sysdevice, _ := GetDevice("test/dev/scinia")
+	sysdevice, _ := GetDevice(nodePublishBlockDevicePath)
 	err := cleanupPrivateTarget(sysdevice, "1", "features/d0f055a700000000")
 	if err != nil {
 		fmt.Printf("Cleanupprivatetarget getDevice error : %s\n", err.Error())
@@ -3148,7 +3631,7 @@ func (f *feature) iCallCleanupPrivateTargetForErrors() error {
 }
 
 func (f *feature) iCallCleanupPrivateTarget() error {
-	sysdevice, terr := GetDevice("test/dev/scinia")
+	sysdevice, terr := GetDevice(nodePublishBlockDevicePath)
 	if terr != nil {
 		return terr
 	}
@@ -3176,8 +3659,6 @@ func (f *feature) iCallUnmountAndDeleteTarget() error {
 }
 
 func (f *feature) iCallEphemeralNodePublish() error {
-	save := ephemeralStagingMountPath
-	ephemeralStagingMountPath = "/tmp"
 	header := metadata.New(map[string]string{"csi.requestid": "1"})
 	ctx := metadata.NewIncomingContext(context.Background(), header)
 	req := new(csi.NodePublishVolumeRequest)
@@ -3190,7 +3671,6 @@ func (f *feature) iCallEphemeralNodePublish() error {
 			f.err = err
 		}
 	}
-	ephemeralStagingMountPath = save
 	return nil
 }
 
@@ -3203,9 +3683,13 @@ func (f *feature) iCallEphemeralNodeUnpublish() error {
 	if stepHandlersErrors.NoVolumeIDError {
 		req.VolumeId = ""
 	}
+	err := os.MkdirAll(ephemeralStagingMountPath+"/"+goodVolumeID+"/id", 0o777)
+	if err != nil {
+		return err
+	}
 
 	fmt.Printf("Calling ephemeralNodeUnpublishiVolume\n")
-	err := f.service.ephemeralNodeUnpublish(ctx, req)
+	err = f.service.ephemeralNodeUnpublish(ctx, req)
 	if err != nil {
 		fmt.Printf("ephemeralNodeUnpublishVolume failed: %s\n", err.Error())
 		if f.err == nil {
@@ -3226,6 +3710,13 @@ func (f *feature) iCallNodeUnpublishVolume(arg1 string) error {
 	req.VolumeId = f.nodePublishVolumeRequest.VolumeId
 	req.TargetPath = f.nodePublishVolumeRequest.TargetPath
 	fmt.Printf("Calling NodeUnpublishVolume\n")
+	if stepHandlersErrors.BadVolIDError {
+		req.VolumeId = badVolumeID
+	}
+	if arg1 == "NVMeTCP" {
+		f.service.useNVME = true
+		f.service.nodeID = goodNodeIDNVMe
+	}
 	_, err := f.service.NodeUnpublishVolume(ctx, req)
 	if err != nil {
 		fmt.Printf("NodeUnpublishVolume failed: %s\n", err.Error())
@@ -3259,7 +3750,7 @@ func (f *feature) thereIsMount(path string) {
 		split := strings.Split(path, ",")
 		for _, p := range split {
 			gofsutil.GOFSMockMounts = append(gofsutil.GOFSMockMounts, gofsutil.Info{
-				Device: "test/dev/scinia",
+				Device: nodePublishBlockDevicePath,
 				Path:   p,
 			})
 		}
@@ -3296,17 +3787,17 @@ func (f *feature) theConfigMapIsUpdated() error {
 
 	tmpFile, err := os.Create("driver-config-params.yaml")
 	if err != nil {
-		Log.Errorf("Error creating temp file: %v", err)
+		log.Errorf("Error creating temp file: %v", err)
 	}
 	if _, err := tmpFile.Write([]byte(data)); err != nil {
-		Log.Errorf("Error writing to temp file: %v", err)
+		log.Errorf("Error writing to temp file: %v", err)
 	}
 
 	if !stepHandlersErrors.ConfigMapNotFoundError {
 		// Create a ConfigMap using fake ClientSet
 		_, err = clientSet.CoreV1().ConfigMaps(DriverNamespace).Create(context.TODO(), configMap, metav1.CreateOptions{})
 		if err != nil {
-			Log.Errorf("failed to create configmap: %v", err)
+			log.Errorf("failed to create configmap: %v", err)
 		}
 	}
 
@@ -3341,6 +3832,8 @@ func setUpBeforeServeContext() (interface{}, []string) {
 	stringSlice = append(stringSlice, "X_CSI_REPLICATION_PREFIX=test")
 	stringSlice = append(stringSlice, "X_CSI_POWERFLEX_EXTERNAL_ACCESS=test")
 	stringSlice = append(stringSlice, "X_CSI_VXFLEXOS_THICKPROVISIONING=dummy")
+	stringSlice = append(stringSlice, "X_CSI_PODMON_ENABLED=true")
+	stringSlice = append(stringSlice, "X_CSI_PODMON_ARRAY_CONNECTIVITY_POLL_RATE=dummy")
 
 	if os.Getenv("ALLOW_RWO_MULTI_POD") == "true" {
 		fmt.Printf("debug set ALLOW_RWO_MULTI_POD\n")
@@ -3390,9 +3883,24 @@ func (f *feature) executeBeforeServe(ctx context.Context) error {
 }
 
 func (f *feature) iCallNodeStageVolume() error {
-	ctx := context.Background()
-	req := new(csi.NodeStageVolumeRequest)
-	_, f.err = f.service.NodeStageVolume(ctx, req)
+	header := metadata.New(map[string]string{"csi.requestid": "1"})
+	ctx := metadata.NewIncomingContext(context.Background(), header)
+	if f.nodeStageVolumeRequest == nil {
+		fmt.Printf("NodeStageVolumeRequest was nil \n")
+		_ = f.getNodeStageVolumeRequest()
+	}
+
+	fmt.Println("Calling NodeStageVolume")
+	_, err := f.service.NodeStageVolume(ctx, f.nodeStageVolumeRequest)
+
+	if err != nil {
+		fmt.Println("NodeStageVolume failed: ", err.Error())
+		if f.err == nil {
+			f.err = err
+		}
+	} else {
+		fmt.Println("NodeStageVolume completed successfully")
+	}
 	return nil
 }
 
@@ -3433,7 +3941,7 @@ func (f *feature) iCallNodeExpandVolume(volPath string) error {
 		req.VolumeId = badCsiVolumeID
 	} else if stepHandlersErrors.EmptySysID {
 		req.VolumeId = goodVolumeID
-	} else if stepHandlersErrors.BadVolIDError {
+	} else if stepHandlersErrors.IncorrectVolID {
 		req.VolumeId = badVolumeID
 	}
 	_, f.err = f.service.NodeExpandVolume(ctx, req)
@@ -3546,7 +4054,6 @@ func (f *feature) aCorrectNodeGetVolumeStatsResponse() error {
 
 func (f *feature) iCallNodeUnstageVolumeWith(errStr string) error {
 	// Save the ephemeralStagingMountPath to restore below
-	ephemeralPath := ephemeralStagingMountPath
 	header := metadata.New(map[string]string{"csi.requestid": "1"})
 	if errStr == "NoRequestID" {
 		header = metadata.New(map[string]string{"csi.requestid": ""})
@@ -3557,7 +4064,7 @@ func (f *feature) iCallNodeUnstageVolumeWith(errStr string) error {
 	if errStr == "NoVolumeID" {
 		req.VolumeId = ""
 	}
-	req.StagingTargetPath = datadir
+	req.StagingTargetPath = stageDir
 	if errStr == "NoStagingTarget" {
 		req.StagingTargetPath = ""
 	}
@@ -3567,14 +4074,13 @@ func (f *feature) iCallNodeUnstageVolumeWith(errStr string) error {
 	}
 	if errStr == "EphemeralVolume" {
 		// Create an ephemeral volume id
-		ephemeralStagingMountPath = "test/"
-		err := os.MkdirAll("test"+"/"+goodVolumeID+"/id", 0o777)
+		// ephemeralStagingMountPath = "test/"
+		err := os.MkdirAll(ephemeralStagingMountPath+"/"+goodVolumeID+"/id", 0o777)
 		if err != nil {
 			return err
 		}
 	}
 	_, f.err = f.service.NodeUnstageVolume(ctx, req)
-	ephemeralStagingMountPath = ephemeralPath
 	os.Remove("test" + "/" + goodVolumeID + "/id")
 	return nil
 }
@@ -3610,16 +4116,18 @@ func (f *feature) aValidNodeGetCapabilitiesResponseIsReturned() error {
 				count = count + 1
 			case csi.NodeServiceCapability_RPC_GET_VOLUME_STATS:
 				count = count + 1
+			case csi.NodeServiceCapability_RPC_STAGE_UNSTAGE_VOLUME:
+				count = count + 1
 			default:
 				return fmt.Errorf("received unxexpcted capability: %v", typex)
 			}
 		}
 
-		if f.service.opts.IsHealthMonitorEnabled && count != 4 {
+		if f.service.opts.IsHealthMonitorEnabled && count != 5 {
 			// Set default value
 			f.service.opts.IsHealthMonitorEnabled = false
 			return errors.New("Did not retrieve all the expected capabilities")
-		} else if !f.service.opts.IsHealthMonitorEnabled && count != 2 {
+		} else if !f.service.opts.IsHealthMonitorEnabled && count != 3 {
 			return errors.New("Did not retrieve all the expected capabilities")
 		}
 		// Set default value
@@ -3725,7 +4233,7 @@ func (f *feature) iCallControllerGetVolume() error {
 	f.ControllerGetVolumeResponse, f.err = f.service.ControllerGetVolume(ctx, req)
 
 	if f.err != nil {
-		log.Printf("Controller GetVolume call failed: %s\n", f.err.Error())
+		log.Infof("Controller GetVolume call failed: %s\n", f.err.Error())
 	}
 	fmt.Printf("Response from ControllerGetVolume is %v", f.ControllerGetVolumeResponse)
 	return nil
@@ -4029,10 +4537,10 @@ func (f *feature) iCallListSnapshotsWithMaxentriesAndStartingtoken(maxEntriesStr
 	req := &csi.ListSnapshotsRequest{MaxEntries: int32(maxEntries), StartingToken: startingTokenString}
 
 	f.listSnapshotsRequest = req
-	log.Printf("Calling ListSnapshots with req=%+v", f.listVolumesRequest)
+	log.Infof("Calling ListSnapshots with req=%+v", f.listVolumesRequest)
 	f.listSnapshotsResponse, f.err = f.service.ListSnapshots(ctx, req)
 	if f.err != nil {
-		log.Printf("ListSnapshots called failed: %s\n", f.err.Error())
+		log.Infof("ListSnapshots called failed: %s\n", f.err.Error())
 	}
 	return nil
 }
@@ -4054,10 +4562,10 @@ func (f *feature) iCallListSnapshotsForVolume(arg1 string) error {
 	}
 
 	f.listSnapshotsRequest = req
-	log.Printf("Calling ListSnapshots with req=%+v", f.listSnapshotsRequest)
+	log.Infof("Calling ListSnapshots with req=%+v", f.listSnapshotsRequest)
 	f.listSnapshotsResponse, f.err = f.service.ListSnapshots(ctx, req)
 	if f.err != nil {
-		log.Printf("ListSnapshots called failed: %s\n", f.err.Error())
+		log.Infof("ListSnapshots called failed: %s\n", f.err.Error())
 	}
 	return nil
 }
@@ -4066,10 +4574,10 @@ func (f *feature) iCallListSnapshotsForSnapshot(arg1 string) error {
 	ctx := context.Background()
 	req := &csi.ListSnapshotsRequest{SnapshotId: arg1}
 	f.listSnapshotsRequest = req
-	log.Printf("Calling ListSnapshots with req=%+v", f.listVolumesRequest)
+	log.Infof("Calling ListSnapshots with req=%+v", f.listVolumesRequest)
 	f.listSnapshotsResponse, f.err = f.service.ListSnapshots(ctx, req)
 	if f.err != nil {
-		log.Printf("ListSnapshots called failed: %s\n", f.err.Error())
+		log.Infof("ListSnapshots called failed: %s\n", f.err.Error())
 	}
 	return nil
 }
@@ -4463,7 +4971,7 @@ func (f *feature) iCallGetReplicationCapabilities() error {
 	req := &replication.GetReplicationCapabilityRequest{}
 	ctx := context.Background()
 	f.replicationCapabilitiesResponse, f.err = f.service.GetReplicationCapabilities(ctx, req)
-	log.Printf("GetReplicationCapabilities returned %+v", f.replicationCapabilitiesResponse)
+	log.Infof("GetReplicationCapabilities returned %+v", f.replicationCapabilitiesResponse)
 	return nil
 }
 
@@ -4574,6 +5082,36 @@ func (f *feature) iCallCreateRemoteVolume() error {
 	return nil
 }
 
+func (f *feature) iCallCreateRemoteVolumeWithError(errorMessage string) error {
+	ctx := context.Background()
+	req := &replication.CreateRemoteVolumeRequest{}
+	if f.createVolumeResponse == nil {
+		return errors.New("iCallCreateRemoteVolume: f.createVolumeResponse is nil")
+	}
+	req.VolumeHandle = f.createVolumeResponse.Volume.VolumeId
+	if stepHandlersErrors.NoVolIDError {
+		req.VolumeHandle = ""
+	}
+	if stepHandlersErrors.BadVolIDError {
+		req.VolumeHandle = "/"
+	}
+	req.Parameters = map[string]string{
+		f.service.WithRP(KeyReplicationRemoteStoragePool): "viki_pool_HDD_20181031",
+		f.service.WithRP(KeyReplicationRemoteSystem):      "15dbbf5617523655",
+	}
+	_, f.err = f.service.CreateRemoteVolume(ctx, req)
+
+	if f.err != nil {
+		if strings.Contains(f.err.Error(), errorMessage) {
+			log.Infof("Expected Error Message Found: %s\n", f.err.Error())
+		} else {
+			return fmt.Errorf("expected error message not found: %s in the error: %s", errorMessage, f.err.Error())
+		}
+	}
+
+	return nil
+}
+
 func (f *feature) iCallDeleteLocalVolume(name string) error {
 	ctx := context.Background()
 
@@ -4587,7 +5125,7 @@ func (f *feature) iCallDeleteLocalVolume(name string) error {
 		volumeHandle = "/"
 	}
 
-	log.Printf("iCallDeleteLocalVolume name %s to ID %s", name, volumeHandle)
+	log.Infof("iCallDeleteLocalVolume name %s to ID %s", name, volumeHandle)
 
 	req := &replication.DeleteLocalVolumeRequest{
 		VolumeHandle: volumeHandle,
@@ -4712,7 +5250,7 @@ func (f *feature) iCallDeleteVolume(name string) error {
 	ctx := context.Background()
 	req := f.getControllerDeleteVolumeRequest("single-writer")
 	id := arrayID + "-" + volumeNameToID[name]
-	log.Printf("iCallDeleteVolume name %s to ID %s", name, id)
+	log.Infof("iCallDeleteVolume name %s to ID %s", name, id)
 	req.VolumeId = id
 	f.deleteVolumeResponse, f.err = f.service.DeleteVolume(ctx, req)
 	if f.err != nil {
@@ -4883,6 +5421,71 @@ func (f *feature) iCallIsNFSEnabled(systemID string) error {
 	return nil
 }
 
+func (f *feature) iCallgetArrayVersion(systemID string) error {
+	ctx := context.Background()
+	f.checkGoRoutines("start aVxFlexOSService")
+
+	// Save off the admin client and the system
+	if f.service != nil {
+		adminClient := f.service.adminClients[systemID]
+		if adminClient != nil {
+			f.adminClient = adminClient
+			f.adminClient.SetToken("xxxx")
+		}
+
+		system := f.service.systems[systemID]
+		if system != nil {
+			f.system = system
+		}
+	}
+
+	ver, err := f.service.getArrayVersion(ctx, systemID)
+	f.err = err
+	fmt.Printf("Array Version: %v\n", ver)
+	return nil
+}
+
+func (f *feature) iCallSetupNVMeHostWithNVMeInitiators(initiatorsStr string) error {
+	var nvmeInitiators []string
+	if initiatorsStr != "" {
+		nvmeInitiators = strings.Split(initiatorsStr, ",")
+		for i := range nvmeInitiators {
+			nvmeInitiators[i] = strings.TrimSpace(nvmeInitiators[i])
+		}
+	}
+
+	f.checkGoRoutines("start aVxFlexOSService")
+
+	// Save off the admin client and the system
+	if f.service != nil {
+		adminClient := f.service.adminClients[arrayID]
+		if adminClient != nil {
+			f.adminClient = adminClient
+			f.adminClient.SetToken("xxxx")
+		}
+
+		system := f.service.systems[arrayID]
+		if system != nil {
+			f.system = system
+		}
+	}
+
+	// Setup array config
+	f.service.opts.arrays = map[string]*ArrayConnectionData{
+		arrayID: {
+			SystemID:      arrayID,
+			BlockProtocol: NVMeTCP,
+		},
+	}
+
+	f.service.opts.KubeNodeName = "node2"
+	clientSet := fake.NewSimpleClientset()
+	K8sClientset = clientSet
+	f.CreateKubernetesNode(K8sClientset, "node2")
+	f.err = f.service.setupNVMeHost(nvmeInitiators, arrayID)
+	return nil
+}
+
 func getZoneEnabledRequest(zoneLabelName string) *csi.CreateVolumeRequest {
 	req := new(csi.CreateVolumeRequest)
 	params := make(map[string]string)
@@ -4921,11 +5524,11 @@ func (f *feature) iCallCreateVolumeWithZones(name string) error {
 
 	f.createVolumeResponse, f.err = f.service.CreateVolume(ctx, req)
 	if f.err != nil {
-		log.Printf("CreateVolume with zones called failed: %s\n", f.err.Error())
+		log.Infof("CreateVolume with zones called failed: %s\n", f.err.Error())
 	}
 
 	if f.createVolumeResponse != nil {
-		log.Printf("vol id %s\n", f.createVolumeResponse.GetVolume().VolumeId)
+		log.Infof("vol id %s\n", f.createVolumeResponse.GetVolume().VolumeId)
 	}
 	return nil
 }
@@ -4956,7 +5559,7 @@ func (f *feature) aValidNodeGetInfoIsReturnedWithNodeTopology() error {
 
 func (f *feature) aNodeGetInfoIsReturnedWithoutZoneTopology() error {
 	accessibility := f.nodeGetInfoResponse.GetAccessibleTopology()
-	Log.Printf("Node Accessibility %+v", accessibility)
+	log.Infof("Node Accessibility %+v", accessibility)
 	if _, ok := accessibility.Segments[f.service.opts.zoneLabelKey]; ok {
 		return fmt.Errorf("zone found")
 	}
@@ -4965,7 +5568,7 @@ func (f *feature) aNodeGetInfoIsReturnedWithoutZoneTopology() error {
 
 func (f *feature) aNodeGetInfoIsReturnedWithoutZoneSystemTopology() error {
 	accessibility := f.nodeGetInfoResponse.GetAccessibleTopology()
-	Log.Printf("Node Accessibility %+v", accessibility)
+	log.Infof("Node Accessibility %+v", accessibility)
 
 	for _, array := range f.service.opts.arrays {
 		if _, ok := accessibility.Segments[Name+"/"+array.SystemID]; ok {
@@ -4975,10 +5578,29 @@ func (f *feature) aNodeGetInfoIsReturnedWithoutZoneSystemTopology() error {
 	return nil
 }
 
+func (f *feature) iSetProtocolTo(protocol string) error {
+	f.protocol = protocol
+	f.service.useNVME = false
+	f.service.useSDC = false
+	switch protocol {
+	case SDC:
+		f.service.useSDC = true
+	case NVMeTCP:
+		f.service.opts.SdcGUID = ""
+		f.service.useNVME = true
+	default:
+		fmt.Printf("unknown protocol %s", protocol)
+	}
+	return nil
+}
+
 func FeatureContext(s *godog.ScenarioContext) {
 	f := &feature{}
 
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
+	s.Step(`^I set Platform Info "([^"]*)" "([^"]*)" "([^"]*)" "([^"]*)"$`, f.setPlatformInfo)
+	s.Step(`^I reset the Platform Info$`, f.resetPlatformInfo)
+	s.Step(`^I set Provision to "([^"]*)"$`, f.iSetProvisionTo)
 	s.Step(`^a VxFlexOS service with timeout (\d+) milliseconds$`, f.aVxFlexOSServiceWithTimeoutMilliseconds)
 	s.Step(`^I call GetPluginInfo$`, f.iCallGetPluginInfo)
 	s.Step(`^I call DynamicArrayChange$`, f.iCallDynamicArrayChange)
@@ -5002,11 +5624,12 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^there is a Node Probe SdcGUID error$`, f.thereIsANodeProbeSdcGUIDError)
 	s.Step(`^there is a Node Probe drvCfg error$`, f.thereIsANodeProbeDrvCfgError)
 	s.Step(`^I call CreateVolume "([^"]*)"$`, f.iCallCreateVolume)
+	s.Step(`^I call CreateVolume "([^"]*)" with Error "([^"]*)"$`, f.iCallCreateVolumeWithError)
 	s.Step(`^I call ValidateConnectivity$`, f.iCallValidateVolumeHostConnectivity)
 	s.Step(`^a valid CreateVolumeResponse is returned$`, f.aValidCreateVolumeResponseIsReturned)
 	s.Step(`^I specify AccessibilityRequirements with a SystemID of "([^"]*)"$`, f.iSpecifyAccessibilityRequirementsWithASystemIDOf)
 	s.Step(`^I specify NFS AccessibilityRequirements with a SystemID of "([^"]*)"$`, f.iSpecifyAccessibilityRequirementsNFSWithASystemIDOf)
-	s.Step(`^I specify bad NFS AccessibilityRequirements with a SystemID of "([^"]*)"$`, f.iSpecifyBadAccessibilityRequirementsNFSWithASystemIDOf)
+	s.Step(`^I specify bad AccessibilityRequirements with a SystemID of "([^"]*)"$`, f.iSpecifyBadAccessibilityRequirementsWithASystemIDOf)
 	s.Step(`^a valid CreateVolumeResponse with topology is returned$`, f.aValidCreateVolumeResponseWithTopologyIsReturned)
 	s.Step(`^I specify MULTINODE_WRITER$`, f.iSpecifyMULTINODEWRITER)
 	s.Step(`^I specify a BadCapacity$`, f.iSpecifyABadCapacity)
@@ -5038,12 +5661,15 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^the number of SDC mappings is (\d+)$`, f.theNumberOfSDCMappingsIs)
 	s.Step(`^I call NodeGetInfo$`, f.iCallNodeGetInfo)
 	s.Step(`^I call Node Probe$`, f.iCallNodeProbe)
+	s.Step(`^I call Node Probe with NVMe flag enabled$`, f.iCallNodeProbeNVMeFlagEnabled)
 	s.Step(`^a valid NodeGetInfoResponse is returned$`, f.aValidNodeGetInfoResponseIsReturned)
 	s.Step(`^a valid NodeGetInfoResponse with node UID is returned$`, f.aValidNodeGetInfoResponseWithNodeUIDIsReturned)
+	s.Step(`^a valid NodeGetInfoResponse with "([^"]*)" in AccessibleTopology is returned$`, f.aValidNodeGetInfoResponseWithTopologyIsReturned)
 	s.Step(`^the Volume limit is set$`, f.theVolumeLimitIsSet)
 	s.Step(`^an invalid MaxVolumesPerNode$`, f.anInvalidMaxVolumesPerNode)
 	s.Step(`^I call GetNodeLabels$`, f.iCallGetNodeLabels)
 	s.Step(`^I call NodeGetInfo with a valid Node UID$`, f.iCallNodeGetInfoWithValidNodeUID)
+	s.Step(`^I call NodeGetInfo with useNVME flag as true$`, f.iCallNodeGetInfoWithNVMeFlagTrue)
 	s.Step(`^a valid label is returned$`, f.aValidLabelIsReturned)
 	s.Step(`^I set invalid EnvMaxVolumesPerNode$`, f.iSetInvalidEnvMaxVolumesPerNode)
 	s.Step(`^I call GetNodeLabels with invalid node$`, f.iCallGetNodeLabelsWithInvalidNode)
@@ -5076,6 +5702,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^a controller published volume$`, f.aControllerPublishedVolume)
 	s.Step(`^a controller published volume with the private target equalling the mount path$`, f.aControllerPublishedVolumeWithPrivateTargetEqualMountPath)
 	s.Step(`^I call NodePublishVolume "([^"]*)"$`, f.iCallNodePublishVolume)
+	s.Step(`^I call NodePublishVolume NVME "([^"]*)"$`, f.iCallNodePublishVolumeNVME)
 	s.Step(`^I call NodePublishVolume NFS "([^"]*)"$`, f.iCallNodePublishVolumeNFS)
 	s.Step(`^I call CleanupPrivateTarget$`, f.iCallCleanupPrivateTarget)
 	s.Step(`^I call removeWithRetry$`, f.iCallRemoveWithRetry)
@@ -5087,7 +5714,9 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call mountValidateBlockVolCapabilities$`, f.iCallMountValidateVolCapabilities)
 	s.Step(`^I call blockValidateMountVolCapabilities$`, f.iCallBlockValidateVolCapabilities)
 	s.Step(`^I call UnmountAndDeleteTarget$`, f.iCallUnmountAndDeleteTarget)
+	s.Step(`^get Node Stage Volume Request$`, f.getNodeStageVolumeRequest)
 	s.Step(`^get Node Publish Volume Request$`, f.getNodePublishVolumeRequest)
+	s.Step(`^get Node Publish Volume Request for NVME "([^"]*)"$`, f.getNodePublishVolumeRequestNVME)
 	s.Step(`^get Node Publish Volume Request NFS$`, f.getNodePublishVolumeRequestNFS)
 	s.Step(`^get Node Publish Ephemeral Volume Request with name "([^"]*)" size "([^"]*)" storagepool "([^"]*)" and systemName "([^"]*)"$`, f.getNodeEphemeralVolumePublishRequest)
 	s.Step(`^I mark request read only$`, f.iMarkRequestReadOnly)
@@ -5181,6 +5810,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I set approveSDC with approveSDCEnabled "([^"]*)"`, f.iSetApproveSdcEnabled)
 	s.Step(`^I set RestrictedSDCMode with "([^"]*)"`, f.iSetRestrictedSDCMode)
 	s.Step(`^I call CreateRemoteVolume$`, f.iCallCreateRemoteVolume)
+	s.Step(`^I call CreateRemoteVolume with Error "([^"]*)"$`, f.iCallCreateRemoteVolumeWithError)
 	s.Step(`^I call DeleteLocalVolume "([^"]*)"$`, f.iCallDeleteLocalVolume)
 	s.Step(`^I call CreateStorageProtectionGroup$`, f.iCallCreateStorageProtectionGroup)
 	s.Step(`^I call CreateStorageProtectionGroup with "([^"]*)", "([^"]*)", "([^"]*)"$`, f.iCallCreateStorageProtectionGroupWith)
@@ -5206,8 +5836,7 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call GetNodeUID$`, f.iCallGetNodeUID)
 	s.Step(`^a valid node uid is returned$`, f.aValidNodeUIDIsReturned)
 	s.Step(`^I call GetNodeUID with invalid node$`, f.iCallGetNodeUIDWithInvalidNode)
-	s.Step(`^I call GetNodeUID with unset KubernetesClient$`, f.iCallGetNodeUIDWithUnsetKubernetesClient)
-
+	s.Step(`^I call GetNodeUID without KubeNodeName$`, f.iCallGetNodeUIDWithoutKubeNodeName)
 	s.Step(`^I call CreateVolume "([^"]*)" with zones$`, f.iCallCreateVolumeWithZones)
 	s.Step(`^I call NodeGetInfo with zone labels$`, f.iCallNodeGetInfoWithZoneLabels)
 	s.Step(`^a valid NodeGetInfo is returned with node topology$`, f.aValidNodeGetInfoIsReturnedWithNodeTopology)
@@ -5215,7 +5844,9 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^a NodeGetInfo is returned without zone system topology$`, f.aNodeGetInfoIsReturnedWithoutZoneSystemTopology)
 	s.Step(`^I call systemProbeAll in mode "([^"]*)"`, f.iCallSystemProbeAll)
 	s.Step(`^I call BeforeServe but change "([^"]*)" with "([^"]*)"$`, f.iCallBeforeServeButChangeWithValue)
-
+	s.Step(`^I call getArrayVersion on "([^"]*)"`, f.iCallgetArrayVersion)
+	s.Step(`^I call setupNVMeHost with NVMe intiators "([^"]*)"$`, f.iCallSetupNVMeHostWithNVMeInitiators)
+	s.Step(`^I set protocol to "([^"]*)"$`, f.iSetProtocolTo)
 	s.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
 		// Cleanup test directory before each test
 		if err := os.RemoveAll(testBaseDir); err != nil {

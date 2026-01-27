@@ -72,4 +72,19 @@ const (
 
 	// EnvMaxProbeTimeout is the name of the environment variable which stores the maximum probe timeout
 	EnvMaxProbeTimeout = "X_CSI_PROBE_TIMEOUT"
+
+	// EnvNodeChrootPath is the name of the environment variable which store path to chroot where to execute NVMe commands
+	EnvNodeChrootPath = "X_CSI_POWERFLEX_NODE_CHROOT_PATH"
+
+	// EnvPodmonEnabled indicates that podmon is enabled
+	EnvPodmonEnabled = "X_CSI_PODMON_ENABLED"
+
+	// EnvPodmonArrayConnectivityAPIPORT indicates the port to be used for exposing podmon API health
+	EnvPodmonArrayConnectivityAPIPORT = "X_CSI_PODMON_API_PORT"
+
+	// EnvPodmonArrayConnectivityPollRate indicates the polling frequency to check array connectivity
+	EnvPodmonArrayConnectivityPollRate = "X_CSI_PODMON_ARRAY_CONNECTIVITY_POLL_RATE"
+
+	// EnvAuthTyoe is the name of the environment variable which stores the authentication type such as OIDC or Standard Username Password
+	EnvAuthType = "X_CSI_AUTH_TYPE"
 )

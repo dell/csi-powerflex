@@ -13,12 +13,33 @@ Feature: VxFlex OS CSI interface
     Then no error was received
 
   @pmon
+  Scenario: Call ValidateConnectivity for NVMeTCP
+    Given a VxFlexOS service
+    When I call Probe
+    And I set protocol to "NVMeTCP"
+    And I call CreateVolume "podmon1"
+    Then a valid CreateVolumeResponse is returned
+    And I call ValidateConnectivity
+    Then no error was received
+
+  @pmon
+    Scenario: Call ValidateConnectivity for GenType EC
+      Given a VxFlexOS service
+      When I call Probe
+      And I call CreateVolume "podmon1"
+      Then a valid CreateVolumeResponse is returned
+      And I set Platform Info "5.0" "EC" "5.0" "EC"
+      And I call ValidateConnectivity
+      Then no error was received
+      Then I reset the Platform Info
+
+  @pmon
   Scenario: Call ValidateConnectivity with node probe error
     Given a VxFlexOS service
     When I call Probe
     And I induce error "node-probe"
     And I call ValidateConnectivity
-    Then the error contains "NodeID is invalid"
+    Then the error contains "error getting host ID"
 
   @pmon
   Scenario: Call ValidateConnectivity with no Volume no Node
@@ -42,7 +63,7 @@ Feature: VxFlex OS CSI interface
     And I call CreateVolume "podmon1"
     And I induce error "no-system"
     And I call ValidateConnectivity
-    Then the error contains "NodeID is invalid"
+    Then the error contains "error getting host ID"
 
   @pmon
   Scenario: Call ValidateConnectivity with contoller probe error
@@ -50,7 +71,7 @@ Feature: VxFlex OS CSI interface
     When I call Probe
     And I induce error "controller-probe"
     And I call ValidateConnectivity
-    Then the error contains "NodeID is invalid"
+    Then the error contains "error getting host ID"
 
   @pmon
   Scenario: Call ValidateConnectivity with no System
@@ -59,7 +80,7 @@ Feature: VxFlex OS CSI interface
     And I call CreateVolume "podmon1"
     And I induce error "no-sdc"
     And I call ValidateConnectivity
-    Then the error contains "NodeID is invalid"
+    Then the error contains "error getting host ID"
 
   @pmon
   Scenario: Call ValidateConnectivity with volume error

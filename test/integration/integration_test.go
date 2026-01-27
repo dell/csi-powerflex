@@ -12,6 +12,7 @@
 //
 
 //go:build integration
+// +build integration
 
 package integration_test
 
@@ -24,11 +25,11 @@ import (
 	"testing"
 	"time"
 
-	csi "github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/cucumber/godog"
 	"github.com/dell/csi-vxflexos/v2/provider"
 	"github.com/dell/csi-vxflexos/v2/service"
 	csiutils "github.com/dell/gocsi/utils/csi"
+	csi "github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/cucumber/godog"
 	"google.golang.org/grpc"
 )
 

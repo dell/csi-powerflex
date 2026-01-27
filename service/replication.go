@@ -20,14 +20,13 @@ package service
 
 import (
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 	"time"
 
-	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/dell/dell-csi-extensions/replication"
 	"github.com/dell/goscaleio"
+	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -145,7 +144,7 @@ func (s *service) GetReplicationCapabilities(_ context.Context, _ *replication.G
 }
 
 func (s *service) CreateRemoteVolume(ctx context.Context, req *replication.CreateRemoteVolumeRequest) (*replication.CreateRemoteVolumeResponse, error) {
-	Log.Printf("[CreateRemoteVolume] - req %+v", req)
+	log.Infof("[CreateRemoteVolume] - req %+v", req)
 
 	volHandleCtx := req.GetVolumeHandle()
 	parameters := req.GetParameters()
@@ -157,7 +156,7 @@ func (s *service) CreateRemoteVolume(ctx context.Context, req *replication.Creat
 	volumeID := getVolumeIDFromCsiVolumeID(volHandleCtx)
 	systemID := s.getSystemIDFromCsiVolumeID(volHandleCtx)
 
-	Log.Printf("Volume ID: %s System ID: %s", volumeID, systemID)
+	log.Infof("Volume ID: %s System ID: %s", volumeID, systemID)
 
 	if volumeID == "" || systemID == "" {
 		return nil, status.Error(codes.InvalidArgument, "failed to provide system ID or volume ID")
@@ -182,9 +181,17 @@ func (s *service) CreateRemoteVolume(ctx context.Context, req *replication.Creat
 		return nil, status.Errorf(codes.InvalidArgument, "replication enabled but no remote system specified in storage class")
 	}
 
+	log.Infof("Remote System ID: %s", remoteSystemID)
+	platformInfo, err := s.GetPlatformInfo(remoteSystemID)
+	if err != nil {
+		return nil, err
+	} else if s.isReplicationNotSupported(platformInfo.GenType) {
+		return nil, status.Errorf(codes.InvalidArgument, "Replication is not supported on this System %s with GenType: %s", remoteSystemID, platformInfo.GenType)
+	}
+
 	// Probe the remote system
 	if err := s.requireProbe(ctx, remoteSystemID); err != nil {
-		Log.Infof("Remote probe failed: %s", err)
+		log.Errorf("Remote probe failed: %s", err)
 		return nil, err
 	}
 
@@ -205,7 +212,7 @@ func (s *service) CreateRemoteVolume(ctx context.Context, req *replication.Creat
 
 	protectionDomain, ok := parameters[s.WithRP(KeyReplicationProtectionDomain)]
 	if !ok {
-		log.Printf("Remote protection domain not provided; there could be conflicts if two storage pools share a name")
+		log.Infof("Remote protection domain not provided; there could be conflicts if two storage pools share a name")
 	}
 
 	name := "replicated-" + vol.Name
@@ -213,11 +220,11 @@ func (s *service) CreateRemoteVolume(ctx context.Context, req *replication.Creat
 
 	createVolumeResponse, err := s.CreateVolume(ctx, volReq)
 	if err != nil {
-		log.Printf("CreateVolume call failed: %s", err.Error())
+		log.Errorf("CreateVolume call failed: %s", err)
 		return nil, err
 	}
 
-	log.Printf("Potentially created a remote volume: %+v", createVolumeResponse)
+	log.Infof("Potentially created a remote volume: %+v", createVolumeResponse)
 
 	remoteParams := map[string]string{
 		"storagePool":    remoteStoragePool,
@@ -234,7 +241,8 @@ func (s *service) CreateRemoteVolume(ctx context.Context, req *replication.Creat
 
 // DeleteLocalVolume deletes the backend volume on the storage array.
 func (s *service) DeleteLocalVolume(ctx context.Context, req *replication.DeleteLocalVolumeRequest) (*replication.DeleteLocalVolumeResponse, error) {
-	Log.Printf("[DeleteLocalVolume] - req %+v", req)
+	log := log.WithContext(ctx)
+	log.Infof("[DeleteLocalVolume] - req %+v", req)
 
 	volHandleCtx := req.GetVolumeHandle()
 
@@ -245,7 +253,7 @@ func (s *service) DeleteLocalVolume(ctx context.Context, req *replication.Delete
 	volumeID := getVolumeIDFromCsiVolumeID(volHandleCtx)
 	systemID := s.getSystemIDFromCsiVolumeID(volHandleCtx)
 
-	Log.Printf("Volume ID: %s System ID: %s", volumeID, systemID)
+	log.Infof("Volume ID: %s System ID: %s", volumeID, systemID)
 
 	if volumeID == "" || systemID == "" {
 		return nil, status.Error(codes.InvalidArgument, "failed to provide system ID or volume ID")
@@ -254,7 +262,7 @@ func (s *service) DeleteLocalVolume(ctx context.Context, req *replication.Delete
 	vol, err := s.getVolByID(volumeID, systemID)
 	if err != nil {
 		if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) {
-			log.Printf("[DeleteLocalVolume] - volume already deleted.")
+			log.Infof("[DeleteLocalVolume] - volume already deleted.")
 			return &replication.DeleteLocalVolumeResponse{}, nil
 		}
 
@@ -262,13 +270,13 @@ func (s *service) DeleteLocalVolume(ctx context.Context, req *replication.Delete
 	}
 
 	if vol.VolumeReplicationState != "UnmarkedForReplication" {
-		log.Printf("[DeleteLocalVolume] - target volume is marked for replication when deleting")
+		log.Infof("[DeleteLocalVolume] - target volume is marked for replication when deleting")
 		return nil, status.Error(codes.InvalidArgument, "replication target volume marked for replication. Delete source volume.")
 	}
 
 	_, err = s.DeleteVolume(ctx, &csi.DeleteVolumeRequest{VolumeId: volHandleCtx})
 	if err != nil {
-		log.Printf("[DeleteLocalVolume] - call failed: %s", err.Error())
+		log.Infof("[DeleteLocalVolume] - call failed: %s", err.Error())
 		return nil, err
 	}
 
@@ -276,7 +284,7 @@ func (s *service) DeleteLocalVolume(ctx context.Context, req *replication.Delete
 }
 
 func (s *service) CreateStorageProtectionGroup(ctx context.Context, req *replication.CreateStorageProtectionGroupRequest) (*replication.CreateStorageProtectionGroupResponse, error) {
-	Log.Printf("[CreateStorageProtectionGroup] - req %+v", req)
+	log.Infof("[CreateStorageProtectionGroup] - req %+v", req)
 
 	volHandleCtx := req.GetVolumeHandle()
 	if volHandleCtx == "" {
@@ -309,7 +317,7 @@ func (s *service) CreateStorageProtectionGroup(ctx context.Context, req *replica
 		return nil, status.Errorf(codes.Internal, "couldn't getProtectionDomain (local): %s", err.Error())
 	}
 
-	Log.Printf("[CreateStorageProtectionGroup] - Local Protection Domain: %+v", localProtectionDomain)
+	log.Infof("[CreateStorageProtectionGroup] - Local Protection Domain: %+v", localProtectionDomain)
 
 	remoteSystemID, ok := parameters[s.WithRP(KeyReplicationRemoteSystem)]
 	if !ok {
@@ -349,13 +357,13 @@ func (s *service) CreateStorageProtectionGroup(ctx context.Context, req *replica
 
 		clusterUID, ok := parameters["clusterUID"]
 		if !ok {
-			Log.Warnf("[CreateStorageProtectionGroup] - source cluster UID not provided, using remote system ID in RCG name.")
+			log.Warnf("[CreateStorageProtectionGroup] - source cluster UID not provided, using remote system ID in RCG name.")
 			clusterUID = remoteSystemID
 		}
 
 		rcgPrefix, ok := parameters[s.WithRP(KeyReplicationVGPrefix)]
 		if !ok || rcgPrefix == "" {
-			Log.Warnf("[CreateStorageProtectionGroup] - RCG prefix not provided, using 'RCG' as prefix.")
+			log.Warnf("[CreateStorageProtectionGroup] - RCG prefix not provided, using 'RCG' as prefix.")
 			rcgPrefix = "rcg"
 		}
 
@@ -364,7 +372,7 @@ func (s *service) CreateStorageProtectionGroup(ctx context.Context, req *replica
 		if err != nil {
 			return nil, err
 		}
-		Log.Printf("[CreateStorageProtectionGroup] - consistencyGroupName: %+s", consistencyGroupName)
+		log.Infof("[CreateStorageProtectionGroup] - consistencyGroupName: %+s", consistencyGroupName)
 	}
 
 	localRcg, err := s.CreateReplicationConsistencyGroup(systemID, consistencyGroupName,
@@ -381,7 +389,7 @@ func (s *service) CreateStorageProtectionGroup(ctx context.Context, req *replica
 	remoteVolumeName := "replicated-" + vol.Name
 
 	if len(remoteVolumeName) > 31 {
-		Log.Printf("remoteVolumeName: %s longer than 31 character max, will search for truncated name: %s", remoteVolumeName, remoteVolumeName[0:31])
+		log.Infof("remoteVolumeName: %s longer than 31 character max, will search for truncated name: %s", remoteVolumeName, remoteVolumeName[0:31])
 		remoteVolumeName = remoteVolumeName[0:31]
 	}
 
@@ -420,7 +428,7 @@ func (s *service) CreateStorageProtectionGroup(ctx context.Context, req *replica
 		s.opts.replicationContextPrefix + "remoteSystemID": localSystem.ID,
 	}
 
-	Log.Printf("[CreateStorageProtectionGroup] - localRcg: %+s, group.ID: %s", localRcg.ID, group.ID)
+	log.Infof("[CreateStorageProtectionGroup] - localRcg: %+s, group.ID: %s", localRcg.ID, group.ID)
 
 	return &replication.CreateStorageProtectionGroupResponse{
 		LocalProtectionGroupId:         group.ID,
@@ -432,7 +440,7 @@ func (s *service) CreateStorageProtectionGroup(ctx context.Context, req *replica
 }
 
 func (s *service) GetStorageProtectionGroupStatus(_ context.Context, req *replication.GetStorageProtectionGroupStatusRequest) (*replication.GetStorageProtectionGroupStatusResponse, error) {
-	Log.Printf("[GetStorageProtectionGroupStatus] - req %+v", req)
+	log.Infof("[GetStorageProtectionGroupStatus] - req %+v", req)
 
 	localParams := req.GetProtectionGroupAttributes()
 
@@ -455,7 +463,7 @@ func (s *service) GetStorageProtectionGroupStatus(_ context.Context, req *replic
 		return nil, status.Errorf(codes.Internal, "no replication pairs exist")
 	}
 
-	Log.Printf("[GetStorageProtectionGroupStatus] - group %+v", group)
+	log.Infof("[GetStorageProtectionGroupStatus] - group %+v", group)
 
 	var state replication.StorageProtectionGroupStatus_State
 	switch group.CurrConsistMode {
@@ -464,7 +472,7 @@ func (s *service) GetStorageProtectionGroupStatus(_ context.Context, req *replic
 	case goscaleio.Consistent:
 		state = replication.StorageProtectionGroupStatus_SYNCHRONIZED
 	default:
-		Log.Printf("The status (%s) does not match with known protection group states", group.CurrConsistMode)
+		log.Infof("The status (%s) does not match with known protection group states", group.CurrConsistMode)
 		state = replication.StorageProtectionGroupStatus_UNKNOWN
 	}
 
@@ -485,7 +493,7 @@ func (s *service) GetStorageProtectionGroupStatus(_ context.Context, req *replic
 }
 
 func (s *service) DeleteStorageProtectionGroup(_ context.Context, req *replication.DeleteStorageProtectionGroupRequest) (*replication.DeleteStorageProtectionGroupResponse, error) {
-	Log.Printf("[DeleteStorageProtectionGroup] %+v", req)
+	log.Infof("[DeleteStorageProtectionGroup] %+v", req)
 	localParams := req.GetProtectionGroupAttributes()
 
 	protectionGroupSystem := localParams[s.opts.replicationContextPrefix+"systemName"]
@@ -512,7 +520,7 @@ func (s *service) DeleteStorageProtectionGroup(_ context.Context, req *replicati
 }
 
 func (s *service) ExecuteAction(ctx context.Context, req *replication.ExecuteActionRequest) (*replication.ExecuteActionResponse, error) {
-	Log.Printf("[ExecuteAction] - req %+v", req)
+	log.Infof("[ExecuteAction] - req %+v", req)
 
 	action := req.GetAction().GetActionTypes().String()
 	protectionGroupID := req.GetProtectionGroupId()
@@ -740,7 +748,7 @@ func (s *service) getReplicationPairs(systemID string, groupID string) ([]*sioty
 	pairs, err := rcg.GetReplicationPairs()
 	if err != nil {
 		if !strings.EqualFold(err.Error(), sioReplicationPairsDoesNotExist) {
-			Log.Printf("Error getting replication pairs: %s", err.Error())
+			log.Infof("Error getting replication pairs: %s", err.Error())
 			return nil, err
 		}
 	}

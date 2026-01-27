@@ -1,4 +1,4 @@
-// Copyright © 2019-2024 Dell Inc. or its subsidiaries. All Rights Reserved.
+// Copyright © 2019-2026 Dell Inc. or its subsidiaries. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,11 +19,9 @@ import (
 
 	"golang.org/x/net/context"
 
-	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	commonext "github.com/dell/dell-csi-extensions/common"
+	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/protobuf/types/known/wrapperspb"
-
-	"github.com/dell/csi-vxflexos/v2/core"
 )
 
 func (s *service) GetPluginInfo(
@@ -33,7 +31,7 @@ func (s *service) GetPluginInfo(
 ) {
 	return &csi.GetPluginInfoResponse{
 		Name:          Name,
-		VendorVersion: core.SemVer,
+		VendorVersion: ManifestSemver,
 		Manifest:      Manifest,
 	}, nil
 }
@@ -78,23 +76,23 @@ func (s *service) Probe(
 	*csi.ProbeResponse, error,
 ) {
 	if !strings.EqualFold(s.mode, "node") {
-		Log.Debug("systemProbe")
+		log.Debug("systemProbe")
 		if err := s.systemProbeAll(ctx); err != nil {
-			Log.Printf("error in systemProbeAll: %s", err.Error())
+			log.Infof("error in systemProbeAll: %s", err.Error())
 			return nil, err
 		}
 	}
 	if !strings.EqualFold(s.mode, "controller") {
-		Log.Debug("nodeProbe")
+		log.Debug("nodeProbe")
 		if err := s.nodeProbe(ctx); err != nil {
-			Log.Printf("error in nodeProbe: %s", err.Error())
+			log.Infof("error in nodeProbe: %s", err.Error())
 			return nil, err
 		}
 	}
 	rep := &csi.ProbeResponse{
 		Ready: wrapperspb.Bool(true),
 	}
-	Log.Debug(fmt.Sprintf("Probe returning: %v", rep.Ready.GetValue()))
+	log.Debug(fmt.Sprintf("Probe returning: %v", rep.Ready.GetValue()))
 
 	return rep, nil
 }
@@ -104,16 +102,18 @@ func (s *service) ProbeController(ctx context.Context,
 	*commonext.ProbeControllerResponse, error,
 ) {
 	if !strings.EqualFold(s.mode, "node") {
-		Log.Debug("systemProbe")
+		log.Debug("systemProbe")
 		if err := s.systemProbeAll(ctx); err != nil {
-			Log.Printf("error in systemProbeAll: %s", err.Error())
+			log.Infof("error in systemProbeAll: %s", err.Error())
 			return nil, err
 		}
 	}
 
 	rep := new(commonext.ProbeControllerResponse)
 	rep.Name = Name
-	rep.VendorVersion = core.SemVer
+	rep.VendorVersion = ManifestSemver
+	Manifest["semver"] = ManifestSemver
+
 	rep.Manifest = Manifest
 
 	return rep, nil

@@ -17,7 +17,9 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -34,10 +36,10 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
-	csi "github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/dell/csmlog"
 	"github.com/dell/goscaleio"
 	siotypes "github.com/dell/goscaleio/types/v1"
-	"github.com/sirupsen/logrus"
+	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -159,7 +161,10 @@ const (
 	HeaderCSIPluginIdentifier = "x-csi-plugin-id"
 )
 
-var interestingParameters = [...]string{0: "FsType", 1: KeyMkfsFormatOption, 2: KeyBandwidthLimitInKbps, 3: KeyIopsLimit}
+var (
+	interestingParameters = [...]string{0: "FsType", 1: KeyMkfsFormatOption, 2: KeyBandwidthLimitInKbps, 3: KeyIopsLimit}
+	log                   = csmlog.GetLogger()
+)
 
 type ZoneContent struct {
 	systemID         string
@@ -172,6 +177,7 @@ func (s *service) CreateVolume(
 	req *csi.CreateVolumeRequest) (
 	*csi.CreateVolumeResponse, error,
 ) {
+	log := log.WithContext(ctx)
 	params := req.GetParameters()
 	var systemID string
 	var err error
@@ -212,10 +218,31 @@ func (s *service) CreateVolume(
 		}
 	}
 
+	platformInfo, err := s.GetPlatformInfo(systemID)
+	if err != nil {
+		return nil, err
+	}
+
+	if isNFS && platformInfo.GenType != "" && s.isGenTypeNotSupportsNfsAndReplication(platformInfo.GenType) {
+		return nil, status.Errorf(codes.InvalidArgument, "NFS is not supported on the System %s GenType %s", systemID, platformInfo.GenType)
+	}
+
+	if isNFS && s.isNfsNotSupported(platformInfo.ArrayVersion) {
+		return nil, status.Errorf(codes.InvalidArgument, "NFS is not supported on the System %s PowerFlex version %.1f", systemID, platformInfo.ArrayVersion)
+	}
+
+	remoteSystemID, ok := params[s.WithRP(KeyReplicationRemoteSystem)]
+	if ok {
+		isReplicationEnabledOnPlatform, err := s.IsReplicationEnabledOnPlatforms(systemID, remoteSystemID, platformInfo.GenType)
+		if !isReplicationEnabledOnPlatform {
+			return nil, err
+		}
+	}
+
 	// validate AccessibleTopology
 	accessibility := req.GetAccessibilityRequirements()
 	if accessibility == nil {
-		Log.Printf("Received CreateVolume request without accessibility keys")
+		log.Info("Received CreateVolume request without accessibility keys")
 	}
 
 	// Look for zone topology
@@ -230,27 +257,27 @@ func (s *service) CreateVolume(
 		contentSource := req.GetVolumeContentSource()
 		var sourceSystemID string
 		if contentSource != nil {
-			Log.Infof("[CreateVolume] Zone volume has a content source - we are a snapshot or clone: %+v", contentSource)
+			log.Infof("[CreateVolume] Zone volume has a content source - we are a snapshot or clone: %+v", contentSource)
 
 			snapshotSource := contentSource.GetSnapshot()
 			cloneSource := contentSource.GetVolume()
 
 			if snapshotSource != nil {
 				sourceSystemID = s.getSystemIDFromCsiVolumeID(snapshotSource.SnapshotId)
-				Log.Infof("[CreateVolume] Zone snapshot source systemID: %s", sourceSystemID)
+				log.Infof("[CreateVolume] Zone snapshot source systemID: %s", sourceSystemID)
 			} else if cloneSource != nil {
 				sourceSystemID = s.getSystemIDFromCsiVolumeID(cloneSource.VolumeId)
-				Log.Infof("[CreateVolume] Zone clone source systemID: %s", sourceSystemID)
+				log.Infof("[CreateVolume] Zone clone source systemID: %s", sourceSystemID)
 			}
 		}
 
 		for _, topo := range accessibility.GetPreferred() {
 			for topoLabel, zoneName := range topo.Segments {
-				Log.Infof("Zoning based on label %s", s.opts.zoneLabelKey)
+				log.Infof("Zoning based on label %s", s.opts.zoneLabelKey)
 				if strings.HasPrefix(topoLabel, s.opts.zoneLabelKey) {
 					zoneTarget, ok := zoneTargetMap[ZoneName(zoneName)]
 					if !ok {
-						Log.Infof("no zone target for %s", zoneTarget)
+						log.Infof("no zone target for %s", zoneTarget)
 						continue
 					}
 
@@ -263,7 +290,7 @@ func (s *service) CreateVolume(
 					systemID = zoneTarget.systemID
 
 					if err := s.requireProbe(ctx, systemID); err != nil {
-						Log.Errorln("Failed to probe system " + systemID)
+						log.Errorf("Failed to probe system: %v", systemID)
 						continue
 					}
 
@@ -273,7 +300,7 @@ func (s *service) CreateVolume(
 					})
 
 					// We found a zone topology
-					Log.Infof("Preferred topology zone %s, systemID %s, protectionDomain %s, and storagePool %s", zoneName, systemID, protectionDomain, storagePool)
+					log.Infof("Preferred topology zone %s, systemID %s, protectionDomain %s, and storagePool %s", zoneName, systemID, protectionDomain, storagePool)
 					zoneTopology = true
 				}
 			}
@@ -307,7 +334,7 @@ func (s *service) CreateVolume(
 				if len(tokens) > 1 {
 					constraint = tokens[1]
 				}
-				Log.Printf("Found topology constraint: VxFlex OS system: %s", constraint)
+				log.Infof("Found topology constraint: VxFlex OS system: %s", constraint)
 
 				// Update constraint wrt to topology specified for NFS volume
 				if isNFS {
@@ -322,6 +349,16 @@ func (s *service) CreateVolume(
 						}
 					}
 				}
+
+				// check if constraint is having nvmetcp type
+				if strings.HasSuffix(constraint, "nvmetcp") {
+					nvmeToken := strings.Split(constraint, "-")
+					if len(nvmeToken) > 1 {
+						// update constraint to system ID
+						constraint = nvmeToken[0]
+					}
+				}
+
 				if constraint == sID || constraint == sName {
 					if constraint == sID {
 						requestedSystem = sID
@@ -330,8 +367,11 @@ func (s *service) CreateVolume(
 					}
 					// segment matches system ID/Name where volume will be created
 					topologyKey := tokens[0] + "/" + sID
+					if strings.HasSuffix(key, "nvmetcp") {
+						topologyKey = key
+					}
 					systemSegments[topologyKey] = segments[key]
-					Log.Printf("Added accessible topology segment for volume: %s, segment: %s = %s", req.GetName(),
+					log.Infof("Added accessible topology segment for volume: %s, segment: %s = %s", req.GetName(),
 						topologyKey, systemSegments[topologyKey])
 				}
 			}
@@ -347,7 +387,7 @@ func (s *service) CreateVolume(
 			volumeTopology = append(volumeTopology, &csi.Topology{
 				Segments: systemSegments,
 			})
-			Log.Printf("Accessible topology for volume: %s, segments: %#v", req.GetName(), systemSegments)
+			log.Infof("Accessible topology for volume: %s, segments: %#v", req.GetName(), systemSegments)
 		}
 	}
 
@@ -371,7 +411,7 @@ func (s *service) CreateVolume(
 
 	if len(name) > 31 {
 		name = name[0:31]
-		Log.Printf("Requested name %s longer than 31 character max, truncated to %s\n", req.Name, name)
+		log.Infof("Requested name %s longer than 31 character max, truncated to %s\n", req.Name, name)
 		req.Name = name
 	}
 
@@ -386,7 +426,7 @@ func (s *service) CreateVolume(
 		if params[KeyNasName] != "" {
 			nasName = params[KeyNasName] // Storage class takes precedence
 		} else {
-			Log.Debug("nasName not present in storage class, value taken from secret")
+			log.Info("nasName not present in storage class, value taken from secret")
 			nasName = arr.NasName // Secret next
 		}
 		nasServerID, err := s.getNASServerIDFromName(systemID, nasName)
@@ -398,7 +438,7 @@ func (s *service) CreateVolume(
 		pdID := ""
 		pd, ok := params[KeyProtectionDomain]
 		if !ok {
-			Log.Printf("Protection Domain name not provided; there could be conflicts if two storage pools share a name")
+			log.Info("Protection Domain name not provided; there could be conflicts if two storage pools share a name")
 		} else {
 			pdID, err = s.getProtectionDomainIDFromName(systemID, pd)
 			if err != nil {
@@ -421,7 +461,7 @@ func (s *service) CreateVolume(
 		size := cr.GetRequiredBytes()
 		// round off the size to the 3GB if less than 3GB
 		if size < minNfsSize {
-			Log.Printf("Size %d is less than 3GB, rounding to 3GB", size/bytesInGiB)
+			log.Infof("Size %d is less than 3GB, rounding to 3GB", size/bytesInGiB)
 			size = minNfsSize
 		}
 
@@ -429,7 +469,7 @@ func (s *service) CreateVolume(
 		if contentSource != nil {
 			snapshotSource := contentSource.GetSnapshot()
 			if snapshotSource != nil {
-				Log.Printf("snapshot %s specified as volume content source", snapshotSource.SnapshotId)
+				log.Infof("snapshot %s specified as volume content source", snapshotSource.SnapshotId)
 				return s.createVolumeFromSnapshot(req, snapshotSource, name, size, storagePoolName)
 			}
 		}
@@ -443,7 +483,8 @@ func (s *service) CreateVolume(
 			HeaderPersistentVolumeClaimName:      params[CSIPersistentVolumeClaimName],
 			HeaderPersistentVolumeClaimNamespace: params[CSIPersistentVolumeClaimNamespace],
 		}
-		Log.WithFields(fields).Info("Executing CreateVolume with following fields")
+		// logctx = csmlog.WithContext(ctx)
+		log.WithFields(fields).Info("Executing CreateVolume with following fields")
 
 		volumeParam := &siotypes.FsCreate{
 			Name:          volName,
@@ -469,16 +510,16 @@ func (s *service) CreateVolume(
 				csiResp := &csi.CreateVolumeResponse{
 					Volume: vi,
 				}
-				Log.Info("Volume exists in the requested state with same size")
+				log.Info("Volume exists in the requested state with same size")
 				return csiResp, nil
 			}
-			Log.Info("'Volume name' already exists and size is different")
+			log.Info("'Volume name' already exists and size is different")
 			return nil, status.Error(codes.AlreadyExists, "'Volume name' already exists and size is different.")
 		}
-		Log.Debug("Volume does not exist, proceeding to create new volume")
+		log.Debug("Volume does not exist, proceeding to create new volume")
 		fsResp, err := system.CreateFileSystem(volumeParam)
 		if err != nil {
-			Log.Debugf("Create volume response error:%v", err)
+			log.Debugf("Create volume response error:%v", err)
 			return nil, status.Errorf(codes.Unknown, "Create Volume %s failed with error: %v", volName, err)
 		}
 
@@ -488,7 +529,7 @@ func (s *service) CreateVolume(
 			// get filesystem (NFS volume), newly created
 			fs, err := system.GetFileSystemByIDName(fsResp.ID, "")
 			if err != nil {
-				Log.Debugf("Find Volume response error: %v", err)
+				log.Debugf("Find Volume response error: %v", err)
 				return nil, status.Errorf(codes.Unknown, "Find Volume response error: %v", err)
 			}
 			path, ok := params[KeyPath]
@@ -514,16 +555,16 @@ func (s *service) CreateVolume(
 					return nil, status.Errorf(codes.Internal,
 						"rollback (deleting volume '%s') failed with error : '%v'", fs.Name, delErr.Error())
 				}
-				Log.Debugf("Error creating quota for volume: %s of size: %d bytes, error: %v", fs.Name, size, err.Error())
-				Log.Debugf("Successfully rolled back by deleting the newly created volume: %s", fs.Name)
+				log.Errorf("Error creating quota for volume: %s of size: %d bytes, error: %v", fs.Name, size, err.Error())
+				log.Debugf("Successfully rolled back by deleting the newly created volume: %s", fs.Name)
 				return nil, err
 			}
-			Log.Infof("Tree quota set for: %d bytes on directory: '%s', quota ID: %s", size, path, quotaID)
+			log.Infof("Tree quota set for: %d bytes on directory: '%s', quota ID: %s", size, path, quotaID)
 		}
 
 		newFs, err := system.GetFileSystemByIDName(fsResp.ID, "")
 		if err != nil {
-			Log.Debugf("Find Volume response error: %v", err)
+			log.Debugf("Find Volume response error: %v", err)
 			return nil, status.Errorf(codes.Unknown, "Find Volume response error: %v", err)
 		}
 		if newFs != nil {
@@ -555,14 +596,14 @@ func (s *service) CreateVolume(
 
 			storagePool = sp
 		} else {
-			Log.Printf("[CreateVolume] Multi-AZ Storage Pool Determined by Secret %s", storagePool)
+			log.Infof("[CreateVolume] Multi-AZ Storage Pool Determined by Secret %s", storagePool)
 		}
 
 		var pdID string
 		if protectionDomain == "" {
 			pd, ok := params[KeyProtectionDomain]
 			if !ok {
-				Log.Printf("Protection Domain name not provided; there could be conflicts if two storage pools share a name")
+				log.Info("Protection Domain name not provided; there could be conflicts if two storage pools share a name")
 			} else {
 				protectionDomain = pd
 			}
@@ -590,7 +631,7 @@ func (s *service) CreateVolume(
 			}
 			snapshotSource := contentSource.GetSnapshot()
 			if snapshotSource != nil {
-				Log.Printf("snapshot %s specified as volume content source", snapshotSource.SnapshotId)
+				log.Infof("snapshot %s specified as volume content source", snapshotSource.SnapshotId)
 				snapshotVolumeResponse, err := s.createVolumeFromSnapshot(req, snapshotSource, name, size, storagePool)
 				if err != nil {
 					return nil, err
@@ -613,8 +654,9 @@ func (s *service) CreateVolume(
 			HeaderPersistentVolumeClaimName:      params[CSIPersistentVolumeClaimName],
 			HeaderPersistentVolumeClaimNamespace: params[CSIPersistentVolumeClaimNamespace],
 		}
+		// logctx = csmlog.WithContext(ctx)
 
-		Log.WithFields(fields).Info("Executing CreateVolume with following fields")
+		log.WithFields(fields).Info("Executing CreateVolume with following fields")
 
 		volumeParam := &siotypes.VolumeParam{
 			Name:           name,
@@ -632,14 +674,14 @@ func (s *service) CreateVolume(
 			t.MetaData().Set(HeaderCSIPluginIdentifier, Name)
 			t.MetaData().Set(HeaderSystemIdentifier, systemID)
 		} else {
-			Log.Println("warning: goscaleio.VolumeParam: no MetaData method exists, consider updating goscaleio library.")
+			log.Warn("warning: goscaleio.VolumeParam: no MetaData method exists, consider updating goscaleio library.")
 		}
 
 		createResp, err := s.adminClients[systemID].CreateVolume(volumeParam, storagePool, pdID)
 		if err != nil {
 			// handle case where volume already exists
 			if !strings.EqualFold(err.Error(), sioGatewayVolumeNameInUse) {
-				Log.Printf("error creating volume: %s pool %s error: %s", name, storagePool, err.Error())
+				log.Infof("error creating volume: %s pool %s error: %s", name, storagePool, err.Error())
 				return nil, status.Errorf(codes.Internal,
 					"error when creating volume %s storagepool %s: %s", name, storagePool, err.Error())
 			}
@@ -683,7 +725,7 @@ func (s *service) CreateVolume(
 		}
 		copyInterestingParameters(req.GetParameters(), vi.VolumeContext)
 
-		Log.Printf("volume %s (%s) created %s\n", vi.VolumeContext["Name"], vi.VolumeId, vi.VolumeContext["CreationTime"])
+		log.Infof("volume %s (%s) created %s\n", vi.VolumeContext["Name"], vi.VolumeId, vi.VolumeContext["CreationTime"])
 
 		vi.VolumeContext[KeyFsType] = fsType
 		csiResp := &csi.CreateVolumeResponse{
@@ -716,7 +758,7 @@ func (s *service) createQuota(fsID, path, softLimit, gracePeriod string, size in
 	// enabling quota on FS
 	fs, err := system.GetFileSystemByIDName(fsID, "")
 	if err != nil {
-		Log.Debugf("Find Volume response error: %v", err)
+		log.Debugf("Find Volume response error: %v", err)
 		return "", status.Errorf(codes.Unknown, "Find Volume response error: %v", err)
 	}
 
@@ -736,20 +778,20 @@ func (s *service) createQuota(fsID, path, softLimit, gracePeriod string, size in
 
 	err = system.ModifyFileSystem(fsModify, fs.ID)
 	if err != nil {
-		Log.Debugf("Modify NFS volume failed with error: %v", err)
+		log.Debugf("Modify NFS volume failed with error: %v", err)
 		return "", status.Errorf(codes.Unknown, "Modify NFS volume failed with error: %v", err)
 	}
 
 	fs, err = system.GetFileSystemByIDName(fsID, "")
 	if err != nil {
-		Log.Debugf("Find NFS volume response error: %v", err)
+		log.Debugf("Find NFS volume response error: %v", err)
 		return "", status.Errorf(codes.Unknown, "Find NFS volume response error: %v", err)
 	}
 
 	// need to set the quota based on the requested pv size
 	// if a size isn't requested, skip creating the quota
 	if size <= 0 {
-		Log.Debugf("Quotas is enabled, but storage size is not requested, skip creating quotas for volume '%s'", fsID)
+		log.Debugf("Quotas is enabled, but storage size is not requested, skip creating quotas for volume '%s'", fsID)
 		return "", nil
 	}
 
@@ -763,7 +805,7 @@ func (s *service) createQuota(fsID, path, softLimit, gracePeriod string, size in
 		return "", status.Errorf(codes.InvalidArgument, "requested softLimit: %s perc, i.e. default value which is greater than hardlimit, i.e. volume size: %d for volume %s:", softLimit, size, fsID)
 	}
 
-	Log.Debugf("Begin to set quota for FS '%s', size '%d', quota enabled: '%t'", fsID, size, isQuotaEnabled)
+	log.Debugf("Begin to set quota for FS '%s', size '%d', quota enabled: '%t'", fsID, size, isQuotaEnabled)
 	// log all parameters used in CreateTreeQuota call
 	fields := map[string]interface{}{
 		"FileSystemID": fsID,
@@ -772,7 +814,8 @@ func (s *service) createQuota(fsID, path, softLimit, gracePeriod string, size in
 		"SoftLimit":    softLimitInt,
 		"GracePeriod":  gracePeriodInt,
 	}
-	Log.WithFields(fields).Info("Executing CreateTreeQuota with following fields")
+	// logctx = csmlog.WithContext(ctx)
+	log.WithFields(fields).Info("Executing CreateTreeQuota with following fields")
 
 	createQuotaParams := &siotypes.TreeQuotaCreate{
 		FileSystemID: fsID,
@@ -783,7 +826,7 @@ func (s *service) createQuota(fsID, path, softLimit, gracePeriod string, size in
 	}
 	quota, err := system.CreateTreeQuota(createQuotaParams)
 	if err != nil {
-		Log.Debugf("Creating quota failed with error: %v", err)
+		log.Debugf("Creating quota failed with error: %v", err)
 		return "", status.Errorf(codes.Unknown, "Creating quota failed with error: %v", err)
 	}
 	return quota.ID, nil
@@ -813,7 +856,7 @@ func validateQuotaParameters(path, softLimit, gracePeriod, fsID string) (int64, 
 			return 0, 0, status.Errorf(codes.InvalidArgument, "requested gracePeriod: %s is not numeric for volume %s, error: %s", gracePeriod, fsID, err)
 		}
 	} else {
-		Log.Debugf("GracePeriod value set to default.")
+		log.Debugf("GracePeriod value set to default.")
 		gracePeriodInt = 0
 	}
 	return softLimitPerc, gracePeriodInt, nil
@@ -856,20 +899,21 @@ func (s *service) getSystemIDFromParameters(params map[string]string) (string, e
 		}
 	}
 
-	Log.Printf("getSystemIDFromParameters system %s", systemID)
+	log.Infof("getSystemIDFromParameters system %s", systemID)
 
 	// if name set for array.SystemID use id instead
 	// names can change , id will remain unique
 	if id, ok := s.connectedSystemNameToID[systemID]; ok {
 		systemID = id
 	}
-	Log.Printf("Use systemID as %s", systemID)
+	log.Infof("Use systemID as %s", systemID)
 	return systemID, nil
 }
 
 // getZonesFromSecret returns a map with zone names as keys to zone content
 // with zone content consisting of the PowerFlex systemID, protection domain and pool.
 func (s *service) getZonesFromSecret() map[ZoneName]ZoneContent {
+	//
 	zoneTargetMap := make(map[ZoneName]ZoneContent)
 
 	for _, array := range s.opts.arrays {
@@ -893,8 +937,23 @@ func (s *service) getZonesFromSecret() map[ZoneName]ZoneContent {
 			pool:             pool,
 		}
 	}
-
 	return zoneTargetMap
+}
+
+var getVolByIDFunc = func(s *service, id string, systemID string) (*siotypes.Volume, error) {
+	return s.getVolByID(id, systemID)
+}
+
+var getStoragePoolNameFromIDFunc = func(s *service, systemID string, id string) string {
+	return s.getStoragePoolNameFromID(systemID, id)
+}
+
+var getVolumeFunc = func(adminClient *goscaleio.Client, a, b, c, name string, e bool) ([]*siotypes.Volume, error) {
+	return adminClient.GetVolume(a, b, c, name, e)
+}
+
+var createThinCloneFunc = func(system *goscaleio.System, snapParam *siotypes.CreateSnapshotParam) (*siotypes.SnapshotVolumesResp, error) {
+	return system.CreateThinClone(snapParam)
 }
 
 // Create a volume (which is actually a snapshot) from an existing snapshot.
@@ -967,7 +1026,7 @@ func (s *service) createVolumeFromSnapshot(req *csi.CreateVolumeRequest,
 		csiVolume.ContentSource = req.GetVolumeContentSource()
 		copyInterestingParameters(req.GetParameters(), csiVolume.VolumeContext)
 
-		Log.Printf("Volume (from snap) %s (%s) storage pool %s",
+		log.Infof("Volume (from snap) %s (%s) storage pool %s",
 			csiVolume.VolumeContext["Name"], csiVolume.VolumeId, csiVolume.VolumeContext["StoragePoolName"])
 		return &csi.CreateVolumeResponse{Volume: csiVolume}, nil
 
@@ -975,7 +1034,7 @@ func (s *service) createVolumeFromSnapshot(req *csi.CreateVolumeRequest,
 
 	// Look up the snapshot
 	snapID := getVolumeIDFromCsiVolumeID(snapshotSource.SnapshotId)
-	srcVol, err := s.getVolByID(snapID, systemID)
+	srcVol, err := getVolByIDFunc(s, snapID, systemID)
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "Snapshot not found: %s, error: %s", snapshotSource.SnapshotId, err.Error())
 	}
@@ -990,28 +1049,28 @@ func (s *service) createVolumeFromSnapshot(req *csi.CreateVolumeRequest,
 	system := s.systems[systemID]
 
 	// Validate the storagePool is the same.
-	snapStoragePool := s.getStoragePoolNameFromID(systemID, srcVol.StoragePoolID)
+	snapStoragePool := getStoragePoolNameFromIDFunc(s, systemID, srcVol.StoragePoolID)
 	if snapStoragePool != storagePool {
 		return nil, status.Errorf(codes.InvalidArgument,
 			"Snapshot storage pool %s is different than the requested storage pool %s", snapStoragePool, storagePool)
 	}
 
 	// Check for idempotent request
-	existingVols, err := adminClient.GetVolume("", "", "", name, false)
+	existingVols, err := getVolumeFunc(adminClient, "", "", "", name, false)
 	noVolErrString1 := "Error: problem finding volume: Volume not found"
 	noVolErrString2 := "Error: problem finding volume: Could not find the volume"
 	if (err != nil) && !(strings.Contains(err.Error(), noVolErrString1) || strings.Contains(err.Error(), noVolErrString2)) {
-		Log.Printf("[createVolumeFromSnapshot] Idempotency check: GetVolume returned error: %s", err.Error())
+		log.Infof("[createVolumeFromSnapshot] Idempotency check: GetVolume returned error: %s", err.Error())
 		return nil, status.Errorf(codes.Internal, "Failed to create vol from snap -- GetVolume returned unexpected error: %s", err.Error())
 	}
 
 	for _, vol := range existingVols {
 		if vol.Name == name && vol.StoragePoolID == srcVol.StoragePoolID {
-			Log.Printf("Requested volume %s already exists", name)
+			log.Infof("Requested volume %s already exists", name)
 			csiVolume := s.getCSIVolume(vol, systemID)
 			csiVolume.ContentSource = req.GetVolumeContentSource()
 			copyInterestingParameters(req.GetParameters(), csiVolume.VolumeContext)
-			Log.Printf("Requested volume (from snap) already exists %s (%s) storage pool %s",
+			log.Infof("Requested volume (from snap) already exists %s (%s) storage pool %s",
 				csiVolume.VolumeContext["Name"], csiVolume.VolumeId, csiVolume.VolumeContext["StoragePoolName"])
 			return &csi.CreateVolumeResponse{Volume: csiVolume}, nil
 		}
@@ -1021,13 +1080,23 @@ func (s *service) createVolumeFromSnapshot(req *csi.CreateVolumeRequest,
 	snapshotDefs := make([]*siotypes.SnapshotDef, 0)
 	snapDef := &siotypes.SnapshotDef{VolumeID: snapID, SnapshotName: name}
 	snapshotDefs = append(snapshotDefs, snapDef)
-	snapParam := &siotypes.SnapshotVolumesParam{SnapshotDefs: snapshotDefs, AccessMode: "ReadWrite"}
+	snapResponse := &siotypes.SnapshotVolumesResp{}
 
-	// Create snapshot
-	snapResponse, err := system.CreateSnapshotConsistencyGroup(snapParam)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Failed to create snapshot: %s", err.Error())
+	// Create clone or snapshot
+	if srcVol.GenType == "EC" {
+		snapParam := &siotypes.CreateSnapshotParam{SnapshotDefs: snapshotDefs}
+		snapResponse, err = createThinCloneFunc(system, snapParam)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Failed to call CreateThinClone to create volume from snapshot: %s", err.Error())
+		}
+	} else {
+		snapParam := &siotypes.SnapshotVolumesParam{SnapshotDefs: snapshotDefs, AccessMode: "ReadWrite"}
+		snapResponse, err = system.CreateSnapshotConsistencyGroup(snapParam)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Failed to call CreateSnapshotConsistencyGroup to create volume from snapshot: %s", err.Error())
+		}
 	}
+
 	if len(snapResponse.VolumeIDList) != 1 {
 		return nil, status.Errorf(codes.Internal, "Expected volume ID to be returned but it was not")
 	}
@@ -1044,7 +1113,7 @@ func (s *service) createVolumeFromSnapshot(req *csi.CreateVolumeRequest,
 	csiVolume.ContentSource = req.GetVolumeContentSource()
 	copyInterestingParameters(req.GetParameters(), csiVolume.VolumeContext)
 
-	Log.Printf("Volume (from snap) %s (%s) storage pool %s",
+	log.Infof("Volume (from snap) %s (%s) storage pool %s",
 		csiVolume.VolumeContext["Name"], csiVolume.VolumeId, csiVolume.VolumeContext["StoragePoolName"])
 	return &csi.CreateVolumeResponse{Volume: csiVolume}, nil
 }
@@ -1062,6 +1131,7 @@ func (s *service) clearCache() {
 // volume to create, and returns an error if volume size would be greater than
 // the given limit. Returned size is in KiB
 func validateVolSize(cr *csi.CapacityRange) (int64, error) {
+	//
 	minSize := cr.GetRequiredBytes()
 	maxSize := cr.GetLimitBytes()
 	if minSize < 0 || maxSize < 0 {
@@ -1159,7 +1229,7 @@ func (s *service) DeleteVolume(
 		toBeDeletedFS, err := system.GetFileSystemByIDName(fsID, "")
 		if err != nil {
 			if strings.Contains(err.Error(), sioGatewayFileSystemNotFound) {
-				Log.WithFields(logrus.Fields{"id": fsID}).Debug("NFS volume does not exist", fsID)
+				log.WithFields(csmlog.Fields{"id": fsID}).Debug("NFS volume does not exist")
 				return &csi.DeleteVolumeResponse{}, nil
 			}
 		}
@@ -1202,12 +1272,12 @@ func (s *service) DeleteVolume(
 				var modifyParam *siotypes.NFSExportModify = &siotypes.NFSExportModify{}
 				// Removing externalAccess from RWHosts as well as RWRootHosts
 				if len(nfsExport.ReadWriteRootHosts) == 1 && externalAccess == nfsExport.ReadWriteRootHosts[0] {
-					Log.Debug("Trying to remove externalAccess IP with mask having RWRootHosts access while deleting the volume: ", externalAccess)
+					log.Debugf("Trying to remove externalAccess IP with mask having RWRootHosts access while deleting the volume: %v ", externalAccess)
 					modifyNFSExport = true
 					modifyParam.RemoveReadWriteRootHosts = []string{externalAccess}
 				}
 				if len(nfsExport.ReadWriteHosts) == 1 && externalAccess == nfsExport.ReadWriteHosts[0] {
-					Log.Debug("Trying to remove externalAccess IP with mask having RWHosts access while deleting the volume: ", externalAccess)
+					log.Debugf("Trying to remove externalAccess IP with mask having RWHosts access while deleting the volume: %v", externalAccess)
 					modifyNFSExport = true
 					modifyParam.RemoveReadWriteHosts = []string{externalAccess}
 				}
@@ -1215,7 +1285,7 @@ func (s *service) DeleteVolume(
 				if modifyNFSExport {
 					err = client.ModifyNFSExport(modifyParam, fsID)
 					if err != nil {
-						Log.Warn("failure when removing externalAccess from nfs export: ", err.Error())
+						log.Warnf("failure when removing externalAccess from nfs export: %v", err)
 					}
 				} else {
 					// either of RWRootHosts or RWHosts has one entry but it is not externalAccess
@@ -1230,7 +1300,7 @@ func (s *service) DeleteVolume(
 			}
 		}
 
-		Log.WithFields(logrus.Fields{"name": fsName, "id": fsID}).Info("Deleting NFS volume")
+		log.WithFields(csmlog.Fields{"name": fsName, "id": fsID}).Info("Deleting NFS volume")
 		err = system.DeleteFileSystem(fsName)
 		if err != nil {
 			if strings.Contains(err.Error(), sioGatewayFileSystemNotFound) {
@@ -1263,18 +1333,19 @@ func (s *service) DeleteVolume(
 	volID := getVolumeIDFromCsiVolumeID(csiVolID)
 	vol, err := s.getVolByID(volID, systemID)
 	if err != nil {
+
 		if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) {
-			Log.WithFields(logrus.Fields{"id": csiVolID}).Debug("volume is already deleted", csiVolID)
+			log.Debugf("volume is already deleted : %v", csiVolID)
 			return &csi.DeleteVolumeResponse{}, nil
 		}
 		if strings.Contains(err.Error(), sioVolumeRemovalOperationInProgress) {
-			Log.WithFields(logrus.Fields{"id": csiVolID}).Debug("volume is currently being deleted", csiVolID)
+			log.Debugf("volume is currently being deleted : %v", csiVolID)
 			return &csi.DeleteVolumeResponse{}, nil
 		}
 
 		if strings.Contains(err.Error(), "must be a hexadecimal number") {
 
-			Log.WithFields(logrus.Fields{"id": csiVolID}).Debug("volume id must be a hexadecimal number", csiVolID)
+			log.Debugf("volume id must be a hexadecimal number : %v", csiVolID)
 			return &csi.DeleteVolumeResponse{}, nil
 
 		}
@@ -1292,16 +1363,16 @@ func (s *service) DeleteVolume(
 
 	// If volume is marked for replication, remove the replication pair first.
 	if vol.VolumeReplicationState != "UnmarkedForReplication" {
-		Log.Printf("[DeleteVolume] - vol: %+v", vol)
+		log.Infof("[DeleteVolume] - vol: %+v", vol)
 		pair, err := s.removeVolumeFromReplicationPair(systemID, volID)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal,
 				"error removing replication pair: %s", err.Error())
 		}
-		Log.Printf("[DeleteVolume] - Removed Pair: %+v", pair)
+		log.Infof("[DeleteVolume] - Removed Pair: %+v", pair)
 	}
 
-	Log.WithFields(logrus.Fields{"name": vol.Name, "id": csiVolID}).Info("Deleting volume")
+	log.WithFields(csmlog.Fields{"name": vol.Name, "id": csiVolID}).Info("Deleting volume")
 	tgtVol := goscaleio.NewVolume(s.adminClients[systemID])
 	tgtVol.Volume = vol
 	err = tgtVol.RemoveVolume(removeModeOnlyMe)
@@ -1328,11 +1399,13 @@ func (s *service) DeleteVolume(
 	return &csi.DeleteVolumeResponse{}, nil
 }
 
+var CreateKubeClientSet = k8sutils.CreateKubeClientSet
+
 func (s *service) findNetworkInterfaceIPs() ([]string, error) {
 	if K8sClientset == nil {
-		err := k8sutils.CreateKubeClientSet()
+		err := CreateKubeClientSet()
 		if err != nil {
-			Log.Errorf("Failed to create Kubernetes clientset: %v", err)
+			log.Errorf("Failed to create Kubernetes clientset: %v", err)
 			return []string{}, err
 		}
 		K8sClientset = k8sutils.Clientset
@@ -1341,7 +1414,7 @@ func (s *service) findNetworkInterfaceIPs() ([]string, error) {
 	// Get the ConfigMap
 	configMap, err := K8sClientset.CoreV1().ConfigMaps(DriverNamespace).Get(context.TODO(), DriverConfigMap, metav1.GetOptions{})
 	if err != nil {
-		Log.Errorf("Failed to get the ConfigMap: %v", err)
+		log.Errorf("Failed to get the ConfigMap: %v", err)
 		return []string{}, err
 	}
 
@@ -1351,7 +1424,7 @@ func (s *service) findNetworkInterfaceIPs() ([]string, error) {
 	if configParamsYaml, ok := configMap.Data[DriverConfigParamsYaml]; ok {
 		err := yaml.Unmarshal([]byte(configParamsYaml), &configData)
 		if err != nil {
-			Log.Errorf("Failed to unmarshal the ConfigMap params: %v", err)
+			log.Errorf("Failed to unmarshal the ConfigMap params: %v", err)
 			return []string{}, err
 		}
 
@@ -1374,10 +1447,28 @@ func (s *service) ControllerPublishVolume(
 ) {
 	volumeContext := req.GetVolumeContext()
 	if volumeContext != nil {
-		Log.Printf("VolumeContext:")
+		log.Infof("VolumeContext:")
 		for key, value := range volumeContext {
-			Log.Printf("    [%s]=%s", key, value)
+			log.Infof("    [%s]=%s", key, value)
 		}
+	}
+
+	if req.GetVolumeCapability() == nil {
+		return nil, status.Error(codes.InvalidArgument, "volume capability is required")
+	}
+
+	am := req.GetVolumeCapability().GetAccessMode()
+	if am == nil {
+		return nil, status.Error(codes.InvalidArgument, "access mode is required")
+	}
+
+	if am.Mode == csi.VolumeCapability_AccessMode_UNKNOWN {
+		return nil, status.Error(codes.InvalidArgument, errUnknownAccessMode)
+	}
+
+	nodeID := req.GetNodeId()
+	if nodeID == "" {
+		return nil, status.Error(codes.InvalidArgument, "node ID is required")
 	}
 
 	// create publish context
@@ -1388,8 +1479,7 @@ func (s *service) ControllerPublishVolume(
 	publishContext["volumeContextId"] = csiVolID
 
 	if csiVolID == "" {
-		return nil, status.Error(codes.InvalidArgument,
-			"volume ID is required")
+		return nil, status.Error(codes.InvalidArgument, "volume ID is required")
 	}
 
 	// get systemID from req
@@ -1399,8 +1489,7 @@ func (s *service) ControllerPublishVolume(
 		systemID = s.opts.defaultSystemID
 	}
 	if systemID == "" {
-		return nil, status.Error(codes.InvalidArgument,
-			"systemID is not found in the request and there is no default system")
+		return nil, status.Error(codes.InvalidArgument, "systemID is not found in the request and there is no default system")
 	}
 
 	if err := s.requireProbe(ctx, systemID); err != nil {
@@ -1417,10 +1506,15 @@ func (s *service) ControllerPublishVolume(
 			"checkVolumesMap for id: %s failed : %s", csiVolID, err.Error())
 	}
 
-	nodeID := req.GetNodeId()
-	if nodeID == "" {
-		return nil, status.Error(codes.InvalidArgument,
-			"node ID is required")
+	// Check for NVMe type
+	isNVME := false
+	_, hostType, err := s.getHostIDAndType(systemID, nodeID)
+	if err != nil {
+		return nil, status.Errorf(codes.NotFound,
+			"error getting host ID and type for nodeID %s: %s", nodeID, err.Error())
+	}
+	if hostType == NVMeTCP {
+		isNVME = true
 	}
 
 	// Check for NFS protocol
@@ -1434,12 +1528,9 @@ func (s *service) ControllerPublishVolume(
 		fs, err := s.getFilesystemByID(fsID, systemID)
 		if err != nil {
 			if strings.EqualFold(err.Error(), sioGatewayFileSystemNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
-				return nil, status.Error(codes.NotFound,
-					"volume not found")
+				return nil, status.Error(codes.NotFound, "volume not found")
 			}
-			return nil, status.Errorf(codes.Internal,
-				"failure checking volume status before controller publish: %s",
-				err.Error())
+			return nil, status.Errorf(codes.Internal, "failure checking volume status before controller publish: %s", err.Error())
 		}
 
 		var ipAddresses []string
@@ -1447,7 +1538,7 @@ func (s *service) ControllerPublishVolume(
 		ipAddresses, err = s.findNetworkInterfaceIPs()
 		if err != nil || len(ipAddresses) == 0 {
 
-			Log.Printf("ControllerPublish - No network interfaces found, trying to get SDC IPs")
+			log.Infof("ControllerPublish - No network interfaces found, trying to get SDC IPs")
 			// get SDC IPs if Network Interface IPs not found
 			ipAddresses, err = s.getSDCIPs(nodeID, systemID)
 			if err != nil {
@@ -1456,26 +1547,11 @@ func (s *service) ControllerPublishVolume(
 				return nil, status.Errorf(codes.NotFound, "%s", "received empty sdcIPs")
 			}
 		}
-		Log.Printf("ControllerPublish - ipAddresses %v", ipAddresses)
+		log.Infof("ControllerPublish - ipAddresses %v", ipAddresses)
 
 		externalAccess := s.opts.ExternalAccess
 		publishContext["host"] = ipAddresses[0]
 
-		fsc := req.GetVolumeCapability()
-		if fsc == nil {
-			return nil, status.Error(codes.InvalidArgument,
-				"volume capability is required")
-		}
-
-		am := fsc.GetAccessMode()
-		if am == nil {
-			return nil, status.Error(codes.InvalidArgument,
-				"access mode is required")
-		}
-		if am.Mode == csi.VolumeCapability_AccessMode_UNKNOWN {
-			return nil, status.Error(codes.InvalidArgument,
-				errUnknownAccessMode)
-		}
 		// Export for NFS
 		resp, err := s.exportFilesystem(ctx, req, adminClient, fs, ipAddresses, externalAccess, nodeID, publishContext, am)
 		return resp, err
@@ -1485,131 +1561,26 @@ func (s *service) ControllerPublishVolume(
 	if err != nil {
 		if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") ||
 			strings.Contains(err.Error(), "Invalid volume") {
-			return nil, status.Error(codes.NotFound,
-				"volume not found")
+			return nil, status.Error(codes.NotFound, "volume not found")
 		}
-		return nil, status.Errorf(codes.Internal,
-			"failure checking volume status before controller publish: %s",
-			err.Error())
+		return nil, status.Errorf(codes.Internal, "failure checking volume status before controller publish: %s", err.Error())
 	}
+	log.Infof("Found volume: %s with volume ID: %s", vol.Name, vol.ID)
 
-	sdcID, err := s.getSDCID(nodeID, systemID)
-	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "%s", err.Error())
-	}
-
-	vc := req.GetVolumeCapability()
-	if vc == nil {
-		return nil, status.Error(codes.InvalidArgument,
-			"volume capability is required")
-	}
-
-	am := vc.GetAccessMode()
-	if am == nil {
-		return nil, status.Error(codes.InvalidArgument,
-			"access mode is required")
-	}
-
-	if am.Mode == csi.VolumeCapability_AccessMode_UNKNOWN {
-		return nil, status.Error(codes.InvalidArgument,
-			errUnknownAccessMode)
-	}
-	// Check if volume is published to any node already
-	allowMultipleMappings := "FALSE"
-	vcs := []*csi.VolumeCapability{req.GetVolumeCapability()}
-	isBlock := accTypeIsBlock(vcs)
-
-	if len(vol.MappedSdcInfo) > 0 {
-		for _, sdc := range vol.MappedSdcInfo {
-			if sdc.SdcID == sdcID {
-				// TODO check if published volume is compatible with this request
-				// volume already mapped
-				Log.Debug("volume already mapped")
-
-				// check for QoS limits of mapped volume
-				bandwidthLimit := volumeContext[KeyBandwidthLimitInKbps]
-				iopsLimit := volumeContext[KeyIopsLimit]
-				// validate requested QoS parameters
-				if err := validateQoSParameters(bandwidthLimit, iopsLimit, vol.Name); err != nil {
-					return nil, err
-				}
-
-				// check if volume QoS is same as requested QoS settings
-				if len(bandwidthLimit) > 0 && strconv.Itoa(sdc.LimitBwInMbps*1024) != bandwidthLimit {
-					return nil, status.Errorf(codes.InvalidArgument,
-						"volume %s already published with bandwidth limit: %d, but does not match the requested bandwidth limit: %s", vol.Name, sdc.LimitBwInMbps*1024, bandwidthLimit)
-				} else if len(iopsLimit) > 0 && strconv.Itoa(sdc.LimitIops) != iopsLimit {
-					return nil, status.Errorf(codes.InvalidArgument,
-						"volume %s already published with IOPS limit: %d, but does not match the requested IOPS limits: %s", vol.Name, sdc.LimitIops, iopsLimit)
-				}
-
-				return &csi.ControllerPublishVolumeResponse{}, nil
-			}
-		}
-
-		// If volume has SINGLE_NODE cap, go no farther
-		switch am.Mode {
-		case csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
-			csi.VolumeCapability_AccessMode_SINGLE_NODE_MULTI_WRITER,
-			csi.VolumeCapability_AccessMode_SINGLE_NODE_SINGLE_WRITER,
-			csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY:
-			return nil, status.Errorf(codes.FailedPrecondition,
-				"volume already published to SDC id: %s", vol.MappedSdcInfo[0].SdcID)
-		}
-
-		// All remaining cases are MULTI_NODE:
-		// This original code precludes block multi-writers,
-		// and is based on a faulty test that the Volume MappingToAllSdcsEnabled
-		// attribute must be set to allow multiple writers, which is not true.
-		// The proper way to control multiple mappings is with the allowMultipleMappings
-		// attribute passed in the MapVolumeSdcParameter. Unfortunately you cannot
-		// read this parameter back.
-
-		allowMultipleMappings, err = shouldAllowMultipleMappings(isBlock, am)
-		if err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "%s", err.Error())
-		}
-
-		if err := validateAccessType(am, isBlock); err != nil {
-			return nil, err
+	var publisher VolumePublisher
+	if isNVME {
+		publisher = &NVMePublisher{
+			svc: s,
+			vol: vol,
 		}
 	} else {
-		allowMultipleMappings, err = shouldAllowMultipleMappings(isBlock, am)
-		if err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "%s", err.Error())
+		publisher = &SDCPublisher{
+			svc: s,
+			vol: vol,
 		}
 	}
 
-	mapVolumeSdcParam := &siotypes.MapVolumeSdcParam{
-		SdcID:                 sdcID,
-		AllowMultipleMappings: allowMultipleMappings,
-		AllSdcs:               "",
-	}
-
-	targetVolume := goscaleio.NewVolume(adminClient)
-	targetVolume.Volume = &siotypes.Volume{ID: vol.ID}
-
-	err = targetVolume.MapVolumeSdc(mapVolumeSdcParam)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal,
-			"error mapping volume to node: %s", err.Error())
-	}
-
-	bandwidthLimit := volumeContext[KeyBandwidthLimitInKbps]
-	iopsLimit := volumeContext[KeyIopsLimit]
-
-	// validate requested QoS parameters
-	if err := validateQoSParameters(bandwidthLimit, iopsLimit, vol.Name); err != nil {
-		return nil, err
-	}
-	// check for atleast one of the QoS params should exist in storage class
-	if len(bandwidthLimit) > 0 || len(iopsLimit) > 0 {
-		if err = s.setQoSParameters(ctx, systemID, sdcID, bandwidthLimit, iopsLimit, vol.Name, csiVolID, nodeID); err != nil {
-			return nil, err
-		}
-	}
-
-	return &csi.ControllerPublishVolumeResponse{}, nil
+	return publisher.Publish(ctx, req, adminClient, systemID, csiVolID)
 }
 
 // validate the requested QoS parameters.
@@ -1638,7 +1609,7 @@ func (s *service) setQoSParameters(
 	iopsLimit string, volumeName string, csiVolID string,
 	nodeID string,
 ) error {
-	Log.Infof("Setting QoS limits for volume %s, mapped to SDC %s", volumeName, sdcID)
+	log.Infof("Setting QoS limits for volume %s, mapped to SDC %s", volumeName, sdcID)
 	adminClient := s.adminClients[systemID]
 	tgtVol := goscaleio.NewVolume(adminClient)
 	volID := getVolumeIDFromCsiVolumeID(csiVolID)
@@ -1655,7 +1626,7 @@ func (s *service) setQoSParameters(
 	err = tgtVol.SetMappedSdcLimits(&settings)
 	if err != nil {
 		// unpublish the volume
-		Log.Errorf("unpublishing volume since error in setting QoS parameters for volume: %s, error: %s", volumeName, err.Error())
+		log.Errorf("unpublishing volume since error in setting QoS parameters for volume: %s, error: %s", volumeName, err.Error())
 
 		_, newErr := s.ControllerUnpublishVolume(ctx, &csi.ControllerUnpublishVolumeRequest{
 			VolumeId: csiVolID,
@@ -1680,9 +1651,9 @@ func shouldAllowMultipleMappings(isBlock bool, accessMode *csi.VolumeCapability_
 		if isBlock {
 			return TRUE, nil
 		}
-		return FALSE, errors.New("Mount multinode multi-writer not allowed")
+		return FALSE, errors.New("mount multinode multi-writer not allowed")
 	case csi.VolumeCapability_AccessMode_MULTI_NODE_SINGLE_WRITER:
-		return FALSE, errors.New("Multinode single writer not supported")
+		return FALSE, errors.New("multinode single writer not supported")
 	default:
 		return FALSE, nil
 	}
@@ -1720,16 +1691,18 @@ func validateAccessType(
 
 func (s *service) ControllerUnpublishVolume(
 	ctx context.Context,
-	req *csi.ControllerUnpublishVolumeRequest) (
-	*csi.ControllerUnpublishVolumeResponse, error,
-) {
-	// get systemID from req
-	systemID := s.getSystemIDFromCsiVolumeID(req.GetVolumeId())
-	if systemID == "" {
-		// use default system
-		systemID = s.opts.defaultSystemID
+	req *csi.ControllerUnpublishVolumeRequest,
+) (*csi.ControllerUnpublishVolumeResponse, error) {
+	// Validate and Extract IDs
+	csiVolID := req.GetVolumeId()
+	if csiVolID == "" {
+		return nil, status.Error(codes.InvalidArgument, "volume ID is required")
 	}
 
+	systemID := s.getSystemIDFromCsiVolumeID(csiVolID)
+	if systemID == "" {
+		systemID = s.opts.defaultSystemID
+	}
 	if systemID == "" {
 		return nil, status.Error(codes.InvalidArgument,
 			"systemID is not found in the request and there is no default system")
@@ -1741,104 +1714,124 @@ func (s *service) ControllerUnpublishVolume(
 
 	s.logStatistics()
 
-	csiVolID := req.GetVolumeId()
-	if csiVolID == "" {
-		return nil, status.Error(codes.InvalidArgument,
-			"volume ID is required")
-	}
-	// ensure no ambiguity if legacy vol
-	err := s.checkVolumesMap(csiVolID)
-	if err != nil {
+	if err := s.checkVolumesMap(csiVolID); err != nil {
 		return nil, status.Errorf(codes.Internal,
-			"checkVolumesMap for id: %s failed : %s", csiVolID, err.Error())
+			"checkVolumesMap for id: %s failed: %s", csiVolID, err.Error())
 	}
+
 	nodeID := req.GetNodeId()
 	if nodeID == "" {
-		return nil, status.Error(codes.InvalidArgument,
-			"Node ID is required")
+		return nil, status.Error(codes.InvalidArgument, "Node ID is required")
 	}
 
-	adminClient := s.adminClients[systemID]
+	log.Infof("ControllerUnpublishVolume called for nodeID: %s", nodeID)
 
+	adminClient := s.adminClients[systemID]
 	isNFS := strings.Contains(csiVolID, "/")
 
+	// Handle NFS Volumes
 	if isNFS {
 		fsID := getFilesystemIDFromCsiVolumeID(csiVolID)
 		fs, err := s.getFilesystemByID(fsID, systemID)
 		if err != nil {
-			if strings.EqualFold(err.Error(), sioGatewayFileSystemNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
-				return nil, status.Error(codes.NotFound,
-					"volume not found")
+			if strings.EqualFold(err.Error(), sioGatewayFileSystemNotFound) ||
+				strings.Contains(err.Error(), "must be a hexadecimal number") {
+				return nil, status.Error(codes.NotFound, "volume not found")
 			}
 			return nil, status.Errorf(codes.Internal,
-				"failure checking volume status before controller publish: %s",
-				err.Error())
+				"failure checking volume status before controller unpublish: %s", err.Error())
 		}
 
-		var ipAddresses []string
-		ipAddresses, err = s.findNetworkInterfaceIPs()
+		ipAddresses, err := s.findNetworkInterfaceIPs()
 		if err != nil || len(ipAddresses) == 0 {
-
-			Log.Printf("ControllerUnPublish - No network interfaces found, trying to get SDC IPs")
+			log.Infof("No network interfaces found, trying to get SDC IPs")
 			ipAddresses, err = s.getSDCIPs(nodeID, systemID)
 			if err != nil {
 				return nil, status.Errorf(codes.NotFound, "%s", err.Error())
 			} else if len(ipAddresses) == 0 {
-				return nil, status.Errorf(codes.NotFound, "%s", "received empty sdcIPs")
+				return nil, status.Errorf(codes.NotFound, "received empty SDC IPs")
 			}
 		}
-		Log.Printf("ControllerUnPublish - ipAddresses %v", ipAddresses)
 
-		// unexport for NFS
-		err = s.unexportFilesystem(ctx, req, adminClient, fs, req.GetVolumeId(), ipAddresses, nodeID)
-		if err != nil {
+		log.Infof("SDC IP addresses: %v", ipAddresses)
+
+		if err := s.unexportFilesystem(ctx, req, adminClient, fs, csiVolID, ipAddresses, nodeID); err != nil {
 			return nil, err
 		}
-
 		return &csi.ControllerUnpublishVolumeResponse{}, nil
 	}
 
+	// Handle Block Volumes
 	volID := getVolumeIDFromCsiVolumeID(csiVolID)
 	vol, err := s.getVolByID(volID, systemID)
 	if err != nil {
 		if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) {
-			Log.Debugf("volume %s is already deleted", volID)
+			log.Debugf("volume %s is already deleted", volID)
 			return &csi.ControllerUnpublishVolumeResponse{}, nil
 		}
 		return nil, status.Errorf(codes.Internal,
-			"failure checking volume status before controller unpublish: %s",
-			err.Error())
+			"failure checking volume status before controller unpublish: %s", err.Error())
 	}
 
-	sdcID, err := s.getSDCID(nodeID, systemID)
-	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "%s", err.Error())
+	// Check Mapping and Protocol
+	var (
+		protocol     string
+		mappedToNode bool
+	)
+
+	hostID, _, err := s.getHostIDAndType(systemID, nodeID)
+	if err != nil || hostID == "" {
+		return nil, status.Errorf(codes.Internal,
+			"error getting host ID for nodeID %s: %s", nodeID, err.Error())
 	}
 
-	// check if volume is attached to node at all
-	mappedToNode := false
 	for _, mapping := range vol.MappedSdcInfo {
-		if mapping.SdcID == sdcID {
-			mappedToNode = true
-			break
+		log.Debugf("Checking mapping for nodeID: %s", nodeID)
+		log.Debugf("Mapping HostType: %s, Host ID: %s, Host Name: %s", mapping.HostType, mapping.SdcID, mapping.SdcName)
+
+		if mapping.HostType == "SdcHost" {
+			if mapping.SdcID == hostID {
+				protocol = SDC
+				mappedToNode = true
+				break
+			}
+		} else if mapping.HostType == "NVMeHost" {
+			if mapping.SdcID == hostID {
+				protocol = NVMeTCP
+				mappedToNode = true
+				break
+			}
 		}
 	}
 
 	if !mappedToNode {
-		Log.Debug("volume already unpublished")
+		log.Debug("Volume already unpublished")
 		return &csi.ControllerUnpublishVolumeResponse{}, nil
 	}
+
+	// Unmap Volume
 	targetVolume := goscaleio.NewVolume(adminClient)
 	targetVolume.Volume = vol
 
-	unmapVolumeSdcParam := &siotypes.UnmapVolumeSdcParam{
-		SdcID:   sdcID,
-		AllSdcs: "",
-	}
-
-	if err = targetVolume.UnmapVolumeSdc(unmapVolumeSdcParam); err != nil {
-		return nil, status.Errorf(codes.Internal,
-			"Error unmapping volume from node: %s", err.Error())
+	switch protocol {
+	case SDC:
+		unmapVolumeSdcParam := &siotypes.UnmapVolumeSdcParam{
+			SdcID:   hostID,
+			AllSdcs: "",
+		}
+		if err := targetVolume.UnmapVolumeSdc(unmapVolumeSdcParam); err != nil {
+			return nil, status.Errorf(codes.Internal,
+				"Error unmapping volume from SDC node: %s", err.Error())
+		}
+	case NVMeTCP:
+		unmapVolumeNVMeParam := &siotypes.UnmapVolumeNVMeParam{
+			HostID:   hostID,
+			AllHosts: "",
+		}
+		if err := targetVolume.RemoveMappedHost(unmapVolumeNVMeParam); err != nil {
+			return nil, status.Errorf(codes.Internal,
+				"Error unmapping volume from NVMe host: %s", err.Error())
+		}
 	}
 
 	return &csi.ControllerUnpublishVolumeResponse{}, nil
@@ -1985,7 +1978,7 @@ func (s *service) ListVolumes(
 	req *csi.ListVolumesRequest) (
 	*csi.ListVolumesResponse, error,
 ) {
-	Log.Printf("ListVolumes called")
+	log.Infof("ListVolumes called")
 
 	var systemID string
 	var entries []*csi.ListVolumesResponse_Entry
@@ -1997,11 +1990,11 @@ func (s *service) ListVolumes(
 
 		if systemID != "" {
 			if err := s.requireProbe(ctx, systemID); err != nil {
-				Log.Warnf("Could not probe system: %s", systemID)
+				log.Warnf("Could not probe system: %s", systemID)
 				continue
 			}
 		} else {
-			Log.Printf("SystemID is empty in controller array configuration")
+			log.Infof("SystemID is empty in controller array configuration")
 			return nil, status.Error(codes.InvalidArgument, "There is no SystemID in controller array configuration")
 		}
 
@@ -2039,7 +2032,7 @@ func (s *service) ListVolumes(
 		i := 0
 		for _, vol := range source {
 			if vol == nil {
-				Log.Printf("Volume[%d] is nil in ListVolumeResponse from system %s", i, systemID)
+				log.Infof("Volume[%d] is nil in ListVolumeResponse from system %s", i, systemID)
 				continue
 			}
 			entries[i] = &csi.ListVolumesResponse_Entry{
@@ -2114,7 +2107,7 @@ func (s *service) ListSnapshots(
 	}
 
 	if err := s.requireProbe(ctx, systemID); err != nil {
-		Log.Printf("Could not probe system: %s", systemID)
+		log.Infof("Could not probe system: %s", systemID)
 		code := status.Code(err)
 		if code == codes.NotFound {
 			return &csi.ListSnapshotsResponse{}, nil
@@ -2191,7 +2184,7 @@ func (s *service) listVolumes(systemID string, startToken int, maxEntries int, d
 	if doVols {
 		// Get the volumes from the cache if we can.
 		if startToken != 0 && len(s.volCache) > 0 {
-			Log.Printf("volume cache hit: %d volumes", len(s.volCache))
+			log.Infof("volume cache hit: %d volumes", len(s.volCache))
 			func() {
 				s.volCacheRWL.Lock()
 				defer s.volCacheRWL.Unlock()
@@ -2227,7 +2220,7 @@ func (s *service) listVolumes(systemID string, startToken int, maxEntries int, d
 	// Process snapshots.
 	if doSnaps {
 		if startToken != 0 && len(s.snapCache) > 0 {
-			Log.Printf("snap cache hit: %d snapshots", len(s.snapCache))
+			log.Infof("snap cache hit: %d snapshots", len(s.snapCache))
 			func() {
 				s.snapCacheRWL.Lock()
 				defer s.snapCacheRWL.Unlock()
@@ -2292,59 +2285,6 @@ func (s *service) listVolumes(systemID string, startToken int, maxEntries int, d
 	return volumes[startToken : startToken+maxEntries], nextTokenStr, nil
 }
 
-// Gets capacity of a given storage system. When storage pool name is provided, gets capcity of this storage pool only.
-func (s *service) getSystemCapacity(ctx context.Context, systemID, protectionDomain string, spName ...string) (int64, error) {
-	Log.Infof("Get capacity for system: %s, pool %s", systemID, spName)
-
-	if err := s.requireProbe(ctx, systemID); err != nil {
-		return 0, err
-	}
-
-	adminClient := s.adminClients[systemID]
-	system := s.systems[systemID]
-	if adminClient == nil || system == nil {
-		return 0, fmt.Errorf("can't find adminClient or system by id %s", systemID)
-	}
-
-	var statsFunc func() (*siotypes.Statistics, error)
-
-	// Default to get Capacity of system
-	statsFunc = system.GetStatistics
-
-	if len(spName) > 0 && spName[0] != "" {
-		// if storage pool is given, get capacity of storage pool
-		pdID, err := s.getProtectionDomainIDFromName(systemID, protectionDomain)
-		if err != nil {
-			return 0, err
-		}
-		sp, err := adminClient.FindStoragePool("", spName[0], "", pdID)
-		if err != nil {
-			return 0, status.Errorf(codes.Internal,
-				"unable to look up storage pool: %s on system: %s, err: %s",
-				spName, systemID, err.Error())
-		}
-		spc := goscaleio.NewStoragePoolEx(adminClient, sp)
-		statsFunc = spc.GetStatistics
-
-		if !s.opts.Thick {
-			if sp.CapacityUsageState == "Critical" {
-				return 0, nil
-			}
-		}
-	}
-
-	stats, err := statsFunc()
-	if err != nil {
-		return 0, status.Errorf(codes.Internal,
-			"unable to get system stats for system: %s, err: %s", systemID, err.Error())
-	}
-
-	if !s.opts.Thick {
-		return int64(stats.VolumeAllocationLimitInKb * bytesInKiB), nil
-	}
-	return int64(stats.CapacityAvailableForVolumeAllocationInKb * bytesInKiB), nil
-}
-
 // Gets capacity for all systems known to controller.
 // When storage pool name is provided, gets capacity of this storage pool name from all systems
 func (s *service) getCapacityForAllSystems(ctx context.Context, protectionDomain string, spName ...string) (int64, error) {
@@ -2362,7 +2302,7 @@ func (s *service) getCapacityForAllSystems(ctx context.Context, protectionDomain
 
 		if err != nil {
 			return 0, status.Errorf(codes.Internal,
-				"Unable to get capacity for system: %s, err: %s", array.SystemID, err.Error())
+				"unable to get system stats for system: %s, err: %s", array.SystemID, err.Error())
 		}
 
 		capacity += systemCapacity
@@ -2395,7 +2335,7 @@ func (s *service) GetCapacity(
 		spname := params[KeyStoragePool]
 		pd, ok := params[KeyProtectionDomain]
 		if !ok {
-			Log.Printf("Protection Domain name not provided; there could be conflicts if two storage pools share a name")
+			log.Infof("Protection Domain name not provided; there could be conflicts if two storage pools share a name")
 		}
 		for key, value := range params {
 			if strings.EqualFold(key, KeySystemID) {
@@ -2438,7 +2378,7 @@ func (s *service) GetCapacity(
 
 	maxVolSize, err := s.getMaximumVolumeSize(systemID)
 	if err != nil {
-		Log.Debug("GetMaxVolumeSize returning error ", err)
+		log.Debugf("GetMaxVolumeSize returning error: %v", err)
 	}
 
 	if maxVolSize < 0 {
@@ -2460,7 +2400,7 @@ func (s *service) GetCapacity(
 func (s *service) getSystemIDFromZoneLabelKey(req *csi.GetCapacityRequest) (systemID string, err error) {
 	zoneName, ok := req.AccessibleTopology.Segments[s.opts.zoneLabelKey]
 	if !ok {
-		Log.Infof("could not get availability zone from accessible topology. Getting capacity for all systems")
+		log.Infof("could not get availability zone from accessible topology. Getting capacity for all systems")
 		return "", nil
 	}
 
@@ -2487,13 +2427,13 @@ func (s *service) getMaximumVolumeSize(systemID string) (int64, error) {
 
 		vol1, err := adminClient.GetMaxVol()
 		if err != nil {
-			Log.Debug("GetMaxVolumeSize returning error ", err)
+			log.Debugf("GetMaxVolumeSize returning error: %v ", err)
 			return 0, err
 		}
 
 		value, err := strconv.ParseInt(vol1, 10, 64)
 		if err != nil {
-			Log.Debug("error converting str to int ", err)
+			log.Debugf("error converting str to int: %v ", err)
 			return 0, err
 
 		}
@@ -2633,13 +2573,15 @@ func (s *service) ControllerGetCapabilities(
 }
 
 func (s *service) getZoneFromZoneLabelKey(ctx context.Context, zoneLabelKey string) (zone string, err error) {
+	log := log.WithContext(ctx)
+
 	// get labels for this service, s
 	labels, err := GetNodeLabels(ctx, s)
 	if err != nil {
 		return "", err
 	}
 
-	Log.Infof("Listing labels: %v", labels)
+	log.Infof("Listing labels: %v", labels)
 
 	// get the zone name from the labels
 	if val, ok := labels[zoneLabelKey]; ok {
@@ -2652,8 +2594,10 @@ func (s *service) getZoneFromZoneLabelKey(ctx context.Context, zoneLabelKey stri
 // systemProbeAll will iterate through all arrays in service.opts.arrays and probe them. If failed, it logs
 // the failed system name
 func (s *service) systemProbeAll(ctx context.Context) error {
+	log := log.WithContext(ctx)
+
 	// probe all arrays
-	Log.Infoln("Probing all associated arrays")
+	log.Infof("Probing all associated arrays")
 	allArrayFail := true
 	errMap := make(map[string]error)
 	zoneName := ""
@@ -2665,7 +2609,7 @@ func (s *service) systemProbeAll(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		Log.Infof("probing zoneLabel '%s', zone value: '%s'", s.opts.zoneLabelKey, zoneName)
+		log.Infof("probing zoneLabel '%s', zone value: '%s'", s.opts.zoneLabelKey, zoneName)
 	}
 
 	newCtx, cancel := s.createProbeContextWithDeadline(ctx)
@@ -2676,7 +2620,7 @@ func (s *service) systemProbeAll(ctx context.Context) error {
 		if usingZones && !array.isInZone(zoneName) {
 			// Driver node containers should not probe arrays that exist outside their assigned zone
 			// Driver controller container should probe all arrays
-			Log.Infof("array %s zone %s does not match %s, not pinging this array\n", array.SystemID, array.AvailabilityZone.Name, zoneName)
+			log.Infof("array %s zone %s does not match %s, not pinging this array\n", array.SystemID, array.AvailabilityZone.Name, zoneName)
 			errMap[array.SystemID] = fmt.Errorf("array %s zone %s does not match %s, not pinging this array", array.SystemID, array.AvailabilityZone.Name, zoneName)
 			continue
 		}
@@ -2685,14 +2629,14 @@ func (s *service) systemProbeAll(ctx context.Context) error {
 		systemID := array.SystemID
 		if err != nil {
 			errMap[systemID] = err
-			Log.Errorf("array %s probe failed: %v", array.SystemID, err)
+			log.Errorf("array %s probe failed: %v", array.SystemID, err)
 		} else {
 			allArrayFail = false
-			Log.Infof("array %s probed successfully", systemID)
+			log.Infof("array %s probed successfully", systemID)
 		}
 	}
 
-	Log.Printf("[SystemProbeAll] Number of failed probes: %d", len(errMap))
+	log.Infof("[SystemProbeAll] Number of failed probes: %d", len(errMap))
 
 	if allArrayFail {
 		return status.Error(codes.FailedPrecondition,
@@ -2702,8 +2646,78 @@ func (s *service) systemProbeAll(ctx context.Context) error {
 	return nil
 }
 
+func ExtractIP(endpoint string) (string, error) {
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return "", err
+	}
+
+	host := u.Hostname() // strips port if present
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return "", fmt.Errorf("not a valid IP: %s", host)
+	}
+
+	return ip.String(), nil
+}
+
+func oidcPrechecks(array *ArrayConnectionData) error {
+	if array.OidcClientID == "" {
+		return status.Error(codes.FailedPrecondition, "missing OidcClientID")
+	}
+	if array.OidcClientSecret == "" {
+		return status.Error(codes.FailedPrecondition, "missing OidcClientSecret")
+	}
+	if array.CiamClientID == "" {
+		return status.Error(codes.FailedPrecondition, "missing CiamClientID")
+	}
+	if array.CiamClientSecret == "" {
+		return status.Error(codes.FailedPrecondition, "missing CiamClientSecret")
+	}
+	if array.Issuer == "" {
+		return status.Error(codes.FailedPrecondition, "missing Issuer")
+	}
+
+	return nil
+}
+
+func ParseScopes(scopesCSV string) []string {
+	csv := strings.TrimSpace(scopesCSV)
+	if csv == "" {
+		return nil
+	}
+
+	parts := strings.Split(csv, ",")
+	out := make([]string, 0, len(parts))
+	seen := make(map[string]struct{})
+
+	for _, p := range parts {
+		s := strings.TrimSpace(p)
+		if s == "" {
+			continue
+		}
+		if _, ok := seen[s]; !ok {
+			seen[s] = struct{}{}
+			out = append(out, s)
+		}
+	}
+
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
 // systemProbe will probe the given array
 func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) error {
+	lock := s.getProbeLock(array.SystemID)
+	log.Debugf("[systemProbe] Waiting for lock for systemID=%s", array.SystemID)
+	lock.Lock()
+	defer lock.Unlock()
+	log.Debugf("[systemProbe] Acquired lock for systemID=%s, starting probe", array.SystemID)
+
+	log := csmlog.GetLogger().WithContext(ctx)
+
 	// Check that we have the details needed to login to the Gateway
 	if array.Endpoint == "" {
 		return status.Error(codes.FailedPrecondition,
@@ -2743,18 +2757,52 @@ func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) e
 		}
 	}
 
-	Log.Printf("Login to PowerFlex Gateway, system=%s, endpoint=%s, user=%s\n", systemID, array.Endpoint, array.Username)
+	log.Infof("Login to PowerFlex Gateway, system=%s, endpoint=%s, user=%s\n", systemID, array.Endpoint, array.Username)
 
 	client := s.adminClients[systemID]
 	if client.GetToken() == "" {
-		_, err := client.WithContext(ctx).Authenticate(&goscaleio.ConfigConnect{
-			Endpoint: array.Endpoint,
-			Username: array.Username,
-			Password: array.Password,
-		})
-		if err != nil {
-			return status.Errorf(codes.FailedPrecondition,
-				"unable to login to PowerFlex Gateway: %s", err.Error())
+		if s.opts.AuthType == "OIDC" {
+			log.Debugf("Authentication via OIDC")
+
+			err := oidcPrechecks(array)
+			if err != nil {
+				return status.Errorf(codes.FailedPrecondition,
+					"OIDC prechecks failed: %s", err.Error())
+			}
+
+			pfmpIP, err := ExtractIP(array.Endpoint)
+			if err != nil {
+				return status.Errorf(codes.FailedPrecondition,
+					"unable to extract endpoint IP: %s", err.Error())
+			}
+
+			_, err = client.WithContext(ctx).Authenticate(&goscaleio.ConfigConnect{
+				Endpoint:         array.Endpoint,
+				AuthType:         s.opts.AuthType,
+				PfmpIP:           pfmpIP,
+				CiamClientID:     array.CiamClientID,
+				CiamClientSecret: array.CiamClientSecret,
+				OidcClientID:     array.OidcClientID,
+				OidcClientSecret: array.OidcClientSecret,
+				Issuer:           array.Issuer,
+				Insecure:         array.SkipCertificateValidation,
+				Scopes:           ParseScopes(array.Scopes),
+			})
+			if err != nil {
+				return status.Errorf(codes.FailedPrecondition,
+					"unable to login to PowerFlex Gateway: %s", err.Error())
+			}
+		} else {
+			log.Debugf("Basic Authentication")
+			_, err := client.WithContext(ctx).Authenticate(&goscaleio.ConfigConnect{
+				Endpoint: array.Endpoint,
+				Username: array.Username,
+				Password: array.Password,
+			})
+			if err != nil {
+				return status.Errorf(codes.FailedPrecondition,
+					"unable to login to PowerFlex Gateway: %s", err.Error())
+			}
 		}
 	}
 
@@ -2769,7 +2817,7 @@ func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) e
 
 		s.systems[systemID] = system
 		if system.System != nil && system.System.Name != "" {
-			Log.Printf("Found Name for system=%s with ID=%s", system.System.Name, system.System.ID)
+			log.Infof("Found Name for system=%s with ID=%s", system.System.Name, system.System.ID)
 			s.connectedSystemNameToID[system.System.Name] = system.System.ID
 			s.systems[system.System.ID] = system
 			s.adminClients[system.System.ID] = client
@@ -2784,15 +2832,15 @@ func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) e
 
 	sysID := systemID
 	if id, ok := s.connectedSystemNameToID[systemID]; ok {
-		Log.Printf("System with name %s found id: %s", systemID, id)
+		log.Infof("System with name %s found id: %s", systemID, id)
 		sysID = id
 		s.opts.arrays[sysID] = array
 	}
 
 	if array.IsDefault {
-		Log.Infof("default array is set to array ID: %s", sysID)
+		log.Infof("default array is set to array ID: %s", sysID)
 		s.opts.defaultSystemID = sysID
-		Log.Printf("%s is the default array, skipping VolumePrefixToSystems map update. \n", sysID)
+		log.Infof("%s is the default array, skipping VolumePrefixToSystems map update. \n", sysID)
 	} else {
 		err := s.UpdateVolumePrefixToSystemsMap(sysID)
 		if err != nil {
@@ -2803,9 +2851,23 @@ func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) e
 	return nil
 }
 
+func (s *service) getProbeLock(systemID string) *sync.Mutex {
+	actual, loaded := s.probeLocks.LoadOrStore(systemID, &sync.Mutex{})
+	if loaded {
+		log.Debugf("[probeLock] Reusing existing lock for systemID=%s", systemID)
+	} else {
+		log.Debugf("[probeLock] Created new lock for systemID=%s", systemID)
+	}
+	return actual.(*sync.Mutex)
+}
+
 func (s *service) requireProbe(ctx context.Context, systemID string) error {
+	log := csmlog.GetLogger().WithContext(ctx)
+
 	if s.adminClients[systemID] == nil || s.systems[systemID] == nil {
-		Log.Debugf("probing system %s automatically", systemID)
+		mx.Lock()
+		defer mx.Unlock()
+		log.Debugf("probing system %s automatically", systemID)
 		array, ok := s.opts.arrays[systemID]
 		if ok {
 			if err := s.systemProbe(ctx, array); err != nil {
@@ -2819,6 +2881,10 @@ func (s *service) requireProbe(ctx context.Context, systemID string) error {
 	}
 
 	return nil
+}
+
+var createSnapshotFunc = func(system *goscaleio.System, snapParam *siotypes.CreateSnapshotParam) (*siotypes.SnapshotVolumesResp, error) {
+	return system.CreateSnapshot(snapParam)
 }
 
 // CreateSnapshot creates a snapshot.
@@ -2866,7 +2932,7 @@ func (s *service) CreateSnapshot(
 		name = strings.Replace(name, "snapshot-", "sn-", 1)
 		length := int(math.Min(float64(len(name)), 31))
 		name = name[0:length]
-		Log.Printf("Requested name %s longer than 31 character max, truncated to %s\n", req.Name, name)
+		log.Infof("Requested name %s longer than 31 character max, truncated to %s\n", req.Name, name)
 		req.Name = name
 	}
 
@@ -2930,7 +2996,7 @@ func (s *service) CreateSnapshot(
 		csiSnapResponse := &csi.CreateSnapshotResponse{Snapshot: snapshot}
 		s.clearCache()
 
-		Log.Printf("createSnapshot: SnapshotId %s SourceVolumeId %s CreationTime %s",
+		log.Infof("createSnapshot: SnapshotId %s SourceVolumeId %s CreationTime %s",
 			snapshot.SnapshotId, snapshot.SourceVolumeId, snapshot.CreationTime.AsTime().Format(time.RFC3339Nano))
 		return csiSnapResponse, nil
 
@@ -2939,21 +3005,22 @@ func (s *service) CreateSnapshot(
 	volID := getVolumeIDFromCsiVolumeID(csiVolID)
 
 	// Check for idempotent request, i.e. the snapshot has been already created, by looking up the name.
-	existingVols, err := s.adminClients[systemID].GetVolume("", "", "", req.Name, false)
+	adminClient := s.adminClients[systemID]
+	existingVols, err := getVolumeFunc(adminClient, "", "", "", req.Name, false)
 	noVolErrString1 := "Error: problem finding volume: Volume not found"
 	noVolErrString2 := "Error: problem finding volume: Could not find the volume"
 	if (err != nil) && !(strings.Contains(err.Error(), noVolErrString1) || strings.Contains(err.Error(), noVolErrString2)) {
-		Log.Printf("[CreateSnapshot] Idempotency check: GetVolume returned error: %s", err.Error())
+		log.Infof("[CreateSnapshot] Idempotency check: GetVolume returned error: %s", err.Error())
 		return nil, status.Errorf(codes.Internal, "Failed to create snapshot -- GetVolume returned unexpected error: %s", err.Error())
 	}
 
 	for _, vol := range existingVols {
 		ancestor := vol.AncestorVolumeID
-		Log.Printf("idempotent Name %s Name %s Ancestor %s id %s VTree %s pool %s\n",
+		log.Infof("idempotent Name %s Name %s Ancestor %s id %s VTree %s pool %s\n",
 			vol.Name, req.Name, ancestor, volID, vol.VTreeID, vol.StoragePoolID)
 		if vol.Name == req.Name && vol.AncestorVolumeID == volID {
 			// populate response structure
-			Log.Printf("Idempotent request, snapshot id %s for source vol %s in system %s already exists\n", vol.ID, vol.AncestorVolumeID, systemID)
+			log.Infof("Idempotent request, snapshot id %s for source vol %s in system %s already exists\n", vol.ID, vol.AncestorVolumeID, systemID)
 			snapshot := s.getCSISnapshot(vol, systemID)
 			resp := &csi.CreateSnapshotResponse{Snapshot: snapshot}
 			return resp, nil
@@ -2961,7 +3028,7 @@ func (s *service) CreateSnapshot(
 	}
 
 	// Validate volume
-	vol, err := s.getVolByID(volID, systemID)
+	vol, err := getVolByIDFunc(s, volID, systemID)
 	if err != nil {
 		if strings.EqualFold(err.Error(), sioGatewayVolumeNotFound) {
 			return nil, status.Errorf(codes.NotFound, "volume %s was not found", volID)
@@ -2970,7 +3037,7 @@ func (s *service) CreateSnapshot(
 			"failure checking volume status: %s", err.Error())
 	}
 	vtreeID := vol.VTreeID
-	Log.Printf("vtree ID: %s\n", vtreeID)
+	log.Infof("vtree ID: %s\n", vtreeID)
 
 	// Build list of volumes to be snapshotted.
 	snapshotDefs := make([]*siotypes.SnapshotDef, 0)
@@ -2992,7 +3059,7 @@ func (s *service) CreateSnapshot(
 			if consistencyGroupSystem != "" && consistencyGroupSystem != systemID {
 				// system needs to be the same throughout snapshot consistency group, this is an error
 				err = status.Errorf(codes.Internal, "Consistency group needs to be on the same system but vol %s is not on system: %s ", v, systemID)
-				Log.Errorf("Consistency group needs to be on the same system but vol %s is not on system: %s ", v, systemID)
+				log.Errorf("Consistency group needs to be on the same system but vol %s is not on system: %s ", v, systemID)
 				return nil, err
 			}
 			v = getVolumeIDFromCsiVolumeID(v)
@@ -3010,10 +3077,17 @@ func (s *service) CreateSnapshot(
 			snapshotDefs = append(snapshotDefs, &snapshotDefX)
 		}
 	}
-	snapParam := &siotypes.SnapshotVolumesParam{SnapshotDefs: snapshotDefs, AccessMode: "ReadOnly"}
 
 	// Create snapshot(s)
-	snapResponse, err := s.systems[systemID].CreateSnapshotConsistencyGroup(snapParam)
+	snapResponse := &siotypes.SnapshotVolumesResp{}
+	if vol.GenType == "EC" {
+		snapParam := &siotypes.CreateSnapshotParam{SnapshotDefs: snapshotDefs}
+		system := s.systems[systemID]
+		snapResponse, err = createSnapshotFunc(system, snapParam)
+	} else {
+		snapParam := &siotypes.SnapshotVolumesParam{SnapshotDefs: snapshotDefs, AccessMode: "ReadOnly"}
+		snapResponse, err = s.systems[systemID].CreateSnapshotConsistencyGroup(snapParam)
+	}
 	if err != nil {
 		return nil, status.Errorf(codes.AlreadyExists, "Failed to create snapshot: %s", err.Error())
 	}
@@ -3036,7 +3110,7 @@ func (s *service) CreateSnapshot(
 	resp := &csi.CreateSnapshotResponse{Snapshot: snapshot}
 	s.clearCache()
 
-	Log.Printf("createSnapshot: SnapshotId %s SourceVolumeId %s CreationTime %s",
+	log.Infof("createSnapshot: SnapshotId %s SourceVolumeId %s CreationTime %s",
 		snapshot.SnapshotId, snapshot.SourceVolumeId, snapshot.CreationTime.AsTime().Format(time.RFC3339Nano))
 	return resp, nil
 }
@@ -3052,7 +3126,7 @@ func generateSnapName(volumeName string) string {
 	namebytes := []byte(name)
 	if len(namebytes) > 31 {
 		name = string(namebytes[0:31])
-		Log.Printf("Requested name %s longer than 31 character max, truncated to %s\n", string(namebytes), name)
+		log.Infof("Requested name %s longer than 31 character max, truncated to %s\n", string(namebytes), name)
 	}
 	return name
 }
@@ -3065,7 +3139,7 @@ func (s *service) DeleteSnapshot(
 	// Display any secrets passed in
 	secrets := req.GetSecrets()
 	for k, v := range secrets {
-		Log.Printf("secret: %s = %s", k, v)
+		log.Infof("secret: %s = %s", k, v)
 	}
 
 	// Validate snapshot volume
@@ -3107,7 +3181,7 @@ func (s *service) DeleteSnapshot(
 			}
 			if err != nil {
 				if strings.Contains(err.Error(), sioGatewayFileSystemNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
-					Log.Printf("Snapshot %s already deleted on system %s \n", snapID, systemID)
+					log.Infof("Snapshot %s already deleted on system %s \n", snapID, systemID)
 					return &csi.DeleteSnapshotResponse{}, nil
 				}
 				return nil, err
@@ -3115,7 +3189,7 @@ func (s *service) DeleteSnapshot(
 		}
 		if err != nil {
 			if strings.Contains(err.Error(), sioGatewayFileSystemNotFound) || strings.Contains(err.Error(), "must be a hexadecimal number") {
-				Log.Printf("Snapshot %s already deleted on system %s \n", snapID, systemID)
+				log.Infof("Snapshot %s already deleted on system %s \n", snapID, systemID)
 				return &csi.DeleteSnapshotResponse{}, nil
 			}
 			return nil, err
@@ -3126,7 +3200,7 @@ func (s *service) DeleteSnapshot(
 	vol, err := s.getVolByID(snapID, systemID)
 	if err != nil {
 		if strings.Contains(err.Error(), "Could not find the volume") || strings.Contains(err.Error(), "must be a hexadecimal number") {
-			Log.Printf("Snapshot %s already deleted on system %s \n", snapID, systemID)
+			log.Infof("Snapshot %s already deleted on system %s \n", snapID, systemID)
 			return &csi.DeleteSnapshotResponse{}, nil
 		}
 		return nil, status.Errorf(codes.Internal, "Failed to retrieve snapshot: %s", err.Error())
@@ -3174,7 +3248,8 @@ func (s *service) DeleteSnapshotConsistencyGroup(
 	cgVols := make([]*siotypes.Volume, 0)
 	exposedVols := make([]string, 0)
 	cgID := snapVol.ConsistencyGroupID
-	Log.Printf("Called DeleteSnapshotConsistencyGroup id: cg %s\n", cgID)
+	//
+	log.Infof("Called DeleteSnapshotConsistencyGroup id: cg %s\n", cgID)
 
 	// make call to cluster to get all volumes
 	// Collect a list of the volumes in the same consistency group (cgVols)
@@ -3182,7 +3257,7 @@ func (s *service) DeleteSnapshotConsistencyGroup(
 	sioVols, err := adminClient.GetVolume("", "", "", "", true)
 	for _, vol := range sioVols {
 		if vol.ConsistencyGroupID == cgID {
-			Log.Printf("Name %s CG %s ID %s", vol.Name, vol.ConsistencyGroupID, vol.ID)
+			log.Infof("Name %s CG %s ID %s", vol.Name, vol.ConsistencyGroupID, vol.ID)
 			cgVols = append(cgVols, vol)
 			if len(vol.MappedSdcInfo) > 0 {
 				exposedVols = append(exposedVols, fmt.Sprintf("%s (%s) ", vol.Name, vol.ID))
@@ -3197,10 +3272,10 @@ func (s *service) DeleteSnapshotConsistencyGroup(
 	}
 	// If there are no volumes, at least add the original one passed in.
 	if len(cgVols) == 0 {
-		Log.Printf("Name %s CG %s ID %s", snapVol.Name, snapVol.ConsistencyGroupID, snapVol.ID)
+		log.Infof("Name %s CG %s ID %s", snapVol.Name, snapVol.ConsistencyGroupID, snapVol.ID)
 		cgVols = append(cgVols, snapVol)
 	}
-	Log.Printf("CG Snapshots to be deleted: %v\n", cgVols)
+	log.Infof("CG Snapshots to be deleted: %v\n", cgVols)
 
 	// Otherwise let's delete them all. If there is an error we fail immediately.
 	s.clearCache()
@@ -3219,7 +3294,8 @@ func (s *service) DeleteSnapshotConsistencyGroup(
 }
 
 func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
-	Log.Printf("[ControllerExpandVolume] req: %+v", req)
+	log := log.WithContext(ctx)
+	log.Infof("[ControllerExpandVolume] req: %+v", req)
 
 	var reqID string
 	var err error
@@ -3271,28 +3347,23 @@ func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.Controlle
 
 		fsName := fs.Name
 		cr := req.GetCapacityRange()
-		Log.Printf("cr:%d", cr)
+		log.Infof("cr:%d", cr)
 		requestedSize := int(cr.GetRequiredBytes())
+		log.Infof("req.size:%d", requestedSize)
+		log.Infof("Executing ExpandVolume: reqID=%s, fsName=%s, requestedSize=%d", reqID, fsName, requestedSize)
 
-		Log.Printf("req.size:%d", requestedSize)
-		fields := map[string]interface{}{
-			"RequestID":      reqID,
-			"fileSystemName": fsName,
-			"RequestedSize":  requestedSize,
-		}
-		Log.WithFields(fields).Info("Executing ExpandVolume with following fields")
 		allocatedSize := fs.SizeTotal
-		Log.Printf("allocatedsize:%d", allocatedSize)
+		log.Infof("allocatedsize:%d", allocatedSize)
 
 		// nil response returned if volume shrink operation is tried
 		if requestedSize < allocatedSize {
-			Log.Printf("volume shrink tried")
+			log.Infof("volume shrink tried")
 			return &csi.ControllerExpandVolumeResponse{}, nil
 		}
 
 		// idempotency check
 		if requestedSize == allocatedSize {
-			Log.Infof("Idempotent call detected for volume (%s) with requested size (%d) SizeInKb and allocated size (%d) SizeInKb",
+			log.Infof("Idempotent call detected for volume (%s) with requested size (%d) SizeInKb and allocated size (%d) SizeInKb",
 				fsName, requestedSize, allocatedSize)
 			return &csi.ControllerExpandVolumeResponse{
 				CapacityBytes:         int64(requestedSize),
@@ -3306,7 +3377,7 @@ func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.Controlle
 		}
 
 		if err := system.ModifyFileSystem(&siotypes.FSModify{Size: requestedSize}, fsID); err != nil {
-			Log.Errorf("NFS volume expansion failed with error: %s", err.Error())
+			log.Errorf("NFS volume expansion failed with error: %s", err.Error())
 			return nil, status.Error(codes.Internal, err.Error())
 		}
 
@@ -3316,14 +3387,14 @@ func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.Controlle
 		if isQuotaEnabled && fs.IsQuotaEnabled {
 			treeQuota, err := system.GetTreeQuotaByFSID(fsID)
 			if err != nil {
-				Log.Errorf("Fetching tree quota for NFS volume failed, error: %s", err.Error())
+				log.Errorf("Fetching tree quota for NFS volume failed, error: %s", err.Error())
 				return nil, status.Error(codes.Internal, err.Error())
 			}
 
 			// Modify Tree Quota
 			updatedSoftLimit := treeQuota.SoftLimit * (requestedSize / treeQuota.HardLimit)
 			treeQuotaID := treeQuota.ID
-			Log.Infof("Modifying tree quota ID %s for NFS volume ID: %s", treeQuotaID, fsID)
+			log.Infof("Modifying tree quota ID %s for NFS volume ID: %s", treeQuotaID, fsID)
 			quotaModify := &siotypes.TreeQuotaModify{
 				HardLimit: requestedSize,
 				SoftLimit: updatedSoftLimit,
@@ -3331,10 +3402,10 @@ func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.Controlle
 
 			err = system.ModifyTreeQuota(quotaModify, treeQuotaID)
 			if err != nil {
-				Log.Errorf("Modifying tree quota for NFS volume failed, error: %s", err.Error())
+				log.Errorf("Modifying tree quota for NFS volume failed, error: %s", err.Error())
 				return nil, status.Error(codes.Internal, err.Error())
 			}
-			Log.Infof("Tree quota modified successfully.")
+			log.Infof("Tree quota modified successfully.")
 		}
 
 		csiResp := &csi.ControllerExpandVolumeResponse{
@@ -3370,27 +3441,27 @@ func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.Controlle
 
 	volName := vol.Name
 	cr := req.GetCapacityRange()
-	Log.Printf("cr:%d", cr)
+	log.Infof("cr:%d", cr)
 	requestedSize, err := validateVolSize(cr)
 	if err != nil {
 		return nil, err
 	}
-	Log.Printf("req.size:%d", requestedSize)
+	log.Infof("req.size:%d", requestedSize)
 	fields := map[string]interface{}{
 		"RequestID":     reqID,
 		"VolumeName":    volName,
 		"RequestedSize": requestedSize,
 	}
-	Log.WithFields(fields).Info("Executing ExpandVolume with following fields")
+	log.WithFields(fields).Info("Executing ExpandVolume with following fields")
 	allocatedSize := int64(vol.SizeInKb)
-	Log.Printf("allocatedsize:%d", allocatedSize)
+	log.Infof("allocatedsize:%d", allocatedSize)
 
 	if requestedSize < allocatedSize {
 		return &csi.ControllerExpandVolumeResponse{}, nil
 	}
 
 	if requestedSize == allocatedSize {
-		Log.Infof("Idempotent call detected for volume (%s) with requested size (%d) SizeInKb and allocated size (%d) SizeInKb",
+		log.Infof("Idempotent call detected for volume (%s) with requested size (%d) SizeInKb and allocated size (%d) SizeInKb",
 			volName, requestedSize, allocatedSize)
 		return &csi.ControllerExpandVolumeResponse{
 			CapacityBytes:         requestedSize * bytesInKiB,
@@ -3403,13 +3474,13 @@ func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.Controlle
 	tgtVol.Volume = vol
 	err = tgtVol.SetVolumeSize(strconv.Itoa(int(reqSize)))
 	if err != nil {
-		Log.Errorf("Failed to execute ExpandVolume() with error (%s)", err.Error())
+		log.Errorf("Failed to execute ExpandVolume() with error (%s)", err.Error())
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
 	// If volume is marked for replication, remove the replication pair first.
 	if vol.VolumeReplicationState != "UnmarkedForReplication" {
-		Log.Printf("[ControllerExpandVolume] - vol: %+v", vol)
+		log.Infof("[ControllerExpandVolume] - vol: %+v", vol)
 		err := s.expandReplicationPair(ctx, req, systemID, volID)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal,
@@ -3483,17 +3554,17 @@ func (s *service) Clone(req *csi.CreateVolumeRequest,
 	noVolErrString1 := "Error: problem finding volume: Volume not found"
 	noVolErrString2 := "Error: problem finding volume: Could not find the volume"
 	if (err != nil) && !(strings.Contains(err.Error(), noVolErrString1) || strings.Contains(err.Error(), noVolErrString2)) {
-		Log.Printf("[Clone] Idempotency check: GetVolume returned error: %s", err.Error())
+		log.Infof("[Clone] Idempotency check: GetVolume returned error: %s", err.Error())
 		return nil, status.Errorf(codes.Internal, "Failed to create clone -- GetVolume returned unexpected error: %s", err.Error())
 	}
 
 	for _, vol := range existingVols {
 		if vol.Name == name && vol.StoragePoolID == srcVol.StoragePoolID {
-			Log.Printf("Requested volume %s already exists", name)
+			log.Infof("Requested volume %s already exists", name)
 			csiVolume := s.getCSIVolume(vol, systemID)
 			csiVolume.ContentSource = req.GetVolumeContentSource()
 			copyInterestingParameters(req.GetParameters(), csiVolume.VolumeContext)
-			Log.Printf("Requested volume (from clone) already exists %s (%s) storage pool %s",
+			log.Infof("Requested volume (from clone) already exists %s (%s) storage pool %s",
 				csiVolume.VolumeContext["Name"], csiVolume.VolumeId, csiVolume.VolumeContext["StoragePoolName"])
 			return &csi.CreateVolumeResponse{Volume: csiVolume}, nil
 
@@ -3504,13 +3575,22 @@ func (s *service) Clone(req *csi.CreateVolumeRequest,
 	snapshotDefs := make([]*siotypes.SnapshotDef, 0)
 	snapDef := &siotypes.SnapshotDef{VolumeID: sourceVolID, SnapshotName: name}
 	snapshotDefs = append(snapshotDefs, snapDef)
-	snapParam := &siotypes.SnapshotVolumesParam{SnapshotDefs: snapshotDefs, AccessMode: "ReadWrite"}
 
+	snapResponse := &siotypes.SnapshotVolumesResp{}
 	// Create snapshot
 	system := s.systems[systemID]
-	snapResponse, err := system.CreateSnapshotConsistencyGroup(snapParam)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Failed to call CreateSnapshotConsistencyGroup to clone volume: %s", err.Error())
+	if srcVol.GenType == "EC" {
+		snapParam := &siotypes.CreateSnapshotParam{SnapshotDefs: snapshotDefs}
+		snapResponse, err = system.CreateThinClone(snapParam)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Failed to call CreateThinClone to clone volume: %s", err.Error())
+		}
+	} else {
+		snapParam := &siotypes.SnapshotVolumesParam{SnapshotDefs: snapshotDefs, AccessMode: "ReadWrite"}
+		snapResponse, err = system.CreateSnapshotConsistencyGroup(snapParam)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Failed to call CreateSnapshotConsistencyGroup to clone volume: %s", err.Error())
+		}
 	}
 
 	if len(snapResponse.VolumeIDList) != 1 {
@@ -3530,7 +3610,7 @@ func (s *service) Clone(req *csi.CreateVolumeRequest,
 	csiVolume.ContentSource = req.GetVolumeContentSource()
 	copyInterestingParameters(req.GetParameters(), csiVolume.VolumeContext)
 
-	Log.Printf("Volume (from volume clone) %s (%s) storage pool %s",
+	log.Infof("Volume (from volume clone) %s (%s) storage pool %s",
 		csiVolume.VolumeContext["Name"], csiVolume.VolumeId, csiVolume.VolumeContext["storagePoolName"])
 
 	return &csi.CreateVolumeResponse{Volume: csiVolume}, nil
@@ -3614,7 +3694,7 @@ func (s *service) CreateReplicationConsistencyGroup(systemID string, name string
 	if err != nil {
 		// Handle the case where it already exists.
 		if !strings.EqualFold(err.Error(), sioReplicationGroupExists) {
-			Log.Printf("Replication Creation Error: %s", err.Error())
+			log.Infof("Replication Creation Error: %s", err.Error())
 			return nil, err
 		}
 	}
@@ -3629,7 +3709,7 @@ func (s *service) CreateReplicationConsistencyGroup(systemID string, name string
 		// RCG already exists, find it on the array.
 		for _, rcg := range rcgs {
 			if rcg.Name == name && rcg.ProtectionDomainID == locatProtectionDomain && rcg.RemoteProtectionDomainID == remoteProtectionDomain {
-				Log.Printf("Replication Group Found: %s, %s", rcg.ID, rcg.RemoteID)
+				log.Infof("Replication Group Found: %s, %s", rcg.ID, rcg.RemoteID)
 				id = rcg.ID
 				break
 			}
@@ -3667,7 +3747,7 @@ func (s *service) CreateReplicationPair(systemID string, name string,
 	if err != nil {
 		// Handle the case where it already exists.
 		if !strings.EqualFold(err.Error(), sioReplicationPairExists) {
-			Log.Printf("Replication Pair Creation Error: %s", err.Error())
+			log.Infof("Replication Pair Creation Error: %s", err.Error())
 			return nil, err
 		}
 	}
@@ -3680,7 +3760,7 @@ func (s *service) CreateReplicationPair(systemID string, name string,
 
 		for _, pair := range pairs {
 			if pair.Name == name {
-				Log.Printf("Replication Pair Found: %+v", pair)
+				log.Infof("Replication Pair Found: %+v", pair)
 				response = pair
 				break
 			}
@@ -3706,7 +3786,7 @@ func (s *service) DeleteReplicationConsistencyGroup(systemID string, groupID str
 
 	group, err := adminClient.GetReplicationConsistencyGroupByID(groupID)
 	if err != nil {
-		Log.Printf("Replication Deletion Error: %s", err.Error())
+		log.Infof("Replication Deletion Error: %s", err.Error())
 		return err
 	}
 
@@ -3734,7 +3814,7 @@ func (s *service) ExecuteFailoverOnReplicationGroup(client *goscaleio.Client, gr
 	rcg := goscaleio.NewReplicationConsistencyGroup(client)
 	rcg.ReplicationConsistencyGroup = group
 
-	Log.Printf("[ExecuteFailoverOnReplicationGroup]: Executing Failover command")
+	log.Infof("[ExecuteFailoverOnReplicationGroup]: Executing Failover command")
 
 	return rcg.ExecuteFailoverOnReplicationGroup()
 }
@@ -3743,7 +3823,7 @@ func (s *service) ExecuteSwitchoverOnReplicationGroup(client *goscaleio.Client, 
 	rcg := goscaleio.NewReplicationConsistencyGroup(client)
 	rcg.ReplicationConsistencyGroup = group
 
-	Log.Printf("[ExecuteSwitchoverOnReplicationGroup]: Executing Switchover (Unplanned Failover)")
+	log.Infof("[ExecuteSwitchoverOnReplicationGroup]: Executing Switchover (Unplanned Failover)")
 
 	return rcg.ExecuteSwitchoverOnReplicationGroup(false)
 }
@@ -3752,7 +3832,7 @@ func (s *service) ExecuteReverseOnReplicationGroup(client *goscaleio.Client, gro
 	rcg := goscaleio.NewReplicationConsistencyGroup(client)
 	rcg.ReplicationConsistencyGroup = group
 
-	Log.Printf("[ExecuteReverseOnReplicationGroup]: Executing Reverse (Reprotect Local)")
+	log.Infof("[ExecuteReverseOnReplicationGroup]: Executing Reverse (Reprotect Local)")
 
 	return rcg.ExecuteReverseOnReplicationGroup()
 }
@@ -3761,10 +3841,10 @@ func (s *service) ExecuteResumeOnReplicationGroup(client *goscaleio.Client, grou
 	rcg := goscaleio.NewReplicationConsistencyGroup(client)
 	rcg.ReplicationConsistencyGroup = group
 
-	Log.Printf("[ExecuteReverseOnReplicationGroup]: Resuming Replication Group")
+	log.Infof("[ExecuteReverseOnReplicationGroup]: Resuming Replication Group")
 
 	if failover {
-		Log.Printf("[ExecuteReverseOnReplicationGroup]: In Failover, Restoring...")
+		log.Infof("[ExecuteReverseOnReplicationGroup]: In Failover, Restoring...")
 		return rcg.ExecuteRestoreOnReplicationGroup()
 	}
 
@@ -3775,7 +3855,7 @@ func (s *service) ExecutePauseOnReplicationGroup(client *goscaleio.Client, group
 	rcg := goscaleio.NewReplicationConsistencyGroup(client)
 	rcg.ReplicationConsistencyGroup = group
 
-	Log.Printf("[ExecutePauseOnReplicationGroup]: Pause Replication Group")
+	log.Infof("[ExecutePauseOnReplicationGroup]: Pause Replication Group")
 
 	return rcg.ExecutePauseOnReplicationGroup()
 }
@@ -3784,7 +3864,7 @@ func (s *service) ExecuteSyncOnReplicationGroup(client *goscaleio.Client, group 
 	rcg := goscaleio.NewReplicationConsistencyGroup(client)
 	rcg.ReplicationConsistencyGroup = group
 
-	Log.Printf("[ExecuteSyncOnReplicationGroup]: Executing SyncNow")
+	log.Infof("[ExecuteSyncOnReplicationGroup]: Executing SyncNow")
 
 	return rcg.ExecuteSyncOnReplicationGroup()
 }
@@ -3802,16 +3882,42 @@ func (s *service) createProbeContextWithDeadline(ctx context.Context) (context.C
 	defaultProbeDeadline := time.Now().Add(s.opts.probeTimeout)
 	probeDeadline, ok := ctx.Deadline()
 	if !ok {
-		Log.Println("Probe deadline not in context, using default")
+		log.Infof("Probe deadline not in context, using default")
 		probeDeadline = time.Now().Add(s.opts.probeTimeout)
 	}
 
 	// Set the deadline to be the lowest of the two times.
 	if probeDeadline.After(defaultProbeDeadline) {
-		Log.Printf("Original Probe Deadline %s is greater than defaultProbeDeadline %s, setting to default", probeDeadline, defaultProbeDeadline)
+		log.Infof("Original Probe Deadline %s is greater than defaultProbeDeadline %s, setting to default", probeDeadline, defaultProbeDeadline)
 		probeDeadline = defaultProbeDeadline
 	}
 
 	// Calculate the new deadline by subtracting the desired duration
 	return context.WithDeadline(ctx, probeDeadline)
+}
+
+func (s *service) IsReplicationEnabledOnPlatforms(sourceSystemID, remoteSystemID, sourceGenType string) (bool, error) {
+	// check replication supports on source and Target
+	if remoteSystemID != "" {
+		log.Infof("Checking if Replication is Enabled on the Platform level. SourceSystemId: %s RemoteSystemId: %s", sourceSystemID, remoteSystemID)
+
+		if s.isReplicationNotSupported(sourceGenType) {
+			log.Infof("Replication is not supported on this System %s with GenType: %s", sourceSystemID, sourceGenType)
+			return false, status.Errorf(codes.InvalidArgument, "Replication is not supported on this System %s with GenType: %s", sourceSystemID, sourceGenType)
+		}
+
+		platformInfo, err := s.GetPlatformInfo(remoteSystemID)
+		if err != nil {
+			return false, err
+		}
+
+		if s.isReplicationNotSupported(platformInfo.GenType) {
+			log.Infof("Replication is not supported on this System %s with GenType: %s", remoteSystemID, platformInfo.GenType)
+			return false, status.Errorf(codes.InvalidArgument, "Replication is not supported on this System %s with GenType: %s", remoteSystemID, platformInfo.GenType)
+		}
+
+		log.Infof("Checked: Replication is Enabled on the Platform level. SourceSystemId: %s RemoteSystemId: %s", sourceSystemID, remoteSystemID)
+	}
+
+	return true, nil
 }

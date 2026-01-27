@@ -1,0 +1,80 @@
+# Copyright © 2025 Dell Inc. or its subsidiaries. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#      http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: vxflexos-nvmetcp
+provisioner: csi-vxflexos.dellemc.com
+# reclaimPolicy: PVs that are dynamically created by a StorageClass will have the reclaim policy specified here
+# Allowed values:
+#   Reclaim: retain the PV after PVC deletion
+#   Delete: delete the PV after PVC deletion
+# Optional: true
+# Default value: Delete
+reclaimPolicy: Delete
+# allowVolumeExpansion: allows the users to resize the volume by editing the corresponding PVC object
+# Allowed values:
+#   true: allow users to resize the PVC
+#   false: does not allow users to resize the PVC
+# Optional: true
+# Default value: false
+allowVolumeExpansion: true
+parameters:
+  # Storage pool to use on system
+  # Optional: false
+  storagepool: <STORAGE_POOL>
+  # Protection domain that storage pool above belongs to
+  # Needed if array has two storagepools that share the same name, but belong to different protection domains
+  # Optional: true
+  # Uncomment the line below if you want to use protectiondomain
+  # protectiondomain: # Insert Protection domain name
+  # System you would like this storage class to use
+  # Allowed values: one string for system ID
+  # Optional: false
+  systemID: <SYSTEM_ID>
+  # format options to pass to mkfs
+  # Allowed values: A string dictating the fs options you want passed
+  # Optional: true
+  # Uncomment the line below if you want to use mkfsFormatOption
+  # mkfsFormatOption: "<mkfs_format_option>" # Insert file system format option
+  # Filesytem type for volumes created by storageclass
+  # Default value: None if defaultFsType is not mentioned in values.yaml
+  # Else defaultFsType value mentioned in values.yaml
+  # will be used as default value
+  csi.storage.k8s.io/fstype: ext4
+  # Limit the volume network bandwidth
+  # Value is a positive number in granularity of 1024 Kbps; 0 = unlimited
+  # Allowed values: one string for bandwidth limit in Kbps
+  # Optional: false
+  # Uncomment the line below if you want to use bandwidthLimitInKbps
+  # bandwidthLimitInKbps: <BANDWIDTH_LIMIT_IN_KBPS> # Insert bandwidth limit in Kbps
+  # Limit the volume IOPS
+  # The number of IOPS must be greater than 10; 0 = unlimited
+  # Allowed values: one string for iops limit
+  # Optional: false
+  # Uncomment the line below if you want to use iopsLimit
+  # iopsLimit: <IOPS_LIMIT> # Insert iops limit
+# volumeBindingMode determines how volume binding and dynamic provisioning should occur
+# Allowed values:
+#  Immediate: volume binding and dynamic provisioning occurs once PVC is created
+#  WaitForFirstConsumer: delay the binding and provisioning of PV until a pod using the PVC is created.
+#  Optional: false
+# Default value: WaitForFirstConsumer (required for topology section below)
+volumeBindingMode: WaitForFirstConsumer
+# allowedTopologies helps scheduling pods on worker nodes which match all of below expressions.
+allowedTopologies:
+  - matchLabelExpressions:
+      - key: csi-vxflexos.dellemc.com/<SYSTEM_ID>-nvmetcp
+        values:
+          - "true"
