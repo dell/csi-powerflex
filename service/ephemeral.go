@@ -16,6 +16,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -30,6 +31,7 @@ var ephemeralStagingMountPath = "/var/lib/kubelet/plugins/kubernetes.io/csi/pv/e
 
 func (s *service) fileExist(filename string) bool {
 	_, err := os.Stat(filename)
+	log.Debugf("Error stating file %s: %v", filename, err)
 	if err != nil && os.IsNotExist(err) {
 		return false
 	}
@@ -62,41 +64,41 @@ func (s *service) ephemeralNodePublish(
 ) {
 	_, err := os.Stat(ephemeralStagingMountPath)
 	if err != nil {
-		Log.Warnf("Unable to check stat of file: %s with error: %v", ephemeralStagingMountPath, err.Error())
+		log.Warnf("Unable to check stat of file: %s with error: %v", ephemeralStagingMountPath, err.Error())
 		if os.IsNotExist(err) {
-			Log.Debug("path does not exist, will attempt to create it")
+			log.Debug("path does not exist, will attempt to create it")
 			err = os.MkdirAll(ephemeralStagingMountPath, 0o750)
 			if err != nil {
-				Log.WithField("dir", ephemeralStagingMountPath).WithError(err).Error("Unable to create dir")
+				log.Errorf("Unable to create dir %s: %v", ephemeralStagingMountPath, err)
 				return nil, status.Error(codes.Internal, "Unable to create directory for mounting ephemeral volumes, error: "+err.Error())
 			}
-			Log.Debug("dir created: ", ephemeralStagingMountPath)
+			log.Debugf("dir created: %v", ephemeralStagingMountPath)
 		}
 	}
 
 	volID := req.GetVolumeId()
 	volName := req.VolumeContext["volumeName"]
 	if len(volName) > 31 {
-		Log.Errorf("Volume name: %s is over 32 characters, too long.", volName)
+		log.Errorf("Volume name: %s is over 32 characters, too long.", volName)
 		return nil, status.Error(codes.Internal, "Volume name too long")
 
 	}
 
 	if volName == "" {
-		Log.Errorf("Missing Parameter: volumeName must be specified in volume attributes section for ephemeral volumes")
+		log.Errorf("Missing Parameter: volumeName must be specified in volume attributes section for ephemeral volumes")
 		return nil, status.Error(codes.Internal, "Volume name not specified")
 	}
 
 	volSize, err := parseSize(req.VolumeContext["size"])
 	if err != nil {
-		Log.Errorf("Parse size failed %s", err.Error())
+		log.Errorf("Parse size failed %s", err.Error())
 		return nil, status.Error(codes.Internal, "inline ephemeral parse size failed")
 	}
 
 	systemName := req.VolumeContext["systemID"]
 
 	if systemName == "" {
-		Log.Debug("systemName not specified, using default array")
+		log.Debug("systemName not specified, using default array")
 		systemName = s.opts.defaultSystemID
 	}
 
@@ -106,11 +108,11 @@ func (s *service) ephemeralNodePublish(
 		// to get inside this if block, req has name, but secret has ID, need to convert from name -> ID
 		if id, ok := s.connectedSystemNameToID[systemName]; ok {
 			// systemName was sent in req, but secret used ID. Change to ID.
-			Log.Debug("systemName set to id")
+			log.Debugf("systemName set to id: %s", id)
 			array = s.opts.arrays[id]
 		} else {
 			err = status.Errorf(codes.Internal, "systemID: %s not recgonized", systemName)
-			Log.Errorf("Error from ephemeralNodePublish: %v ", err)
+			log.Errorf("Error from ephemeralNodePublish: %v ", err)
 			return nil, err
 
 		}
@@ -118,7 +120,7 @@ func (s *service) ephemeralNodePublish(
 
 	err = s.systemProbe(ctx, array)
 	if err != nil {
-		Log.Errorf("systemProb  Ephemeral %s", err.Error())
+		log.Errorf("systemProb  Ephemeral %s", err.Error())
 		return nil, status.Error(codes.Internal, "inline ephemeral system prob failed: "+err.Error())
 	}
 
@@ -133,42 +135,35 @@ func (s *service) ephemeralNodePublish(
 		Secrets:            req.Secrets,
 	})
 	if err != nil {
-		Log.Errorf("CreateVolume Ephemeral %s", err.Error())
+		log.Errorf("CreateVolume Ephemeral %s", err.Error())
 		return nil, status.Error(codes.Internal, "inline ephemeral create volume failed: "+err.Error())
 	}
 
-	Log.Infof("volume ID returned from CreateVolume is: %s ", crvolresp.Volume.VolumeId)
+	log.Infof("volume ID returned from CreateVolume is: %s ", crvolresp.Volume.VolumeId)
+	volumeID := crvolresp.Volume.VolumeId
 
 	// Create lockfile to map vol ID from request to volID returned by CreateVolume
 	// will also be used to determine if volume is ephemeral in NodeUnpublish
-	errLock := os.MkdirAll(ephemeralStagingMountPath+volID, 0o750)
+	errLock := os.MkdirAll(filepath.Clean(filepath.Join(ephemeralStagingMountPath, volID)), 0o750)
 	if errLock != nil {
 		return nil, errLock
 	}
 	safePath := filepath.Join(ephemeralStagingMountPath, volID, "id")
 	safePath = filepath.Clean(safePath)
-	f, errLock := os.Create(safePath)
-	if errLock != nil {
-		return nil, errLock
-	}
-	defer f.Close() //#nosec
-	_, errLock = f.WriteString(crvolresp.Volume.VolumeId)
-	if errLock != nil {
-		return nil, errLock
-	}
-
-	volumeID := crvolresp.Volume.VolumeId
 
 	// in case systemName was not given with volume context
 	systemName = s.getSystemIDFromCsiVolumeID(volumeID)
 
 	if systemName == "" {
-
-		Log.Errorf("getSystemIDFromCsiVolumeID was not able to determine systemName from volID: %s", volumeID)
+		log.Errorf("getSystemIDFromCsiVolumeID was not able to determine systemName from VolumeID: %s", volumeID)
 		return nil, status.Error(codes.Internal, "inline ephemeral getSystemIDFromCsiVolumeID failed ")
 	}
 
 	NodeID := s.opts.SdcGUID
+	if s.useNVME {
+		log.Infof("SdcGUID is not set, using NodeID: %s", s.nodeID)
+		NodeID = s.nodeID
+	}
 
 	cpubresp, err := s.ControllerPublishVolume(ctx, &csi.ControllerPublishVolumeRequest{
 		NodeId:           NodeID,
@@ -179,18 +174,54 @@ func (s *service) ephemeralNodePublish(
 		VolumeContext:    crvolresp.Volume.VolumeContext,
 	})
 	if err != nil {
-		Log.Infof("Rolling back and calling unpublish ephemeral volumes with VolId %s", crvolresp.Volume.VolumeId)
+		log.Infof("Rolling back and calling unpublish ephemeral volumes with VolId %s", crvolresp.Volume.VolumeId)
 		_, _ = s.NodeUnpublishVolume(ctx, &csi.NodeUnpublishVolumeRequest{
 			VolumeId:   volID,
 			TargetPath: req.TargetPath,
 		})
 		return nil, status.Error(codes.Internal, "inline ephemeral controller publish failed: "+err.Error())
 	}
+	if s.useNVME {
+		log.Debug("found NVME ephemeral volume")
+		stageReq := &csi.NodeStageVolumeRequest{
+			StagingTargetPath: filepath.Clean(filepath.Join(ephemeralStagingMountPath, volID)),
+			VolumeId:          volumeID,
+			VolumeCapability:  req.VolumeCapability,
+			Secrets:           req.Secrets,
+			VolumeContext:     crvolresp.Volume.VolumeContext,
+		}
+		_, err = s.NodeStageVolume(ctx, stageReq)
+		if err != nil {
+			_, _ = s.NodeUnpublishVolume(ctx, &csi.NodeUnpublishVolumeRequest{
+				VolumeId:   volID,
+				TargetPath: req.TargetPath,
+			})
+			return nil, status.Error(codes.Internal, "inline NVMe ephemeral node stage volume failed: "+err.Error())
+		}
+	}
+	var f *os.File
+	f, errLock = os.Create(safePath)
+	if errLock != nil {
+		return nil, errLock
+	}
+	log.Debugf("Created lockfile during volume creation:%s", safePath)
+
+	_, errLock = f.WriteString(volumeID)
+	if errLock != nil {
+		return nil, errLock
+	}
+	log.Infof("lock-file contents written:%s", volumeID)
+
+	defer func() {
+		if err := f.Close(); err != nil {
+			log.Errorf("Error closing file %s: %v", safePath, err)
+		}
+	}()
 
 	_, err = s.NodePublishVolume(ctx, &csi.NodePublishVolumeRequest{
 		VolumeId:          volumeID,
 		PublishContext:    cpubresp.PublishContext,
-		StagingTargetPath: ephemeralStagingMountPath,
+		StagingTargetPath: filepath.Clean(filepath.Join(ephemeralStagingMountPath, volID)),
 		TargetPath:        req.TargetPath,
 		VolumeCapability:  req.VolumeCapability,
 		Readonly:          req.Readonly,
@@ -198,14 +229,13 @@ func (s *service) ephemeralNodePublish(
 		VolumeContext:     crvolresp.Volume.VolumeContext,
 	})
 	if err != nil {
-		Log.Errorf("NodePublishErrEph %s", err.Error())
+		log.Errorf("NodePublishErrEph %s", err.Error())
 		_, _ = s.NodeUnpublishVolume(ctx, &csi.NodeUnpublishVolumeRequest{
 			VolumeId:   volID,
 			TargetPath: req.TargetPath,
 		})
 		return nil, status.Error(codes.Internal, "inline ephemeral node publish failed: "+err.Error())
 	}
-
 	return &csi.NodePublishVolumeResponse{}, nil
 }
 
@@ -215,14 +245,15 @@ func (s *service) ephemeralNodeUnpublish(
 	ctx context.Context,
 	req *csi.NodeUnpublishVolumeRequest,
 ) error {
-	Log.Infof("Called ephemeral Node unpublish")
+	log.Infof("Called ephemeral Node unpublish")
 
 	volID := req.GetVolumeId()
 	if volID == "" {
 		return status.Error(codes.InvalidArgument, "volume ID is required")
 	}
-
-	lockFile := ephemeralStagingMountPath + volID + "/id"
+	stagingPath := filepath.Clean(filepath.Join(ephemeralStagingMountPath, volID))
+	lockFile := filepath.Clean(filepath.Join(ephemeralStagingMountPath, volID, "id"))
+	log.Debugf("Lock-file path:%s", lockFile)
 
 	//while a file is being read from, it's a file determined by volID and is written by the driver
 	/* #nosec G304 */
@@ -233,13 +264,29 @@ func (s *service) ephemeralNodeUnpublish(
 
 	goodVolid := string(dat)
 	NodeID := s.opts.SdcGUID
+	if s.useNVME {
+		log.Infof("SdcGUID is not set, using NodeID: %s", s.nodeID)
+		NodeID = s.nodeID
+	}
+	log.Infof("Read volume and array ID from file:%s", goodVolid)
 
+	if s.useNVME {
+		log.Debug("Unstaging NVME ephemeral volume")
+		unStageReq := &csi.NodeUnstageVolumeRequest{
+			StagingTargetPath: stagingPath,
+			VolumeId:          goodVolid,
+		}
+		_, err = s.NodeUnstageVolume(ctx, unStageReq)
+		if err != nil {
+			return err
+		}
+	}
 	_, err = s.ControllerUnpublishVolume(ctx, &csi.ControllerUnpublishVolumeRequest{
 		VolumeId: goodVolid,
 		NodeId:   NodeID,
 	})
 	if err != nil {
-		return errors.New("Inline ephemeral controller unpublish failed")
+		return fmt.Errorf("Inline ephemeral controller unpublish failed: %v: ", err)
 	}
 
 	_, err = s.DeleteVolume(ctx, &csi.DeleteVolumeRequest{
@@ -248,10 +295,12 @@ func (s *service) ephemeralNodeUnpublish(
 	if err != nil {
 		return err
 	}
-	err = os.RemoveAll(ephemeralStagingMountPath + volID)
-	if err != nil {
-		return errors.New("failed to cleanup lock files")
-	}
+	fileToRemove := filepath.Clean(filepath.Join(ephemeralStagingMountPath, volID))
+	log.Debugf("lock-file to delete:%s", fileToRemove)
 
+	err = os.RemoveAll(fileToRemove)
+	if err != nil {
+		return fmt.Errorf("failed to cleanup lock files: %v", err)
+	}
 	return nil
 }

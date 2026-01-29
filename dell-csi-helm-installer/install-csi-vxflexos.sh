@@ -14,6 +14,9 @@
 
 # make MDM secret key with values from each array
 # fail if MDM format is not valid
+
+SDC_ENABLED=${SDC_ENABLED:-false}
+
 function install_mdm_secret() {
   log smart_step "Get SDC config and make MDM string for multi array support"
   SECRET=${1}
@@ -56,4 +59,8 @@ function check_ip() {
   fi
 }
 
-install_mdm_secret "${RELEASE}-config"
+if [[ "${SDC_ENABLED}" == "true" ]]; then
+  install_mdm_secret "${RELEASE}-config"
+else
+  log smart_step "SDC installation is disabled, skipping MDM secret creation"
+fi

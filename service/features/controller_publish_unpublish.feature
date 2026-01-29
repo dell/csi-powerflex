@@ -7,16 +7,19 @@ Feature: VxFlex OS CSI interface
     Given a VxFlexOS service
     And a valid volume
     When I call Probe
+    And I set protocol to <protocol>
     And I call PublishVolume with <access>
     Then a valid PublishVolumeResponse is returned
     And the number of SDC mappings is 1
-
     Examples:
-      | access                      |
-      | "single-writer"             |
-      | "single-node-single-writer" |
-      | "single-node-multi-writer"  |
-  
+      | access                      | protocol  |
+      | "single-writer"             | "SDC"     |
+      | "single-node-single-writer" | "SDC"     |
+      | "single-node-multi-writer"  | "SDC"     |
+      | "single-writer"             | "NVMeTCP" |
+      | "single-node-single-writer" | "NVMeTCP" |
+      | "single-node-multi-writer"  | "NVMeTCP" |
+
   Scenario: a Basic NFS controller Publish no error
     Given a VxFlexOS service
     When I specify CreateVolumeMountRequest "nfs"
@@ -270,28 +273,34 @@ Feature: VxFlex OS CSI interface
     And I induce error "LegacyVolumeConflictError"
     And a valid volume
     When I call Probe
+    And I set protocol to <protocol>
     And I call PublishVolume with <access>
     Then the error contains "expecting this volume id only on default system. aborting operation"
-
     Examples:
-      | access                      |
-      | "single-writer"             |
-      | "single-node-single-writer" |
-      | "single-node-multi-writer"  |
+      | access                      | protocol  |
+      | "single-writer"             | "SDC"     |
+      | "single-node-single-writer" | "SDC"     |
+      | "single-node-multi-writer"  | "SDC"     |
+      | "single-writer"             | "NVMeTCP" |
+      | "single-node-single-writer" | "NVMeTCP" |
+      | "single-node-multi-writer"  | "NVMeTCP" |
 
   Scenario: Publish volume but ID is too short to get first 24 bits
     Given a VxFlexOS service
     And a valid volume
     When I call Probe
     And I induce error "VolumeIDTooShortError"
+    And I set protocol to <protocol>
     And I call PublishVolume with <access>
     Then the error contains "is shorter than 3 chars, returning error"
-
     Examples:
-      | access                      |
-      | "single-writer"             |
-      | "single-node-single-writer" |
-      | "single-node-multi-writer"  |
+      | access                      | protocol  |
+      | "single-writer"             | "SDC"     |
+      | "single-node-single-writer" | "SDC"     |
+      | "single-node-multi-writer"  | "SDC"     |
+      | "single-writer"             | "NVMeTCP" |
+      | "single-node-single-writer" | "NVMeTCP" |
+      | "single-node-multi-writer"  | "NVMeTCP" |
 
   Scenario: Calling probe twice, so UpdateVolumePrefixToSystemsMap gets a key,value already added
     Given a VxFlexOS service
@@ -305,138 +314,194 @@ Feature: VxFlex OS CSI interface
     And a valid volume
     And I use AccessType Mount
     When I call Probe
+    And I set protocol to <protocol>
     And I call PublishVolume with <access>
     Then the error contains <msg>
-
     Examples:
-      | access                | msg                                        |
-      | "multiple-writer"     | "Mount multinode multi-writer not allowed" |
-      | "multi-single-writer" | "Multinode single writer not supported"    |
+      | access                | msg                                        | protocol  |
+      | "multiple-writer"     | "mount multinode multi-writer not allowed" | "SDC"     |
+      | "multi-single-writer" | "multinode single writer not supported"    | "SDC"     |
+      | "multiple-writer"     | "mount multinode multi-writer not allowed" | "NVMeTCP" |
+      | "multi-single-writer" | "multinode single writer not supported"    | "NVMeTCP" |
 
   Scenario: Idempotent publish volume with single writer
     Given a VxFlexOS service
     And a valid volume
     When I call Probe
+    And I set protocol to <protocol>
     And I call PublishVolume with <access>
     And I call PublishVolume with <access>
     Then a valid PublishVolumeResponse is returned
     And the number of SDC mappings is 1
 
     Examples:
-      | access                      |
-      | "single-writer"             |
-      | "single-node-single-writer" |
-      | "single-node-multi-writer"  |
+      | access                      | protocol  |
+      | "single-writer"             | "SDC"     |
+      | "single-node-single-writer" | "SDC"     |
+      | "single-node-multi-writer"  | "SDC"     |
+      | "single-writer"             | "NVMeTCP" |
+      | "single-node-single-writer" | "NVMeTCP" |
+      | "single-node-multi-writer"  | "NVMeTCP" |
 
   Scenario: Publish block volume with multiple writers to single writer volume
     Given a VxFlexOS service
     And a valid volume
     When I call Probe
+    And I set protocol to <protocol>
     And I call PublishVolume with <access>
     And then I use a different nodeID
     And I call PublishVolume with <access>
     Then the error contains "volume already published"
-
     Examples:
-      | access                      |
-      | "single-writer"             |
-      | "single-node-single-writer" |
-      | "single-node-multi-writer"  |
+      | access                      | protocol  |
+      | "single-writer"             | "SDC"     |
+      | "single-node-single-writer" | "SDC"     |
+      | "single-node-multi-writer"  | "SDC"     |
+      | "single-writer"             | "NVMeTCP" |
+      | "single-node-single-writer" | "NVMeTCP" |
+      | "single-node-multi-writer"  | "NVMeTCP" |
 
   Scenario: Publish block volume with multiple writers to multiple writer volume
     Given a VxFlexOS service
     And a valid volume
     When I call Probe
+    And I set protocol to <protocol>
     And I call PublishVolume with "multiple-writer"
     And then I use a different nodeID
     And I call PublishVolume with "multiple-writer"
     Then a valid PublishVolumeResponse is returned
     And the number of SDC mappings is 2
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
 
   Scenario: Publish block volume with multiple writers to multiple reader volume
     Given a VxFlexOS service
     And a valid volume
     When I call Probe
+    And I set protocol to <protocol>
     And I call PublishVolume with "multiple-reader"
     And then I use a different nodeID
     And I call PublishVolume with "multiple-reader"
     Then the error contains "not compatible with access type"
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
 
   Scenario: Publish mount volume with multiple writers to single writer volume
     Given a VxFlexOS service
     And a valid volume
     And I use AccessType Mount
     When I call Probe
+    And I set protocol to <protocol>
     And I call PublishVolume with <access>
     And then I use a different nodeID
     And I call PublishVolume with <access>
     Then the error contains "volume already published"
-
     Examples:
-      | access                      |
-      | "single-writer"             |
-      | "single-node-single-writer" |
-      | "single-node-multi-writer"  |
+      | access                      | protocol  |
+      | "single-writer"             | "SDC"     |
+      | "single-node-single-writer" | "SDC"     |
+      | "single-node-multi-writer"  | "SDC"     |
+      | "single-writer"             | "NVMeTCP" |
+      | "single-node-single-writer" | "NVMeTCP" |
+      | "single-node-multi-writer"  | "NVMeTCP" |
 
   Scenario: Publish mount volume with multiple readers to multiple reader volume
     Given a VxFlexOS service
     And a valid volume
     And I use AccessType Mount
     When I call Probe
+    And I set protocol to <protocol>
     And I call PublishVolume with "multiple-reader"
     And then I use a different nodeID
     And I call PublishVolume with "multiple-reader"
     Then a valid PublishVolumeResponse is returned
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
 
   Scenario: Publish mount volume with multiple readers to multiple reader volume
     Given a VxFlexOS service
     And a valid volume
     And I use AccessType Mount
     When I call Probe
+    And I set protocol to <protocol>
     And I call PublishVolume with "multiple-reader"
     And then I use a different nodeID
     And I call PublishVolume with "multiple-reader"
     Then a valid PublishVolumeResponse is returned
     And the number of SDC mappings is 2
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
 
   Scenario: Publish volume with an invalid volumeID
     Given a VxFlexOS service
     When I call Probe
     And an invalid volume
+    And I set protocol to <protocol>
     And I call PublishVolume with "single-writer"
     Then the error contains "volume not found"
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
 
   Scenario: Publish volume no volumeID specified
     Given a VxFlexOS service
     And no volume
     When I call Probe
+    And I set protocol to <protocol>
     And I call PublishVolume with "single-writer"
     Then the error contains "volume ID is required"
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
 
   Scenario: Publish volume with no nodeID specified
     Given a VxFlexOS service
     And a valid volume
     And no node
     When I call Probe
+    And I set protocol to <protocol>
     And I call PublishVolume with "single-writer"
     Then the error contains "node ID is required"
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
 
   Scenario: Publish volume with no volume capability
     Given a VxFlexOS service
     And a valid volume
     And no volume capability
     When I call Probe
+    And I set protocol to <protocol>
     And I call PublishVolume with "single-writer"
     Then the error contains "volume capability is required"
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
 
   Scenario: Publish volume with no access mode
     Given a VxFlexOS service
     And a valid volume
     And no access mode
     When I call Probe
+    And I set protocol to <protocol>
     And I call PublishVolume with "single-writer"
     Then the error contains "access mode is required"
-
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
 
   Scenario: Publish volume with getSDCID error
     Given a VxFlexOS service
@@ -444,48 +509,68 @@ Feature: VxFlex OS CSI interface
     And I induce error "GetSdcInstancesError"
     When I call Probe
     And I call PublishVolume with "single-writer"
-    Then the error contains "error finding SDC from GUID"
+    Then the error contains "error getting host ID and type"
 
   Scenario: Publish volume with bad vol ID
     Given a VxFlexOS service
     And a valid volume
     And I induce error "BadVolIDError"
     When I call Probe
+    And I set protocol to <protocol>
     And I call PublishVolume with "single-writer"
     Then the error contains "volume not found"
-
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
 
   Scenario: Publish volume with a map SDC error
     Given a VxFlexOS service
     And a valid volume
-    And I induce error "MapSdcError"
+    And I induce error <inducedErr>
     When I call Probe
+    And I set protocol to <protocol>
     And I call PublishVolume with "single-writer"
-    Then the error contains "error mapping volume to node"
+    Then the error contains <expectedErr>
+    Examples:
+      | protocol  | inducedErr     | expectedErr                         |
+      | "SDC"     | "MapSdcError"  | "error mapping volume to node"      |
+      | "NVMeTCP" | "MapNVMeError" | "error mapping volume to nvme host" |
 
   Scenario: Publish volume with AccessMode UNKNOWN
     Given a VxFlexOS service
     And a valid volume
     When I call Probe
+    And I set protocol to <protocol>
     And I call PublishVolume with "unknown"
     Then the error contains "access mode cannot be UNKNOWN"
-
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
+ 
   Scenario: Unpublish volume
     Given a VxFlexOS service
     And a valid volume
     When I call Probe
+    And I set protocol to <protocol>
     And I call PublishVolume with "single-writer"
     And no error was received
-    And the number of SDC mappings is 1
+    And the number of SDC mappings is 1 
     And I call UnpublishVolume
     And no error was received
     Then a valid UnpublishVolumeResponse is returned
     And the number of SDC mappings is 0
-
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
+     
   Scenario: Idempotent unpublish volume
     Given a VxFlexOS service
     And a valid volume
     When I call Probe
+    And I set protocol to <protocol>
     And I call PublishVolume with "single-writer"
     And no error was received
     And I call UnpublishVolume
@@ -493,52 +578,76 @@ Feature: VxFlex OS CSI interface
     And I call UnpublishVolume
     And no error was received
     Then a valid UnpublishVolumeResponse is returned
-    
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
 
   Scenario: Unpublish volume with no volume id
     Given a VxFlexOS service
     And a valid volume
     When I call Probe
+    And I set protocol to <protocol>
     And I call PublishVolume with "single-writer"
     And no error was received
     And no volume
     And I call UnpublishVolume
     Then the error contains "volume ID is required"
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
 
   Scenario: Unpublish volume with invalid volume id
     Given a VxFlexOS service
     And a valid volume
     When I call Probe
+    And I set protocol to <protocol>
     And I call PublishVolume with "single-writer"
     And no error was received
     And an invalid volume
     And I call UnpublishVolume
     Then the error contains "volume not found"
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
 
   Scenario: Unpublish volume with no node id
     Given a VxFlexOS service
     And a valid volume
     When I call Probe
+    And I set protocol to <protocol>
     And I call PublishVolume with "single-writer"
     And no error was received
     And no node
     And I call UnpublishVolume
     Then the error contains "Node ID is required"
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
 
   Scenario: Unpublish volume with RemoveMappedSdcError
     Given a VxFlexOS service
     And a valid volume
     When I call Probe
+    And I set protocol to <protocol>
     And I call PublishVolume with "single-writer"
     And no error was received
-    And I induce error "RemoveMappedSdcError"
+    And I induce error <inducedErr>
     And I call UnpublishVolume
-    Then the error contains "Error unmapping volume from node"
+    Then the error contains <errorMsg>
+    Examples:
+      | protocol  | inducedErr              | errorMsg                                |
+      | "SDC"     | "RemoveMappedSdcError"  | "Error unmapping volume from SDC node"  |
+      | "NVMeTCP" | "RemoveMappedHostError" | "Error unmapping volume from NVMe host" |
 
   Scenario: Publish / unpublish mount volume with multiple writers to multiple writer volume
     Given a VxFlexOS service
     And a valid volume
     When I call Probe
+    And I set protocol to <protocol>
     And I call PublishVolume with "multiple-writer"
     And a valid PublishVolumeResponse is returned
     And the number of SDC mappings is 1
@@ -553,6 +662,9 @@ Feature: VxFlex OS CSI interface
     And I call UnpublishVolume
     And no error was received
     Then the number of SDC mappings is 0
+    Examples:
+      | protocol  |
+      | "NVMeTCP" |
 
   Scenario: Create NFS volume, enable quota with all key parameters
     Given a VxFlexOS service
@@ -654,3 +766,15 @@ Feature: VxFlex OS CSI interface
     And I set quota with path "/fs" softLimit "200" graceperiod "86400"
     And I call CreateVolumeSize nfs "vol-inttest-nfs" "10"
     Then the error contains "requested softLimit: 200 perc is greater than volume size"
+
+  Scenario: Try to create NFS volume and Replication on NFS & Replication not supported Array
+    Given a VxFlexOS service
+    And I set Platform Info <sourceVersion> <sourceGenType> <targetVersion> <targetGenType>
+    When I specify CreateVolumeMountRequest <volumeType>
+    And I call CreateVolume "volume1" with Error <errorMsg>
+    Then I reset the Platform Info
+
+    Examples:
+      | sourceVersion      | sourceGenType | targetVersion      | targetGenType | volumeType | errorMsg                            |
+      | "5.0" | "EC" | "5.0" | "EC" | "nfs" | "NFS is not supported on the System"                              |
+      | "4.0" | "" | "5.0" | "EC" | "ext4" | "Replication is not supported on this System" |

@@ -1,0 +1,159 @@
+[
+        {
+        "ipList": [
+            {
+                "role": "StorageAndHost",
+                "ip": "127.0.0.1:invalid"
+            }
+        ],
+        "sdtState": "Normal",
+        "name": "dummy-SDT1",
+        "systemId": "14dbbf5617523654",
+        "protectionDomainId": "df18067f00000000",
+        "storagePort": 12200,
+        "nvmePort": 4420,
+        "discoveryPort": 8009,
+        "faultSetId": null,
+        "softwareVersionInfo": "R4_5.5000.0",
+        "mdmConnectionState": "Connected",
+        "membershipState": "Joined",
+        "maintenanceState": "NoMaintenance",
+        "authenticationError": "None",
+        "persistentDiscoveryControllersNum": 0,
+        "id": "a6ef26bb00000002",
+        "links": [
+            {
+                "rel": "self",
+                "href": "/api/instances/Sdt::a6ef26bb00000002"
+            },
+            {
+                "rel": "/api/Sdt/relationship/Statistics",
+                "href": "/api/instances/Sdt::a6ef26bb00000002/relationships/Statistics"
+            },
+            {
+                "rel": "/api/parent/relationship/protectionDomainId",
+                "href": "/api/instances/ProtectionDomain::df18067f00000000"
+            }
+        ]
+    },
+    {
+        "ipList": [
+            {
+                "role": "StorageAndHost",
+                "ip": "127.0.0.2:invalid"
+            }
+        ],
+        "sdtState": "Normal",
+        "name": "dummy-SDT2",
+        "systemId": "14dbbf5617523654",
+        "protectionDomainId": "df18067f00000000",
+        "storagePort": 12200,
+        "nvmePort": 4420,
+        "discoveryPort": 8009,
+        "faultSetId": null,
+        "softwareVersionInfo": "R4_5.5000.0",
+        "certificateInfo": {
+            "validFromAsn1Format": "251014070827Z",
+            "validToAsn1Format": "351013080827Z",
+            "subject": "/GN=sdt-comp-0/CN=lglou172/L=Hopkinton/ST=Massachusetts/C=US/O=EMC/OU=ASD",
+            "issuer": "/GN=MDM/CN=CA-14dbbf5617523654/L=Hopkinton/ST=Massachusetts/C=US/O=EMC/OU=ASD",
+            "thumbprint": "FE:E4:46:40:EB:0A:D3:70:63:71:A3:8A:EE:58:5C:7D:F9:F4:8D:F5",
+            "validTo": "Oct 13 08:08:27 2035 GMT",
+            "validFrom": "Oct 14 07:08:27 2025 GMT"
+        },
+        "mdmConnectionState": "Connected",
+        "membershipState": "Joined",
+        "maintenanceState": "NoMaintenance",
+        "authenticationError": "None",
+        "persistentDiscoveryControllersNum": 0,
+        "id": "a6ef26b900000000",
+        "links": [
+            {
+                "rel": "self",
+                "href": "/api/instances/Sdt::a6ef26b900000000"
+            },
+            {
+                "rel": "/api/Sdt/relationship/Statistics",
+                "href": "/api/instances/Sdt::a6ef26b900000000/relationships/Statistics"
+            },
+            {
+                "rel": "/api/parent/relationship/protectionDomainId",
+                "href": "/api/instances/ProtectionDomain::df18067f00000000"
+            }
+        ]
+    },
+    {
+        "ipList": [
+            {
+                "role": "StorageAndHost",
+                "ip": "127.0.0.3"
+            }
+        ],
+        "sdtState": "Normal",
+        "name": "dummy-SDT3",
+        "systemId": "14dbbf5617523654",
+        "protectionDomainId": "df18067f00000000",
+        "storagePort": 12200,
+        "nvmePort": 4420,
+        "discoveryPort": 8009,
+        "faultSetId": null,
+        "softwareVersionInfo": "R4_5.5000.0",
+        "mdmConnectionState": "Connected",
+        "membershipState": "Joined",
+        "maintenanceState": "NoMaintenance",
+        "authenticationError": "None",
+        "persistentDiscoveryControllersNum": 0,
+        "id": "a6ef26ba00000001",
+        "links": [
+            {
+                "rel": "self",
+                "href": "/api/instances/Sdt::a6ef26ba00000001"
+            },
+            {
+                "rel": "/api/Sdt/relationship/Statistics",
+                "href": "/api/instances/Sdt::a6ef26ba00000001/relationships/Statistics"
+            },
+            {
+                "rel": "/api/parent/relationship/protectionDomainId",
+                "href": "/api/instances/ProtectionDomain::df18067f00000000"
+            }
+        ]
+    },
+    {
+        "ipList": [
+            {
+                "role": "StorageAndHost",
+                "ip": "127.0.0.4"
+            }
+        ],
+        "sdtState": "Normal",
+        "name": "dummy-SDT4",
+        "systemId": "14dbbf5617523654",
+        "protectionDomainId": "df18067f00000000",
+        "storagePort": 12200,
+        "nvmePort": 4420,
+        "discoveryPort": 8009,
+        "faultSetId": null,
+        "softwareVersionInfo": "R4_5.5000.0",
+        "mdmConnectionState": "Connected",
+        "membershipState": "Joined",
+        "maintenanceState": "NoMaintenance",
+        "authenticationError": "None",
+        "persistentDiscoveryControllersNum": 0,
+        "id": "a6ef26bc00000003",
+        "links": [
+            {
+                "rel": "self",
+                "href": "/api/instances/Sdt::a6ef26bc00000003"
+            },
+            {
+                "rel": "/api/Sdt/relationship/Statistics",
+                "href": "/api/instances/Sdt::a6ef26bc00000003/relationships/Statistics"
+            },
+            {
+                "rel": "/api/parent/relationship/protectionDomainId",
+                "href": "/api/instances/ProtectionDomain::df18067f00000000"
+            }
+        ]
+    }
+]

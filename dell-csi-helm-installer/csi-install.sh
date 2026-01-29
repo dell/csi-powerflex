@@ -287,6 +287,28 @@ function verify_kubernetes() {
   fi
 }
 
+# get_sdc_enabled_from_values
+# reads node.sdc.enabled from the provided values.yaml (in $VALUES)
+# and exports SDC_ENABLED=true/false for child scripts
+function get_sdc_enabled_from_values() {
+  if [ -z "${VALUES}" ] || [ ! -f "${VALUES}" ]; then
+    # default to false when values file isn't present
+    export SDC_ENABLED=false
+    return
+  fi
+  local val
+  val=$(awk '
+    BEGIN{in_node=0; in_sdc=0}
+    /^[[:space:]]*node:/ {in_node=1; next}
+    in_node && /^[[:space:]]*sdc:/ {in_sdc=1; next}
+    in_node && in_sdc && /^[[:space:]]*enabled:[[:space:]]*/ {gsub(/"/, ""); print tolower($2); exit}
+  ' "${VALUES}")
+  case "${val}" in
+    true|"true") export SDC_ENABLED=true;;
+    *) export SDC_ENABLED=false;;
+  esac
+}
+
 #
 # main
 #
@@ -420,6 +442,7 @@ kNonGAVersion=$(run_command kubectl version | grep 'Server Version' | sed -n 's/
 
 # validate the parameters passed in
 validate_params "${MODE}"
+get_sdc_enabled_from_values
 
 header
 check_for_driver "${MODE}"

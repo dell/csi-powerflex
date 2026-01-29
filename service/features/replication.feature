@@ -262,3 +262,11 @@ Scenario Outline: Test ControllerExpandVolume on replication pair
   | "1srcVol" | 64 | "none"                    | "none"                              |
   | "1srcVol" | 64 | "GetReplicationPairError" | "GET ReplicationPair induced error" |
   | "1srcVol" | 64 | "GetRCGByIdError"         | "could not GET RCG by ID"           |
+
+Scenario: Try to create block volume with Replication on Replication not supported Array
+    Given a VxFlexOS service
+    And I use config "replication-config"
+    When I call CreateVolume "volume1"
+    And I set Platform Info "5.0" "EC" "5.0" "EC"
+    And I call CreateRemoteVolume with Error "Replication is not supported on this System"
+    Then I reset the Platform Info

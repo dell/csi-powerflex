@@ -17,7 +17,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -56,8 +55,10 @@ var (
 		GetSystemLimitError           bool
 		GetSdcInstancesError          bool
 		MapSdcError                   bool
+		MapNVMeError                  bool
 		ApproveSdcError               bool
 		RemoveMappedSdcError          bool
+		RemoveMappedHostError         bool
 		SDCLimitsError                bool
 		SIOGatewayVolumeNotFoundError bool
 		GetStatisticsError            bool
@@ -71,6 +72,7 @@ var (
 		NasServerNotFoundError        bool
 		FileInterfaceNotFoundError    bool
 		BadVolIDError                 bool
+		IncorrectVolID                bool
 		NoCsiVolIDError               bool
 		WrongVolIDError               bool
 		WrongFileSystemIDError        bool
@@ -112,6 +114,11 @@ var (
 		UpdateConfigK8sClientError    bool
 		UpdateConfigFormatError       bool
 		ConfigMapNotFoundError        bool
+		NoNfsServer                   bool
+		SdtNotFoundError              bool
+		EmptySdtError                 bool
+		NvmeDiscoveryError            bool
+		GetMetricsError               bool
 	}
 )
 
@@ -121,6 +128,7 @@ var (
 	scaleioRouter                 http.Handler
 	testControllerHasNoConnection bool
 	count                         int
+	apiVersion                    string
 )
 
 var inducedError error
@@ -136,12 +144,12 @@ const (
 func getHandler() http.Handler {
 	handler := http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
-			log.Printf("handler called: %s %s", r.Method, r.URL)
+			log.Infof("handler called: %s %s", r.Method, r.URL)
 			if scaleioRouter == nil {
 				getRouter().ServeHTTP(w, r)
 			}
 		})
-	log.Printf("Clearing volume caches\n")
+	log.Infof("Clearing volume caches\n")
 	volumeIDToName = make(map[string]string)
 	fileSystemIDName = make(map[string]string)
 	fileSystemIDToSizeTotal = make(map[string]string)
@@ -181,7 +189,9 @@ func getHandler() http.Handler {
 	stepHandlersErrors.PodmonVolumeError = false
 	stepHandlersErrors.GetSdcInstancesError = false
 	stepHandlersErrors.MapSdcError = false
+	stepHandlersErrors.MapNVMeError = false
 	stepHandlersErrors.RemoveMappedSdcError = false
+	stepHandlersErrors.RemoveMappedHostError = false
 	stepHandlersErrors.SDCLimitsError = false
 	stepHandlersErrors.GetStatisticsError = false
 	stepHandlersErrors.GetSystemSdcError = false
@@ -195,6 +205,7 @@ func getHandler() http.Handler {
 	stepHandlersErrors.NasServerNotFoundError = false
 	stepHandlersErrors.BadCapacityError = false
 	stepHandlersErrors.BadVolIDError = false
+	stepHandlersErrors.IncorrectVolID = false
 	stepHandlersErrors.GetFileSystemsByIDError = false
 	stepHandlersErrors.NoCsiVolIDError = false
 	stepHandlersErrors.WrongVolIDError = false
@@ -238,6 +249,11 @@ func getHandler() http.Handler {
 	stepHandlersErrors.UpdateConfigK8sClientError = false
 	stepHandlersErrors.UpdateConfigFormatError = false
 	stepHandlersErrors.ConfigMapNotFoundError = false
+	stepHandlersErrors.NoNfsServer = false
+	stepHandlersErrors.SdtNotFoundError = false
+	stepHandlersErrors.EmptySdtError = false
+	stepHandlersErrors.NvmeDiscoveryError = false
+	stepHandlersErrors.GetMetricsError = false
 	sdcMappings = sdcMappings[:0]
 	sdcMappingsID = ""
 	return handler
@@ -252,6 +268,7 @@ func getRouter() http.Handler {
 	scaleioRouter.HandleFunc("/api/login", handleLogin)
 	scaleioRouter.HandleFunc("/api/version", handleVersion)
 	scaleioRouter.HandleFunc("/api/types/System/instances", handleSystemInstances)
+	scaleioRouter.HandleFunc("/api/types/Host/instances", handleHostInstances)
 	scaleioRouter.HandleFunc("/rest/v1/nas-servers", handleNasInstances)
 	scaleioRouter.HandleFunc("/rest/v1/nas-servers/{id}", handleGetNasInstances)
 	scaleioRouter.HandleFunc("/rest/v1/file-systems", handleFileSystems)
@@ -273,6 +290,8 @@ func getRouter() http.Handler {
 	scaleioRouter.HandleFunc("/rest/v1/file-tree-quotas/{id}", handleGetFileTreeQuotas)
 	scaleioRouter.HandleFunc("/api/instances/System/action/querySystemLimits", handleGetSystemLimits)
 	scaleioRouter.HandleFunc("/rest/v1/nfs-servers", handleIsNFSEnabled)
+	scaleioRouter.HandleFunc("/api/types/Sdt/instances", handleGetAllSdt)
+	scaleioRouter.HandleFunc("/dtapi/rest/v1/metrics/query", handleMetricsQuery)
 	return scaleioRouter
 }
 
@@ -323,7 +342,9 @@ func handleVersion(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusRequestTimeout)
 		return
 	}
-	w.Write([]byte("4.0"))
+
+	log.Infof("Mock Api Version: %s", apiVersion)
+	w.Write([]byte(apiVersion))
 }
 
 // handleSystemInstances implements GET /api/types/System/instances
@@ -352,6 +373,11 @@ func handleSystemInstances(w http.ResponseWriter, _ *http.Request) {
 	}
 }
 
+// handleHostInstances implements POST /api/types/Host/instances
+func handleHostInstances(w http.ResponseWriter, _ *http.Request) {
+	returnJSONFile("features", "create_nvme_host.json", w, nil)
+}
+
 func handleNFSSnapshots(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
@@ -366,7 +392,7 @@ func handleNFSSnapshots(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
-			log.Printf("error decoding json: %s\n", err.Error())
+			log.Infof("error decoding json: %s\n", err.Error())
 		}
 		resp := types.CreateFileSystemSnapshotResponse{}
 		resp.ID = hex.EncodeToString([]byte(req.Name))
@@ -385,15 +411,15 @@ func handleNFSSnapshots(w http.ResponseWriter, r *http.Request) {
 			array.fileSystems[resp.ID]["size_total"] = sizeTotal
 		}
 		if debug {
-			log.Printf("request name: %s id: %s\n", req.Name, resp.ID)
+			log.Infof("request name: %s id: %s\n", req.Name, resp.ID)
 		}
 		encoder := json.NewEncoder(w)
 		err = encoder.Encode(resp)
 		if err != nil {
-			log.Printf("error encoding json: %s\n", err.Error())
+			log.Infof("error encoding json: %s\n", err.Error())
 		}
 
-		log.Printf("end make fileSystemSnapshots")
+		log.Infof("end make fileSystemSnapshots")
 	}
 }
 
@@ -409,7 +435,21 @@ func handleNasInstances(w http.ResponseWriter, _ *http.Request) {
 
 // handleIsNFSEnabled implements GET rest/v1/nfs-servers?select=*
 func handleIsNFSEnabled(w http.ResponseWriter, _ *http.Request) {
+	if stepHandlersErrors.NoNfsServer {
+		return
+	}
 	returnJSONFile("features", "get_nfs_server.json", w, nil)
+}
+
+// handleGetAllSdt implements GET /api/types/Sdt/instances
+func handleGetAllSdt(w http.ResponseWriter, _ *http.Request) {
+	if stepHandlersErrors.SdtNotFoundError {
+		writeError(w, "SDT not found", http.StatusNotFound, codes.NotFound)
+		return
+	} else if stepHandlersErrors.EmptySdtError {
+		return
+	}
+	returnJSONFile("features", "get_all_sdt.json", w, nil)
 }
 
 func handleGetNasInstances(w http.ResponseWriter, _ *http.Request) {
@@ -449,7 +489,7 @@ func handleNFSExports(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
-			log.Printf("error decoding json: %s\n", err.Error())
+			log.Infof("error decoding json: %s\n", err.Error())
 		}
 
 		// good response
@@ -486,15 +526,15 @@ func handleNFSExports(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if debug {
-			log.Printf("request name: %s id: %s\n", req.Name, resp.ID)
+			log.Infof("request name: %s id: %s\n", req.Name, resp.ID)
 		}
 		encoder := json.NewEncoder(w)
 		err = encoder.Encode(resp)
 		if err != nil {
-			log.Printf("error encoding json: %s\n", err.Error())
+			log.Infof("error encoding json: %s\n", err.Error())
 		}
 
-		log.Printf("end make nfsExports")
+		log.Infof("end make nfsExports")
 	// Read all the Volumes
 	case http.MethodGet:
 		if stepHandlersErrors.NFSExportInstancesError {
@@ -522,7 +562,7 @@ func handleNFSExports(w http.ResponseWriter, r *http.Request) {
 				nfsExp := new(types.NFSExport)
 				err := json.Unmarshal(data, nfsExp)
 				if err != nil {
-					log.Printf("error unmarshalling json: %s\n", string(data))
+					log.Infof("error unmarshalling json: %s\n", string(data))
 				}
 				instances = append(instances, nfsExp)
 			}
@@ -558,7 +598,7 @@ func handleNFSExports(w http.ResponseWriter, r *http.Request) {
 			nfsExp := new(types.NFSExport)
 			err := json.Unmarshal(data, nfsExp)
 			if err != nil {
-				log.Printf("error unmarshalling json: %s\n", string(data))
+				log.Infof("error unmarshalling json: %s\n", string(data))
 			}
 			instances = append(instances, nfsExp)
 		}
@@ -566,7 +606,7 @@ func handleNFSExports(w http.ResponseWriter, r *http.Request) {
 		encoder := json.NewEncoder(w)
 		err := encoder.Encode(instances)
 		if err != nil {
-			log.Printf("error encoding json: %s\n", err)
+			log.Infof("error encoding json: %s\n", err)
 		}
 	}
 }
@@ -588,7 +628,7 @@ func handleGetNFSExports(w http.ResponseWriter, r *http.Request) {
 
 		// Insert to map if it doesn't exist.
 		if nfsExportIDName[id] == "" {
-			log.Printf("Did not find id %s \n", id)
+			log.Infof("Did not find id %s \n", id)
 			writeError(w, "could not find nfsExport ", http.StatusNotFound, codes.NotFound)
 			return
 		}
@@ -599,7 +639,7 @@ func handleGetNFSExports(w http.ResponseWriter, r *http.Request) {
 			nfsExp = array.nfsExports[id]
 		}
 
-		log.Printf("Get id %s\n", id)
+		log.Infof("Get id %s\n", id)
 		if nfsExp != nil {
 			replacementMap["__ID__"] = nfsExp["id"]
 			replacementMap["__NAME__"] = nfsExp["name"]
@@ -642,13 +682,13 @@ func handleGetNFSExports(w http.ResponseWriter, r *http.Request) {
 		nfsExp1 := new(types.NFSExport)
 		err := json.Unmarshal(data, nfsExp1)
 		if err != nil {
-			log.Printf("error unmarshalling json: %s\n", string(data))
+			log.Infof("error unmarshalling json: %s\n", string(data))
 		}
 
 		encoder := json.NewEncoder(w)
 		err = encoder.Encode(nfsExp1)
 		if err != nil {
-			log.Printf("error encoding json: %s\n", err)
+			log.Infof("error encoding json: %s\n", err)
 		}
 	case http.MethodDelete:
 		vars := mux.Vars(r)
@@ -656,7 +696,7 @@ func handleGetNFSExports(w http.ResponseWriter, r *http.Request) {
 
 		// Insert to map if it doesn't exist.
 		if nfsExportIDName[id] == "" {
-			log.Printf("Did not find id %s \n", id)
+			log.Infof("Did not find id %s \n", id)
 			writeError(w, "could not find nfsExport ", http.StatusNotFound, codes.NotFound)
 			return
 		}
@@ -678,7 +718,7 @@ func handleGetNFSExports(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("fsidname", nfsExportIDName[id])
 
 		if nfsExportIDName[id] == "" {
-			log.Printf("Did not find id %s \n", id)
+			log.Infof("Did not find id %s \n", id)
 			writeError(w, "could not find nfsExport ", http.StatusNotFound, codes.NotFound)
 			return
 		}
@@ -692,7 +732,7 @@ func handleGetNFSExports(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
-			log.Printf("error decoding json: %s\n", err.Error())
+			log.Infof("error decoding json: %s\n", err.Error())
 		}
 		fmt.Printf("patchReq:%#v\n", req)
 		if len(req.AddReadOnlyRootHosts) != 0 {
@@ -752,7 +792,7 @@ func handleFileSystems(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
-			log.Printf("error decoding json: %s\n", err.Error())
+			log.Infof("error decoding json: %s\n", err.Error())
 		}
 
 		// good response
@@ -772,15 +812,15 @@ func handleFileSystems(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if debug {
-			log.Printf("request name: %s id: %s\n", req.Name, resp.ID)
+			log.Infof("request name: %s id: %s\n", req.Name, resp.ID)
 		}
 		encoder := json.NewEncoder(w)
 		err = encoder.Encode(resp)
 		if err != nil {
-			log.Printf("error encoding json: %s\n", err.Error())
+			log.Infof("error encoding json: %s\n", err.Error())
 		}
 
-		log.Printf("end make fileSystems")
+		log.Infof("end make fileSystems")
 	// Read all the Volumes
 	case http.MethodGet:
 		instances := make([]*types.FileSystem, 0)
@@ -800,7 +840,7 @@ func handleFileSystems(w http.ResponseWriter, r *http.Request) {
 				fs := new(types.FileSystem)
 				err := json.Unmarshal(data, fs)
 				if err != nil {
-					log.Printf("error unmarshalling json: %s\n", string(data))
+					log.Infof("error unmarshalling json: %s\n", string(data))
 				}
 				instances = append(instances, fs)
 			}
@@ -823,7 +863,7 @@ func handleFileSystems(w http.ResponseWriter, r *http.Request) {
 			fs := new(types.FileSystem)
 			err := json.Unmarshal(data, fs)
 			if err != nil {
-				log.Printf("error unmarshalling json: %s\n", string(data))
+				log.Infof("error unmarshalling json: %s\n", string(data))
 			}
 			instances = append(instances, fs)
 		}
@@ -831,7 +871,7 @@ func handleFileSystems(w http.ResponseWriter, r *http.Request) {
 		encoder := json.NewEncoder(w)
 		err := encoder.Encode(instances)
 		if err != nil {
-			log.Printf("error encoding json: %s\n", err)
+			log.Infof("error encoding json: %s\n", err)
 		}
 	}
 }
@@ -849,22 +889,22 @@ func handleRestoreSnapshotNFS(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
-			log.Printf("error decoding json: %s\n", err.Error())
+			log.Infof("error decoding json: %s\n", err.Error())
 		}
 
 		// good response
 		resp := new(types.RestoreFsSnapResponse)
 		resp.ID = req.SnapshotID
 		if debug {
-			log.Printf("response id: %s\n", resp.ID)
+			log.Infof("response id: %s\n", resp.ID)
 		}
 		encoder := json.NewEncoder(w)
 		err = encoder.Encode(resp)
 		if err != nil {
-			log.Printf("error encoding json: %s\n", err.Error())
+			log.Infof("error encoding json: %s\n", err.Error())
 		}
 
-		log.Printf("end make restore fs from snaspshot")
+		log.Infof("end make restore fs from snaspshot")
 	}
 }
 
@@ -883,7 +923,7 @@ func handleGetFileSystems(w http.ResponseWriter, r *http.Request) {
 
 		// Insert to map if it doesn't exist.
 		if fileSystemIDName[id] == "" {
-			log.Printf("Did not find id %s \n", id)
+			log.Infof("Did not find id %s \n", id)
 			writeError(w, "could not find filesystem ", http.StatusNotFound, codes.NotFound)
 			return
 		}
@@ -894,7 +934,7 @@ func handleGetFileSystems(w http.ResponseWriter, r *http.Request) {
 			fs = array.fileSystems[id]
 		}
 
-		log.Printf("Get id %s\n", id)
+		log.Infof("Get id %s\n", id)
 		if fs != nil {
 			replacementMap["__ID__"] = fs["id"]
 			replacementMap["__NAME__"] = fs["name"]
@@ -925,13 +965,13 @@ func handleGetFileSystems(w http.ResponseWriter, r *http.Request) {
 		fs1 := new(types.FileSystem)
 		err := json.Unmarshal(data, fs1)
 		if err != nil {
-			log.Printf("error unmarshalling json: %s\n", string(data))
+			log.Infof("error unmarshalling json: %s\n", string(data))
 		}
 
 		encoder := json.NewEncoder(w)
 		err = encoder.Encode(fs1)
 		if err != nil {
-			log.Printf("error encoding json: %s\n", err)
+			log.Infof("error encoding json: %s\n", err)
 		}
 	case http.MethodDelete:
 		if inducedError.Error() == "DeleteSnapshotError" {
@@ -943,7 +983,7 @@ func handleGetFileSystems(w http.ResponseWriter, r *http.Request) {
 
 		// Insert to map if it doesn't exist.
 		if fileSystemIDName[id] == "" {
-			log.Printf("Did not find id %s \n", id)
+			log.Infof("Did not find id %s \n", id)
 			writeError(w, "could not find filesystem ", http.StatusNotFound, codes.NotFound)
 			return
 		}
@@ -962,7 +1002,7 @@ func handleGetFileSystems(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
-			log.Printf("error decoding json: %s\n", err.Error())
+			log.Infof("error decoding json: %s\n", err.Error())
 		}
 		if inducedError.Error() == "ModifyFSError" {
 			writeError(w, "Modify filesystem failed with error:", http.StatusRequestTimeout, codes.Internal)
@@ -983,7 +1023,7 @@ func handleGetFileSystems(w http.ResponseWriter, r *http.Request) {
 			array.fileSystems[id]["graceperiod"] = strconv.Itoa(req.GracePeriod)
 		}
 		w.WriteHeader(http.StatusNoContent)
-		log.Printf("end modify file systems")
+		log.Infof("end modify file systems")
 	}
 
 	// returnJSONFile("features", "get_file_system_response.json", w, nil)
@@ -998,6 +1038,15 @@ func handleStoragePoolInstances(w http.ResponseWriter, _ *http.Request) {
 	returnJSONFile("features", "get_storage_pool_instances.json", w, nil)
 }
 
+// handleMetricsQuery implement POST /dtapi/rest/v1/metrics/query
+func handleMetricsQuery(w http.ResponseWriter, _ *http.Request) {
+	if stepHandlersErrors.GetMetricsError {
+		writeError(w, "induced error", http.StatusRequestTimeout, codes.Internal)
+		return
+	}
+	returnJSONFile("features", "get_volume_metrics.json", w, nil)
+}
+
 func handlePeerMdmInstances(w http.ResponseWriter, _ *http.Request) {
 	if inducedError.Error() == "PeerMdmError" {
 		writeError(w, "PeerMdmError", http.StatusRequestTimeout, codes.Internal)
@@ -1009,7 +1058,7 @@ func handlePeerMdmInstances(w http.ResponseWriter, _ *http.Request) {
 func returnJSONFile(directory, filename string, w http.ResponseWriter, replacements map[string]string) (jsonBytes []byte) {
 	jsonBytes, err := os.ReadFile(filepath.Join(directory, filename))
 	if err != nil {
-		log.Printf("Couldn't read %s/%s\n", directory, filename)
+		log.Infof("Couldn't read %s/%s\n", directory, filename)
 		if w != nil {
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -1037,17 +1086,17 @@ func returnJSONFile(directory, filename string, w http.ResponseWriter, replaceme
 		}
 
 		if debug {
-			log.Printf("Edited payload:\n%s\n", jsonString)
+			log.Infof("Edited payload:\n%s\n", jsonString)
 		}
 		jsonBytes = []byte(jsonString)
 	}
 	if debug {
-		log.Printf("jsonBytes:\n%s\n", jsonBytes)
+		log.Infof("jsonBytes:\n%s\n", jsonBytes)
 	}
 	if w != nil {
 		_, err = w.Write(jsonBytes)
 		if err != nil {
-			log.Printf("Couldn't write to ResponseWriter")
+			log.Infof("Couldn't write to ResponseWriter")
 			w.WriteHeader(http.StatusInternalServerError)
 			return make([]byte, 0)
 		}
@@ -1187,12 +1236,12 @@ func handleVolumeInstances(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
-			log.Printf("error decoding json: %s\n", err.Error())
+			log.Infof("error decoding json: %s\n", err.Error())
 		}
 		if volumeNameToID[req.Name] != "" {
 			w.WriteHeader(http.StatusInternalServerError)
 			// duplicate volume name response
-			log.Printf("request for volume creation of duplicate name: %s\n", req.Name)
+			log.Infof("request for volume creation of duplicate name: %s\n", req.Name)
 			resp := new(types.Error)
 			resp.Message = sioGatewayVolumeNameInUse
 			resp.HTTPStatusCode = http.StatusInternalServerError
@@ -1200,7 +1249,7 @@ func handleVolumeInstances(w http.ResponseWriter, r *http.Request) {
 			encoder := json.NewEncoder(w)
 			err = encoder.Encode(resp)
 			if err != nil {
-				log.Printf("error encoding json: %s\n", err.Error())
+				log.Infof("error encoding json: %s\n", err.Error())
 			}
 			return
 		}
@@ -1226,15 +1275,15 @@ func handleVolumeInstances(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if debug {
-			log.Printf("request name: %s id: %s\n", req.Name, resp.ID)
+			log.Infof("request name: %s id: %s\n", req.Name, resp.ID)
 		}
 		encoder := json.NewEncoder(w)
 		err = encoder.Encode(resp)
 		if err != nil {
-			log.Printf("error encoding json: %s\n", err.Error())
+			log.Infof("error encoding json: %s\n", err.Error())
 		}
 
-		log.Printf("end make volumes")
+		log.Infof("end make volumes")
 	// Read all the Volumes
 	case http.MethodGet:
 		instances := make([]*types.Volume, 0)
@@ -1256,7 +1305,7 @@ func handleVolumeInstances(w http.ResponseWriter, r *http.Request) {
 				vol := new(types.Volume)
 				err := json.Unmarshal(data, vol)
 				if err != nil {
-					log.Printf("error unmarshalling json: %s\n", string(data))
+					log.Infof("error unmarshalling json: %s\n", string(data))
 				}
 				instances = append(instances, vol)
 			}
@@ -1281,7 +1330,7 @@ func handleVolumeInstances(w http.ResponseWriter, r *http.Request) {
 			vol := new(types.Volume)
 			err := json.Unmarshal(data, vol)
 			if err != nil {
-				log.Printf("error unmarshalling json: %s\n", string(data))
+				log.Infof("error unmarshalling json: %s\n", string(data))
 			}
 			instances = append(instances, vol)
 		}
@@ -1289,7 +1338,7 @@ func handleVolumeInstances(w http.ResponseWriter, r *http.Request) {
 		encoder := json.NewEncoder(w)
 		err := encoder.Encode(instances)
 		if err != nil {
-			log.Printf("error encoding json: %s\n", err)
+			log.Infof("error encoding json: %s\n", err)
 		}
 	}
 }
@@ -1299,7 +1348,7 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 	from := vars["from"]
 	id := vars["id"]
 	action := vars["action"]
-	log.Printf("action from %s id %s action %s", from, id, action)
+	log.Infof("action from %s id %s action %s", from, id, action)
 	switch action {
 	case "setSdcName":
 		if stepHandlersErrors.SetSdcNameError {
@@ -1310,7 +1359,7 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
-			log.Printf("error decoding json: %s\n", err.Error())
+			log.Infof("error decoding json: %s\n", err.Error())
 		}
 		fmt.Printf("SdcName: %s\n", req.SdcName)
 		sdcIDToName = make(map[string]string, 0)
@@ -1333,13 +1382,13 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
-			log.Printf("error decoding json: %s\n", err.Error())
+			log.Infof("error decoding json: %s\n", err.Error())
 		}
 		resp := types.ApproveSdcResponse{SdcID: "d0f055a700000000"}
 		encoder := json.NewEncoder(w)
 		err = encoder.Encode(resp)
 		if err != nil {
-			log.Printf("error encoding json: %s\n", err.Error())
+			log.Infof("error encoding json: %s\n", err.Error())
 		}
 
 	case "addMappedSdc":
@@ -1351,15 +1400,32 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
-			log.Printf("error decoding json: %s\n", err.Error())
+			log.Infof("error decoding json: %s\n", err.Error())
 		}
 		fmt.Printf("SdcID: %s\n", req.SdcID)
 		if req.SdcID == "d0f055a700000000" {
-			sdcMappings = append(sdcMappings, types.MappedSdcInfo{SdcID: req.SdcID, SdcIP: "127.1.1.11"})
+			sdcMappings = append(sdcMappings, types.MappedSdcInfo{SdcID: req.SdcID, SdcIP: "127.1.1.11", HostType: "SdcHost"})
 		}
 		fmt.Printf("SdcID: %s\n", req.SdcID)
 		if req.SdcID == "d0f055aa00000001" {
-			sdcMappings = append(sdcMappings, types.MappedSdcInfo{SdcID: req.SdcID, SdcIP: "127.1.1.10"})
+			sdcMappings = append(sdcMappings, types.MappedSdcInfo{SdcID: req.SdcID, SdcIP: "127.1.1.10", HostType: "SdcHost"})
+		}
+	case "addMappedHost":
+		if stepHandlersErrors.MapNVMeError {
+			writeError(w, "induced error", http.StatusRequestTimeout, codes.Internal)
+			return
+		}
+		req := types.MapVolumeNVMeParam{}
+		decoder := json.NewDecoder(r.Body)
+		err := decoder.Decode(&req)
+		if err != nil {
+			log.Infof("error decoding json: %s\n", err.Error())
+		}
+		fmt.Printf("HostID: %s\n", req.HostID)
+		if req.HostID == goodSdcIDNVMe {
+			sdcMappings = append(sdcMappings, types.MappedSdcInfo{SdcID: req.HostID, SdcName: goodNodeIDNVMe, HostType: "NVMeHost"})
+		} else if req.HostID == altSdcIDNVMe {
+			sdcMappings = append(sdcMappings, types.MappedSdcInfo{SdcID: req.HostID, SdcName: altNodeIDNVMe, HostType: "NVMeHost"})
 		}
 	case "removeMappedSdc":
 		if stepHandlersErrors.RemoveMappedSdcError {
@@ -1370,10 +1436,27 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
-			log.Printf("error decoding json: %s\n", err.Error())
+			log.Infof("error decoding json: %s\n", err.Error())
 		}
 		for i, val := range sdcMappings {
 			if val.SdcID == req.SdcID {
+				copy(sdcMappings[i:], sdcMappings[i+1:])
+				sdcMappings = sdcMappings[:len(sdcMappings)-1]
+			}
+		}
+	case "removeMappedHost":
+		if stepHandlersErrors.RemoveMappedHostError {
+			writeError(w, "induced error", http.StatusRequestTimeout, codes.Internal)
+			return
+		}
+		req := types.UnmapVolumeNVMeParam{}
+		decoder := json.NewDecoder(r.Body)
+		err := decoder.Decode(&req)
+		if err != nil {
+			log.Infof("error decoding json: %s\n", err.Error())
+		}
+		for i, val := range sdcMappings {
+			if val.SdcID == req.HostID {
 				copy(sdcMappings[i:], sdcMappings[i+1:])
 				sdcMappings = sdcMappings[:len(sdcMappings)-1]
 			}
@@ -1387,7 +1470,7 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
-			log.Printf("error decoding json: %s\n", err.Error())
+			log.Infof("error decoding json: %s\n", err.Error())
 		}
 		fmt.Printf("SdcID: %s\n", req.SdcID)
 		if req.SdcID == "d0f055a700000000" {
@@ -1409,7 +1492,7 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
-			log.Printf("error decoding json: %s\n", err.Error())
+			log.Infof("error decoding json: %s\n", err.Error())
 		}
 		for _, snapParam := range req.SnapshotDefs {
 			// For now, only a single snapshot ID is supported
@@ -1550,7 +1633,7 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 		encoder := json.NewEncoder(w)
 		err := encoder.Encode(resp)
 		if err != nil {
-			log.Printf("error encoding json: %s\n", err)
+			log.Infof("error encoding json: %s\n", err)
 		}
 	case "switchoverReplicationConsistencyGroup":
 		fallthrough
@@ -1582,7 +1665,7 @@ func getSdcMappings(volumeID string) string {
 		bytes, err = json.Marshal(&emptyMappings)
 	}
 	if err != nil {
-		log.Printf("Json marshalling error: %s", err.Error())
+		log.Infof("Json marshalling error: %s", err.Error())
 		return ""
 	}
 	if debug {
@@ -1596,7 +1679,7 @@ func handleRelationships(w http.ResponseWriter, r *http.Request) {
 	from := vars["from"]
 	id := vars["id"]
 	to := vars["to"]
-	log.Printf("relationship from %s id %s to %s", from, id, to)
+	log.Infof("relationship from %s id %s to %s", from, id, to)
 	switch to {
 	case "Sdc":
 		if stepHandlersErrors.GetSdcInstancesError {
@@ -1622,14 +1705,14 @@ func handleRelationships(w http.ResponseWriter, r *http.Request) {
 				sdc := new(types.Sdc)
 				err := json.Unmarshal(data, sdc)
 				if err != nil {
-					log.Printf("error unmarshalling json: %s\n", string(data))
+					log.Infof("error unmarshalling json: %s\n", string(data))
 				}
 				instances = append(instances, sdc)
 			}
 			encoder := json.NewEncoder(w)
 			err := encoder.Encode(instances)
 			if err != nil {
-				log.Printf("error encoding json: %s\n", err)
+				log.Infof("error encoding json: %s\n", err)
 			}
 			setSdcNameSuccess = false
 			return
@@ -1682,16 +1765,16 @@ func handleRelationships(w http.ResponseWriter, r *http.Request) {
 			pair := new(types.ReplicationPair)
 			err := json.Unmarshal(data, pair)
 			if err != nil {
-				log.Printf("error unmarshalling json: %s\n", string(data))
+				log.Infof("error unmarshalling json: %s\n", string(data))
 			}
-			log.Printf("pair +%v", pair)
+			log.Infof("pair +%v", pair)
 			instances = append(instances, pair)
 		}
 
 		encoder := json.NewEncoder(w)
 		err := encoder.Encode(instances)
 		if err != nil {
-			log.Printf("error encoding json: %s\n", err)
+			log.Infof("error encoding json: %s\n", err)
 		}
 	default:
 		writeError(w, "Unsupported relationship to type", http.StatusRequestTimeout, codes.Internal)
@@ -1724,7 +1807,7 @@ func handleInstances(w http.ResponseWriter, r *http.Request) {
 	id := vars["id"]
 	id = extractIDFromStruct(id)
 	if true {
-		log.Printf("handle instances type %s id %s\n", objType, id)
+		log.Infof("handle instances type %s id %s\n", objType, id)
 	}
 	switch objType {
 	case "Volume":
@@ -1742,7 +1825,7 @@ func handleInstances(w http.ResponseWriter, r *http.Request) {
 				vol = array.volumes[id]
 			}
 
-			log.Printf("Get id %s for %s\n", id, objType)
+			log.Infof("Get id %s for %s\n", id, objType)
 			if vol != nil {
 				replacementMap["__ID__"] = vol["id"]
 				replacementMap["__NAME__"] = vol["name"]
@@ -1762,7 +1845,7 @@ func handleInstances(w http.ResponseWriter, r *http.Request) {
 			}
 			returnJSONFile("features", "volume.json.template", w, replacementMap)
 		} else {
-			log.Printf("Did not find id %s for %s\n", id, objType)
+			log.Infof("Did not find id %s for %s\n", id, objType)
 			writeError(w, "volume not found: "+id, http.StatusNotFound, codes.NotFound)
 		}
 
@@ -1826,12 +1909,12 @@ func handleQueryVolumeIDByKey(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(&req)
 	if err != nil {
-		log.Printf("error decoding json: %s\n", err.Error())
+		log.Infof("error decoding json: %s\n", err.Error())
 	}
 	if volumeNameToID[req.Name] != "" {
 		resp := new(types.VolumeResp)
 		resp.ID = volumeNameToID[req.Name]
-		log.Printf("found volume %s id %s\n", req.Name, volumeNameToID[req.Name])
+		log.Infof("found volume %s id %s\n", req.Name, volumeNameToID[req.Name])
 		encoder := json.NewEncoder(w)
 		if stepHandlersErrors.BadVolIDJSON {
 			err = encoder.Encode("thisWill://causeUnmarshalErr")
@@ -1839,10 +1922,10 @@ func handleQueryVolumeIDByKey(w http.ResponseWriter, r *http.Request) {
 			err = encoder.Encode(resp.ID)
 		}
 		if err != nil {
-			log.Printf("error encoding json: %s\n", err.Error())
+			log.Infof("error encoding json: %s\n", err.Error())
 		}
 	} else {
-		log.Printf("did not find volume %s\n", req.Name)
+		log.Infof("did not find volume %s\n", req.Name)
 		volumeNameToID[req.Name] = ""
 		writeError(w, fmt.Sprintf("Volume not found %s", req.Name), http.StatusNotFound, codes.NotFound)
 
@@ -1861,14 +1944,14 @@ func handleReplicationConsistencyGroupInstances(w http.ResponseWriter, r *http.R
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
-			log.Printf("error decoding json: %s\n", err.Error())
+			log.Infof("error decoding json: %s\n", err.Error())
 		}
 
 		fmt.Printf("POST to ReplicationConsistencyGroup %s\n", req.Name)
 		for _, ctx := range systemArrays[r.Host].replicationConsistencyGroups {
 			if ctx["name"] == req.Name {
 				w.WriteHeader(http.StatusInternalServerError)
-				log.Printf("request for rcg creation of duplicate name: %s\n", req.Name)
+				log.Infof("request for rcg creation of duplicate name: %s\n", req.Name)
 				resp := types.Error{
 					Message:        "The Replication Consistency Group already exists",
 					HTTPStatusCode: http.StatusInternalServerError, ErrorCode: 6,
@@ -1876,7 +1959,7 @@ func handleReplicationConsistencyGroupInstances(w http.ResponseWriter, r *http.R
 				encoder := json.NewEncoder(w)
 				err = encoder.Encode(resp)
 				if err != nil {
-					log.Printf("error encoding json: %s\n", err.Error())
+					log.Infof("error encoding json: %s\n", err.Error())
 				}
 				return
 			}
@@ -1912,7 +1995,7 @@ func handleReplicationConsistencyGroupInstances(w http.ResponseWriter, r *http.R
 		array.replicationConsistencyGroups[remoteRCGID]["replicationDirection"] = "RemoteToLocal"
 
 		if debug {
-			log.Printf("request name: %s id: %s\n", req.Name, resp.ID)
+			log.Infof("request name: %s id: %s\n", req.Name, resp.ID)
 		}
 
 		if inducedError.Error() == "StorageGroupAlreadyExists" || inducedError.Error() == "StorageGroupAlreadyExistsUnretriavable" {
@@ -1923,7 +2006,7 @@ func handleReplicationConsistencyGroupInstances(w http.ResponseWriter, r *http.R
 		encoder := json.NewEncoder(w)
 		err = encoder.Encode(resp)
 		if err != nil {
-			log.Printf("error encoding json: %s\n", err.Error())
+			log.Infof("error encoding json: %s\n", err.Error())
 		}
 	case http.MethodGet:
 		if inducedError.Error() == "GetReplicationConsistencyGroupsError" {
@@ -1957,7 +2040,7 @@ func handleReplicationConsistencyGroupInstances(w http.ResponseWriter, r *http.R
 			rcg := new(types.ReplicationConsistencyGroup)
 			err := json.Unmarshal(data, rcg)
 			if err != nil {
-				log.Printf("error unmarshalling json: %s\n", string(data))
+				log.Infof("error unmarshalling json: %s\n", string(data))
 			}
 
 			instances = append(instances, rcg)
@@ -1966,7 +2049,7 @@ func handleReplicationConsistencyGroupInstances(w http.ResponseWriter, r *http.R
 		encoder := json.NewEncoder(w)
 		err := encoder.Encode(instances)
 		if err != nil {
-			log.Printf("error encoding json: %s\n", err)
+			log.Infof("error encoding json: %s\n", err)
 		}
 
 	}
@@ -1983,13 +2066,13 @@ func handleReplicationPairInstances(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
-			log.Printf("error decoding json: %s\n", err.Error())
+			log.Infof("error decoding json: %s\n", err.Error())
 		}
 		fmt.Printf("POST to ReplicationPair %s Request %+v\n", req.Name, req)
 		for _, ctx := range systemArrays[r.Host].replicationPairs {
 			if ctx["name"] == req.Name {
 				w.WriteHeader(http.StatusInternalServerError)
-				log.Printf("request for replication pair creation of duplicate name: %s\n", req.Name)
+				log.Infof("request for replication pair creation of duplicate name: %s\n", req.Name)
 
 				resp := new(types.Error)
 				resp.Message = "Replication Pair name already in use"
@@ -1998,7 +2081,7 @@ func handleReplicationPairInstances(w http.ResponseWriter, r *http.Request) {
 				encoder := json.NewEncoder(w)
 				err = encoder.Encode(resp)
 				if err != nil {
-					log.Printf("error encoding json: %s\n", err.Error())
+					log.Infof("error encoding json: %s\n", err.Error())
 				}
 				return
 			}
@@ -2034,7 +2117,7 @@ func handleReplicationPairInstances(w http.ResponseWriter, r *http.Request) {
 		volumeIDToReplicationState[req.DestinationVolumeID] = "Replicated"
 
 		if debug {
-			log.Printf("request name: %s id: %s sourceVolume %s\n", req.Name, resp.ID, req.SourceVolumeID)
+			log.Infof("request name: %s id: %s sourceVolume %s\n", req.Name, resp.ID, req.SourceVolumeID)
 		}
 
 		if inducedError.Error() == "ReplicationPairAlreadyExists" || inducedError.Error() == "ReplicationPairAlreadyExistsUnretrievable" {
@@ -2045,7 +2128,7 @@ func handleReplicationPairInstances(w http.ResponseWriter, r *http.Request) {
 		encoder := json.NewEncoder(w)
 		err = encoder.Encode(resp)
 		if err != nil {
-			log.Printf("error encoding json: %s\n", err.Error())
+			log.Infof("error encoding json: %s\n", err.Error())
 		}
 	case http.MethodGet:
 		if inducedError.Error() == "GetReplicationPairError" {
@@ -2066,24 +2149,24 @@ func handleReplicationPairInstances(w http.ResponseWriter, r *http.Request) {
 			replacementMap["__DESTINATION_VOLUME__"] = pair["remoteVolumeId"]
 			replacementMap["__RP_GROUP__"] = pair["replicationConsistencyGroupId"]
 
-			log.Printf("replicatPair replacementMap %v\n", replacementMap)
+			log.Infof("replicatPair replacementMap %v\n", replacementMap)
 			data := returnJSONFile("features", "replication_pair.template", nil, replacementMap)
 
-			log.Printf("replication-pair-data %s\n", string(data))
+			log.Infof("replication-pair-data %s\n", string(data))
 			pair := new(types.ReplicationPair)
 			err := json.Unmarshal(data, pair)
 			if err != nil {
-				log.Printf("error unmarshalling json: %s\n", string(data))
+				log.Infof("error unmarshalling json: %s\n", string(data))
 			}
 
-			log.Printf("replication-pair +%v", pair)
+			log.Infof("replication-pair +%v", pair)
 			instances = append(instances, pair)
 		}
 
 		encoder := json.NewEncoder(w)
 		err := encoder.Encode(instances)
 		if err != nil {
-			log.Printf("error encoding json: %s\n", err)
+			log.Infof("error encoding json: %s\n", err)
 		}
 	}
 }
@@ -2099,7 +2182,7 @@ func handleFileTreeQuotas(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
-			log.Printf("error decoding json: %s\n", err.Error())
+			log.Infof("error decoding json: %s\n", err.Error())
 		}
 
 		// good response
@@ -2122,14 +2205,14 @@ func handleFileTreeQuotas(w http.ResponseWriter, r *http.Request) {
 			array.treeQuotas[resp.ID]["hardlimit"] = strconv.Itoa(req.HardLimit)
 		}
 		if debug {
-			log.Printf("request \"dummy-name\" id: %s\n", resp.ID)
+			log.Infof("request \"dummy-name\" id: %s\n", resp.ID)
 		}
 		encoder := json.NewEncoder(w)
 		err = encoder.Encode(resp)
 		if err != nil {
-			log.Printf("error encoding json: %s\n", err.Error())
+			log.Infof("error encoding json: %s\n", err.Error())
 		}
-		log.Printf("end make tree quotas")
+		log.Infof("end make tree quotas")
 	case http.MethodGet:
 		if inducedError.Error() == "GetQuotaByFSIDError" {
 			writeError(w, "Fetching tree quota for filesystem failed, error:", http.StatusRequestTimeout, codes.Internal)
@@ -2152,7 +2235,7 @@ func handleFileTreeQuotas(w http.ResponseWriter, r *http.Request) {
 				tq := new(types.TreeQuota)
 				err := json.Unmarshal(data, tq)
 				if err != nil {
-					log.Printf("error unmarshalling json: %s\n", string(data))
+					log.Infof("error unmarshalling json: %s\n", string(data))
 				}
 				instances = append(instances, tq)
 			}
@@ -2174,7 +2257,7 @@ func handleFileTreeQuotas(w http.ResponseWriter, r *http.Request) {
 			tq := new(types.TreeQuota)
 			err := json.Unmarshal(data, tq)
 			if err != nil {
-				log.Printf("error unmarshalling json: %s\n", string(data))
+				log.Infof("error unmarshalling json: %s\n", string(data))
 			}
 			instances = append(instances, tq)
 		}
@@ -2182,9 +2265,9 @@ func handleFileTreeQuotas(w http.ResponseWriter, r *http.Request) {
 		encoder := json.NewEncoder(w)
 		err := encoder.Encode(instances)
 		if err != nil {
-			log.Printf("error encoding json: %s\n", err)
+			log.Infof("error encoding json: %s\n", err)
 		}
-		log.Printf("end get tree quotas")
+		log.Infof("end get tree quotas")
 	}
 }
 
@@ -2203,7 +2286,7 @@ func handleGetFileTreeQuotas(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
-			log.Printf("error decoding json: %s\n", err.Error())
+			log.Infof("error decoding json: %s\n", err.Error())
 		}
 		fmt.Printf("patchReq:%#v\n", req)
 		if array, ok := systemArrays[r.Host]; ok {
@@ -2213,7 +2296,7 @@ func handleGetFileTreeQuotas(w http.ResponseWriter, r *http.Request) {
 			array.treeQuotas[id]["hardlimit"] = strconv.Itoa(req.HardLimit)
 		}
 		w.WriteHeader(http.StatusNoContent)
-		log.Printf("end modify tree quotas")
+		log.Infof("end modify tree quotas")
 	}
 }
 
@@ -2227,6 +2310,6 @@ func writeError(w http.ResponseWriter, message string, httpStatus int, errorCode
 	encoder := json.NewEncoder(w)
 	err := encoder.Encode(resp)
 	if err != nil {
-		log.Printf("error encoding json: %s\n", err.Error())
+		log.Infof("error encoding json: %s\n", err.Error())
 	}
 }

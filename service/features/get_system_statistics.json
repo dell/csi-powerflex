@@ -38,6 +38,7 @@
   "rfcacheIosOutstanding": 0,
   "rmcacheBigBlockEvictionSizeCountInKb": 0,
   "capacityAvailableForVolumeAllocationInKb": 117440512,
+  "volumeAllocationLimitInKb": 117440512,
   "numOfMappedToAllVolumes": 0,
   "numOfScsiInitiators": 0,
   "rebuildPerReceiveJobNetThrottlingInKbps": 0,

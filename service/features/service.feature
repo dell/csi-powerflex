@@ -23,7 +23,6 @@ Feature: VxFlex OS CSI interface
       | "14dbbf5617523654"             | "none"   |
       | "15dbbf5617523655"             | "none"   |
 
-
   Scenario: Identity GetPluginInfo good call
     Given a VxFlexOS service
     When I call GetPluginInfo
@@ -183,121 +182,167 @@ Feature: VxFlex OS CSI interface
   Scenario Outline: Create volume good scenario
     Given a VxFlexOS service
     When I call Probe
+    And I set protocol to <protocol>
     And I call CreateVolume <name>
     Then a valid CreateVolumeResponse is returned
-
     Examples:
-      | name                                                |
-      | "volume1"                                           |
-      | "thisnameiswaytoolongtopossiblybeunder31characters" |
+      | name                                                | protocol  |
+      | "volume1"                                           | "SDC"     |
+      | "thisnameiswaytoolongtopossiblybeunder31characters" | "SDC"     |
+      | "volume1"                                           | "NVMeTCP" |
 
+      | "thisnameiswaytoolongtopossiblybeunder31characters" | "NVMeTCP" |
 
   Scenario: Create volume with admin error
     Given a VxFlexOS service
     When I call Probe
     And I induce error "NoAdminError"
+    And I set protocol to <protocol>
     And I call CreateVolume "volume1"
     Then a valid CreateVolumeResponse is returned
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
 
   Scenario: Create Volume with invalid probe cache, no endpoint, and no admin
     Given a VxFlexOS service
     When I induce error "NoAdminError"
     And I induce error "NoEndpointError"
     And I invalidate the Probe cache
+    And I set protocol to <protocol>
     And I call CreateVolume "volume1"
     Then the error contains "No system ID is found in parameters or as default"
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
 
   Scenario: Idempotent create volume with duplicate volume name
     Given a VxFlexOS service
     When I call Probe
+    And I set protocol to <protocol>
     And I call CreateVolume "volume2"
     And I call CreateVolume "volume2"
     Then a valid CreateVolumeResponse is returned
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
 
   Scenario: Idempotent create volume with different sizes
     Given a VxFlexOS service
     When I call Probe
+    And I set protocol to <protocol>
     And I call CreateVolumeSize "volume3" "8"
     And I call CreateVolumeSize "volume3" "16"
     Then the error contains "different size than requested"
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
 
   Scenario: Idempotent create volume with different sizes and induced error in handleQueryVolumeIDByKey
     Given a VxFlexOS service
     When I call Probe
+    And I set protocol to <protocol>
     And I call CreateVolumeSize "volume3" "8"
     And I induce error "FindVolumeIDError"
     And I call CreateVolumeSize "volume3" "16"
     Then the error contains "induced error"
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
 
   Scenario: Idempotent create volume with different sizes and induced error in handleInstances
     Given a VxFlexOS service
     When I call Probe
+    And I set protocol to <protocol>
     And I call CreateVolumeSize "volume3" "8"
     And I induce error "GetVolByIDError"
     And I call CreateVolumeSize "volume3" "16"
     Then the error contains "induced error"
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
 
   Scenario: Idempotent create volume with different sizes and induced error in handleStoragePoolInstances
     Given a VxFlexOS service
     When I call Probe
+    And I set protocol to <protocol>
     And I call CreateVolumeSize "volume3" "8"
     And I induce error "GetStoragePoolsError"
     And I call CreateVolumeSize "volume3" "16"
     Then the error contains "induced error"
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
 
   Scenario: Idempotent create volume with different storage pool
     Given a VxFlexOS service
     When I call Probe
+    And I set protocol to <protocol>
     And I call CreateVolume "volume4"
     And I change the StoragePool "other_storage_pool"
     And I call CreateVolume "volume4"
     Then the error contains "different storage pool"
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
 
   Scenario: Idempotent create volume with bad storage pool
     Given a VxFlexOS service
     When I call Probe
+    And I set protocol to <protocol>
     And I call CreateVolume "volume4"
     And I change the StoragePool "no_storage_pool"
     And I call CreateVolume "volume4"
     Then the error contains "Couldn't find storage pool"
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
 
   Scenario Outline: Create volume with Accessibility Requirements
     Given a VxFlexOS service
     When I call Probe
     And I specify AccessibilityRequirements with a SystemID of <sysID>
+    And I set protocol to <protocol>
     And I call CreateVolume "accessibility"
     Then the error contains <errormsg>
-
     Examples:
-      | sysID                      | errormsg                               |
-      | "f.service.opt.SystemName" | "none"                                 |
-      | ""                         | "is not accessible based on Preferred" |
-      | "Unknown"                  | "is not accessible based on Preferred" |
-      | "badSystem"                | "is not accessible based on Preferred" |
+      | sysID                      | errormsg                               | protocol  |
+      | "f.service.opt.SystemName" | "none"                                 | "SDC"     |
+      | ""                         | "is not accessible based on Preferred" | "SDC"     |
+      | "Unknown"                  | "is not accessible based on Preferred" | "SDC"     |
+      | "badSystem"                | "is not accessible based on Preferred" | "SDC"     |
+      | "f.service.opt.SystemName" | "none"                                 | "NVMeTCP" |
+      | ""                         | "is not accessible based on Preferred" | "NVMeTCP" |
+      | "Unknown"                  | "is not accessible based on Preferred" | "NVMeTCP" |
+      | "badSystem"                | "is not accessible based on Preferred" | "NVMeTCP" |
 
   Scenario Outline: Create volume with Accessibility Requirements
     Given a VxFlexOS service
     When I call Probe
+    And I set protocol to <protocol>
     And I specify AccessibilityRequirements with a SystemID of <sysID>
     And I call CreateVolume "accessibility"
     Then a valid CreateVolumeResponse with topology is returned
     Examples:
-      | sysID                      |
-      | "f.service.opt.SystemName" |
-
-
+      | sysID                      | protocol   |
+      | "f.service.opt.SystemName" | "SDC"      |
+      | "f.service.opt.SystemName" | "NVMeTCP"  |
 
   Scenario Outline: Create volume with Accessiblity Requirements NFS volumes Invalid topology error
     Given a VxFlexOS service
     When I call Probe
-    And I specify bad NFS AccessibilityRequirements with a SystemID of <sysID>
+    And I specify bad AccessibilityRequirements with a SystemID of "f.service.opt.SystemName"
     And I call CreateVolume "volume1"
     Then the error contains "Invalid topology requested for NFS Volume"
-    Examples:
-      | sysID                      |
-      | "f.service.opt.SystemName" |
-
-
 
   Scenario Outline: Create volume with Accessibility Requirements for NFS volumes with different examples
     Given a VxFlexOS service
@@ -317,36 +362,60 @@ Feature: VxFlex OS CSI interface
     Given a VxFlexOS service
     When I call Probe
     And I specify MULTINODE_WRITER
+    And I set protocol to <protocol>
     And I call CreateVolume "multi-writer"
     Then a valid CreateVolumeResponse is returned
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
 
   Scenario: Attempt create volume with no name
     Given a VxFlexOS service
     When I call Probe
+    And I set protocol to <protocol>
     And I call CreateVolume ""
     Then the error contains "Name cannot be empty"
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
 
   Scenario: Create volume with bad capacity
     Given a VxFlexOS service
     When I call Probe
     And I specify a BadCapacity
+    And I set protocol to <protocol>
     And I call CreateVolume "bad capacity"
     Then the error contains "bad capacity"
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
 
   Scenario: Create volume with no storage pool
     Given a VxFlexOS service
     When I call Probe
     And I specify NoStoragePool
+    And I set protocol to <protocol>
     And I call CreateVolume "no storage pool"
     Then the error contains "storagepool is a required parameter"
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
 
   Scenario: Create mount volume good scenario
     Given a VxFlexOS service
     When I call Probe
     When I specify CreateVolumeMountRequest "xfs"
+    And I set protocol to <protocol>
     And I call CreateVolume "volume1"
     Then a valid CreateVolumeResponse is returned
-
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
 
   Scenario: Create mount volume NFS no error
     Given a VxFlexOS service
@@ -400,10 +469,14 @@ Feature: VxFlex OS CSI interface
     Given a VxFlexOS service
     When I call Probe
     When I specify CreateVolumeMountRequest "xfs"
+    And I set protocol to <protocol>
     And I call CreateVolume "volume2"
     And I call CreateVolume "volume2"
     Then a valid CreateVolumeResponse is returned
-
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
 
   Scenario: Create mount volume idempotent NFS no error
     Given a VxFlexOS service
@@ -450,7 +523,7 @@ Feature: VxFlex OS CSI interface
   Scenario: Call GetNodeUID with invalid node
     Given a VxFlexOS service
     When I call GetNodeUID with invalid node
-    Then the error contains "Unable to fetch the node details"
+    Then the error contains "unable to fetch node"
 
   Scenario: Call NodeGetInfo with invalid volume limit node labels
     Given a VxFlexOS service
@@ -467,6 +540,19 @@ Feature: VxFlex OS CSI interface
     When I call NodeGetInfo with a valid Node UID
     Then a valid NodeGetInfoResponse with node UID is returned
 
+  Scenario: Call NodeGetInfo with useNVME flag as true
+    Given a VxFlexOS service
+    And I induce error <error>
+    When I call NodeGetInfo with useNVME flag as true
+    Then a valid NodeGetInfoResponse with <protocols> in AccessibleTopology is returned
+    Examples:
+      | error                | protocols     |
+      | "none"               | "nfs,nvmetcp" |
+      | "NoNfsServer"        | "nvmetcp"     |
+      | "SdtNotFoundError"   | "nfs"         |
+      | "EmptySdtError"      | "nfs"         |
+      | "NvmeDiscoveryError" | "nfs"         |
+
   Scenario: Call GetNodeUID
     Given a VxFlexOS service
     When I call GetNodeUID
@@ -482,10 +568,10 @@ Feature: VxFlex OS CSI interface
     When I call GetNodeLabels with unset KubernetesClient
     Then the error contains "init client failed with error"
 
-  Scenario: Call GetNodeUID with invalid KubernetesClient
+  Scenario: Call GetNodeUID without KubeNodeName
     Given a VxFlexOS service
-    When I call GetNodeUID with unset KubernetesClient
-    Then the error contains "init client failed with error"
+    When I call GetNodeUID without KubeNodeName
+    Then the error contains "node name is empty"
 
   Scenario: Call GetCapacity without specifying Storage Pool Name (this returns overall capacity)
     Given a VxFlexOS service
@@ -513,11 +599,32 @@ Feature: VxFlex OS CSI interface
   Scenario: Call GetMaximumVolumeSize with Systemid
     Given a VxFlexOS service
     When I call Probe
+    And I set protocol to <protocol>
     And I call CreateVolume "volume123"
     Then a valid CreateVolumeResponse is returned
+    And I set Provision to <provisionType>
     And I call GetCapacity with storage pool "viki_pool_HDD_20181031"
     And I call get GetMaximumVolumeSize with systemid "14dbbf5617523654"
     Then a valid GetCapacityResponse1 is returned
+    Examples:
+      | protocol  | provisionType |
+      | "SDC"     | "Thick"       |
+      | "NVMeTCP" | "Thin"        |
+
+   Scenario: Call GetMaximumVolumeSize with Systemid Without Storage Pool
+       Given a VxFlexOS service
+       When I call Probe
+       And I call CreateVolume "volume123"
+       Then a valid CreateVolumeResponse is returned
+       And I set Provision to <provisionType>
+       And I call GetCapacity with storage pool ""
+       And I call get GetMaximumVolumeSize with systemid "14dbbf5617523654"
+       Then a valid GetCapacityResponse1 is returned
+
+      Examples:
+             | provisionType |
+             | "Thick" |
+             | "Thin" |
 
   Scenario: Call GetCapacity with invalid Storage Pool name
     Given a VxFlexOS service
@@ -525,12 +632,56 @@ Feature: VxFlex OS CSI interface
     And I call GetCapacity with storage pool "xxx"
     Then the error contains "unable to look up storage pool"
 
+  Scenario: Call GetCapacity with invalid Storage Pool name For Gen 2
+    Given a VxFlexOS service
+    When I call Probe
+    And I set Platform Info "5.0" "EC" "5.0" "EC"
+    And I call GetCapacity with storage pool "xxx"
+    Then the error contains "unable to look up storage pool"
+    Then I reset the Platform Info
+
+  Scenario: Call GetCapacity with induced error retrieving statistics For Gen2
+      Given a VxFlexOS service
+      When I call Probe
+      And I induce error "GetMetricsError"
+      And I set Platform Info "5.0" "EC" "5.0" "EC"
+      And I call GetCapacity with storage pool <storagePool>
+      Then the error contains "unable to get system stats"
+      Then I reset the Platform Info
+
+  Examples:
+    | storagePool |
+    | "viki_pool_HDD_20181031" |
+    | "" |
+
   Scenario: Call GetCapacity with induced error retrieving statistics
     Given a VxFlexOS service
     When I call Probe
     And I induce error "GetStatisticsError"
     And I call GetCapacity with storage pool "viki_pool_HDD_20181031"
     Then the error contains "unable to get system stats"
+
+  Scenario: Call GetCapacity For Gen 2 With Storage Pool
+    Given a VxFlexOS service
+    When I call Probe
+    And I call CreateVolume "volume123"
+    Then a valid CreateVolumeResponse is returned
+    And I set Platform Info "5.0" "EC" "5.0" "EC"
+    And I call GetCapacity with storage pool "viki_pool_HDD_20181031"
+    And I call get GetMaximumVolumeSize with systemid "14dbbf5617523654"
+    Then a valid GetCapacityResponse1 is returned
+    Then I reset the Platform Info
+
+  Scenario: Call GetCapacity For Gen 2 Without Storage Pool
+      Given a VxFlexOS service
+      When I call Probe
+      And I call CreateVolume "volume123"
+      Then a valid CreateVolumeResponse is returned
+      And I set Platform Info "5.0" "EC" "5.0" "EC"
+      And I call GetCapacity with storage pool ""
+      And I call get GetMaximumVolumeSize with systemid "14dbbf5617523654"
+      Then a valid GetCapacityResponse1 is returned
+      Then I reset the Platform Info
 
   Scenario: Call ControllerGetCapabilities with health monitor enabled
     Given a VxFlexOS service
@@ -545,21 +696,30 @@ Feature: VxFlex OS CSI interface
   Scenario Outline: Calls to validate volume capabilities
     Given a VxFlexOS service
     When I call Probe
+    And I set protocol to <protocol>
     And I call CreateVolume "volume1"
     And a valid CreateVolumeResponse is returned
     And I call ValidateVolumeCapabilities with voltype <voltype> access <access> fstype <fstype>
     Then the error contains <errormsg>
 
     Examples:
-      | voltype | access                      | fstype | errormsg                                                         |
-      | "block" | "single-writer"             | "none" | "none"                                                           |
-      | "block" | "multi-reader"              | "none" | "none"                                                           |
-      | "mount" | "multi-writer"              | "ext4" | "multi-node with writer(s) only supported for block access type" |
-      | "mount" | "multi-node-single-writer"  | "ext4" | "multi-node with writer(s) only supported for block access type" |
-      | "mount" | "single-node-single-writer" | "ext4" | "none"                                                           |
-      | "mount" | "single-node-multi-writer"  | "ext4" | "none"                                                           |
-      | "mount" | "unknown"                   | "ext4" | "access mode cannot be UNKNOWN"                                  |
-      | "none " | "unknown"                   | "ext4" | "unknown access type is not Block or Mount"                      |
+      | voltype | access                      | fstype | errormsg                                                         | protocol  |
+      | "block" | "single-writer"             | "none" | "none"                                                           | "SDC"     |
+      | "block" | "multi-reader"              | "none" | "none"                                                           | "SDC"     |
+      | "mount" | "multi-writer"              | "ext4" | "multi-node with writer(s) only supported for block access type" | "SDC"     |
+      | "mount" | "multi-node-single-writer"  | "ext4" | "multi-node with writer(s) only supported for block access type" | "SDC"     |
+      | "mount" | "single-node-single-writer" | "ext4" | "none"                                                           | "SDC"     |
+      | "mount" | "single-node-multi-writer"  | "ext4" | "none"                                                           | "SDC"     |
+      | "mount" | "unknown"                   | "ext4" | "access mode cannot be UNKNOWN"                                  | "SDC"     |
+      | "none " | "unknown"                   | "ext4" | "unknown access type is not Block or Mount"                      | "SDC"     |
+      | "block" | "single-writer"             | "none" | "none"                                                           | "NVMeTCP" |
+      | "block" | "multi-reader"              | "none" | "none"                                                           | "NVMeTCP" |
+      | "mount" | "multi-writer"              | "ext4" | "multi-node with writer(s) only supported for block access type" | "NVMeTCP" |
+      | "mount" | "multi-node-single-writer"  | "ext4" | "multi-node with writer(s) only supported for block access type" | "NVMeTCP" |
+      | "mount" | "single-node-single-writer" | "ext4" | "none"                                                           | "NVMeTCP" |
+      | "mount" | "single-node-multi-writer"  | "ext4" | "none"                                                           | "NVMeTCP" |
+      | "mount" | "unknown"                   | "ext4" | "access mode cannot be UNKNOWN"                                  | "NVMeTCP" |
+      | "none " | "unknown"                   | "ext4" | "unknown access type is not Block or Mount"                      | "NVMeTCP" |
 
   Scenario Outline: Call validate volume capabilities with non-existent volume
     Given a VxFlexOS service
@@ -585,32 +745,16 @@ Feature: VxFlex OS CSI interface
   Scenario: Call with ValidateVolumeCapabilities with bad vol ID
     Given a VxFlexOS service
     When I call Probe
+    And I set protocol to <protocol>
     And I call CreateVolume "volume1"
     And a valid CreateVolumeResponse is returned
     And I induce error "BadVolIDError"
     And I call ValidateVolumeCapabilities with voltype "block" access "single-writer" fstype "none"
     Then the error contains "volume not found"
-
-  Scenario: Call NodeStageVolume, should get unimplemented
-    Given a VxFlexOS service
-    And I call Probe
-    When I call NodeStageVolume
-    Then the error contains "Unimplemented"
-
-  Scenario Outline: Call NodeUnstageVolume to test podmon functionality
-    Given a VxFlexOS service
-    And I call Probe
-    When I call NodeUnstageVolume with <error>
-    Then the error contains <errormsg>
-
     Examples:
-      | error             | errormsg                               |
-      | "none"            | "none"                                 |
-      | "NoRequestID"     | "none"                                 |
-      | "NoVolumeID"      | "Volume ID is required"                |
-      | "NoStagingTarget" | "StagingTargetPath is required"        |
-      | "EphemeralVolume" | "none"                                 |
-      | "UnmountError"    | "Unable to remove staging target path" |
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
 
   Scenario: Call NodeGetCapabilities with health monitor feature enabled
     Given a VxFlexOS service
@@ -627,14 +771,20 @@ Feature: VxFlex OS CSI interface
   Scenario: Snapshot a single block volume
     Given a VxFlexOS service
     When I call Probe
+    And I set protocol to <protocol>
     And I call CreateVolume "vol1"
     And a valid CreateVolumeResponse is returned
     And I call CreateSnapshot "snap1"
     Then a valid CreateSnapshotResponse is returned
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
 
   Scenario: Idempotent test of snapshot a single block volume
     Given a VxFlexOS service
     When I call Probe
+    And I set protocol to <protocol>
     And I call CreateVolume "vol1"
     And I induce error <error>
     And a valid CreateVolumeResponse is returned
@@ -644,13 +794,16 @@ Feature: VxFlex OS CSI interface
     Then the error contains <errormsg>
 
     Examples:
-      | error          | errormsg                                                           |
-      | "none"         | "none"                                                             |
-      | "BadVolIDJSON" | "Failed to create snapshot -- GetVolume returned unexpected error" |
+      | error          | errormsg                                                           | protocol  |
+      | "none"         | "none"                                                             | "SDC"     |
+      | "BadVolIDJSON" | "Failed to create snapshot -- GetVolume returned unexpected error" | "SDC"     |
+      | "none"         | "none"                                                             | "NVMeTCP" |
+      | "BadVolIDJSON" | "Failed to create snapshot -- GetVolume returned unexpected error" | "NVMeTCP" |
 
   Scenario: Request to create Snapshot with same name and different SourceVolumeID
     Given a VxFlexOS service
     When I call Probe
+    And I set protocol to <protocol>
     And I call CreateVolume "vol1"
     And a valid CreateVolumeResponse is returned
     And I call CreateSnapshot "snap1"
@@ -660,6 +813,10 @@ Feature: VxFlex OS CSI interface
     And I induce error "WrongVolIDError"
     And I call CreateSnapshot "snap1"
     Then the error contains "Failed to create snapshot"
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
 
   Scenario: Snapshot a single fileSystem Volume
     Given a VxFlexOS service
@@ -708,10 +865,15 @@ Feature: VxFlex OS CSI interface
     Given a VxFlexOS service
     When I call Probe
     And I induce error "CreateSnapshotError"
+    And I set protocol to <protocol>
     And I call CreateVolume "vol1"
     And a valid CreateVolumeResponse is returned
     And I call CreateSnapshot ""
     Then the error contains "snapshot name cannot be Nil"
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
 
   Scenario: Call snapshot create with invalid volume
     Given a VxFlexOS service
@@ -771,6 +933,7 @@ Feature: VxFlex OS CSI interface
   Scenario: Snapshot a block volume consistency group
     Given a VxFlexOS service
     When I call Probe
+    And I set protocol to <protocol>
     And I call CreateVolume "vol1"
     And a valid CreateVolumeResponse is returned
     And I call CreateVolume "vol2"
@@ -779,6 +942,10 @@ Feature: VxFlex OS CSI interface
     And a valid CreateVolumeResponse is returned
     And I call CreateSnapshot "snap1"
     Then a valid CreateSnapshotResponse is returned
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
 
   Scenario: Delete a snapshot
     Given a VxFlexOS service
@@ -1036,7 +1203,7 @@ Feature: VxFlex OS CSI interface
     And I induce error "CreateSnapshotError"
     When I call Probe
     And I call Create Volume from Snapshot
-    Then the error contains "Failed to create snapshot"
+    Then the error contains "Failed to call CreateSnapshotConsistencyGroup to create volume from snapshot"
 
   Scenario: Idempotent create a volume from a snapshot
     Given a VxFlexOS service
@@ -1057,6 +1224,7 @@ Feature: VxFlex OS CSI interface
   Scenario Outline: Call ControllerExpandVolume
     Given a VxFlexOS service
     And I call Probe
+    And I set protocol to <protocol>
     And I call CreateVolumeSize "volume10" "32"
     And a valid CreateVolumeResponse is returned
     And I induce error <error>
@@ -1066,17 +1234,24 @@ Feature: VxFlex OS CSI interface
     Then the error contains <errmsg>
 
     Examples:
-      | error                | GB | errmsg                  |
-      | "none"               | 32 | "none"                  |
-      | "SetVolumeSizeError" | 64 | "induced error"         |
-      | "none"               | 16 | "none"                  |
-      | "NoVolumeIDError"    | 64 | "volume ID is required" |
-      | "none"               | 64 | "none"                  |
-      | "GetVolByIDError"    | 64 | "induced error"         |
+      | error                | GB | errmsg                  | protocol  |
+      | "none"               | 32 | "none"                  | "SDC"     |
+      | "SetVolumeSizeError" | 64 | "induced error"         | "SDC"     |
+      | "none"               | 16 | "none"                  | "SDC"     |
+      | "NoVolumeIDError"    | 64 | "volume ID is required" | "SDC"     |
+      | "none"               | 64 | "none"                  | "SDC"     |
+      | "GetVolByIDError"    | 64 | "induced error"         | "SDC"     |
+      | "none"               | 32 | "none"                  | "NVMeTCP" |
+      | "SetVolumeSizeError" | 64 | "induced error"         | "NVMeTCP" |
+      | "none"               | 16 | "none"                  | "NVMeTCP" |
+      | "NoVolumeIDError"    | 64 | "volume ID is required" | "NVMeTCP" |
+      | "none"               | 64 | "none"                  | "NVMeTCP" |
+      | "GetVolByIDError"    | 64 | "induced error"         | "NVMeTCP" |
 
-  Scenario Outline: Call NodeExpandVolume with non sysID and no defaultSysID
+  Scenario Outline: Call NodeExpandVolume with non sysID and no defaultSysID for SDC
     Given setup Get SystemID to fail
     And a VxFlexOS service
+    And I set protocol to "SDC"
     And I call CreateVolumeSize "volume4" "32"
     And a controller published volume
     And a capability with voltype "mount" access "single-writer" fstype "xfs"
@@ -1085,11 +1260,48 @@ Feature: VxFlex OS CSI interface
     And I induce error "EmptySysIDInNodeExpand"
     When I call NodeExpandVolume with volumePath as "test/00000000-1111-0000-0000-000000000000/datadir"
     Then the error contains "systemID is not found in the request and there is no default system"
+|   
+  Scenario Outline: Call NodeExpandVolume for NVMETCP
+    Given a VxFlexOS service
+    And I call Probe
+    And I set protocol to "NVMeTCP"
+    And I call CreateVolumeSize "volume4" "32"
+    And a controller published volume
+    And a capability with voltype "mount" access "single-writer" fstype "xfs"
+    And get Node Publish Volume Request
+    And get Node Publish Volume Request for NVME <voltype>
+    And no error was received
+    And I induce error <error>
+    When I call NodeExpandVolume with volumePath as <volPath>
+    Then the error contains <errormsg>
 
+    Examples:
+      | error                                  | volPath                                              | errormsg                                   |  voltype  |
+      | "none"                                 | ""                                                   | "Volume path required"                     |  "block"  |
+      | "none"                                 | "test/00000000-1111-0000-0000-000000000000/datadir"  | "none"                                     |  "block"  |
+      | "GOFSInduceFSTypeError"                | "test/00000000-1111-0000-0000-000000000000/datadir"  | "Failed to fetch filesystem"               |  "mount"  |
+      | "GOFSInduceResizeFSError"              | "test/00000000-1111-0000-0000-000000000000/datadir"  | "Failed to resize device"                  |  "mount"  |
+
+  Scenario Outline: Call NodeExpandVolume with non sysID and no defaultSysID for NVMETCP
+    Given setup Get SystemID to fail
+    And a VxFlexOS service
+    And I set protocol to <protocol>
+    And I call CreateVolumeSize "volume4" "32"
+    And a controller published volume
+    And a capability with voltype "mount" access "single-writer" fstype "xfs"
+    And get Node Publish Volume Request for NVME <voltype>
+    And I induce error "EmptySysIDInNodeExpand"
+    When I call NodeExpandVolume with volumePath as "test/00000000-1111-0000-0000-000000000000/datadir"
+    Then the error contains "systemID is not found in the request and there is no default system"
+    Examples:
+      | protocol  | voltype |
+      | "NVMeTCP" | "block" |
+    
   Scenario Outline: Call NodeExpandVolume with invalid volID
     Given undo setup Get SystemID to fail
     And a VxFlexOS service
     And I call Probe
+    And I set protocol to "SDC"
     And I call CreateVolumeSize "volume4" "32"
     And a controller published volume
     And a capability with voltype "mount" access "single-writer" fstype "xfs"
@@ -1103,6 +1315,7 @@ Feature: VxFlex OS CSI interface
   Scenario Outline: Call NodeExpandVolume
     Given a VxFlexOS service
     And I call Probe
+    And I set protocol to "SDC"
     And I call CreateVolumeSize "volume4" "32"
     And a controller published volume
     And a capability with voltype "mount" access "single-writer" fstype "xfs"
@@ -1114,8 +1327,8 @@ Feature: VxFlex OS CSI interface
     Then the error contains <errormsg>
 
     Examples:
-      | error                                   | volPath             | errormsg                                    |
-      | "none"                                  | ""                  | "Volume path required"                      |
+      | error                                  | volPath                                              | errormsg                                   |
+      | "none"                                 | ""                                                   | "Volume path required"                     |
       | "none"                                 | "test/00000000-1111-0000-0000-000000000000/datadir"  | "none"                                     |
       | "GOFSInduceFSTypeError"                | "test/00000000-1111-0000-0000-000000000000/datadir"  | "Failed to fetch filesystem"               |
       | "GOFSInduceResizeFSError"              | "test/00000000-1111-0000-0000-000000000000/datadir"  | "Failed to resize device"                  |
@@ -1125,7 +1338,7 @@ Feature: VxFlex OS CSI interface
       | "CorrectFormatBadCsiVolIDInNodeExpand" | "test/00000000-1111-0000-0000-000000000000/datadir"  | "is not configured in the driver"          |
       | "VolumeIDTooShortErrorInNodeExpand"    | "test/00000000-1111-0000-0000-000000000000/datadir"  | "is shorter than 3 chars, returning error" |
       | "TooManyDashesVolIDInNodeExpand"       | "test/00000000-1111-0000-0000-000000000000/datadir"  | "is not configured in the driver"          |
-
+ 
   Scenario Outline: Call NodeGetVolumeStats with various errors
     Given a VxFlexOS service
     And a controller published volume
@@ -1208,6 +1421,7 @@ Feature: VxFlex OS CSI interface
   Scenario: Idempotent clone of a volume
     Given a VxFlexOS service
     And I induce error <error>
+    And I set protocol to <protocol>
     And I call CreateVolume "vol1"
     And a valid CreateVolumeResponse is returned
     And I call Clone volume
@@ -1216,9 +1430,11 @@ Feature: VxFlex OS CSI interface
     Then the error contains <errormsg>
 
     Examples:
-      | error          | errormsg                                                        |
-      | "none"         | "none"                                                          |
-      | "BadVolIDJSON" | "Failed to create clone -- GetVolume returned unexpected error" |
+      | error          | errormsg                                                        | protocol  |
+      | "none"         | "none"                                                          | "SDC"     |
+      | "BadVolIDJSON" | "Failed to create clone -- GetVolume returned unexpected error" | "SDC"     |
+      | "none"         | "none"                                                          | "NVMeTCP" |
+      | "BadVolIDJSON" | "Failed to create clone -- GetVolume returned unexpected error" | "NVMeTCP" |
 
   Scenario: Clone a volume
     Given a VxFlexOS service
@@ -1411,6 +1627,31 @@ Feature: VxFlex OS CSI interface
     When I call Node Probe
     Then the error contains "The given GUID is invalid"
 
+  Scenario: Call Probe for NVMe host
+    Given a VxFlexOS service
+    And I call Probe
+    When I call Node Probe with NVMe flag enabled
+    Then the error contains "none"
+
+  Scenario Outline: getArrayVersion good call
+    Given a VxFlexOS service
+    And I call getArrayVersion on <systemID>
+    Then the error contains <errorMsg>
+    Examples:
+      | systemID           | errorMsg                                   |
+      | "14dbbf5617523654" | "none"                                     |
+      | "14dbbf5617523655" | "unable to get admin client of the array"  |
+
+  Scenario: Test setupNVMeHost with NVMe initiators
+    Given a VxFlexOS service
+    When I call Probe
+    And I call setupNVMeHost with NVMe intiators <nvmeintiators>
+    Then the error contains <errorMsg>
+    Examples:
+      | nvmeintiators     | errorMsg                             |
+      | "nqn.123,nqn.124" | "none"                               |
+      | ""                | "NVMe initiators not found on node"  |
+
   Scenario: Approve SDC using defaultSystemID fallback
     Given a VxFlexOS service
     And I set approveSDC with approveSDCEnabled "true"
@@ -1593,22 +1834,25 @@ Feature: VxFlex OS CSI interface
     Given a VxFlexOS service
     And I call Probe
     And I induce error <error>
-    When I call check NFS enabled <systemid> <nasserver>
+    When I call check NFS enabled <systemid>
     Then the error contains <errorMsg>
     Examples:
-      |  systemid                  | nasserver                                |   error                         |  errorMsg                   |
-      |  "15dbbf5617523655"        | "63ec8e0d-4551-29a7-e79c-b202f2b914f3"   |   ""                            | "none"                      |
+      |  systemid                  |   error                         |  errorMsg                   |
+      |  "15dbbf5617523655"        |   ""                            | "none"                      |
 
   Scenario: Create Volume for multi-available zone
     Given a VxFlexOS service
     And I use config <config>
     When I call Probe
+    And I set protocol to <protocol>
     And I call CreateVolume <name> with zones
     Then the error contains <errorMsg>
     Examples:
-      | name      | config             | errorMsg                                               |
-      | "volume1" | "multi_az"         | "none"                                                 |
-      | "volume1" | "invalid_multi_az" | "no zone topology found in accessibility requirements" |
+      | name      | config             | errorMsg                                               | protocol  |
+      | "volume1" | "multi_az"         | "none"                                                 | "SDC"     |
+      | "volume1" | "invalid_multi_az" | "no zone topology found in accessibility requirements" | "SDC"     |
+      | "volume1" | "multi_az"         | "none"                                                 | "NVMeTCP" |
+      | "volume1" | "invalid_multi_az" | "no zone topology found in accessibility requirements" | "NVMeTCP" |
 
   Scenario: Call NodeGetInfo without zone label
     Given a VxFlexOS service
@@ -1630,6 +1874,7 @@ Feature: VxFlex OS CSI interface
     Given a VxFlexOS service
     And I use config <config>
     When I call Probe
+    And I set protocol to <protocol>
     And I call CreateVolume "volume1" with zones
     And a valid CreateVolumeResponse is returned
     And I call CreateSnapshot <name>
@@ -1637,20 +1882,23 @@ Feature: VxFlex OS CSI interface
     And I call Create Volume for zones from Snapshot <name>
     Then a valid CreateVolumeResponse is returned
     Examples:
-      | name      | config             | errorMsg       |
-      | "snap1"   | "multi_az"         | "none"         |
+      | name      | config             | errorMsg       | protocol  |
+      | "snap1"   | "multi_az"         | "none"         | "SDC"     |
+      | "snap1"   | "multi_az"         | "none"         | "NVMeTCP" |
 
   Scenario: Clone a single volume in zone
     Given a VxFlexOS service
     And I use config <config>
     When I call Probe
+    And I set protocol to <protocol>
     And I call CreateVolume <name> with zones
     And a valid CreateVolumeResponse is returned
     And I call Clone volume for zones <name>
     Then a valid CreateVolumeResponse is returned
     Examples:
-      | name      | config             | errorMsg       |
-      | "volume1"   | "multi_az"       | "none"         |
+      | name      | config             | errorMsg       | protocol  |
+      | "volume1"   | "multi_az"       | "none"         | "SDC"     |
+      | "volume1"   | "multi_az"       | "none"         | "NVMeTCP" |
 
   Scenario: Probe all systems using availability zones
     Given a VxFlexOS service

@@ -71,7 +71,7 @@ var (
 )
 
 func (s *service) PreInit() error {
-	Log.Infof("PreInit running")
+	log.Infof("PreInit running")
 
 	arrayConfig, err := arrayConfigurationProviderImpl.GetArrayConfiguration()
 	if err != nil {
@@ -86,7 +86,7 @@ func (s *service) PreInit() error {
 	var mdmData string
 
 	if labelKey == "" {
-		Log.Debug("No zone key found, will configure all MDMs")
+		log.Debug("No zone key found, will configure all MDMs")
 		sb := strings.Builder{}
 		for _, connectionData := range arrayConfig {
 			if connectionData.Mdm != "" {
@@ -98,7 +98,7 @@ func (s *service) PreInit() error {
 		}
 		mdmData = sb.String()
 	} else {
-		Log.Infof("Zone key detected, will configure MDMs for this node, key: %s", labelKey)
+		log.Infof("Zone key detected, will configure MDMs for this node, key: %s", labelKey)
 		nodeLabels, err := s.GetNodeLabels(context.Background())
 		if err != nil {
 			return fmt.Errorf("unable to get node labels: %v", err)
@@ -107,11 +107,11 @@ func (s *service) PreInit() error {
 		zone, ok := nodeLabels[labelKey]
 
 		if ok && zone == "" {
-			Log.Errorf("node key found but zone is missing, will not configure MDMs for this node, key: %s", labelKey)
+			log.Errorf("node key found but zone is missing, will not configure MDMs for this node, key: %s", labelKey)
 		}
 
 		if zone != "" {
-			Log.Infof("zone found, will configure MDMs for this node, zone: %s", zone)
+			log.Infof("zone found, will configure MDMs for this node, zone: %s", zone)
 			mdmData, err = getMdmList(arrayConfig, labelKey, zone)
 			if err != nil {
 				return fmt.Errorf("unable to get MDM list: %v", err)
@@ -119,7 +119,7 @@ func (s *service) PreInit() error {
 		}
 	}
 
-	Log.Infof("Saving MDM list to %s, MDM=%s", nodeMdmsFile, mdmData)
+	log.Infof("Saving MDM list to %s, MDM=%s", nodeMdmsFile, mdmData)
 	err = fileWriterProviderImpl.WriteFile(nodeMdmsFile, []byte(fmt.Sprintf("MDM=%s\n", mdmData)), fs.FileMode(0o444))
 	return err
 }

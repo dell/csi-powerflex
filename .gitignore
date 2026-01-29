@@ -11,4 +11,6 @@ gofsutil/
 .idea
 .vscode
 *.log
+csm-common.mk
 go-code-tester
+vendor/

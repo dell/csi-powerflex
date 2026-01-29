@@ -19,11 +19,11 @@ import (
 	"strconv"
 	"strings"
 
-	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	podmon "github.com/dell/dell-csi-extensions/podmon"
 	volumeGroupSnapshot "github.com/dell/dell-csi-extensions/volumeGroupSnapshot"
 	sio "github.com/dell/goscaleio"
 	siotypes "github.com/dell/goscaleio/types/v1"
+	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -31,10 +31,13 @@ import (
 const (
 	// ExistingGroupID group id on powerflex array
 	ExistingGroupID = "existingSnapshotGroupID"
+
+	// ArrayStatus is the endPoint for polling to check array status
+	ArrayStatus = "/array-status"
 )
 
 func (s *service) ValidateVolumeHostConnectivity(ctx context.Context, req *podmon.ValidateVolumeHostConnectivityRequest) (*podmon.ValidateVolumeHostConnectivityResponse, error) {
-	Log.Infof("ValidateVolumeHostConnectivity called %+v", req)
+	log.Infof("ValidateVolumeHostConnectivity called %+v", req)
 	rep := &podmon.ValidateVolumeHostConnectivityResponse{
 		Messages: make([]string, 0),
 	}
@@ -45,8 +48,8 @@ func (s *service) ValidateVolumeHostConnectivity(ctx context.Context, req *podmo
 		return rep, nil
 	}
 
-	// The NodeID for the VxFlex OS is the SdcGUID field.
-	if req.GetNodeId() == "" {
+	nodeID := req.GetNodeId()
+	if nodeID == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "The NodeID is a required field")
 	}
 
@@ -65,15 +68,48 @@ func (s *service) ValidateVolumeHostConnectivity(ctx context.Context, req *podmo
 		return nil, err
 	}
 
-	// First- check to see if the SDC is Connected or Disconnected.
-	// Then retrieve the SDC and seet the connection state
-	sdc, err := s.systems[systemID].FindSdc("SdcGUID", req.GetNodeId())
+	// First- check to see if the host is Connected or Disconnected.
+	_, hostType, err := s.getHostIDAndType(systemID, nodeID)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "NodeID is invalid: %s - there is no corresponding SDC, error: %s", req.GetNodeId(), err.Error())
+		return nil, status.Errorf(codes.Internal,
+			"error getting host ID and type for nodeID %s: %s", nodeID, err.Error())
 	}
-	connectionState := sdc.Sdc.MdmConnectionState
-	rep.Messages = append(rep.Messages, fmt.Sprintf("SDC connection state: %s", connectionState))
-	rep.Connected = (connectionState == "Connected")
+	if hostType == NVMeTCP {
+		var message string
+		rep.Connected = false
+		nodeIP := s.GetNodeIPByCSINodeID(nodeID)
+		if len(nodeIP) == 0 {
+			log.Errorf("could not resolve IP address for nodeID=%s", nodeID)
+			return nil, fmt.Errorf("failed to resolve IP address for nodeID=%s", nodeID)
+		}
+
+		// Query the podmon API on the node to get the connectivity status
+		url := "http://" + nodeIP + s.opts.PodmonPort + ArrayStatus + "/" + systemID
+		connected, err := s.QueryArrayStatus(ctx, url)
+		if err != nil {
+			message = fmt.Sprintf("connectivity unknown for array %s to node %s due to %s", systemID, nodeID, err)
+			log.Error(message)
+			rep.Messages = append(rep.Messages, message)
+			log.Errorf("%s", err.Error())
+		}
+
+		if connected {
+			rep.Connected = true
+			message = fmt.Sprintf("array %s is connected to node %s", systemID, nodeID)
+		} else {
+			message = fmt.Sprintf("array %s is not connected to node %s", systemID, nodeID)
+		}
+		log.Info(message)
+		rep.Messages = append(rep.Messages, message)
+	} else {
+		sdc, err := s.systems[systemID].FindSdc("SdcGUID", req.GetNodeId())
+		if err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "NodeID is invalid: %s - there is no corresponding SDC, error: %s", req.GetNodeId(), err.Error())
+		}
+		connectionState := sdc.Sdc.MdmConnectionState
+		rep.Messages = append(rep.Messages, fmt.Sprintf("SDC connection state: %s", connectionState))
+		rep.Connected = (connectionState == "Connected")
+	}
 
 	// Second- check to see if the Volumes have any I/O in the recent past.
 	for _, volID := range req.GetVolumeIds() {
@@ -95,41 +131,84 @@ func (s *service) ValidateVolumeHostConnectivity(ctx context.Context, req *podmo
 			rep.Messages = append(rep.Messages, fmt.Sprintf("Could not retrieve volume: %s, error: %s", volID, err.Error()))
 			continue
 		}
+
+		adminClient := s.adminClients[systemID]
+
 		// Get the volume statistics
-		volume := sio.NewVolume(s.adminClients[systemID])
+		volume := sio.NewVolume(adminClient)
 		volume.Volume = vol
-		stats, err := volume.GetVolumeStatistics()
+
+		platformInfo, err := s.GetPlatformInfo(systemID)
 		if err != nil {
-			rep.Messages = append(rep.Messages, fmt.Sprintf("Could not retrieve volume statistics: %s, error: %s", volID, err.Error()))
-			continue
+			return nil, err
 		}
-		readCount := stats.UserDataReadBwc.NumOccured
-		writeCount := stats.UserDataWriteBwc.NumOccured
-		sampleSeconds := stats.UserDataWriteBwc.NumSeconds
-		rep.Messages = append(rep.Messages, fmt.Sprintf("Volume %s writes %d reads %d for %d seconds",
-			volID, writeCount, readCount, sampleSeconds))
-		if (readCount + writeCount) > 0 {
-			rep.IosInProgress = true
+
+		if platformInfo.GenType == siotypes.GenTypeEC {
+			log.Infof("Found Gentype EC system %s", systemID)
+			metrics, err := adminClient.GetMetrics("volume", []string{volID})
+			if err != nil {
+				rep.Messages = append(rep.Messages, fmt.Sprintf("Could not retrieve volume statistics: %s, error: %s", volID, err.Error()))
+				continue
+			}
+
+			if len(metrics.Resources) == 0 {
+				rep.Messages = append(rep.Messages, fmt.Sprintf("No metrics found for volume: %s", volID))
+				continue
+			}
+			writeBW := getMetric(metrics.Resources[0].Metrics, "host_write_bandwidth")
+			readBW := getMetric(metrics.Resources[0].Metrics, "host_read_bandwidth")
+			writeIOPS := getMetric(metrics.Resources[0].Metrics, "host_write_iops")
+			readIOPS := getMetric(metrics.Resources[0].Metrics, "host_read_iops")
+
+			rep.Messages = append(rep.Messages, fmt.Sprintf("Volume %s writeBW %.2f readBw %.2f readIOPS %.2f writeIOPS %.2f",
+				volID, writeBW, readBW, readIOPS, writeIOPS))
+			if ((writeBW > 0) || (readBW > 0)) || ((writeIOPS > 0) || (readIOPS > 0)) {
+				rep.IosInProgress = true
+			}
+		} else {
+			log.Infof("Found Legacy system %s", systemID)
+			stats, err := volume.GetVolumeStatistics()
+			if err != nil {
+				rep.Messages = append(rep.Messages, fmt.Sprintf("Could not retrieve volume statistics: %s, error: %s", volID, err.Error()))
+				continue
+			}
+			readCount := stats.UserDataReadBwc.NumOccured
+			writeCount := stats.UserDataWriteBwc.NumOccured
+			sampleSeconds := stats.UserDataWriteBwc.NumSeconds
+			rep.Messages = append(rep.Messages, fmt.Sprintf("Volume %s writes %d reads %d for %d seconds",
+				volID, writeCount, readCount, sampleSeconds))
+			if (readCount + writeCount) > 0 {
+				rep.IosInProgress = true
+			}
 		}
 	}
 
-	Log.Infof("ValidateVolumeHostConnectivity reply %+v", rep)
+	log.Infof("ValidateVolumeHostConnectivity reply %+v", rep)
 	return rep, nil
 }
 
+func getMetric(metrics []siotypes.Metric, name string) float64 {
+	for _, m := range metrics {
+		if m.Name == name {
+			return m.Values[0]
+		}
+	}
+	return 0
+}
+
 func (s *service) CreateVolumeGroupSnapshot(ctx context.Context, req *volumeGroupSnapshot.CreateVolumeGroupSnapshotRequest) (*volumeGroupSnapshot.CreateVolumeGroupSnapshotResponse, error) {
-	Log.Infof("CreateVolumeGroupSnapshot called with req: %v", req)
+	log.Infof("CreateVolumeGroupSnapshot called with req: %v", req)
 
 	err := validateCreateVGSreq(req)
 	if err != nil {
-		Log.Errorf("Error from CreateVolumeGroupSnapshot: %v ", err)
+		log.Errorf("Error from CreateVolumeGroupSnapshot: %v ", err)
 		return nil, err
 	}
 
 	// take first volume to calculate systemID. It is expected this systemID is consistent throughout
 	systemID, err := s.getSystemID(req)
 	if err != nil {
-		Log.Errorf("Error from CreateVolumeGroupSnapshot: %v ", err)
+		log.Errorf("Error from CreateVolumeGroupSnapshot: %v ", err)
 		return nil, err
 	}
 
@@ -138,11 +217,11 @@ func (s *service) CreateVolumeGroupSnapshot(ctx context.Context, req *volumeGrou
 		return nil, err
 	}
 
-	Log.Infof("Creating Snapshot Consistency Group on system: %s", systemID)
+	log.Infof("Creating Snapshot Consistency Group on system: %s", systemID)
 
 	snapshotDefs, err := s.buildSnapshotDefs(req, systemID)
 	if err != nil {
-		Log.Errorf("Error from CreateVolumeGroupSnapshot: %v ", err)
+		log.Errorf("Error from CreateVolumeGroupSnapshot: %v ", err)
 		return nil, err
 	}
 
@@ -165,14 +244,14 @@ func (s *service) CreateVolumeGroupSnapshot(ctx context.Context, req *volumeGrou
 			snapsThatFailed = append(snapsThatFailed, snap.SnapshotName)
 		}
 		err = status.Errorf(codes.Internal, "Failed to create group with snapshots %s : %s", snapsThatFailed, err.Error())
-		Log.Errorf("Error from CreateVolumeGroupSnapshot: %v ", err)
+		log.Errorf("Error from CreateVolumeGroupSnapshot: %v ", err)
 		return nil, err
 	}
-	Log.Infof("snapResponse is: %s", snapResponse)
+	log.Infof("snapResponse is: %s", snapResponse)
 	// populate response
 	groupSnapshots, err := s.buildCreateVGSResponse(ctx, snapResponse, systemID)
 	if err != nil {
-		Log.Errorf("Error from CreateVolumeGroupSnapshot: %v ", err)
+		log.Errorf("Error from CreateVolumeGroupSnapshot: %v ", err)
 		return nil, err
 	}
 
@@ -184,19 +263,19 @@ func (s *service) CreateVolumeGroupSnapshot(ctx context.Context, req *volumeGrou
 
 	resp := &volumeGroupSnapshot.CreateVolumeGroupSnapshotResponse{SnapshotGroupID: systemID + "-" + snapResponse.SnapshotGroupID, Snapshots: groupSnapshots, CreationTime: groupSnapshots[0].CreationTime}
 
-	Log.Infof("CreateVolumeGroupSnapshot Response:  %#v", resp)
+	log.Infof("CreateVolumeGroupSnapshot Response:  %#v", resp)
 	return resp, nil
 }
 
 func checkCreationTime(time int64, snapshots []*volumeGroupSnapshot.Snapshot) error {
-	Log.Infof("CheckCreationTime called with snapshots: %v", snapshots)
+	log.Infof("CheckCreationTime called with snapshots: %v", snapshots)
 	for _, snap := range snapshots {
 		if time != snap.CreationTime {
 			err := status.Errorf(codes.Internal, "Creation time of snapshot %s, %d does not match with snapshot %s creation time %d. All snapshot creation times should be equal", snap.Name, snap.CreationTime, snapshots[0].Name, snapshots[0].CreationTime)
-			Log.Errorf("Error from CheckCreationTime: %v ", err)
+			log.Errorf("Error from CheckCreationTime: %v ", err)
 			return err
 		}
-		Log.Infof("CheckCreationTime: Creation time of %s is %d", snap.Name, time)
+		log.Infof("CheckCreationTime: Creation time of %s is %d", snap.Name, time)
 
 	}
 	return nil
@@ -212,7 +291,7 @@ func (s *service) getSystemID(req *volumeGroupSnapshot.CreateVolumeGroupSnapshot
 
 	if systemID == "" {
 		err := status.Error(codes.InvalidArgument, "systemID is not found in vol ID and there is no default system")
-		Log.Errorf("Error from getSystemID: %v ", err)
+		log.Errorf("Error from getSystemID: %v ", err)
 		return systemID, err
 
 	}
@@ -224,19 +303,19 @@ func (s *service) getSystemID(req *volumeGroupSnapshot.CreateVolumeGroupSnapshot
 func validateCreateVGSreq(req *volumeGroupSnapshot.CreateVolumeGroupSnapshotRequest) error {
 	if len(req.SourceVolumeIDs) == 0 {
 		err := status.Errorf(codes.InvalidArgument, "SourceVolumeIDs cannot be empty")
-		Log.Errorf("Error from validateCreateVGSreq: %v ", err)
+		log.Errorf("Error from validateCreateVGSreq: %v ", err)
 		return err
 	}
 
 	if req.Name == "" {
 		err := status.Error(codes.InvalidArgument, "CreateVolumeGroupSnapshotRequest Name is not  set")
-		Log.Warnf("Warning from validateCreateVGSreq: %v ", err)
+		log.Warnf("Warning from validateCreateVGSreq: %v ", err)
 	}
 
 	// name must be less than 28 chars, because we name snapshots with -<index>, and index can at most be 3 chars
 	if len(req.Name) > 27 {
 		err := status.Errorf(codes.InvalidArgument, "Requested name %s longer than 27 character max", req.Name)
-		Log.Errorf("Error from validateCreateVGSreq: %v ", err)
+		log.Errorf("Error from validateCreateVGSreq: %v ", err)
 		return err
 	}
 
@@ -250,7 +329,7 @@ func (s *service) buildSnapshotDefs(req *volumeGroupSnapshot.CreateVolumeGroupSn
 		snapSystemID := strings.TrimSpace(s.getSystemIDFromCsiVolumeID(id))
 		if snapSystemID != "" && snapSystemID != systemID {
 			err := status.Errorf(codes.Internal, "Source volumes for volume group snapshot should be on the same system but vol %s is not on system: %s", id, systemID)
-			Log.Errorf("Error from buildSnapshotDefs: %v \n", err)
+			log.Errorf("Error from buildSnapshotDefs: %v \n", err)
 			return nil, err
 		}
 
@@ -258,7 +337,7 @@ func (s *service) buildSnapshotDefs(req *volumeGroupSnapshot.CreateVolumeGroupSn
 		err := s.checkVolumesMap(id)
 		if err != nil {
 			err = status.Errorf(codes.Internal, "checkVolumesMap for id: %s failed : %s", id, err.Error())
-			Log.Errorf("Error from buildSnapshotDefs: %v ", err)
+			log.Errorf("Error from buildSnapshotDefs: %v ", err)
 			return nil, err
 		}
 
@@ -267,7 +346,7 @@ func (s *service) buildSnapshotDefs(req *volumeGroupSnapshot.CreateVolumeGroupSn
 		_, err = s.getVolByID(volID, systemID)
 		if err != nil {
 			err = status.Errorf(codes.Internal, "failure checking source volume status: %s", err.Error())
-			Log.Errorf("Error from buildSnapshotDefs: %v ", err)
+			log.Errorf("Error from buildSnapshotDefs: %v ", err)
 			return nil, err
 		}
 
@@ -285,7 +364,7 @@ func (s *service) buildSnapshotDefs(req *volumeGroupSnapshot.CreateVolumeGroupSn
 // 2. Each snapshot that we find to satisfy criteria 1 all belong to the same consistency group
 // 3. The consistency group that satisfies criteria 2 contain no other snapshots
 func (s *service) checkIdempotency(ctx context.Context, snapshotsToMake *siotypes.SnapshotVolumesParam, systemID string) (*volumeGroupSnapshot.CreateVolumeGroupSnapshotResponse, error) {
-	Log.Infof("CheckIdempotency called")
+	log.Infof("CheckIdempotency called")
 
 	// We use maps to keep track of info, to ensure criterias 1-3 are met
 
@@ -317,7 +396,7 @@ func (s *service) checkIdempotency(ctx context.Context, snapshotsToMake *siotype
 			foundGrpID := systemID + "-" + existingSnap.ConsistencyGroupID
 			consistencyGroupValue = existingSnap.ConsistencyGroupID
 			if snap.VolumeID == existingSnap.AncestorVolumeID && snap.SnapshotName == existingSnap.Name {
-				Log.Infof("Snapshot for %s exists on array for group id %s", snap.VolumeID, existingSnap.ConsistencyGroupID)
+				log.Infof("Snapshot for %s exists on array for group id %s", snap.VolumeID, existingSnap.ConsistencyGroupID)
 				idempotencyMap[snap.SnapshotName] = true
 				idempotencyValue = true
 				consistencyGroupMap[existingSnap.Name] = foundGrpID
@@ -333,12 +412,12 @@ func (s *service) checkIdempotency(ctx context.Context, snapshotsToMake *siotype
 	for snap := range idempotencyMap {
 		if idempotencyMap[snap] != idempotencyValue {
 			err := status.Error(codes.Internal, "Some snapshots exist on array, while others need to be created. Cannot create VolumeGroupSnapshot")
-			Log.Errorf("Error from checkIdempotency: %v ", err)
+			log.Errorf("Error from checkIdempotency: %v ", err)
 			return nil, err
 		} else if idempotencyValue {
-			Log.Debugf("snap: %s already exists on array", snap)
+			log.Debugf("snap: %s already exists on array", snap)
 		} else {
-			Log.Debugf("snap: %s does not already exist on array", snap)
+			log.Debugf("snap: %s does not already exist on array", snap)
 		}
 	}
 	// since we know all values in idempotencyMap match idempotencyValue, we can return now
@@ -351,7 +430,7 @@ func (s *service) checkIdempotency(ctx context.Context, snapshotsToMake *siotype
 	for _, vol := range existingVols {
 		grpID := systemID + "-" + vol.ConsistencyGroupID
 		if grpID == systemID+"-"+consistencyGroupValue {
-			Log.Infof("Checking  %s: Snapshot %s found in consistency group.", consistencyGroupValue, vol.Name)
+			log.Infof("Checking  %s: Snapshot %s found in consistency group.", consistencyGroupValue, vol.Name)
 			consistencyGroupOnArray = append(consistencyGroupOnArray, vol.Name)
 		}
 	}
@@ -361,11 +440,11 @@ func (s *service) checkIdempotency(ctx context.Context, snapshotsToMake *siotype
 	// this check verifies criteria #3
 	if len(consistencyGroupOnArray) != len(IDsForResponse) {
 		err := status.Errorf(codes.Internal, "CG: %s contains more snapshots than requested. Cannot create VolumeGroupSnapshot", consistencyGroupValue)
-		Log.Errorf("Error from checkIdempotency: %v ", err)
+		log.Errorf("Error from checkIdempotency: %v ", err)
 		return nil, err
 	}
 
-	Log.Infof("Request is idempotent")
+	log.Infof("Request is idempotent")
 
 	// with all 3 criteria met, we need to return a CreateVolumeGroupSnapshotResponse with the VGS that satisfied the criteria
 	var groupSnapshots []*volumeGroupSnapshot.Snapshot
@@ -375,7 +454,7 @@ func (s *service) checkIdempotency(ctx context.Context, snapshotsToMake *siotype
 		req := &csi.ListSnapshotsRequest{SnapshotId: idToQuery}
 		existingSnap, err := s.ListSnapshots(ctx, req)
 		if err != nil {
-			Log.Errorf("Failed to list snaps")
+			log.Errorf("Failed to list snaps")
 		}
 		creationTime := existingSnap.Entries[0].Snapshot.CreationTime.GetSeconds()*1000000000 + int64(existingSnap.Entries[0].Snapshot.CreationTime.GetNanos())
 		fmt.Printf("Creation time is: %d\n", creationTime)
@@ -390,7 +469,7 @@ func (s *service) checkIdempotency(ctx context.Context, snapshotsToMake *siotype
 		groupSnapshots = append(groupSnapshots, &snap)
 	}
 	resp := &volumeGroupSnapshot.CreateVolumeGroupSnapshotResponse{SnapshotGroupID: systemID + "-" + consistencyGroupValue, Snapshots: groupSnapshots, CreationTime: groupSnapshots[0].CreationTime}
-	Log.Infof("Returning Idempotent response: %v", resp)
+	log.Infof("Returning Idempotent response: %v", resp)
 	return resp, nil
 }
 
@@ -403,7 +482,7 @@ func (s *service) buildCreateVGSResponse(ctx context.Context, snapResponse *siot
 		lResponse, err := s.ListSnapshots(ctx, req)
 		if err != nil {
 			err = status.Errorf(codes.Internal, "Failed to get snapshot: %s", err.Error())
-			Log.Errorf("Error from buildCreateVGSResponse: %v ", err)
+			log.Errorf("Error from buildCreateVGSResponse: %v ", err)
 			return nil, err
 		}
 		var arraySnapName string
@@ -412,25 +491,25 @@ func (s *service) buildCreateVGSResponse(ctx context.Context, snapResponse *siot
 		for _, e := range existingSnap {
 			if e.ID == id && e.ConsistencyGroupID == snapResponse.SnapshotGroupID {
 				if e.Name == "" {
-					Log.Infof("debug set snap name for [%s]", e.ID)
+					log.Infof("debug set snap name for [%s]", e.ID)
 					arraySnapName = e.ID + "-snap-" + strconv.Itoa(index)
 					tgtVol := sio.NewVolume(s.adminClients[systemID])
 					tgtVol.Volume = e
 					err := tgtVol.SetVolumeName(arraySnapName)
 					if err != nil {
-						Log.Errorf("Error setting name of snapshot id=%s name=%s %s", e.ID, arraySnapName, err.Error())
+						log.Errorf("Error setting name of snapshot id=%s name=%s %s", e.ID, arraySnapName, err.Error())
 					}
 				} else {
-					Log.Infof("debug found snap name %s for %s", e.Name, e.ID)
+					log.Infof("debug found snap name %s for %s", e.Name, e.ID)
 					arraySnapName = e.Name
 				}
 			}
 		}
 
-		Log.Infof("Snapshot Name created for: %s is %s", lResponse.Entries[0].Snapshot.SnapshotId, arraySnapName)
+		log.Infof("Snapshot Name created for: %s is %s", lResponse.Entries[0].Snapshot.SnapshotId, arraySnapName)
 		// need to convert time from seconds and nanoseconds to int64 nano seconds
 		creationTime := lResponse.Entries[0].Snapshot.CreationTime.GetSeconds()*1000000000 + int64(lResponse.Entries[0].Snapshot.CreationTime.GetNanos())
-		Log.Infof("Creation time is: %d\n", creationTime)
+		log.Infof("Creation time is: %d\n", creationTime)
 		snap := volumeGroupSnapshot.Snapshot{
 			Name:          arraySnapName,
 			CapacityBytes: lResponse.Entries[0].Snapshot.SizeBytes,

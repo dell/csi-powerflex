@@ -1,4 +1,4 @@
-//Copyright © 2019-2025 Dell Inc. or its subsidiaries. All Rights Reserved.
+//Copyright © 2019-2026 Dell Inc. or its subsidiaries. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@ import (
 	"github.com/dell/csi-vxflexos/v2/provider"
 	"github.com/dell/csi-vxflexos/v2/service"
 	"github.com/dell/gocsi"
-	"github.com/sirupsen/logrus"
 )
 
 var flags struct {
@@ -37,12 +36,17 @@ var flags struct {
 	kubeconfig              *string
 }
 
+var ManifestSemver string
+
 // main is ignored when this package is built as a go plug-in
 func main() {
-	logger := logrus.New()
-	service.Log = logger
 	setEnvsFunc()
 	initFlagsFunc()
+
+	if ManifestSemver != "" {
+		service.ManifestSemver = ManifestSemver
+		service.Manifest["semver"] = ManifestSemver
+	}
 
 	err := checkConfigsFunc()
 	if err != nil {

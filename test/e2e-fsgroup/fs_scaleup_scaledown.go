@@ -137,7 +137,7 @@ var _ = ginkgo.Describe("Nodes Scale-up and Scale-down", ginkgo.Label("csi-fsg")
 
 		gomega.Expect(fss.CheckMount(ctx, client, statefulset, mountPath)).NotTo(gomega.HaveOccurred())
 
-		ssPodsBeforeScaleDown := fss.GetPodList(ctx, client, statefulset)
+		ssPodsBeforeScaleDown, _ := fss.GetPodList(ctx, client, statefulset)
 		gomega.Expect(ssPodsBeforeScaleDown.Items).NotTo(gomega.BeEmpty(),
 			fmt.Sprintf("Unable to get list of Pods from the Statefulset: %v", statefulset.Name))
 		gomega.Expect(len(ssPodsBeforeScaleDown.Items) == int(replicas)).To(gomega.BeTrue(),
@@ -180,7 +180,7 @@ var _ = ginkgo.Describe("Nodes Scale-up and Scale-down", ginkgo.Label("csi-fsg")
 		_, scaledownErr := fss.Scale(ctx, client, statefulset, replicas-1)
 		gomega.Expect(scaledownErr).NotTo(gomega.HaveOccurred())
 		fss.WaitForStatusReadyReplicas(ctx, client, statefulset, replicas-1)
-		ssPodsAfterScaleDown := fss.GetPodList(ctx, client, statefulset)
+		ssPodsAfterScaleDown, _ := fss.GetPodList(ctx, client, statefulset)
 		gomega.Expect(ssPodsAfterScaleDown.Items).NotTo(gomega.BeEmpty(),
 			fmt.Sprintf("Unable to get list of Pods from the Statefulset: %v", statefulset.Name))
 		gomega.Expect(len(ssPodsAfterScaleDown.Items) == int(replicas-1)).To(gomega.BeTrue(),
@@ -228,7 +228,7 @@ var _ = ginkgo.Describe("Nodes Scale-up and Scale-down", ginkgo.Label("csi-fsg")
 		fss.WaitForStatusReadyReplicas(ctx, client, statefulset, replicas)
 
 		fss.WaitForStatusReadyReplicas(ctx, client, statefulset, replicas)
-		ssPodsAfterScaleUp := fss.GetPodList(ctx, client, statefulset)
+		ssPodsAfterScaleUp, _ := fss.GetPodList(ctx, client, statefulset)
 		gomega.Expect(ssPodsAfterScaleUp.Items).NotTo(gomega.BeEmpty(),
 			fmt.Sprintf("Unable to get list of Pods from the Statefulset: %v", statefulset.Name))
 		gomega.Expect(len(ssPodsAfterScaleUp.Items) == int(replicas)).To(gomega.BeTrue(),
@@ -256,7 +256,7 @@ var _ = ginkgo.Describe("Nodes Scale-up and Scale-down", ginkgo.Label("csi-fsg")
 		_, scaledownErr = fss.Scale(ctx, client, statefulset, replicas)
 		gomega.Expect(scaledownErr).NotTo(gomega.HaveOccurred())
 		fss.WaitForStatusReplicas(ctx, client, statefulset, replicas)
-		ssPodsAfterScaleDown = fss.GetPodList(ctx, client, statefulset)
+		ssPodsAfterScaleDown, _ = fss.GetPodList(ctx, client, statefulset)
 		gomega.Expect(len(ssPodsAfterScaleDown.Items) == int(replicas)).To(gomega.BeTrue(),
 			"Number of Pods in the statefulset should match with number of replicas")
 	})
