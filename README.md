@@ -1,6 +1,3 @@
-
-For questions or access requests, please contact the maintainers via [Dell Support](https://www.dell.com/support/kbdoc/en-in/000188046/container-storage-interface-csi-drivers-and-container-storage-modules-csm-how-to-get-support).
-
 # CSI Driver for Dell PowerFlex
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/dell/csi-vxflexos?style=flat-square)](https://goreportcard.com/report/github.com/dell/csi-vxflexos)
@@ -51,5 +48,6 @@ Also, if the `X_CSI_VXFLEXOS_SDCGUID` environment variable is not set, the drive
 
 ## Documentation
 For more detailed information on the driver, please refer to [Container Storage Modules documentation](https://dell.github.io/csm-docs/).
+
 
 
