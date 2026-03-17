@@ -691,10 +691,10 @@ func TestRefreshPowerFlexTokenNew(t *testing.T) {
 // helper to build a valid baseline and then override fields
 func validArray() *ArrayConnectionData {
 	return &ArrayConnectionData{
-		OidcClientID:     "oidc-client-id",
-		OidcClientSecret: "oidc-client-secret",
-		CiamClientID:     "ciam-client-id",
-		CiamClientSecret: "ciam-client-secret",
+		OidcClientID:     "oidc-client-id",     // #nosec G101
+		OidcClientSecret: "oidc-client-secret", // #nosec G101
+		CiamClientID:     "ciam-client-id",     // #nosec G101
+		CiamClientSecret: "ciam-client-secret", // #nosec G101
 		Issuer:           "https://issuer.example.com",
 	}
 }

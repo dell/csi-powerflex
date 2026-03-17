@@ -49,5 +49,3 @@ Also, if the `X_CSI_VXFLEXOS_SDCGUID` environment variable is not set, the drive
 ## Documentation
 For more detailed information on the driver, please refer to [Container Storage Modules documentation](https://dell.github.io/csm-docs/).
 
-
-
