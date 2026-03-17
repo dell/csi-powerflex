@@ -115,7 +115,7 @@ func (f *feature) getGoscaleioClient() (client *goscaleio.Client, err error) {
 	}
 
 	for _, a := range f.arrays {
-		client, err := goscaleio.NewClientWithArgs(a.Endpoint, "", math.MaxInt64, true, false)
+		client, err := goscaleio.NewClientWithArgs(a.Endpoint, "", math.MaxInt64, true, false, "")
 		if err != nil {
 			log.Fatalf("err getting client: %v", err)
 		}

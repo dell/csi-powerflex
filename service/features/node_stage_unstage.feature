@@ -113,3 +113,27 @@ Feature: VxFlex OS CSI interface
       | "NoStagingTarget" | "StagingTargetPath is required"        |
       | "EphemeralVolume" | "none"                                 |
       | "UnmountError"    | "Unable to remove staging target path" |
+
+  Scenario: Node stage NVMe XFS volume with FSCheck enabled in checkOnly mode succeeds
+    Given a VxFlexOS service
+    And I set protocol to "NVMeTCP"
+    And a capability with voltype "mount" access "single-writer" fstype "xfs"
+    And get Node Stage Volume Request
+    And I enable FSCheck with mock metadata retriever
+    And I set node stage volume context for FSCheck
+    When I call Probe
+    When I call NodeStageVolume
+    Then the error contains "none"
+    And I disable FSCheck and restore OSExec
+
+  Scenario: Node stage NVMe EXT4 volume with FSCheck enabled in checkOnly mode succeeds
+    Given a VxFlexOS service
+    And I set protocol to "NVMeTCP"
+    And a capability with voltype "mount" access "single-writer" fstype "ext4"
+    And get Node Stage Volume Request
+    And I enable FSCheck with mock metadata retriever
+    And I set node stage volume context for FSCheck
+    When I call Probe
+    When I call NodeStageVolume
+    Then the error contains "none"
+    And I disable FSCheck and restore OSExec

@@ -182,10 +182,15 @@ func (n *NVMeStager) Stage(ctx context.Context, req *csi.NodeStageVolumeRequest,
 		fs := mount.GetFsType()
 		mntFlags := mount.GetMountFlags()
 		fsFormatOption := req.GetVolumeContext()[KeyMkfsFormatOption]
+		pvName := req.GetVolumeContext()["Name"]
 		if fs == "xfs" {
 			mntFlags = append(mntFlags, "nouuid")
 		}
-		if err := handlePrivFSMount(ctx, accMode, sysDevice, mntFlags, fs, stagingPath, fsFormatOption); err != nil {
+		log.Infof("[NodeStage] PV Name: %s", pvName)
+
+		id := req.GetVolumeId()
+		log.Infof("[NodeStage] VolumeID: %s", id)
+		if err := handlePrivFSMount(ctx, accMode, sysDevice, mntFlags, fs, stagingPath, fsFormatOption, pvName, id); err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to mount disk %s to staging path: %s", devicePath, err.Error())
 		}
 	}

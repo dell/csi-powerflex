@@ -2746,7 +2746,7 @@ func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) e
 	// Create ScaleIO API client if needed
 	if s.adminClients[systemID] == nil {
 		skipCertificateValidation := array.SkipCertificateValidation || array.Insecure
-		client, err := goscaleio.NewClientWithArgs(array.Endpoint, "", math.MaxInt64, skipCertificateValidation, !s.opts.DisableCerts)
+		client, err := goscaleio.NewClientWithArgs(array.Endpoint, "", math.MaxInt64, skipCertificateValidation, !s.opts.DisableCerts, "")
 		if err != nil {
 			return status.Errorf(codes.FailedPrecondition,
 				"unable to create ScaleIO client: %s", err.Error())
@@ -3348,7 +3348,7 @@ func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.Controlle
 
 		fsName := fs.Name
 		cr := req.GetCapacityRange()
-		log.Infof("cr:%d", cr)
+		log.Infof("cr:%+v", cr)
 		requestedSize := int(cr.GetRequiredBytes())
 		log.Infof("req.size:%d", requestedSize)
 		log.Infof("Executing ExpandVolume: reqID=%s, fsName=%s, requestedSize=%d", reqID, fsName, requestedSize)
@@ -3442,7 +3442,7 @@ func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.Controlle
 
 	volName := vol.Name
 	cr := req.GetCapacityRange()
-	log.Infof("cr:%d", cr)
+	log.Infof("cr:%+v", cr)
 	requestedSize, err := validateVolSize(cr)
 	if err != nil {
 		return nil, err

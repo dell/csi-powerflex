@@ -87,4 +87,12 @@ const (
 
 	// EnvAuthTyoe is the name of the environment variable which stores the authentication type such as OIDC or Standard Username Password
 	EnvAuthType = "X_CSI_AUTH_TYPE"
+
+	// EnvFsCheckEnabled is the name of the environment variable that specifies
+	// if file system check should be run before mounting a volume.
+	EnvFsCheckEnabled = "X_CSI_FS_CHECK_ENABLED"
+
+	// EnvFsCheckMode is the name of the environment variable that specifies
+	// the file system check mode: "checkOnly" or "checkAndRepair".
+	EnvFsCheckMode = "X_CSI_FS_CHECK_MODE"
 )

@@ -320,7 +320,7 @@ func Test_service_createVolumeFromSnapshot(t *testing.T) {
 	for _, tt := range tests {
 		clients1 := make(map[string]*sio.Client)
 
-		client1, _ := sio.NewClientWithArgs("10.1.1.1", "", math.MaxInt64, false, false)
+		client1, _ := sio.NewClientWithArgs("10.1.1.1", "", math.MaxInt64, false, false, "")
 		clients1["sys-1"] = client1
 		t.Run(tt.name, func(t *testing.T) {
 			s := &service{
@@ -431,7 +431,7 @@ func Test_service_CreateSnapshot(t *testing.T) {
 			// TODO: construct the receiver type.
 			clients1 := make(map[string]*sio.Client)
 
-			client1, _ := sio.NewClientWithArgs("10.1.1.1", "", math.MaxInt64, false, false)
+			client1, _ := sio.NewClientWithArgs("10.1.1.1", "", math.MaxInt64, false, false, "")
 			clients1["volume"] = client1
 			s := &service{
 				opts: Opts{},
@@ -655,7 +655,7 @@ func TestRefreshPowerFlexTokenNew(t *testing.T) {
 					t.Errorf("error creating request: %v", err)
 					return
 				}
-				resp, err := http.DefaultClient.Do(req)
+				resp, err := http.DefaultClient.Do(req) // #nosec G704 - Safe in test: pfmpIP is from httptest.NewServer, URL is validated by construction
 				if err != nil {
 					t.Errorf("error sending request: %v", err)
 					return
@@ -690,11 +690,11 @@ func TestRefreshPowerFlexTokenNew(t *testing.T) {
 
 // helper to build a valid baseline and then override fields
 func validArray() *ArrayConnectionData {
-	return &ArrayConnectionData{
-		OidcClientID:     "oidc-client-id",     // #nosec G101
-		OidcClientSecret: "oidc-client-secret", // #nosec G101
-		CiamClientID:     "ciam-client-id",     // #nosec G101
-		CiamClientSecret: "ciam-client-secret", // #nosec G101
+	return &ArrayConnectionData{ // #nosec G101
+		OidcClientID:     "oidc-client-id",
+		OidcClientSecret: "oidc-client-secret",
+		CiamClientID:     "ciam-client-id",
+		CiamClientSecret: "ciam-client-secret",
 		Issuer:           "https://issuer.example.com",
 	}
 }

@@ -35,12 +35,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dell/csi-metadata-retriever/retriever"
 	"github.com/dell/csi-vxflexos/v2/core"
 	"github.com/dell/csi-vxflexos/v2/k8sutils"
 	"github.com/dell/csmlog"
 	"github.com/dell/dell-csi-extensions/podmon"
 	"github.com/dell/dell-csi-extensions/replication"
-	volumeGroupSnapshot "github.com/dell/dell-csi-extensions/volumeGroupSnapshot"
 	"github.com/dell/gobrick"
 	"github.com/dell/gocsi"
 	csictx "github.com/dell/gocsi/context"
@@ -191,6 +191,7 @@ var Manifest = map[string]string{
 // Service is the CSI Mock service provider.
 type Service interface {
 	csi.ControllerServer
+	// NOTE: csi.GroupControllerServer is implemented by a separate groupControllerService type in groupcontroller.go.
 	csi.IdentityServer
 	csi.NodeServer
 	BeforeServe(context.Context, *gocsi.StoragePlugin, net.Listener) error
@@ -234,6 +235,8 @@ type Opts struct {
 	PodmonPort                 string // to indicates the port to be used for exposing podmon API health
 	PodmonPollingFreq          string // indicates the polling frequency to check array connectivity
 	AuthType                   string // indicate what auth type to use
+	FsCheckEnabled             bool   // enable file system check before mount
+	FsCheckMode                string // "checkOnly" (default) or "checkAndRepair"
 }
 
 type PlatformInfo struct {
@@ -243,6 +246,12 @@ type PlatformInfo struct {
 }
 
 type service struct {
+	// satisfies the Service interface and provides unimplemented defaults to functions not implemented
+	csi.UnimplementedControllerServer
+	// NOTE: GroupControllerServer is served by a separate groupControllerService type (see groupcontroller.go).
+	csi.UnimplementedIdentityServer
+	csi.UnimplementedNodeServer
+
 	opts                Opts
 	adminClients        map[string]*sio.Client
 	systems             map[string]*sio.System
@@ -465,6 +474,8 @@ func (s *service) BeforeServe(
 			"isPodmonEnabled":        s.opts.IsPodmonEnabled,
 			"PodmonPort":             s.opts.PodmonPort,
 			"PodmonFrequency":        s.opts.PodmonPollingFreq,
+			"FsCheckEnabled":         s.opts.FsCheckEnabled,
+			"FsCheckMode":            s.opts.FsCheckMode,
 		}
 
 		log.WithFields(fields).Infof("configured %s", Name)
@@ -605,6 +616,40 @@ func (s *service) BeforeServe(
 
 	if EnvAuthType, ok := csictx.LookupEnv(ctx, EnvAuthType); ok {
 		opts.AuthType = EnvAuthType
+	}
+
+	// FSCheck configuration
+	if fsCheckEnabled, ok := csictx.LookupEnv(ctx, EnvFsCheckEnabled); ok {
+		if strings.EqualFold(fsCheckEnabled, "true") {
+			opts.FsCheckEnabled = true
+		} else if fsCheckEnabled != "" && !strings.EqualFold(fsCheckEnabled, "false") {
+			log.Warnf("invalid value %q for %s, defaulting to false", fsCheckEnabled, EnvFsCheckEnabled)
+		}
+	}
+
+	opts.FsCheckMode = "checkOnly" // default
+	if fsCheckMode, ok := csictx.LookupEnv(ctx, EnvFsCheckMode); ok {
+		switch strings.ToLower(fsCheckMode) {
+		case "checkonly":
+			opts.FsCheckMode = "checkOnly"
+		case "checkandrepair":
+			opts.FsCheckMode = "checkAndRepair"
+		default:
+			log.Warnf("invalid value %q for %s, defaulting to \"checkOnly\"", fsCheckMode, EnvFsCheckMode)
+		}
+	}
+
+	log.Infof("FsCheckEnabled: %s", strconv.FormatBool(opts.FsCheckEnabled))
+	log.Infof("FsCheckMode: %s", opts.FsCheckMode)
+
+	// Setting package-level FSCK variables
+	mountFsCheckEnabled = opts.FsCheckEnabled
+	mountFsCheckMode = opts.FsCheckMode
+
+	// Initializing the MetadataRetriever Client
+	if s.mode == "node" && opts.FsCheckEnabled {
+		metadataRetrieverClient = retriever.NewMetadataRetrieverClient(nil, 30*time.Second)
+		log.Infof("Successfully initialized the Metadata Retriever Client: %s", metadataRetrieverClient)
 	}
 
 	opts.probeTimeout = DefaultAPITimeout
@@ -1012,8 +1057,8 @@ func (s *service) doProbe(ctx context.Context) error {
 func (s *service) RegisterAdditionalServers(server *grpc.Server) {
 	log.Info("Registering additional GRPC servers")
 	podmon.RegisterPodmonServer(server, s)
-	volumeGroupSnapshot.RegisterVolumeGroupSnapshotServer(server, s)
 	replication.RegisterReplicationServer(server, s)
+	csi.RegisterGroupControllerServer(server, &groupControllerService{s: s})
 }
 
 // getVolProvisionType returns a string indicating thin or thick provisioning

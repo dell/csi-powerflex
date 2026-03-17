@@ -30,14 +30,15 @@ import (
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
+	"github.com/dell/csi-metadata-retriever/retriever"
 	"github.com/dell/dell-csi-extensions/podmon"
 	"github.com/dell/dell-csi-extensions/replication"
-	volGroupSnap "github.com/dell/dell-csi-extensions/volumeGroupSnapshot"
 	"github.com/dell/gobrick"
 	"github.com/dell/gocsi"
 	"github.com/dell/gofsutil"
@@ -96,6 +97,7 @@ const (
 	nvmeNguid             = "d0f055a70000000064b94e5617523654"
 	nodeInternalIP        = "10.20.30.40"
 	imageVersion          = "1.0.0"
+	targetPath            = "test/var/lib/kubelet/pods/111a11aa-11a1-111a-1111-11a11aa1111/volumes/kubernetes.io~csi/csivol-1a11111aaa/mount"
 )
 
 var (
@@ -165,7 +167,6 @@ type feature struct {
 	volumeIDList                          []string
 	snapshotIndex                         int
 	volumeID                              string
-	VolumeGroupSnapshot                   *volGroupSnap.CreateVolumeGroupSnapshotResponse
 	replicationCapabilitiesResponse       *replication.GetReplicationCapabilityResponse
 	clusterUID                            string
 	createStorageProtectionGroupResponse  *replication.CreateStorageProtectionGroupResponse
@@ -344,6 +345,10 @@ func (f *feature) aVxFlexOSServiceWithTimeoutMilliseconds(millis int) error {
 	gofsutil.GOFSMockMounts = gofsutil.GOFSMockMounts[:0]
 	gofsutil.GOFSWWNPath = nodePublishSymlinkDir + "/nvme-eui."
 	clear(gofsutil.GOFSMockWWNToDevice)
+
+	// Reset package-level FS check configuration to avoid cross-scenario state leakage.
+	mountFsCheckEnabled = false
+	mountFsCheckMode = "checkOnly"
 
 	// configure variables in the driver
 	publishGetMappedVolMaxRetry = 2
@@ -904,7 +909,6 @@ func (f *feature) iCallCreateVolumeWithError(name, errorMessage string) error {
 }
 
 func (f *feature) iCallValidateVolumeHostConnectivity() error {
-	ctx := context.Background()
 	var csiNodeID string
 	if f.service.useNVME {
 		f.service.opts.SdcGUID = ""
@@ -951,7 +955,7 @@ func (f *feature) iCallValidateVolumeHostConnectivity() error {
 		VolumeIds: volIDs,
 	}
 
-	connect, err := f.service.ValidateVolumeHostConnectivity(ctx, req)
+	connect, err := f.service.ValidateVolumeHostConnectivity(context.Background(), req)
 	if err != nil {
 		f.err = errors.New(err.Error())
 		return nil
@@ -3464,7 +3468,7 @@ func (f *feature) iCallUnmountPrivMount() error {
 	}
 	/*
 		//  needs a mounted ok device to unmount
-		_ = handlePrivFSMount(context.TODO(), accessMode, sysDevice, nil, "", "", "")
+		_ = handlePrivFSMount(context.TODO(), accessMode, sysDevice, []string{}, "ext4", "/tmp/target", "", "/tmp/target", "test-volume-id")
 
 		target := "/tmp/foo"
 		flags := make([]string, 0)
@@ -3505,30 +3509,36 @@ func (f *feature) iCallHandlePrivFSMount() error {
 		RealDev:  device,
 	}
 	fmt.Printf("debug input param sysDevice %#v\n", sysDevice)
-	err := handlePrivFSMount(context.TODO(), accessMode, sysDevice, nil, "", "", "")
+	err := handlePrivFSMount(context.TODO(), accessMode, sysDevice, []string{}, "ext4", "/tmp/target", "", "test-pv", "test-volume-id")
 	msg := "mount induced error"
-	fmt.Printf("expected handlePrivFSMount error msg = %s\n", err.Error())
-	if err != nil && strings.Contains(err.Error(), msg) {
-		f.err = errors.New("error in handlePrivFSMount")
+	if err != nil {
+		fmt.Printf("expected handlePrivFSMount error msg = %s\n", err.Error())
+		if strings.Contains(err.Error(), msg) {
+			f.err = errors.New("error in handlePrivFSMount")
+		}
 	}
 	accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER
 	gofsutil.GOFSMock.InduceMountError = false
 	gofsutil.GOFSMock.InduceBindMountError = true
-	err = handlePrivFSMount(context.TODO(), accessMode, sysDevice, nil, "", "", "rw")
+	err = handlePrivFSMount(context.TODO(), accessMode, sysDevice, []string{}, "ext4", "/tmp/target", "rw", "test-pv", "test-volume-id")
 	msg = "bindMount induced error"
-	fmt.Printf("expected handlePrivFSMount error msg= %s\n", err.Error())
-	if err != nil && strings.Contains(err.Error(), msg) {
-		f.err = errors.New("error in handlePrivFSMount")
+	if err != nil {
+		fmt.Printf("expected handlePrivFSMount error msg= %s\n", err.Error())
+		if strings.Contains(err.Error(), msg) {
+			f.err = errors.New("error in handlePrivFSMount")
+		}
 	}
 
 	accessMode.Mode = csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER
 	gofsutil.GOFSMock.InduceMountError = false
 	gofsutil.GOFSMock.InduceBindMountError = false
-	err = handlePrivFSMount(context.TODO(), accessMode, sysDevice, nil, "", "", "")
+	err = handlePrivFSMount(context.TODO(), accessMode, sysDevice, []string{}, "ext4", "/tmp/target", "", "test-pv", "test-volume-id")
 	msg = "Invalid access mode"
-	fmt.Printf("expected handlePrivFSMount error msg= %s\n", err.Error())
-	if err != nil && strings.Contains(err.Error(), msg) {
-		f.err = errors.New("error in handlePrivFSMount")
+	if err != nil {
+		fmt.Printf("expected handlePrivFSMount error msg= %s\n", err.Error())
+		if strings.Contains(err.Error(), msg) {
+			f.err = errors.New("error in handlePrivFSMount")
+		}
 	}
 	return nil
 }
@@ -3890,6 +3900,12 @@ func (f *feature) iCallNodeStageVolume() error {
 		_ = f.getNodeStageVolumeRequest()
 	}
 
+	if capability := f.nodeStageVolumeRequest.GetVolumeCapability(); capability != nil && capability.GetMount() != nil {
+		if fsType := capability.GetMount().GetFsType(); fsType != "" {
+			gofsutil.GOFSMock.InduceGetDiskFormatType = fsType
+		}
+	}
+
 	fmt.Println("Calling NodeStageVolume")
 	_, err := f.service.NodeStageVolume(ctx, f.nodeStageVolumeRequest)
 
@@ -4137,90 +4153,6 @@ func (f *feature) aValidNodeGetCapabilitiesResponseIsReturned() error {
 	return errors.New("expected NodeGetCapabilitiesResponse but didn't get one")
 }
 
-func (f *feature) iCallCreateVolumeGroupSnapshot() error {
-	ctx := context.Background()
-	name := "apple"
-
-	if stepHandlersErrors.NoSysNameError {
-		f.service.opts.defaultSystemID = ""
-		f.volumeIDList = []string{"1235"}
-	}
-	if stepHandlersErrors.CreateVGSNoNameError {
-		name = ""
-	}
-
-	if stepHandlersErrors.CreateVGSNameTooLongError {
-		name = "ThisNameIsOverThe27CharacterLimit"
-	}
-	if stepHandlersErrors.VolIDListEmptyError {
-		f.volumeIDList = nil
-	}
-	if stepHandlersErrors.CreateVGSAcrossTwoArrays {
-		f.volumeIDList = []string{"14dbbf5617523654-12235531", "15dbbf5617523655-12345986", "14dbbf5617523654-12456777"}
-	}
-
-	if stepHandlersErrors.LegacyVolumeConflictError {
-		// need a legacy vol so check map executes
-		f.volumeIDList = []string{"1234"}
-	}
-	if stepHandlersErrors.CreateVGSLegacyVol {
-		// make sure legacy vol works
-		tokens := strings.Split(f.volumeIDList[0], "-")
-		f.volumeIDList[0] = tokens[1]
-	}
-
-	req := &volGroupSnap.CreateVolumeGroupSnapshotRequest{
-		Name:            name,
-		SourceVolumeIDs: f.volumeIDList,
-		Parameters:      make(map[string]string),
-	}
-	if f.VolumeGroupSnapshot != nil {
-		// idempotency test
-		req.Parameters["existingSnapshotGroupID"] = strings.Split(f.VolumeGroupSnapshot.SnapshotGroupID, "-")[1]
-	}
-
-	group, err := f.service.CreateVolumeGroupSnapshot(ctx, req)
-	if err != nil {
-		f.err = err
-	}
-	if group != nil {
-		f.VolumeGroupSnapshot = group
-	}
-	return nil
-}
-
-func (f *feature) iRemoveAVolumeFromVolumeGroupSnapshotRequest() error {
-	// cut last volume off of list
-	f.volumeIDList = f.volumeIDList[0 : len(f.volumeIDList)-1]
-	return nil
-}
-
-func (f *feature) iCallCheckCreationTime() error {
-	if f.VolumeGroupSnapshot == nil || f.err != nil {
-		return nil
-	}
-	// add a bad snap so creation time will not match
-	if stepHandlersErrors.CreateVGSBadTimeError {
-
-		snap := volGroupSnap.Snapshot{
-			Name:          "unit-test-1",
-			CapacityBytes: 34359738368,
-			SnapId:        "test-1",
-			SourceId:      "source-1",
-			ReadyToUse:    true,
-			CreationTime:  123,
-		}
-		f.VolumeGroupSnapshot.Snapshots = append(f.VolumeGroupSnapshot.Snapshots, &snap)
-
-	}
-
-	err := checkCreationTime(f.VolumeGroupSnapshot.Snapshots[0].CreationTime, f.VolumeGroupSnapshot.Snapshots)
-	if err != nil {
-		f.err = err
-	}
-	return nil
-}
-
 func (f *feature) iCallControllerGetVolume() error {
 	header := metadata.New(map[string]string{"csi.requestid": "1"})
 	ctx := metadata.NewIncomingContext(context.Background(), header)
@@ -4247,39 +4179,6 @@ func (f *feature) aValidControllerGetVolumeResponseIsReturned() error {
 	fmt.Printf("volume is %v\n", f.ControllerGetVolumeResponse.Volume)
 	fmt.Printf("volume condition is '%s'\n", f.ControllerGetVolumeResponse.Status)
 
-	return nil
-}
-
-func (f *feature) aValidCreateVolumeSnapshotGroupResponse() error {
-	// only check resp. if CreateVolumeGroupSnapshot returns okay
-	if f.VolumeGroupSnapshot == nil || f.err != nil {
-		return nil
-	}
-	err := status.Errorf(codes.Internal, "Bad VolumeSnapshotGroupResponse")
-	gID := f.VolumeGroupSnapshot.SnapshotGroupID
-	tokens := strings.Split(gID, "-")
-	if len(tokens) == 0 {
-		fmt.Printf("Error: VolumeSnapshotGroupResponse SnapshotGroupID: %s does not contain systemID \n", gID)
-		return err
-	}
-	for _, snap := range f.VolumeGroupSnapshot.Snapshots {
-		snapID := snap.SnapId
-		srcID := snap.SourceId
-		tokens = strings.Split(snapID, "-")
-		if len(tokens) == 0 {
-			fmt.Printf("Error: VolumeSnapshotGroupResponse SnapId: %s does not contain systemID \n", snapID)
-			return err
-		}
-		fmt.Printf("SnapId: %s contains systemID: %s \n", snapID, tokens[0])
-		tokens = strings.Split(srcID, "-")
-		if len(tokens) == 0 {
-			fmt.Printf("Error: VolumeSnapshotGroupResponse SourceId: %s does not contain systemID \n", srcID)
-			return err
-		}
-		fmt.Printf("SourceId: %s contains systemID: %s \n", srcID, tokens[0])
-	}
-
-	fmt.Printf("VolumeSnapshotGroupResponse looks OK \n")
 	return nil
 }
 
@@ -5594,6 +5493,89 @@ func (f *feature) iSetProtocolTo(protocol string) error {
 	return nil
 }
 
+// iSetNodePublishTargetPathForFsck overrides the target path in the pending
+// NodePublishVolume request to a kubelet-style path and ensures the directory
+// exists on disk so that the mount helper can create the target.
+func (f *feature) iSetNodePublishTargetPathForFsck() error {
+	if f.nodePublishVolumeRequest == nil {
+		if err := f.getNodePublishVolumeRequest(); err != nil {
+			return err
+		}
+	}
+	if err := os.MkdirAll(targetPath, 0o755); err != nil {
+		return fmt.Errorf("failed to create fsck target path %s: %v", targetPath, err)
+	}
+	f.nodePublishVolumeRequest.TargetPath = targetPath
+	return nil
+}
+
+// savedOSExecFn holds the original gofsutil.OSExecFn so it can be restored after
+// the FSCheck scenario finishes.
+var savedOSExecFn func(context.Context, string, ...string) (int, error)
+
+// iEnableFsCheckWithMockMetadataRetriever enables FSCheck globally and wires:
+//   - a mock metadataRetrieverClient that returns PVC labels enabling fsck in checkOnly mode
+//   - a stubbed gofsutil.OSExecFn that always returns exit-code 0 (no errors)
+func (f *feature) iEnableFsCheckWithMockMetadataRetriever() error {
+	mountFsCheckEnabled = true
+	mountFsCheckMode = "checkOnly"
+	f.service.opts.FsCheckEnabled = true
+	f.service.opts.FsCheckMode = "checkOnly"
+
+	mockClient := &mockMetadataRetrieverClient{}
+	mockClient.On("GetPVCLabelsByPVName", mock.Anything, mock.MatchedBy(func(req *retriever.GetPVCLabelsByPVNameRequest) bool {
+		return req.PVName == "csivol-1a11111aaa"
+	})).Return(&retriever.GetPVCLabelsByPVNameResponse{
+		PVCName:      "test-pvc",
+		PVCNamespace: "default",
+		Parameters: map[string]string{
+			"csi.dell.com/fs_check_enabled": "true",
+			"csi.dell.com/fs_check_mode":    "checkonly",
+		},
+	}, nil)
+	metadataRetrieverClient = mockClient
+
+	savedOSExecFn = gofsutil.OSExecFn
+	gofsutil.OSExecFn = func(_ context.Context, _ string, _ ...string) (int, error) {
+		return 0, nil
+	}
+	return nil
+}
+
+// iSetNodeStageVolumeContextForFsck sets VolumeContext["Name"] on the pending
+// NodeStageVolume request so that stager.go picks up the correct pvName when
+// calling runPreMountFsck, and the mock metadata retriever can match it.
+func (f *feature) iSetNodeStageVolumeContextForFsck() error {
+	if f.nodeStageVolumeRequest == nil {
+		if err := f.getNodeStageVolumeRequest(); err != nil {
+			return err
+		}
+	}
+	if f.nodeStageVolumeRequest.VolumeContext == nil {
+		f.nodeStageVolumeRequest.VolumeContext = make(map[string]string)
+	}
+	f.nodeStageVolumeRequest.VolumeContext["Name"] = "csivol-1a11111aaa"
+	return nil
+}
+
+// iDisableFsCheckAndRestoreOSExec resets FSCheck globals, clears the mock metadata
+// retriever client, and restores the original gofsutil.OSExecFn.  It is called as
+// the last step of the FSCheck scenarios to avoid contaminating other tests.
+func (f *feature) iDisableFsCheckAndRestoreOSExec() error {
+	mountFsCheckEnabled = false
+	mountFsCheckMode = "checkOnly"
+	if f.service != nil {
+		f.service.opts.FsCheckEnabled = false
+	}
+	gofsutil.GOFSMock.InduceGetDiskFormatType = ""
+	metadataRetrieverClient = nil
+	if savedOSExecFn != nil {
+		gofsutil.OSExecFn = savedOSExecFn
+		savedOSExecFn = nil
+	}
+	return nil
+}
+
 func FeatureContext(s *godog.ScenarioContext) {
 	f := &feature{}
 
@@ -5770,7 +5752,6 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I do not have a valid gateway endpoint$`, f.iDoNotHaveAValidGatewayEndpoint)
 	s.Step(`^I do not have a valid gateway password$`, f.iDoNotHaveAValidGatewayPassword)
 	s.Step(`^I call Clone volume$`, f.iCallCloneVolume)
-	s.Step(`^I call CreateVolumeSnapshotGroup$`, f.iCallCreateVolumeGroupSnapshot)
 	s.Step(`^the ValidateConnectivity response message contains "([^"]*)"$`, f.theValidateConnectivityResponseMessageContains)
 	s.Step(`^I create false ephemeral ID$`, f.iCreateFalseEphemeralID)
 	s.Step(`^I call EphemeralNodeUnpublish$`, f.iCallEphemeralNodeUnpublish)
@@ -5793,11 +5774,9 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^two identical volumes on two different systems$`, f.twoIdenticalVolumesOnTwoDifferentSystems)
 	s.Step(`^I call getMappedVols with volID "([^"]*)" and sysID "([^"]*)"$`, f.iCallgetMappedVolsWithVolIDAndSysID)
 	s.Step(`the volume "([^"]*)" is from the correct system "([^"]*)"$`, f.theVolumeIsFromTheCorrectSystem)
-	s.Step(`^a valid CreateVolumeSnapshotGroup response is returned$`, f.aValidCreateVolumeSnapshotGroupResponse)
-	s.Step(`^I call CheckCreationTime$`, f.iCallCheckCreationTime)
+
 	s.Step(`^I call ControllerGetVolume$`, f.iCallControllerGetVolume)
 	s.Step(`^a valid ControllerGetVolumeResponse is returned$`, f.aValidControllerGetVolumeResponseIsReturned)
-	s.Step(`^remove a volume from VolumeGroupSnapshotRequest$`, f.iRemoveAVolumeFromVolumeGroupSnapshotRequest)
 	s.Step(`^I call DynamicLogChange "([^"]*)"$`, f.iCallDynamicLogChange)
 	s.Step(`^a valid DynamicLogChange occurs "([^"]*)" "([^"]*)"$`, f.aValidDynamicLogChange)
 	s.Step(`^I call getProtectionDomainIDFromName "([^"]*)" "([^"]*)"$`, f.iCallgetProtectionDomainIDFromName)
@@ -5847,6 +5826,10 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I call getArrayVersion on "([^"]*)"`, f.iCallgetArrayVersion)
 	s.Step(`^I call setupNVMeHost with NVMe intiators "([^"]*)"$`, f.iCallSetupNVMeHostWithNVMeInitiators)
 	s.Step(`^I set protocol to "([^"]*)"$`, f.iSetProtocolTo)
+	s.Step(`^I enable FSCheck with mock metadata retriever$`, f.iEnableFsCheckWithMockMetadataRetriever)
+	s.Step(`^I set node publish target path for FSCheck$`, f.iSetNodePublishTargetPathForFsck)
+	s.Step(`^I disable FSCheck and restore OSExec$`, f.iDisableFsCheckAndRestoreOSExec)
+	s.Step(`^I set node stage volume context for FSCheck$`, f.iSetNodeStageVolumeContextForFsck)
 	s.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
 		// Cleanup test directory before each test
 		if err := os.RemoveAll(testBaseDir); err != nil {
