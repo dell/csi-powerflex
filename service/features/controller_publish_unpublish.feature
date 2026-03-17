@@ -376,7 +376,7 @@ Feature: VxFlex OS CSI interface
       | "SDC"     |
       | "NVMeTCP" |
 
-  Scenario: Publish block volume with multiple writers to multiple reader volume
+  Scenario: Publish block volume with multiple readers to multiple nodes
     Given a VxFlexOS service
     And a valid volume
     When I call Probe
@@ -384,7 +384,8 @@ Feature: VxFlex OS CSI interface
     And I call PublishVolume with "multiple-reader"
     And then I use a different nodeID
     And I call PublishVolume with "multiple-reader"
-    Then the error contains "not compatible with access type"
+    Then a valid PublishVolumeResponse is returned
+    And the number of SDC mappings is 2
     Examples:
       | protocol  |
       | "SDC"     |

@@ -176,6 +176,7 @@ func (s *service) testConnectivityAndUpdateStatus(ctx context.Context, systemID 
 		timeOutCtx, cancel := context.WithTimeout(ctx, timeout)
 		log.Debugf("Running probe for array %s at time %v \n", systemID, time.Now())
 		if existingStatus, ok := s.probeStatus.Load(systemID); !ok {
+			// #nosec G118
 			log.Debugf("%s not in probeStatus ", systemID)
 		} else {
 			if status, ok = existingStatus.(ArrayConnectivityStatus); !ok {
