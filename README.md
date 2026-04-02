@@ -38,8 +38,7 @@ To run unit tests, execute `make unit-test`.
 
 To build an image, execute `make docker`.
 
-You can run an integration test on a Linux system by populating the file `env.sh`
-with values for your PowerFlex system and then run "make integration-test".
+You can run an integration test on a Linux system by populating the file `env.sh` with values for your PowerFlex system and then run "make integration-test".
 
 ## Runtime Dependencies
 The Node portion of the driver can only be run on nodes which have network connectivity to a “`PowerFlex Cluster`” via PowerFlex SDC Client (which is used by the driver). This means that the `scini` kernel module must be loaded. 
