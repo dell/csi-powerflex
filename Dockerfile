@@ -28,6 +28,23 @@ RUN make build IMAGE_VERSION=$VERSION
 # Stage to build the driver image
 FROM $BASEIMAGE AS final
 ARG VERSION
+
+# Update all packages to latest security fixes
+RUN dnf update -y && \
+    dnf upgrade --security -y && \
+    dnf clean all
+
+# Install required packages with security fixes
+RUN dnf install -y \
+    sudo \
+    vim \
+    python3.9 \
+    openssh \
+    gnupg2 \
+    sqlite \
+    curl \
+    && dnf clean all
+
 ENTRYPOINT ["/csi-vxflexos.sh"]
 # copy in the driver
 COPY --from=builder /go/src/csi-vxflexos /
