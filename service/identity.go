@@ -19,8 +19,8 @@ import (
 
 	"golang.org/x/net/context"
 
-	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	commonext "github.com/dell/dell-csi-extensions/common"
+	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"github.com/dell/csi-vxflexos/v2/core"

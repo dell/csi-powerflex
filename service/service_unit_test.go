@@ -25,8 +25,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 
-	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	siotypes "github.com/dell/goscaleio/types/v1"
+	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -602,15 +602,19 @@ func TestGetZoneKeyLabelFromSecret(t *testing.T) {
 
 func TestFindNetworkInterfaceIPs(t *testing.T) {
 	tests := []struct {
-		name            string
-		expectedError   string
-		client          kubernetes.Interface
-		configMapData   map[string]string
-		createConfigMap func(map[string]string, kubernetes.Interface)
+		name               string
+		expectedError      string
+		client             kubernetes.Interface
+		createK8sClientSet func(kubeConfig ...string) error
+		configMapData      map[string]string
+		createConfigMap    func(map[string]string, kubernetes.Interface)
 	}{
 		{
 			name:          "Error getting K8sClient",
 			expectedError: "unable to load in-cluster configuration, KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT must be defined",
+			createK8sClientSet: func(_ ...string) error {
+				return fmt.Errorf("unable to load in-cluster configuration, KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT must be defined")
+			},
 			client:        nil,
 			configMapData: nil,
 			createConfigMap: func(map[string]string, kubernetes.Interface) {
@@ -696,6 +700,16 @@ func TestFindNetworkInterfaceIPs(t *testing.T) {
 	for _, tt := range tests {
 		s := &service{}
 		t.Run(tt.name, func(t *testing.T) {
+			defaultCreateKubeClientSet := CreateKubeClientSet
+			if tt.createK8sClientSet != nil {
+				CreateKubeClientSet = tt.createK8sClientSet
+			}
+			defer func() {
+				if tt.createK8sClientSet != nil {
+					CreateKubeClientSet = defaultCreateKubeClientSet
+				}
+			}()
+
 			K8sClientset = tt.client
 			tt.createConfigMap(tt.configMapData, tt.client)
 			_, err := s.findNetworkInterfaceIPs()

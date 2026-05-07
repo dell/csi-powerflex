@@ -1,0 +1,7 @@
+site_name: 'csi-powerflex'
+site_description: 'csi-powerflex Documentation.'
+docs_dir: docs
+plugins:
+  - techdocs-core
+theme:
+  name: material

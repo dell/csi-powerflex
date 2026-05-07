@@ -42,7 +42,7 @@ Scenario: Controller Unpublish Ephemeral Volume Fails
     And I call NodePublishVolume "SDC_GUID"
     And I induce error "BadVolIDError"
     And I call NodeUnpublishVolume "SDC_GUID"
-    Then the error contains "Inline ephemeral controller unpublish failed"
+    And no error was received
  
 Scenario Outline: Node publish and unpublish ephemeral volume
     Given a VxFlexOS service

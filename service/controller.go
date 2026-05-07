@@ -34,9 +34,9 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
-	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/dell/goscaleio"
 	siotypes "github.com/dell/goscaleio/types/v1"
+	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -1328,9 +1328,11 @@ func (s *service) DeleteVolume(
 	return &csi.DeleteVolumeResponse{}, nil
 }
 
+var CreateKubeClientSet = k8sutils.CreateKubeClientSet
+
 func (s *service) findNetworkInterfaceIPs() ([]string, error) {
 	if K8sClientset == nil {
-		err := k8sutils.CreateKubeClientSet()
+		err := CreateKubeClientSet()
 		if err != nil {
 			Log.Errorf("Failed to create Kubernetes clientset: %v", err)
 			return []string{}, err

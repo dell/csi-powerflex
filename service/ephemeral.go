@@ -16,6 +16,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -141,7 +142,7 @@ func (s *service) ephemeralNodePublish(
 
 	// Create lockfile to map vol ID from request to volID returned by CreateVolume
 	// will also be used to determine if volume is ephemeral in NodeUnpublish
-	errLock := os.MkdirAll(ephemeralStagingMountPath+volID, 0o750)
+	errLock := os.MkdirAll(filepath.Clean(filepath.Join(ephemeralStagingMountPath, volID)), 0o750)
 	if errLock != nil {
 		return nil, errLock
 	}
@@ -222,7 +223,7 @@ func (s *service) ephemeralNodeUnpublish(
 		return status.Error(codes.InvalidArgument, "volume ID is required")
 	}
 
-	lockFile := ephemeralStagingMountPath + volID + "/id"
+	lockFile := filepath.Clean(filepath.Join(ephemeralStagingMountPath, volID, "id"))
 
 	//while a file is being read from, it's a file determined by volID and is written by the driver
 	/* #nosec G304 */
@@ -239,7 +240,7 @@ func (s *service) ephemeralNodeUnpublish(
 		NodeId:   NodeID,
 	})
 	if err != nil {
-		return errors.New("Inline ephemeral controller unpublish failed")
+		return fmt.Errorf("Inline ephemeral controller unpublish failed: %v: ", err)
 	}
 
 	_, err = s.DeleteVolume(ctx, &csi.DeleteVolumeRequest{
@@ -248,9 +249,9 @@ func (s *service) ephemeralNodeUnpublish(
 	if err != nil {
 		return err
 	}
-	err = os.RemoveAll(ephemeralStagingMountPath + volID)
+	err = os.RemoveAll(filepath.Clean(filepath.Join(ephemeralStagingMountPath, volID)))
 	if err != nil {
-		return errors.New("failed to cleanup lock files")
+		return fmt.Errorf("failed to cleanup lock files: %v", err)
 	}
 
 	return nil

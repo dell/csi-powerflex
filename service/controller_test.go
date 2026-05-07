@@ -18,9 +18,9 @@ import (
 	"sync"
 	"testing"
 
-	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	sio "github.com/dell/goscaleio"
 	siotypes "github.com/dell/goscaleio/types/v1"
+	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"golang.org/x/net/context"
 )
 

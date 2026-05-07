@@ -25,9 +25,9 @@ import (
 	"strings"
 	"time"
 
-	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/dell/dell-csi-extensions/replication"
 	"github.com/dell/goscaleio"
+	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

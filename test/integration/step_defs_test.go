@@ -47,10 +47,10 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
-	csi "github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/cucumber/godog"
 	csiext "github.com/dell/dell-csi-extensions/podmon"
 	"github.com/dell/goscaleio"
+	csi "github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/cucumber/godog"
 
 	volGroupSnap "github.com/dell/dell-csi-extensions/volumeGroupSnapshot"
 )

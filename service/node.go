@@ -20,14 +20,15 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
-	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/dell/gofsutil"
 	"github.com/dell/goscaleio"
 	siotypes "github.com/dell/goscaleio/types/v1"
+	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
@@ -260,7 +261,7 @@ func (s *service) NodeUnpublishVolume(
 	isNFS := strings.Contains(csiVolID, "/")
 	var ephemeralVolume bool
 	// For ephemeral volumes, kubernetes gives us an internal ID, so we need to use the lockfile to find the Powerflex ID this is mapped to.
-	lockFile := ephemeralStagingMountPath + csiVolID + "/id"
+	lockFile := filepath.Clean(filepath.Join(ephemeralStagingMountPath, csiVolID, "id"))
 	if s.fileExist(lockFile) {
 		ephemeralVolume = true
 		//while a file is being read from, it's a file determined by volID and is written by the driver

@@ -29,8 +29,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/apparentlymart/go-cidr/cidr"
-	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/dell/csi-vxflexos/v2/core"
 	"github.com/dell/csi-vxflexos/v2/k8sutils"
 	"github.com/dell/dell-csi-extensions/podmon"
@@ -41,6 +39,8 @@ import (
 	"github.com/dell/goscaleio"
 	sio "github.com/dell/goscaleio"
 	siotypes "github.com/dell/goscaleio/types/v1"
+	"github.com/apparentlymart/go-cidr/cidr"
+	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/fsnotify/fsnotify"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
@@ -1911,7 +1911,7 @@ func (s *service) SetPodZoneLabel(ctx context.Context, zoneLabel map[string]stri
 
 func (s *service) GetNodeUID(_ context.Context) (string, error) {
 	if K8sClientset == nil {
-		err := k8sutils.CreateKubeClientSet()
+		err := CreateKubeClientSet()
 		if err != nil {
 			return "", status.Error(codes.Internal, GetMessage("init client failed with error: %v", err))
 		}

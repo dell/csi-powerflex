@@ -19,11 +19,11 @@ import (
 	"strconv"
 	"strings"
 
-	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	podmon "github.com/dell/dell-csi-extensions/podmon"
 	volumeGroupSnapshot "github.com/dell/dell-csi-extensions/volumeGroupSnapshot"
 	sio "github.com/dell/goscaleio"
 	siotypes "github.com/dell/goscaleio/types/v1"
+	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
