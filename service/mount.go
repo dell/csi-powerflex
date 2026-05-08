@@ -21,8 +21,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/dell/gofsutil"
+	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
@@ -30,7 +30,7 @@ import (
 )
 
 // Variables set only for unit testing.
-var unitTestEmulateBlockDevice bool
+var unitTestEmulateBlockDevice = false
 
 // Variables populdated from the environment
 var mountAllowRWOMultiPodAccess bool
@@ -56,17 +56,16 @@ func GetDevice(path string) (*Device, error) {
 		return nil, err
 	}
 
-	// TODO does EvalSymlinks throw error if link is to non-
-	// existent file? assuming so by masking error below
-	ds, _ := os.Stat(d)
-	dm := ds.Mode()
-	if unitTestEmulateBlockDevice {
-		// For unit testing only, emulate a block device on windows
-		dm = dm | os.ModeDevice
-	}
-	if dm&os.ModeDevice == 0 {
-		return nil, fmt.Errorf(
-			"%s is not a block device", path)
+	if !unitTestEmulateBlockDevice {
+		// TODO does EvalSymlinks throw error if link is to non-
+		// existent file? assuming so by masking error below
+		ds, _ := os.Stat(d)
+		dm := ds.Mode()
+
+		if dm&os.ModeDevice == 0 {
+			return nil, fmt.Errorf(
+				"%s is not a block device", path)
+		}
 	}
 
 	return &Device{

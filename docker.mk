@@ -21,7 +21,7 @@ docker: download-csm-common
 	@echo "Building: $(REGISTRY)/$(IMAGENAME):$(IMAGETAG)"
 	$(BUILDER) build --pull $(NOCACHE) -t "$(REGISTRY)/$(IMAGENAME):$(IMAGETAG)" --target $(BUILDSTAGE) --build-arg GOPROXY --build-arg BASEIMAGE=$(CSM_BASEIMAGE) --build-arg GOIMAGE=$(DEFAULT_GOIMAGE)  .
 
-docker-no-cache: download-csm-common
+docker-no-cache:
 	@echo "Building with --no-cache ..."
 	@make docker NOCACHE=--no-cache
 
@@ -29,6 +29,7 @@ push:
 	@echo "Pushing: $(REGISTRY)/$(IMAGENAME):$(IMAGETAG)"
 	$(BUILDER) push "$(REGISTRY)/$(IMAGENAME):$(IMAGETAG)"
 
-
 download-csm-common:
-	curl -O -L https://raw.githubusercontent.com/dell/csm/main/config/csm-common.mk
+	git clone --depth 1 git@github.com:dell/csm.git temp-repo
+	cp temp-repo/config/csm-common.mk .
+	rm -rf temp-repo

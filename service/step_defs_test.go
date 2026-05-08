@@ -26,6 +26,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -35,7 +36,6 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
-	"github.com/cucumber/godog"
 	"github.com/dell/dell-csi-extensions/podmon"
 	"github.com/dell/dell-csi-extensions/replication"
 	volGroupSnap "github.com/dell/dell-csi-extensions/volumeGroupSnapshot"
@@ -43,6 +43,7 @@ import (
 	"github.com/dell/gofsutil"
 	"github.com/dell/goscaleio"
 	types "github.com/dell/goscaleio/types/v1"
+	"github.com/cucumber/godog"
 	"google.golang.org/grpc/metadata"
 	v1 "k8s.io/api/core/v1"
 	storage "k8s.io/api/storage/v1"
@@ -51,45 +52,49 @@ import (
 )
 
 const (
-	testBaseDir                = "test"
-	arrayID                    = "14dbbf5617523654"
-	arrayID2                   = "15dbbf5617523655"
-	badVolumeID                = "Totally Fake ID"
-	badCsiVolumeID             = "ffff-f250"
-	goodVolumeID               = "111"
-	badVolumeID2               = "9999"
-	badVolumeID3               = "99"
-	goodVolumeName             = "vol1"
-	altVolumeID                = "222"
-	goodNodeID                 = "9E56672F-2F4B-4A42-BFF4-88B6846FBFDA"
-	goodArrayConfig            = "./features/array-config/config"
-	goodDriverConfig           = "./features/driver-config/logConfig.yaml"
-	altNodeID                  = "7E012974-3651-4DCB-9954-25975A3C3CDF"
-	datafile                   = "test/00000000-1111-0000-0000-000000000000/datafile"
-	datadir                    = "test/00000000-1111-0000-0000-000000000000/datadir"
-	badtarget                  = "nonexistent/target/path"
-	altdatadir                 = "test/00000000-1111-0000-0000-000000000000/altdatadir"
-	altdatafile                = "test/00000000-1111-0000-0000-000000000000/altdatafile"
-	sdcVolume1                 = "d0f055a700000000"
-	sdcVolume2                 = "c0f055aa00000000"
-	sdcVolume0                 = "0000000000000000"
-	ephemVolumeSDC             = "6373692d64306630353561373030303030303030"
-	mdmID                      = "14dbbf5617523654"
-	mdmIDEphem                 = "14dbbf5617523654"
-	mdmID1                     = "24dbbf5617523654"
-	mdmID2                     = "34dbbf5617523654"
-	badMdmID                   = "9999"
-	nodePublishBlockDevicePath = "test/dev/scinia"
-	nodePublishAltBlockDevPath = "test/dev/scinib"
-	nodePublishEphemDevPath    = "test/dev/scinic"
-	nodePublishSymlinkDir      = "test/dev/disk/by-id"
-	goodSnapID                 = "444"
-	altSnapID                  = "555"
+	testBaseDir           = "test"
+	arrayID               = "14dbbf5617523654"
+	arrayID2              = "15dbbf5617523655"
+	badVolumeID           = "999999"
+	badCsiVolumeID        = "ffff-f250"
+	goodVolumeID          = "111"
+	badVolumeID2          = "9999"
+	badVolumeID3          = "99"
+	goodVolumeName        = "vol1"
+	altVolumeID           = "222"
+	goodNodeID            = "9E56672F-2F4B-4A42-BFF4-88B6846FBFDA"
+	goodArrayConfig       = "./features/array-config/config"
+	goodDriverConfig      = "./features/driver-config/logConfig.yaml"
+	altNodeID             = "7E012974-3651-4DCB-9954-25975A3C3CDF"
+	datafile              = "test/00000000-1111-0000-0000-000000000000/datafile"
+	datadir               = "test/00000000-1111-0000-0000-000000000000/datadir"
+	badtarget             = "nonexistent/target/path"
+	altdatadir            = "test/00000000-1111-0000-0000-000000000000/altdatadir"
+	altdatafile           = "test/00000000-1111-0000-0000-000000000000/altdatafile"
+	sdcVolume1            = "d0f055a700000000"
+	sdcVolume2            = "c0f055aa00000000"
+	sdcVolume0            = "0000000000000000"
+	ephemVolumeSDC        = "6373692d64306630353561373030303030303030"
+	mdmID                 = "14dbbf5617523654"
+	mdmIDEphem            = "14dbbf5617523654"
+	mdmID1                = "24dbbf5617523654"
+	mdmID2                = "34dbbf5617523654"
+	badMdmID              = "9999"
+	nodePublishSymlinkDir = "test/dev/disk/by-id"
+	goodSnapID            = "444"
+	altSnapID             = "555"
+)
+
+var (
+	nodePublishBlockDevicePath = "scinia"
+	nodePublishAltBlockDevPath = "scinib"
+	nodePublishEphemDevPath    = "scinic"
 )
 
 var setupGetSystemIDtoFail bool
 
 type feature struct {
+	t                                     *testing.T
 	nGoRoutines                           int
 	server                                *httptest.Server
 	server2                               *httptest.Server
@@ -1230,7 +1235,6 @@ func (f *feature) iInduceError(errtype string) error {
 			return err
 		}
 	case "NoBlockDevForNodePublish":
-		unitTestEmulateBlockDevice = false
 		cmd := exec.Command("rm", nodePublishBlockDevicePath)
 		_, err := cmd.CombinedOutput()
 		if err != nil {
@@ -1263,11 +1267,20 @@ func (f *feature) iInduceError(errtype string) error {
 			fmt.Printf("Couldn't make: %s\n", datadir+"/"+sdcVolume1)
 		}
 	case "NodePublishPrivateTargetAlreadyMounted":
-		cmd := exec.Command("mknod", nodePublishAltBlockDevPath, "b", "0", "0")
-		_, err := cmd.CombinedOutput()
+		file, err := os.Create(nodePublishAltBlockDevPath)
 		if err != nil {
-			fmt.Printf("Couldn't create block dev: %s\n", nodePublishAltBlockDevPath)
+			fmt.Printf("couldn't create file: %s: %v\n", nodePublishAltBlockDevPath, err)
 		}
+
+		defer func() {
+			file.Close()
+		}()
+
+		// Optionally set permissions to mimic a device node
+		if err := os.Chmod(nodePublishAltBlockDevPath, 0o750); err != nil {
+			fmt.Printf("Failed to set permissions on mock device file %s: %v\n", nodePublishAltBlockDevPath, err)
+		}
+
 		err = os.MkdirAll("features/"+sdcVolume1, 0o777)
 		if err != nil {
 			fmt.Printf("Couldn't make: %s\n", datadir+"/"+sdcVolume1)
@@ -2019,6 +2032,15 @@ func (f *feature) iCallGetNodeLabelsWithInvalidNode() error {
 }
 
 func (f *feature) iCallGetNodeLabelsWithUnsetKubernetesClient() error {
+	defaultKubernetesHost := os.Getenv("KUBERNETES_SERVICE_HOST")
+	defaultKubernetesPort := os.Getenv("KUBERNETES_SERVICE_PORT")
+	defer func() {
+		os.Setenv("KUBERNETES_SERVICE_HOST", defaultKubernetesHost)
+		os.Setenv("KUBERNETES_SERVICE_PORT", defaultKubernetesPort)
+	}()
+
+	os.Unsetenv("KUBERNETES_SERVICE_HOST")
+	os.Unsetenv("KUBERNETES_SERVICE_PORT")
 	K8sClientset = nil
 	ctx := context.Background()
 	f.nodeLabels, f.err = f.service.GetNodeLabels(ctx)
@@ -2033,6 +2055,11 @@ func (f *feature) iCallGetNodeUIDWithInvalidNode() error {
 
 func (f *feature) iCallGetNodeUIDWithUnsetKubernetesClient() error {
 	K8sClientset = nil
+	defaultCreateK8sClientSet := CreateKubeClientSet
+	defer func() { CreateKubeClientSet = defaultCreateK8sClientSet }()
+	CreateKubeClientSet = func(_ ...string) error {
+		return fmt.Errorf("unable to load in-cluster configuration, KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT must be defined")
+	}
 	ctx := context.Background()
 	f.nodeUID, f.err = f.service.GetNodeUID(ctx)
 	return nil
@@ -2611,17 +2638,24 @@ func (f *feature) aControllerPublishedEphemeralVolume() error {
 	_, err = os.Stat(nodePublishEphemDevPath)
 	_, err2 := os.Stat(nodePublishSymlinkDir + "/emc-vol" + "-" + mdmIDEphem + "-" + ephemVolumeSDC)
 	if err != nil || err2 != nil {
-		cmd := exec.Command("mknod", nodePublishEphemDevPath, "b", "0", "0")
-		output, err := cmd.CombinedOutput()
+		file, err := os.Create(nodePublishEphemDevPath)
 		if err != nil {
-			fmt.Printf("scinic: %s\n", err.Error())
+			fmt.Printf("couldn't create file: %s: %v\n", nodePublishEphemDevPath, err)
 		}
-		fmt.Printf("mknod output: %s\n", output)
+
+		defer func() {
+			file.Close()
+		}()
+
+		// Optionally set permissions to mimic a device node
+		if err := os.Chmod(nodePublishEphemDevPath, 0o750); err != nil {
+			fmt.Printf("Failed to set permissions on mock device file %s: %v\n", nodePublishEphemDevPath, err)
+		}
 
 		// Make the symlink
-		cmdstring := fmt.Sprintf("cd %s; ln -s ../../scinic emc-vol-%s-%s", nodePublishSymlinkDir, mdmIDEphem, ephemVolumeSDC)
+		cmdstring := fmt.Sprintf("cd %s; ln -s %s emc-vol-%s-%s", nodePublishSymlinkDir, nodePublishEphemDevPath, mdmIDEphem, ephemVolumeSDC)
 		cmd = exec.Command("sh", "-c", cmdstring)
-		output, err = cmd.CombinedOutput()
+		output, err := cmd.CombinedOutput()
 		fmt.Printf("symlink output: %s\n", output)
 		if err != nil {
 			fmt.Printf("link: %s\n", err.Error())
@@ -2653,8 +2687,6 @@ func (f *feature) aControllerPublishedEphemeralVolume() error {
 	goscaleio.FSDevDirectoryPrefix = "test"
 	// Empty WindowsMounts in gofsutil
 	gofsutil.GOFSMockMounts = gofsutil.GOFSMockMounts[:0]
-	// Set variables in mount for unit testing
-	unitTestEmulateBlockDevice = true
 	return nil
 }
 
@@ -2689,25 +2721,47 @@ func (f *feature) controllerPublishVolume() {
 		fmt.Printf("removed private staging directory\n")
 	}
 
+	// remove the devices so that they can be re-created for each test
+	dir, err := os.ReadDir(getTargetPathPrefix())
+	if err != nil {
+		fmt.Printf("couldn't read device directory: %s: %v\n", getTargetPathPrefix(), err)
+	}
+	for _, d := range dir {
+		os.RemoveAll(filepath.Join(getTargetPathPrefix(), d.Name()))
+	}
+
 	// Make the block device
 	_, err = os.Stat(nodePublishBlockDevicePath)
 	if err != nil {
-		cmd := exec.Command("mknod", nodePublishBlockDevicePath, "b", "0", "0")
-		output, err := cmd.CombinedOutput()
+		file, err := os.Create(nodePublishBlockDevicePath)
 		if err != nil {
-			fmt.Printf("scinia: %s\n", err.Error())
+			fmt.Printf("couldn't create file: %s: %v\n", nodePublishBlockDevicePath, err)
 		}
-		fmt.Printf("mknod output: %s\n", output)
+
+		defer func() {
+			file.Close()
+		}()
+
+		// Optionally set permissions to mimic a device node
+		if err := os.Chmod(nodePublishBlockDevicePath, 0o750); err != nil {
+			fmt.Printf("Failed to set permissions on mock device file %s: %v\n", nodePublishBlockDevicePath, err)
+		}
 
 		// Make the symlink
-		cmdstring := fmt.Sprintf("cd %s; ln -s ../../scinia emc-vol-%s-%s", nodePublishSymlinkDir, mdmID, sdcVolume1)
+		cmdstring := fmt.Sprintf("cd %s; ln -s %s emc-vol-%s-%s", nodePublishSymlinkDir, nodePublishBlockDevicePath, mdmID, sdcVolume1)
 		cmd = exec.Command("sh", "-c", cmdstring)
-		output, err = cmd.CombinedOutput()
+		output, err := cmd.CombinedOutput()
 		fmt.Printf("symlink output: %s\n", output)
 		if err != nil {
 			fmt.Printf("link: %s\n", err.Error())
 			err = nil
 		}
+
+		linkTarget, err := os.Readlink(fmt.Sprintf("%s/emc-vol-%s-%s", nodePublishSymlinkDir, mdmID, sdcVolume1))
+		if err != nil {
+			fmt.Printf("Symlink not created correctly: %v\n", err)
+		}
+		fmt.Printf("Symlink points to: %s\n", linkTarget)
 	}
 
 	// Make the target directory if required
@@ -2734,8 +2788,6 @@ func (f *feature) controllerPublishVolume() {
 	goscaleio.FSDevDirectoryPrefix = "test"
 	// Empty WindowsMounts in gofsutil
 	gofsutil.GOFSMockMounts = gofsutil.GOFSMockMounts[:0]
-	// Set variables in mount for unit testing
-	unitTestEmulateBlockDevice = true
 }
 
 func (f *feature) twoIdenticalVolumesOnTwoDifferentSystems() error {
@@ -2762,7 +2814,7 @@ func (f *feature) twoIdenticalVolumesOnTwoDifferentSystems() error {
 }
 
 func (f *feature) iCreateFalseEphemeralID() error {
-	fakeEphemeralIDFolder := ephemeralStagingMountPath + mdmIDEphem
+	fakeEphemeralIDFolder := filepath.Join(ephemeralStagingMountPath, mdmIDEphem)
 
 	_, err := os.Stat(fakeEphemeralIDFolder)
 	if err != nil {
@@ -3118,7 +3170,7 @@ func (f *feature) iCallMountValidateVolCapabilities() error {
 
 func (f *feature) iCallCleanupPrivateTargetForErrors() error {
 	gofsutil.GOFSMock.InduceDevMountsError = true
-	sysdevice, _ := GetDevice("test/dev/scinia")
+	sysdevice, _ := GetDevice(nodePublishBlockDevicePath)
 	err := cleanupPrivateTarget(sysdevice, "1", "features/d0f055a700000000")
 	if err != nil {
 		fmt.Printf("Cleanupprivatetarget getDevice error : %s\n", err.Error())
@@ -3148,7 +3200,7 @@ func (f *feature) iCallCleanupPrivateTargetForErrors() error {
 }
 
 func (f *feature) iCallCleanupPrivateTarget() error {
-	sysdevice, terr := GetDevice("test/dev/scinia")
+	sysdevice, terr := GetDevice(nodePublishBlockDevicePath)
 	if terr != nil {
 		return terr
 	}
@@ -3176,8 +3228,6 @@ func (f *feature) iCallUnmountAndDeleteTarget() error {
 }
 
 func (f *feature) iCallEphemeralNodePublish() error {
-	save := ephemeralStagingMountPath
-	ephemeralStagingMountPath = "/tmp"
 	header := metadata.New(map[string]string{"csi.requestid": "1"})
 	ctx := metadata.NewIncomingContext(context.Background(), header)
 	req := new(csi.NodePublishVolumeRequest)
@@ -3190,7 +3240,6 @@ func (f *feature) iCallEphemeralNodePublish() error {
 			f.err = err
 		}
 	}
-	ephemeralStagingMountPath = save
 	return nil
 }
 
@@ -3226,6 +3275,9 @@ func (f *feature) iCallNodeUnpublishVolume(arg1 string) error {
 	req.VolumeId = f.nodePublishVolumeRequest.VolumeId
 	req.TargetPath = f.nodePublishVolumeRequest.TargetPath
 	fmt.Printf("Calling NodeUnpublishVolume\n")
+	if stepHandlersErrors.BadVolIDError {
+		req.VolumeId = badVolumeID
+	}
 	_, err := f.service.NodeUnpublishVolume(ctx, req)
 	if err != nil {
 		fmt.Printf("NodeUnpublishVolume failed: %s\n", err.Error())
@@ -3259,7 +3311,7 @@ func (f *feature) thereIsMount(path string) {
 		split := strings.Split(path, ",")
 		for _, p := range split {
 			gofsutil.GOFSMockMounts = append(gofsutil.GOFSMockMounts, gofsutil.Info{
-				Device: "test/dev/scinia",
+				Device: nodePublishBlockDevicePath,
 				Path:   p,
 			})
 		}
@@ -3546,7 +3598,6 @@ func (f *feature) aCorrectNodeGetVolumeStatsResponse() error {
 
 func (f *feature) iCallNodeUnstageVolumeWith(errStr string) error {
 	// Save the ephemeralStagingMountPath to restore below
-	ephemeralPath := ephemeralStagingMountPath
 	header := metadata.New(map[string]string{"csi.requestid": "1"})
 	if errStr == "NoRequestID" {
 		header = metadata.New(map[string]string{"csi.requestid": ""})
@@ -3567,14 +3618,13 @@ func (f *feature) iCallNodeUnstageVolumeWith(errStr string) error {
 	}
 	if errStr == "EphemeralVolume" {
 		// Create an ephemeral volume id
-		ephemeralStagingMountPath = "test/"
-		err := os.MkdirAll("test"+"/"+goodVolumeID+"/id", 0o777)
+		// ephemeralStagingMountPath = "test/"
+		err := os.MkdirAll(ephemeralStagingMountPath+"/"+goodVolumeID+"/id", 0o777)
 		if err != nil {
 			return err
 		}
 	}
 	_, f.err = f.service.NodeUnstageVolume(ctx, req)
-	ephemeralStagingMountPath = ephemeralPath
 	os.Remove("test" + "/" + goodVolumeID + "/id")
 	return nil
 }
