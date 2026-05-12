@@ -20,8 +20,7 @@ PROG="${0}"
 NODE_VERIFY=1
 VERIFY=1
 MODE="install"
-DEFAULT_DRIVER_VERSION="v2.16.1"
-DRIVERVERSION="csi-vxflexos-2.16.1"
+DEFAULT_VERSION="v2.17.0"
 WATCHLIST=""
 
 # export the name of the debug log, so child processes will see it
@@ -396,6 +395,10 @@ done
 
 DRIVERDIR="${SCRIPTDIR}/../"
 
+# Derive helm chart version from DEFAULT_DRIVER_VERSION (single source of truth)
+DRIVERVERSION="${DRIVER}-${DEFAULT_DRIVER_VERSION#v}"
+
+# Allow override via --helm-charts-version
 if [ -n "$HELMCHARTVERSION" ]; then
   DRIVERVERSION=$HELMCHARTVERSION
 fi
@@ -406,7 +409,7 @@ if [ ! -d "$DRIVERDIR/helm-charts" ]; then
     git clone --quiet -c advice.detachedHead=false -b $DRIVERVERSION https://github.com/dell/helm-charts
   fi
   mv helm-charts $DRIVERDIR
-else 
+else
   if [  -d "$SCRIPTDIR/helm-charts" ]; then
     rm -rf $SCRIPTDIR/helm-charts
   fi

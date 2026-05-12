@@ -91,7 +91,7 @@ func (s *service) discoverNVMeTargets(system *goscaleio.System) ([]gonvme.NVMeTa
 		}
 		for _, target := range targets {
 			discoveredTargets[target.Portal] = target
-			s.nvmeTargetNqn[target.Portal] = target.TargetNqn
+			s.setNVMeTargetNqn(target.Portal, target.TargetNqn)
 		}
 	}
 
@@ -105,6 +105,22 @@ func (s *service) discoverNVMeTargets(system *goscaleio.System) ([]gonvme.NVMeTa
 	}
 
 	return targets, err
+}
+
+func (s *service) setNVMeTargetNqn(portal, targetNqn string) {
+	s.nvmeTargetNqnMutex.Lock()
+	defer s.nvmeTargetNqnMutex.Unlock()
+	s.nvmeTargetNqn[portal] = targetNqn
+}
+
+func (s *service) getNVMeTargetNqnSnapshot() map[string]string {
+	s.nvmeTargetNqnMutex.RLock()
+	defer s.nvmeTargetNqnMutex.RUnlock()
+	targetNqnCopy := make(map[string]string, len(s.nvmeTargetNqn))
+	for k, v := range s.nvmeTargetNqn {
+		targetNqnCopy[k] = v
+	}
+	return targetNqnCopy
 }
 
 func (s *service) connectToNVMeTargets(system *goscaleio.System, targets []gonvme.NVMeTarget) error {

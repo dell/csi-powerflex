@@ -14,10 +14,9 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"strings"
-
-	"golang.org/x/net/context"
 
 	commonext "github.com/dell/dell-csi-extensions/common"
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
@@ -62,6 +61,13 @@ func (s *service) GetPluginCapabilities(
 				Type: &csi.PluginCapability_VolumeExpansion_{
 					VolumeExpansion: &csi.PluginCapability_VolumeExpansion{
 						Type: csi.PluginCapability_VolumeExpansion_ONLINE,
+					},
+				},
+			},
+			{
+				Type: &csi.PluginCapability_Service_{
+					Service: &csi.PluginCapability_Service{
+						Type: csi.PluginCapability_Service_GROUP_CONTROLLER_SERVICE,
 					},
 				},
 			},

@@ -35,12 +35,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dell/csi-metadata-retriever/retriever"
 	"github.com/dell/csi-vxflexos/v2/core"
 	"github.com/dell/csi-vxflexos/v2/k8sutils"
+	svcmetrics "github.com/dell/csi-vxflexos/v2/service/metrics"
 	"github.com/dell/csmlog"
 	"github.com/dell/dell-csi-extensions/podmon"
 	"github.com/dell/dell-csi-extensions/replication"
-	volumeGroupSnapshot "github.com/dell/dell-csi-extensions/volumeGroupSnapshot"
 	"github.com/dell/gobrick"
 	"github.com/dell/gocsi"
 	csictx "github.com/dell/gocsi/context"
@@ -86,7 +87,6 @@ const (
 	// ParamCSILogLevel csi driver csmlog level
 
 	ParamCSILogLevel  = "CSI_LOG_LEVEL"
-	DriverNamespace   = "vxflexos"
 	DriverConfigMap   = "vxflexos-config-params"
 	ConfigMapFilePath = "/vxflexos-config-params/driver-config-params.yaml"
 
@@ -109,7 +109,8 @@ var (
 	px = sync.Mutex{}
 )
 
-// var driverLog = csmlog.GetLogger()
+// DriverNamespace is the namespace where the driver is deployed, defaults to "vxflexos" for backward compatibility
+var DriverNamespace = "vxflexos"
 
 // LookupEnv - Fetches the environment var value
 var LookupEnv = lookupEnv
@@ -191,6 +192,7 @@ var Manifest = map[string]string{
 // Service is the CSI Mock service provider.
 type Service interface {
 	csi.ControllerServer
+	// NOTE: csi.GroupControllerServer is implemented by a separate groupControllerService type in groupcontroller.go.
 	csi.IdentityServer
 	csi.NodeServer
 	BeforeServe(context.Context, *gocsi.StoragePlugin, net.Listener) error
@@ -206,34 +208,43 @@ type NetworkInterface interface {
 // Opts defines service configuration options.
 type Opts struct {
 	// map from system name to ArrayConnectionData
-	arrays                     map[string]*ArrayConnectionData
-	defaultSystemID            string // ID of default system
-	SdcGUID                    string
-	Thick                      bool
-	AutoProbe                  bool
-	DisableCerts               bool   // used for unit testing only
-	Lsmod                      string // used for unit testing only
-	drvCfgQueryMDM             string // used for testing only
-	EnableSnapshotCGDelete     bool   // when snapshot deleted, enable deleting of all snaps in the CG of the snapshot
-	EnableListVolumesSnapshots bool   // when listing volumes, include snapshots and volumes
-	AllowRWOMultiPodAccess     bool   // allow multiple pods to access a RWO volume on the same node
-	IsHealthMonitorEnabled     bool   // allow driver to make use of the alpha feature gate, CSIVolumeHealth
-	IsSdcRenameEnabled         bool   // allow driver to enable renaming SDC
-	SdcPrefix                  string // prefix to be set for SDC name
-	IsApproveSDCEnabled        bool
-	replicationContextPrefix   string
-	replicationPrefix          string
-	MaxVolumesPerNode          int64
-	IsQuotaEnabled             bool   // allow driver to enable quota limits for NFS volumes
-	ExternalAccess             string // used for adding extra IP/IP range to the NFS export
-	KubeNodeName               string
-	zoneLabelKey               string
-	probeTimeout               time.Duration
-	NodeChrootPath             string
-	IsPodmonEnabled            bool   // used to indicate that podmon is enabled
-	PodmonPort                 string // to indicates the port to be used for exposing podmon API health
-	PodmonPollingFreq          string // indicates the polling frequency to check array connectivity
-	AuthType                   string // indicate what auth type to use
+	arrays                                 map[string]*ArrayConnectionData
+	defaultSystemID                        string // ID of default system
+	SdcGUID                                string
+	Thick                                  bool
+	AutoProbe                              bool
+	DisableCerts                           bool   // used for unit testing only
+	Lsmod                                  string // used for unit testing only
+	drvCfgQueryMDM                         string // used for testing only
+	EnableSnapshotCGDelete                 bool   // when snapshot deleted, enable deleting of all snaps in the CG of the snapshot
+	EnableListVolumesSnapshots             bool   // when listing volumes, include snapshots and volumes
+	AllowRWOMultiPodAccess                 bool   // allow multiple pods to access a RWO volume on the same node
+	IsHealthMonitorEnabled                 bool   // allow driver to make use of the alpha feature gate, CSIVolumeHealth
+	IsSdcRenameEnabled                     bool   // allow driver to enable renaming SDC
+	SdcPrefix                              string // prefix to be set for SDC name
+	IsApproveSDCEnabled                    bool
+	replicationContextPrefix               string
+	replicationPrefix                      string
+	MaxVolumesPerNode                      int64
+	IsQuotaEnabled                         bool   // allow driver to enable quota limits for NFS volumes
+	ExternalAccess                         string // used for adding extra IP/IP range to the NFS export
+	KubeNodeName                           string
+	zoneLabelKey                           string
+	probeTimeout                           time.Duration
+	NodeChrootPath                         string
+	IsPodmonEnabled                        bool   // used to indicate that podmon is enabled
+	PodmonPort                             string // to indicates the port to be used for exposing podmon API health
+	PodmonPollingFreq                      string // indicates the polling frequency to check array connectivity
+	AuthType                               string // indicate what auth type to use
+	FsCheckEnabled                         bool   // enable file system check before mount
+	FsCheckMode                            string // "checkOnly" (default) or "checkAndRepair"
+	MetricsEnabled                         bool   // independently enables the shared metrics HTTP server
+	GatewayMonitoringEnabled               bool
+	GatewayMonitoringLeaderElectionEnabled bool
+	GatewayMonitoringInterval              time.Duration
+	MetricsPort                            string
+	MetricsTLSCertFile                     string // path to TLS cert for the metrics endpoint
+	MetricsTLSKeyFile                      string // path to TLS key for the metrics endpoint
 }
 
 type PlatformInfo struct {
@@ -243,6 +254,12 @@ type PlatformInfo struct {
 }
 
 type service struct {
+	// satisfies the Service interface and provides unimplemented defaults to functions not implemented
+	csi.UnimplementedControllerServer
+	// NOTE: GroupControllerServer is served by a separate groupControllerService type (see groupcontroller.go).
+	csi.UnimplementedIdentityServer
+	csi.UnimplementedNodeServer
+
 	opts                Opts
 	adminClients        map[string]*sio.Client
 	systems             map[string]*sio.System
@@ -261,6 +278,7 @@ type service struct {
 	volumePrefixToSystems   map[string][]string
 	connectedSystemNameToID map[string]string
 	nvmeTargetNqn           map[string]string
+	nvmeTargetNqnMutex      sync.RWMutex
 	nvmeConnector           NVMEConnector
 	nvmeLib                 gonvme.NVMEinterface
 	useNVME                 bool
@@ -268,6 +286,9 @@ type service struct {
 	nodeID                  string
 	probeStatus             *sync.Map
 	probeLocks              sync.Map // map[string]*sync.Mutex
+	metricsServer           *svcmetrics.SharedMetricsServer
+	gatewayMonitor          *svcmetrics.GatewayMonitor
+	spaceReclaimMgr         *SpaceReclamationManager
 }
 
 type Config struct {
@@ -465,6 +486,8 @@ func (s *service) BeforeServe(
 			"isPodmonEnabled":        s.opts.IsPodmonEnabled,
 			"PodmonPort":             s.opts.PodmonPort,
 			"PodmonFrequency":        s.opts.PodmonPollingFreq,
+			"FsCheckEnabled":         s.opts.FsCheckEnabled,
+			"FsCheckMode":            s.opts.FsCheckMode,
 		}
 
 		log.WithFields(fields).Infof("configured %s", Name)
@@ -474,6 +497,10 @@ func (s *service) BeforeServe(
 	s.mode = csictx.Getenv(ctx, gocsi.EnvVarMode)
 
 	opts := Opts{}
+
+	if ns, ok := csictx.LookupEnv(ctx, EnvDriverNamespace); ok {
+		DriverNamespace = ns
+	}
 
 	var err error
 
@@ -607,6 +634,50 @@ func (s *service) BeforeServe(
 		opts.AuthType = EnvAuthType
 	}
 
+	// FSCheck configuration
+	if fsCheckEnabled, ok := csictx.LookupEnv(ctx, EnvFsCheckEnabled); ok {
+		if strings.EqualFold(fsCheckEnabled, "true") {
+			opts.FsCheckEnabled = true
+		} else if fsCheckEnabled != "" && !strings.EqualFold(fsCheckEnabled, "false") {
+			log.Warnf("invalid value %q for %s, defaulting to false", fsCheckEnabled, EnvFsCheckEnabled)
+		}
+	}
+
+	opts.FsCheckMode = "checkOnly" // default
+	if fsCheckMode, ok := csictx.LookupEnv(ctx, EnvFsCheckMode); ok {
+		switch strings.ToLower(fsCheckMode) {
+		case "checkonly":
+			opts.FsCheckMode = "checkOnly"
+		case "checkandrepair":
+			opts.FsCheckMode = "checkAndRepair"
+		default:
+			log.Warnf("invalid value %q for %s, defaulting to \"checkOnly\"", fsCheckMode, EnvFsCheckMode)
+		}
+	}
+
+	log.Infof("FsCheckEnabled: %s", strconv.FormatBool(opts.FsCheckEnabled))
+	log.Infof("FsCheckMode: %s", opts.FsCheckMode)
+
+	// Setting package-level FSCK variables
+	mountFsCheckEnabled = opts.FsCheckEnabled
+	mountFsCheckMode = opts.FsCheckMode
+
+	// Initializing the MetadataRetriever Client
+	if s.mode == "node" {
+		// Ensure k8s client is initialized for FS check event recording
+		if k8sutils.Clientset == nil {
+			log.Infof("Initializing k8s client for FS check events...")
+			if err := k8sutils.CreateKubeClientSet(); err != nil {
+				log.Errorf("Failed to initialize k8s client for FS check events: %v - PVC events will not be posted", err)
+			}
+		}
+		metadataRetrieverClient = retriever.NewMetadataRetrieverClient(nil, 30*time.Second)
+		log.Infof("Successfully initialized the Metadata Retriever Client: %s", metadataRetrieverClient)
+
+		mountFsCheckEventRecorder = initFsCheckEventRecorder()
+		log.Infof("Successfully initialized the FS check event recorder: %s", mountFsCheckEventRecorder)
+	}
+
 	opts.probeTimeout = DefaultAPITimeout
 	if envProbeTimeout, ok := csictx.LookupEnv(ctx, EnvMaxProbeTimeout); ok {
 		duration, err := time.ParseDuration(envProbeTimeout)
@@ -637,6 +708,38 @@ func (s *service) BeforeServe(
 
 	opts.Thick = pb(EnvThick)
 	opts.AutoProbe = true
+
+	// Metrics service configuration
+	if metricsEnabled, ok := csictx.LookupEnv(ctx, EnvMetricsEnabled); ok {
+		opts.MetricsEnabled = strings.EqualFold(metricsEnabled, "true")
+	}
+
+	// Gateway monitoring configuration
+	if gatewayMonEnabled, ok := csictx.LookupEnv(ctx, EnvGatewayMonitoringEnabled); ok {
+		opts.GatewayMonitoringEnabled = strings.EqualFold(gatewayMonEnabled, "true")
+	}
+	if gatewayMonLEEnabled, ok := csictx.LookupEnv(ctx, EnvGatewayMonitoringLeaderElectionEnabled); ok {
+		opts.GatewayMonitoringLeaderElectionEnabled = strings.EqualFold(gatewayMonLEEnabled, "true")
+	}
+	if gatewayMonInterval, ok := csictx.LookupEnv(ctx, EnvGatewayMonitoringPollInterval); ok {
+		if d, parseErr := time.ParseDuration(gatewayMonInterval); parseErr == nil {
+			opts.GatewayMonitoringInterval = d
+		} else {
+			log.Warnf("invalid value %q for %s, defaulting to 30s", gatewayMonInterval, EnvGatewayMonitoringPollInterval)
+			opts.GatewayMonitoringInterval = 30 * time.Second
+		}
+	}
+	if metricsPort, ok := csictx.LookupEnv(ctx, EnvMetricsPort); ok {
+		opts.MetricsPort = svcmetrics.FormatMetricsAddr(metricsPort)
+	} else {
+		opts.MetricsPort = svcmetrics.DefaultMetricsPort
+	}
+	if metricsTLSCert, ok := csictx.LookupEnv(ctx, EnvMetricsTLSCertFile); ok {
+		opts.MetricsTLSCertFile = metricsTLSCert
+	}
+	if metricsTLSKey, ok := csictx.LookupEnv(ctx, EnvMetricsTLSKeyFile); ok {
+		opts.MetricsTLSKeyFile = metricsTLSKey
+	}
 
 	s.opts = opts
 	s.adminClients = make(map[string]*sio.Client)
@@ -691,11 +794,40 @@ func (s *service) BeforeServe(
 	}
 
 	if s.mode == "node" {
+		// Initialize space reclamation manager after useNVME is set
+		initSpaceReclamation(ctx, s, k8sutils.Clientset)
+
 		// Update the ConfigMap with the Interface IPs
 		s.updateConfigMap(s.getIPAddressByInterface, ConfigMapFilePath)
 
 		// Start the podmon API service
 		go s.startAPIService(ctx)
+	}
+
+	// Gateway monitoring requires the metrics server.  If the metrics server is
+	// disabled while gateway monitoring is enabled, suppress gateway monitoring
+	// and log a warning so the misconfiguration is visible in the driver logs.
+	if s.opts.GatewayMonitoringEnabled && !s.opts.MetricsEnabled {
+		log.Warnf("%s is true but %s is false — gateway monitoring will not start; enable the metrics server first",
+			EnvGatewayMonitoringEnabled, EnvMetricsEnabled)
+		s.opts.GatewayMonitoringEnabled = false
+	}
+
+	// Start the metrics server on every non-node controller pod when the
+	// metrics service is enabled.  The gateway polling loop is started
+	// separately below only on the leader.
+	if s.opts.MetricsEnabled && s.mode != "node" {
+		s.startMetricsServer()
+	}
+
+	// Start the gateway polling loop when gateway monitoring is enabled.
+	if s.opts.GatewayMonitoringEnabled && s.mode != "node" {
+		if s.opts.GatewayMonitoringLeaderElectionEnabled {
+			log.Info("Gateway monitoring leader election enabled — polling will start on the lease holder")
+			go s.startGatewayMonitoringWithLeaderElection(ctx)
+		} else {
+			s.startGatewayMonitor(ctx)
+		}
 	}
 
 	if _, ok := csictx.LookupEnv(ctx, "X_CSI_VXFLEXOS_NO_PROBE_ON_START"); !ok {
@@ -1012,8 +1144,8 @@ func (s *service) doProbe(ctx context.Context) error {
 func (s *service) RegisterAdditionalServers(server *grpc.Server) {
 	log.Info("Registering additional GRPC servers")
 	podmon.RegisterPodmonServer(server, s)
-	volumeGroupSnapshot.RegisterVolumeGroupSnapshotServer(server, s)
 	replication.RegisterReplicationServer(server, s)
+	csi.RegisterGroupControllerServer(server, &groupControllerService{s: s})
 }
 
 // getVolProvisionType returns a string indicating thin or thick provisioning
@@ -2497,4 +2629,135 @@ func (s *service) getHostIDAndType(systemID, nodeID string) (string, string, err
 		}
 	}
 	return hostID, hostType, nil
+}
+
+// startMetricsServer starts the shared HTTP metrics server and stores it in s.metricsServer.
+// It is called on every controller regardless of leader election status so that each
+// controller pod always exposes a /metrics endpoint. When MetricsTLSCertFile and
+// MetricsTLSKeyFile are both configured, the endpoint is served over HTTPS.
+func (s *service) startMetricsServer() {
+	log.Infof("Starting metrics server on port %s", s.opts.MetricsPort)
+	srv := svcmetrics.NewSharedMetricsServer()
+
+	var startErr error
+	if s.opts.MetricsTLSCertFile != "" && s.opts.MetricsTLSKeyFile != "" {
+		log.Infof("Metrics server TLS enabled (cert: %s, key: %s)", s.opts.MetricsTLSCertFile, s.opts.MetricsTLSKeyFile)
+		startErr = srv.StartTLS(s.opts.MetricsPort, s.opts.MetricsTLSCertFile, s.opts.MetricsTLSKeyFile)
+	} else {
+		startErr = srv.Start(s.opts.MetricsPort)
+	}
+
+	if startErr != nil {
+		log.Errorf("failed to start metrics server: %v", startErr)
+		return
+	}
+	s.metricsServer = srv
+	log.Infof("Metrics server started; endpoint available at %s/metrics", srv.GetAddr())
+}
+
+// startGatewayMonitor starts the gateway polling loop using the provided context.
+// It assumes s.metricsServer is already running and registers metrics into the
+// server's shared Prometheus registry.  It is called only on the leader.
+func (s *service) startGatewayMonitor(ctx context.Context) {
+	if s.metricsServer == nil {
+		log.Error("cannot start gateway monitor: metrics server is not running")
+		return
+	}
+
+	// Build an entries map from existing adminClients (already authenticated).
+	gwEntries := make(map[string]svcmetrics.GatewayEntry, len(s.adminClients))
+	for id, c := range s.adminClients {
+		// ip is used solely as a Prometheus label on gateway metrics; the
+		// actual gateway communication uses the already-authenticated client.
+		// If host extraction fails we fall back to the raw endpoint so the
+		// metric label still identifies the gateway, and continue monitoring.
+		ip := ""
+		if arr, ok := s.opts.arrays[id]; ok {
+			if host, err := ExtractHost(arr.Endpoint); err == nil {
+				ip = host
+			} else {
+				log.Warnf("could not extract gateway address for system %s from endpoint %s: %v; using endpoint as metric label", id, arr.Endpoint, err)
+				ip = arr.Endpoint
+			}
+		}
+		gwEntries[id] = svcmetrics.GatewayEntry{Client: c, IP: ip}
+	}
+
+	pollInterval := s.opts.GatewayMonitoringInterval
+	if pollInterval == 0 {
+		pollInterval = 30 * time.Second
+	}
+
+	gm := svcmetrics.NewGatewayMonitor(gwEntries, svcmetrics.Config{
+		PollInterval: pollInterval,
+	})
+	if gmErr := gm.Start(ctx); gmErr != nil {
+		log.Errorf("failed to start gateway monitor: %v", gmErr)
+		return
+	}
+	s.gatewayMonitor = gm
+	log.Infof("Gateway monitoring started; metrics available at %s/metrics", s.metricsServer.GetAddr())
+}
+
+// startGatewayMonitoring starts both the metrics server and the gateway monitor.
+// It is called directly when gateway monitoring leader election is disabled (i.e.
+// a single controller is responsible for both serving metrics and polling gateways).
+func (s *service) startGatewayMonitoring(ctx context.Context) {
+	s.startMetricsServer()
+	if s.metricsServer == nil {
+		// startMetricsServer already logged the error.
+		return
+	}
+	s.startGatewayMonitor(ctx)
+}
+
+// startGatewayMonitoringWithLeaderElection participates in leader election for the gateway
+// monitoring lease. The metrics server is already running on every controller; only the
+// controller that holds the lease will run the gateway polling loop. The parent ctx is
+// used to stop the leader election loop when the driver itself is shutting down.
+func (s *service) startGatewayMonitoringWithLeaderElection(ctx context.Context) {
+	if K8sClientset == nil {
+		if err := k8sutils.CreateKubeClientSet(KubeConfig); err != nil {
+			log.Errorf("gateway monitoring leader election: failed to create k8s clientset: %v", err)
+			return
+		}
+		K8sClientset = k8sutils.Clientset
+	}
+
+	lockName := "gateway-monitor-" + strings.ReplaceAll(Name, ".", "-")
+
+	runFunc := func(leCtx context.Context) {
+		// Merge the leader-election context with the parent driver context so
+		// that losing the lease OR the driver shutting down both stop monitoring.
+		monCtx, cancel := context.WithCancel(leCtx)
+		go func() {
+			select {
+			case <-ctx.Done():
+				cancel()
+			case <-leCtx.Done():
+				cancel()
+			}
+		}()
+		defer cancel()
+
+		log.Infof("Gateway monitoring: acquired leader election lease %q", lockName)
+		s.startGatewayMonitor(monCtx)
+
+		// Block until the merged context is cancelled so the lease is held while
+		// monitoring is running. When cancelled the gateway monitor's own context
+		// will also be cancelled, stopping all polling goroutines.
+		<-monCtx.Done()
+		log.Infof("Gateway monitoring: released leader election lease %q — stopping gateway monitor", lockName)
+		// Stop only the gateway monitor; the metrics server keeps running on this
+		// controller so that it continues to serve (now-empty) metrics until it
+		// either re-acquires the lease or the pod is terminated.
+		if s.gatewayMonitor != nil {
+			s.gatewayMonitor.Stop(context.Background()) //nolint:errcheck
+			s.gatewayMonitor = nil
+		}
+	}
+
+	if err := k8sutils.LeaderElectionFunc(&K8sClientset, lockName, DriverNamespace, runFunc); err != nil {
+		log.Errorf("gateway monitoring leader election failed: %v", err)
+	}
 }

@@ -169,4 +169,51 @@ const usage = `    X_CSI_VXFLEXOS_SDCGUID
         Otherwise only volumes are returned.
 
         The default value is false.
+
+    X_CSI_METRICS_ENABLED
+        Enable the shared Prometheus metrics HTTP endpoint on the controller pod.
+        This is the master switch; gateway monitoring has no effect unless this is true.
+
+        The default value is false.
+
+    X_CSI_METRICS_PORT
+        Port on which the Prometheus metrics endpoint is exposed.
+        Accepts a bare port number ("9090") or a colon-prefixed address (":9090").
+
+        The default value is 9090.
+
+    X_CSI_METRICS_TLS_CERT_FILE
+        Path to the PEM-encoded TLS certificate file for the metrics endpoint.
+        When both X_CSI_METRICS_TLS_CERT_FILE and X_CSI_METRICS_TLS_KEY_FILE are
+        set the endpoint is served over HTTPS instead of plain HTTP.
+
+        The default value is empty (plain HTTP).
+
+    X_CSI_METRICS_TLS_KEY_FILE
+        Path to the PEM-encoded TLS private key file for the metrics endpoint.
+        When both X_CSI_METRICS_TLS_CERT_FILE and X_CSI_METRICS_TLS_KEY_FILE are
+        set the endpoint is served over HTTPS instead of plain HTTP.
+
+        The default value is empty (plain HTTP).
+
+    X_CSI_GATEWAY_MONITORING_ENABLED
+        Enable PowerFlex Gateway health monitoring. Requires X_CSI_METRICS_ENABLED=true.
+        When enabled, the controller pod polls each configured gateway and exposes
+        availability metrics on the shared /metrics endpoint.
+
+        The default value is false.
+
+    X_CSI_GATEWAY_MONITORING_LEADER_ELECTION_ENABLED
+        When true, only the controller that holds the gateway-monitor leader election
+        lease runs the polling loop. All controllers still serve the /metrics endpoint.
+        Recommended for multi-replica controller deployments to avoid duplicate polling.
+
+        The default value is true (matches helm chart default).
+
+    X_CSI_GATEWAY_MONITORING_POLL_INTERVAL
+        How frequently the leader controller probes each gateway endpoint.
+        Accepts a Go duration string (e.g. "30s", "1m"). Values below 5s are
+        clamped to the default.
+
+        The default value is 30s.
 `

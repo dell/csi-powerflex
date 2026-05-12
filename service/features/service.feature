@@ -1248,6 +1248,76 @@ Feature: VxFlex OS CSI interface
       | "none"               | 64 | "none"                  | "NVMeTCP" |
       | "GetVolByIDError"    | 64 | "induced error"         | "NVMeTCP" |
 
+  Scenario Outline: Call ControllerExpandVolume with raw block volume sets NodeExpansionRequired to false
+    Given a VxFlexOS service
+    And I call Probe
+    And I set protocol to <protocol>
+    And I call CreateVolumeSize "volume10" "32"
+    And a valid CreateVolumeResponse is returned
+    When I call ControllerExpandVolume set to 64 with voltype "block"
+    Then no error was received
+    And the ControllerExpandVolume NodeExpansionRequired is "false"
+
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
+
+  Scenario Outline: Call ControllerExpandVolume with mount volume sets NodeExpansionRequired to true
+    Given a VxFlexOS service
+    And I call Probe
+    And I set protocol to <protocol>
+    And I call CreateVolumeSize "volume10" "32"
+    And a valid CreateVolumeResponse is returned
+    When I call ControllerExpandVolume set to 64 with voltype "mount"
+    Then no error was received
+    And the ControllerExpandVolume NodeExpansionRequired is "true"
+
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
+
+  Scenario Outline: Call ControllerExpandVolume idempotent with raw block volume sets NodeExpansionRequired to false
+    Given a VxFlexOS service
+    And I call Probe
+    And I set protocol to <protocol>
+    And I call CreateVolumeSize "volume10" "32"
+    And a valid CreateVolumeResponse is returned
+    When I call ControllerExpandVolume set to 32 with voltype "block"
+    Then no error was received
+    And the ControllerExpandVolume NodeExpansionRequired is "false"
+
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
+
+  Scenario Outline: Call ControllerExpandVolume idempotent with mount volume sets NodeExpansionRequired to true
+    Given a VxFlexOS service
+    And I call Probe
+    And I set protocol to <protocol>
+    And I call CreateVolumeSize "volume10" "32"
+    And a valid CreateVolumeResponse is returned
+    When I call ControllerExpandVolume set to 32 with voltype "mount"
+    Then no error was received
+    And the ControllerExpandVolume NodeExpansionRequired is "true"
+
+    Examples:
+      | protocol  |
+      | "SDC"     |
+      | "NVMeTCP" |
+
+  Scenario: Call ControllerExpandVolume without volume capability sets NodeExpansionRequired to true
+    Given a VxFlexOS service
+    And I call Probe
+    And I set protocol to "SDC"
+    And I call CreateVolumeSize "volume10" "32"
+    And a valid CreateVolumeResponse is returned
+    When I call ControllerExpandVolume set to 64
+    Then no error was received
+    And the ControllerExpandVolume NodeExpansionRequired is "true"
+
   Scenario Outline: Call NodeExpandVolume with non sysID and no defaultSysID for SDC
     Given setup Get SystemID to fail
     And a VxFlexOS service

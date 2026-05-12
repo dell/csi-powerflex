@@ -14,12 +14,11 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"io/fs"
 	"os"
 	"strings"
-
-	"golang.org/x/net/context"
 )
 
 const (

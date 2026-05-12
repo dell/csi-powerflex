@@ -18,28 +18,303 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/dell/csi-metadata-retriever/retriever"
+	"github.com/dell/csi-vxflexos/v2/k8sutils"
 	"github.com/dell/csmlog"
 	"github.com/dell/gofsutil"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	typedv1core "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/tools/record"
 )
 
 // Variables set only for unit testing.
 var unitTestEmulateBlockDevice = false
 
-// Variables populdated from the environment
-var mountAllowRWOMultiPodAccess bool
+// Variables populated from the environment
+var (
+	mountAllowRWOMultiPodAccess bool
+	mountFsCheckEnabled         bool
+	mountFsCheckMode            string
+)
+
+// Variables for metadata retrieval
+var metadataRetrieverClient retriever.MetadataRetrieverClient
+
+// Variable for FS check event recording
+var mountFsCheckEventRecorder record.EventRecorder
+
+var (
+	fsCheckEventRecorderOnce   sync.Once
+	cachedFsCheckEventRecorder record.EventRecorder
+)
+
+// newFsCheckEventRecorder creates a record.EventRecorder for FS check events.
+var newFsCheckEventRecorder = func() (record.EventRecorder, error) {
+	if k8sutils.Clientset == nil {
+		return nil, fmt.Errorf("kubernetes clientset is not initialized")
+	}
+
+	eventBroadcaster := record.NewBroadcaster()
+	eventBroadcaster.StartRecordingToSink(&typedv1core.EventSinkImpl{Interface: k8sutils.Clientset.CoreV1().Events("")})
+
+	scheme := runtime.NewScheme()
+	if err := corev1.AddToScheme(scheme); err != nil {
+		return nil, fmt.Errorf("failed to add scheme for FS check events: %w", err)
+	}
+
+	return eventBroadcaster.NewRecorder(scheme, corev1.EventSource{Component: "csi-vxflexos-node"}), nil
+}
+
+// initFsCheckEventRecorder initializes the Kubernetes event recorder for FS check events.
+// Returns a cached singleton instance.
+func initFsCheckEventRecorder() record.EventRecorder {
+	fsCheckEventRecorderOnce.Do(func() {
+		recorder, err := newFsCheckEventRecorder()
+		if err != nil {
+			log.Errorf("Failed to initialize FS check event recorder: %v - PVC events will not be posted", err)
+			return
+		}
+		cachedFsCheckEventRecorder = recorder
+	})
+	return cachedFsCheckEventRecorder
+}
 
 // Device is a struct for holding details about a block device
 type Device struct {
 	FullPath string
 	Name     string
 	RealDev  string
+}
+
+// fsCheckPVCObserver implements gofsutil.FSCheckObserver to bridge FS check events
+// to structured logging
+type fsCheckPVCObserver struct {
+	pvcName       string
+	pvcNamespace  string
+	devicePath    string
+	fsType        string
+	logFields     csmlog.Fields
+	eventRecorder record.EventRecorder
+	timedOut      bool
+}
+
+func (o *fsCheckPVCObserver) OnEvent(message string) {
+	log.WithFields(o.logFields).Infof("FS check event: %s", message)
+
+	if o.eventRecorder == nil {
+		log.WithFields(o.logFields).Warn("FS check event recorder is nil")
+		return
+	}
+	if o.pvcName == "" {
+		log.WithFields(o.logFields).Warn("FS check PVC name is empty")
+		return
+	}
+	eventType := corev1.EventTypeNormal
+	reason := "FSCheck"
+
+	switch message {
+	case gofsutil.StartedFSCheckEvent:
+		reason = "FSCheckStarted"
+	case gofsutil.FoundNoErrorsEvent:
+		reason = "FSCheckSucceeded"
+	case gofsutil.FinishedFSRepairEvent:
+		reason = "FSCheckRepaired"
+	case gofsutil.FoundErrorsEvent, gofsutil.FSCheckFailedEvent:
+		eventType = corev1.EventTypeWarning
+		reason = "FSCheckFailed"
+	case gofsutil.FSCheckTimedOutEvent, gofsutil.FSRepairTimedOutEvent:
+		eventType = corev1.EventTypeWarning
+		reason = "FSCheckTimedOut"
+		o.timedOut = true
+		log.WithFields(o.logFields).Infof("FS Check timed out on pvc:%s", o.pvcName)
+	case gofsutil.FSRepairFailedEvent:
+		eventType = corev1.EventTypeWarning
+		reason = "FSRepairFailed"
+	case gofsutil.StartFSRepairEvent:
+		reason = "FSRepairStarted"
+	case gofsutil.FoundDirtyLogEvent:
+		reason = "FSCheckFoundDirtyLog"
+	case gofsutil.StartLogReplayEvent:
+		reason = "FSLogReplayStarted"
+	case gofsutil.LogReplayFailedEvent:
+		eventType = corev1.EventTypeWarning
+		reason = "FSLogReplayFailed"
+	case gofsutil.LogReplayDoneEvent:
+		reason = "FSLogReplayDone"
+	}
+
+	pvcRef := &corev1.ObjectReference{
+		Kind:      "PersistentVolumeClaim",
+		Name:      o.pvcName,
+		Namespace: o.pvcNamespace,
+	}
+	o.eventRecorder.Event(pvcRef, eventType, reason, message)
+	log.WithFields(o.logFields).Infof("PVC event recorded successfully: type=%s, reason=%s, pvc=%s/%s", eventType, reason, o.pvcNamespace, o.pvcName)
+}
+
+// parsePVNameFromTargetPath extracts the PV name from the target path
+// Format: <kubelet-dir>/pods/<pod-uid>/volumes/kubernetes.io~csi/<pv-name>/mount
+func parsePVNameFromTargetPath(targetPath string) string {
+	re := regexp.MustCompile(`/volumes/kubernetes\.io~csi/([^/]+)/`)
+	matches := re.FindStringSubmatch(targetPath)
+	if len(matches) > 1 {
+		log.Infof("Found the PV %s in the target path: %s", matches[1], targetPath)
+		return matches[1]
+	}
+	log.Infof("PV name not found in the target path: %s", targetPath)
+	return ""
+}
+
+// runPreMountFsck performs file system check before mounting a volume
+// It determines if FS check should run based on various conditions and executes it if needed
+func runPreMountFsck(
+	ctx context.Context,
+	devicePath string,
+	fsType string,
+	accMode *csi.VolumeCapability_AccessMode,
+	pvName string,
+	volumeID string,
+) error {
+	f := csmlog.Fields{
+		"devicePath": devicePath,
+		"fsType":     fsType,
+		"volumeID":   volumeID,
+	}
+
+	if fsType == "" {
+		log.WithFields(f).Info("Skipping FS check: newly formatted volume")
+		return nil
+	}
+
+	// Skip if filesystem is not supported
+	if fsType != "ext4" && fsType != "ext3" && fsType != "xfs" {
+		log.WithFields(f).Info("Skipping FS check: unsupported filesystem type")
+		return nil
+	}
+
+	// Skip for read-only or multi-node access modes
+	switch accMode.GetMode() {
+	case csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY,
+		csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY,
+		csi.VolumeCapability_AccessMode_MULTI_NODE_SINGLE_WRITER,
+		csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER:
+		log.WithFields(f).Debug("Skipping FS check: read-only or multi-node access mode")
+		return nil
+	}
+
+	log.WithFields(f).Info("FSCheck started")
+
+	// Determine effective FS check configuration (PVC labels override global settings)
+	FsCheckEnabled := mountFsCheckEnabled
+	FsCheckMode := mountFsCheckMode
+	var pvcName, pvcNamespace string
+
+	// Try to get PVC labels if metadata retriever is available.
+	if metadataRetrieverClient != nil && pvName != "" {
+		req := &retriever.GetPVCLabelsByPVNameRequest{
+			PVName:       pvName,
+			VolumeHandle: volumeID,
+		}
+		resp, err := metadataRetrieverClient.GetPVCLabelsByPVName(ctx, req)
+		if err != nil {
+			log.WithFields(f).Warnf("Could not retrieve PVC labels for volume %s: %v. Using global FS check settings.", volumeID, err)
+		} else {
+			pvcName = resp.PVCName
+			pvcNamespace = resp.PVCNamespace
+			f["pvcName"] = pvcName
+			f["pvcNamespace"] = pvcNamespace
+
+			// Check for PVC label overrides
+			if enabledLabel, ok := resp.Parameters["csi.dell.com/fs_check_enabled"]; ok {
+				if strings.EqualFold(enabledLabel, "true") {
+					FsCheckEnabled = true
+				} else if strings.EqualFold(enabledLabel, "false") {
+					FsCheckEnabled = false
+				} else {
+					log.WithFields(f).Warnf("Invalid value %q for PVC label csi.dell.com/fs_check_enabled, using global setting", enabledLabel)
+				}
+			}
+			log.Infof("FSCheck enabled for volume %s: %t", volumeID, FsCheckEnabled)
+
+			if modeLabel, ok := resp.Parameters["csi.dell.com/fs_check_mode"]; ok {
+				switch strings.ToLower(modeLabel) {
+				case "checkonly":
+					FsCheckMode = "checkOnly"
+				case "checkandrepair":
+					FsCheckMode = "checkAndRepair"
+				default:
+					log.WithFields(f).Warnf("Invalid value %q for PVC label csi.dell.com/fs_check_mode, using global setting", modeLabel)
+				}
+			}
+			log.Infof("FSCheck mode for volume %s: %s", volumeID, FsCheckMode)
+		}
+	}
+
+	// Skip if FS check is disabled after checking PVC labels
+	if !FsCheckEnabled {
+		log.WithFields(f).Info("Skipping FS check: disabled by configuration")
+		return nil
+	}
+
+	doRepair := (FsCheckMode == "checkAndRepair")
+	f["fsCheckMode"] = FsCheckMode
+
+	log.WithFields(f).Infof("Starting file system check on device %s (fs: %s, mode: %s)", devicePath, fsType, FsCheckMode)
+
+	// Create observer for logging and event emission
+	observer := &fsCheckPVCObserver{
+		pvcName:       pvcName,
+		pvcNamespace:  pvcNamespace,
+		devicePath:    devicePath,
+		fsType:        fsType,
+		logFields:     f,
+		eventRecorder: mountFsCheckEventRecorder,
+		timedOut:      false,
+	}
+
+	// Get FS checker
+	checker, err := gofsutil.GetFSChecker(devicePath, fsType, observer)
+	if err != nil {
+		log.WithFields(f).Warnf("Could not get FS checker for %s: %v. Skipping FS check.", fsType, err)
+		return nil
+	}
+	log.Infof("Successfully Initialized the FSChecker for %s: %v", fsType, checker)
+
+	// Run FS check
+	err = checker.Check(ctx, doRepair)
+	if err != nil {
+		if observer.timedOut {
+			log.WithFields(f).Errorf("File system check timed out on device %s (volume ID: %s, fs: %s): %v. Retry expected from Kubernetes.", devicePath, volumeID, fsType, err)
+			return status.Errorf(codes.Aborted, "file system check timed out on device %s: %v", devicePath, err)
+		}
+
+		errMsg := fmt.Sprintf("File system check failed on device %s (volume ID: %s, fs: %s): %v. Manual intervention required. Do not attempt to mount this volume until the file system has been repaired.", devicePath, volumeID, fsType, err)
+
+		if observer.eventRecorder != nil && observer.pvcName != "" && observer.pvcNamespace != "" {
+			pvcRef := &corev1.ObjectReference{
+				Kind:      "PersistentVolumeClaim",
+				Name:      observer.pvcName,
+				Namespace: observer.pvcNamespace,
+			}
+			observer.eventRecorder.Event(pvcRef, corev1.EventTypeWarning, "FSCheckFailed", fmt.Sprintf("File system on device %s (fs: %s) cannot be mounted safely. Manual intervention required.", devicePath, fsType))
+		}
+
+		log.WithFields(f).Errorf("%v", errMsg)
+		return status.Errorf(codes.Internal, "%v", errMsg)
+	}
+
+	log.WithFields(f).Infof("File system check completed successfully on device %s", devicePath)
+	return nil
 }
 
 // GetDevice returns a Device struct with info about the given device, or
@@ -217,8 +492,11 @@ func publishVolume(
 				mntFlags = append(mntFlags, "ro")
 			}
 			fsFormatOption := req.GetVolumeContext()[KeyMkfsFormatOption]
+			pvName := parsePVNameFromTargetPath(target)
+			log.Infof("[NodePublish] PV Name: %s", pvName)
+
 			if err := handlePrivFSMount(
-				ctx, accMode, sysDevice, mntFlags, fs, privTgt, fsFormatOption); err != nil {
+				ctx, accMode, sysDevice, mntFlags, fs, privTgt, fsFormatOption, pvName, id); err != nil {
 				// K8S may have removed the desired mount point. Clean up the private target.
 				PrivtgtErr := cleanupPrivateTarget(sysDevice, reqID, privTgt)
 				if PrivtgtErr != nil {
@@ -595,6 +873,8 @@ func handlePrivFSMount(
 	sysDevice *Device,
 	mntFlags []string,
 	fs, privTgt, fsFormatOption string,
+	pvName string,
+	volumeID string,
 ) error {
 	// Invoke the formats with a No Discard option to reduce formatting time
 	formatCtx := context.WithValue(ctx, gofsutil.ContextKey(gofsutil.NoDiscard), gofsutil.NoDiscard)
@@ -615,7 +895,33 @@ func handlePrivFSMount(
 		if fsFormatOption != "" {
 			mntFlags = append(mntFlags, "fsFormatOption:"+fsFormatOption)
 		}
-		if err := gofsutil.FormatAndMount(formatCtx, sysDevice.FullPath, privTgt, fs, mntFlags...); err != nil {
+
+		currentFS, err := gofsutil.GetDiskFormat(formatCtx, sysDevice.FullPath)
+		if err != nil {
+			return status.Errorf(codes.Internal,
+				"error determining device filesystem: %s",
+				err.Error())
+		}
+		log.Infof("[handlePrivFSMount] Current filesystem: %s, Required filesystem: %s", currentFS, fs)
+
+		if currentFS == "" {
+			// Format only when no filesystem exists on the device.
+			log.Info("Formatting since no filesystem exists on the device")
+			if err := gofsutil.Format(formatCtx, sysDevice.FullPath, privTgt, fs, mntFlags...); err != nil {
+				return status.Errorf(codes.Internal,
+					"error formatting device: %s",
+					err.Error())
+			}
+		}
+
+		// Run FS check
+		log.Infof("Input data for the FileSystem check: %s, %s, %s, %s, %s", currentFS, sysDevice.FullPath, sysDevice.RealDev, sysDevice.Name, accMode)
+		if err := runPreMountFsck(ctx, sysDevice.FullPath, currentFS, accMode, pvName, volumeID); err != nil {
+			return err
+		}
+
+		// Mount the device after formatting (if needed) and FSCheck (for existing filesystems).
+		if err := gofsutil.Mount(formatCtx, sysDevice.FullPath, privTgt, fs, mntFlags...); err != nil {
 			return status.Errorf(codes.Internal,
 				"error performing private mount: %s",
 				err.Error())

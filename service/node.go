@@ -16,6 +16,7 @@ package service
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -30,7 +31,6 @@ import (
 	"github.com/dell/goscaleio"
 	siotypes "github.com/dell/goscaleio/types/v1"
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -97,12 +97,14 @@ func (s *service) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeR
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
+	targetNqnCopy := s.getNVMeTargetNqnSnapshot()
+
 	var stager VolumeStager
 	stager = &NVMeStager{
 		useNVME:       s.useNVME,
 		systemID:      systemID,
 		nvmeConnector: s.nvmeConnector,
-		targetNqn:     s.nvmeTargetNqn,
+		targetNqn:     targetNqnCopy,
 		adminClient:   s.adminClients[systemID],
 	}
 	response, err := stager.Stage(ctx, req, stagingPath, logFields, volID)

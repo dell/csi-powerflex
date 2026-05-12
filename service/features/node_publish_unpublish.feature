@@ -659,3 +659,27 @@ Scenario: a Basic NVME Node Unpublish Volume no error
     | "none"                                   | "none"                                          |
     | "GOFSMockGetMounts_targetpath"           | "none"                                          |
     | "GOFSMockGetMountsError"                 | "could not reliably determine existing mount"   |
+
+  Scenario: Node publish SDC XFS volume with FSCheck enabled in checkOnly mode succeeds
+    Given a VxFlexOS service
+    And a controller published volume
+    And a capability with voltype "mount" access "single-writer" fstype "xfs"
+    And get Node Publish Volume Request
+    And I enable FSCheck with mock metadata retriever
+    And I set node publish target path for FSCheck
+    When I call Probe
+    When I call NodePublishVolume "SDC_GUID"
+    Then the error contains "none"
+    And I disable FSCheck and restore OSExec
+
+  Scenario: Node publish SDC EXT4 volume with FSCheck enabled in checkOnly mode succeeds
+    Given a VxFlexOS service
+    And a controller published volume
+    And a capability with voltype "mount" access "single-writer" fstype "ext4"
+    And get Node Publish Volume Request
+    And I enable FSCheck with mock metadata retriever
+    And I set node publish target path for FSCheck
+    When I call Probe
+    When I call NodePublishVolume "SDC_GUID"
+    Then the error contains "none"
+    And I disable FSCheck and restore OSExec

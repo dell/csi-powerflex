@@ -51,8 +51,6 @@ import (
 	"github.com/dell/goscaleio"
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/cucumber/godog"
-
-	volGroupSnap "github.com/dell/dell-csi-extensions/volumeGroupSnapshot"
 )
 
 const (
@@ -98,8 +96,6 @@ type feature struct {
 	controllerGetVolumeResponse *csi.ControllerGetVolumeResponse
 	nodeGetVolumeStatsResponse  *csi.NodeGetVolumeStatsResponse
 	arrays                      map[string]*ArrayConnectionData
-	VolumeGroupSnapshot         *volGroupSnap.CreateVolumeGroupSnapshotResponse
-	VolumeGroupSnapshot2        *volGroupSnap.CreateVolumeGroupSnapshotResponse
 }
 
 func (f *feature) getGoscaleioClient() (client *goscaleio.Client, err error) {
@@ -115,7 +111,7 @@ func (f *feature) getGoscaleioClient() (client *goscaleio.Client, err error) {
 	}
 
 	for _, a := range f.arrays {
-		client, err := goscaleio.NewClientWithArgs(a.Endpoint, "", math.MaxInt64, true, false)
+		client, err := goscaleio.NewClientWithArgs(a.Endpoint, "", math.MaxInt64, true, false, "")
 		if err != nil {
 			log.Fatalf("err getting client: %v", err)
 		}
@@ -1714,106 +1710,6 @@ func (f *feature) iCallValidateVolumeHostConnectivity() error {
 	return nil
 }
 
-func (f *feature) iRemoveAVolumeFromVolumeGroupSnapshotRequest() error {
-	// cut last volume off of list
-	f.volIDList = f.volIDList[0 : len(f.volIDList)-1]
-	return nil
-}
-
-func (f *feature) iCallCreateVolumeGroupSnapshot() error {
-	ctx := context.Background()
-	vgsClient := volGroupSnap.NewVolumeGroupSnapshotClient(grpcClient)
-	params := make(map[string]string)
-	if f.VolumeGroupSnapshot != nil {
-		params["existingSnapshotGroupID"] = strings.Split(f.VolumeGroupSnapshot.SnapshotGroupID, "-")[1]
-	}
-	req := &volGroupSnap.CreateVolumeGroupSnapshotRequest{
-		Name:            "apple",
-		SourceVolumeIDs: f.volIDList,
-		Parameters:      params,
-	}
-	group, err := vgsClient.CreateVolumeGroupSnapshot(ctx, req)
-	if err != nil {
-		f.addError(err)
-	}
-	fmt.Printf("Group returned is: %v \n", group)
-	if group != nil {
-		f.VolumeGroupSnapshot = group
-	}
-	return nil
-}
-
-// takes f.VolumeGroupSnapshot (assumes length >=2 ), and splits its snapshots into
-// two VolumeGroupSnapshots, f.volumeGroupSnapshot and  f.volumeGroupSnapshot2
-func (f *feature) iCallSplitVolumeGroupSnapshot() error {
-	if f.VolumeGroupSnapshot == nil {
-		fmt.Printf("No VolumeGroupSnapshot to split.\n")
-		return nil
-	}
-	ctx := context.Background()
-	vgsClient := volGroupSnap.NewVolumeGroupSnapshotClient(grpcClient)
-	snapList := f.VolumeGroupSnapshot.Snapshots
-
-	// delete first snap from VGS, and save corresponding VGS as f.volumeGroupSnapshot2
-	f.VolumeGroupSnapshot.Snapshots = snapList[0:1]
-	fmt.Printf("Snapshots in VGS to be deleted are: %v \n", f.VolumeGroupSnapshot.Snapshots)
-	f.iCallDeleteVGS()
-	f.VolumeGroupSnapshot.Snapshots = snapList[1:]
-	f.VolumeGroupSnapshot2 = f.VolumeGroupSnapshot
-
-	// adjust f.volIDList to only contain the first, unsnapped volume, and create another VGS for it. Save this one as  f.volumeGroupSnapshot
-	f.volIDListShort = f.volIDList[0:1]
-	req := &volGroupSnap.CreateVolumeGroupSnapshotRequest{
-		Name:            "apple",
-		SourceVolumeIDs: f.volIDListShort,
-	}
-	group, err := vgsClient.CreateVolumeGroupSnapshot(ctx, req)
-	if err != nil {
-		f.addError(err)
-	}
-	if group != nil {
-		f.VolumeGroupSnapshot = group
-	}
-
-	fmt.Printf("group 1 is: %v \n", f.VolumeGroupSnapshot)
-	fmt.Printf("group 2 is: %v \n", f.VolumeGroupSnapshot2)
-
-	return nil
-}
-
-func (f *feature) iCallDeleteVGS() error {
-	ctx := context.Background()
-	client := csi.NewControllerClient(grpcClient)
-	if f.VolumeGroupSnapshot == nil && f.VolumeGroupSnapshot2 != nil {
-		fmt.Printf("VolumeGroupSnapshot already deleted.\n")
-		return nil
-	}
-	for _, snap := range f.VolumeGroupSnapshot.Snapshots {
-		fmt.Printf("Deleting:  %v \n", snap.SnapId)
-		req := &csi.DeleteSnapshotRequest{
-			SnapshotId: snap.SnapId,
-		}
-		_, err := client.DeleteSnapshot(ctx, req)
-		if err != nil {
-			fmt.Printf("DeleteSnapshot returned error: %s\n", err.Error())
-		}
-	}
-
-	if f.VolumeGroupSnapshot2 != nil {
-		for _, snap := range f.VolumeGroupSnapshot2.Snapshots {
-			fmt.Printf("Deleting:  %v \n", snap.SnapId)
-			req := &csi.DeleteSnapshotRequest{
-				SnapshotId: snap.SnapId,
-			}
-			_, err := client.DeleteSnapshot(ctx, req)
-			if err != nil {
-				fmt.Printf("DeleteSnapshot returned error: %s\n", err.Error())
-			}
-		}
-	}
-	return nil
-}
-
 func (f *feature) whenICallExpandVolumeTo(size int64) error {
 	err := f.controllerExpandVolume(f.volID, size)
 	if err != nil {
@@ -2960,15 +2856,11 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I write block data$`, f.iWriteBlockData)
 	s.Step(`^I read write data to volume "([^"]*)"$`, f.iReadWriteToVolume)
 	s.Step(`^when I call Validate Volume Host connectivity$`, f.iCallValidateVolumeHostConnectivity)
-	s.Step(`^I call CreateVolumeGroupSnapshot$`, f.iCallCreateVolumeGroupSnapshot)
 	s.Step(`^when I call ExpandVolume to "([^"]*)"$`, f.whenICallExpandVolumeTo)
 	s.Step(`^when I call NodeExpandVolume$`, f.whenICallNodeExpandVolume)
 	s.Step(`^I call CloneVolume$`, f.iCallCloneVolume)
 	s.Step(`^I call CloneManyVolumes$`, f.iCallCloneManyVolumes)
 	s.Step(`^I call EthemeralNodePublishVolume with ID "([^"]*)" and size "([^"]*)"$`, f.iCallEthemeralNodePublishVolume)
-	s.Step(`^I call DeleteVGS$`, f.iCallDeleteVGS)
-	s.Step(`^remove a volume from VolumeGroupSnapshotRequest$`, f.iRemoveAVolumeFromVolumeGroupSnapshotRequest)
-	s.Step(`^I call split VolumeGroupSnapshot$`, f.iCallSplitVolumeGroupSnapshot)
 	s.Step(`^I call ControllerGetVolume$`, f.iCallControllerGetVolume)
 	s.Step(`^the volumecondition is "([^"]*)"$`, f.theVolumeconditionIs)
 	s.Step(`^I call NodeGetVolumeStats$`, f.iCallNodeGetVolumeStats)

@@ -46,6 +46,25 @@ The Node portion of the driver can only be run on nodes which have network conne
 
 Also, if the `X_CSI_VXFLEXOS_SDCGUID` environment variable is not set, the driver will attempt to query the SDC GUID automatically. If this fails, the driver will not run.
 
+## Volume Group Snapshots
+The driver supports Kubernetes Volume Group Snapshots (Beta, v1beta2) for
+crash-consistent snapshots of multiple PVCs at a single point in time. This
+maps to PowerFlex Snapshot Consistency Groups and implements the CSI spec v1.11
+GroupController RPCs (`CreateVolumeGroupSnapshot`, `DeleteVolumeGroupSnapshot`,
+`GetVolumeGroupSnapshot`).
+
+**Requirements:** Kubernetes ≥ v1.32, snapshot-controller ≥ v8.4+ with
+`--feature-gate=CSIVolumeGroupSnapshot=true`, and v1beta2 VolumeGroupSnapshot CRDs.
+
+See [docs/volume-group-snapshots.md](docs/volume-group-snapshots.md) for the
+full how-to guide, restore workflows, troubleshooting, and RBAC setup.
+
+Sample manifests:
+- [`samples/volumegroupsnapshotclass/`](samples/volumegroupsnapshotclass/) — VolumeGroupSnapshotClass
+- [`samples/volumegroupsnapshot/`](samples/volumegroupsnapshot/) — VolumeGroupSnapshot and restore examples
+- [`samples/rbac/`](samples/rbac/) — RBAC ClusterRole for VGS CRDs
+- [`samples/helm/`](samples/helm/) — Helm values for snapshot-controller / csi-snapshotter sidecars
+
 ## Documentation
 For more detailed information on the driver, please refer to [Container Storage Modules documentation](https://dell.github.io/csm-docs/).
 

@@ -87,4 +87,54 @@ const (
 
 	// EnvAuthTyoe is the name of the environment variable which stores the authentication type such as OIDC or Standard Username Password
 	EnvAuthType = "X_CSI_AUTH_TYPE"
+
+	// EnvFsCheckEnabled is the name of the environment variable that specifies
+	// if file system check should be run before mounting a volume.
+	EnvFsCheckEnabled = "X_CSI_FS_CHECK_ENABLED"
+
+	// EnvFsCheckMode is the name of the environment variable that specifies
+	// the file system check mode: "checkOnly" or "checkAndRepair".
+	EnvFsCheckMode = "X_CSI_FS_CHECK_MODE"
+
+	// EnvMetricsEnabled enables the shared HTTP Prometheus metrics endpoint.
+	// When true, the controller pod starts the metrics server regardless of
+	// whether gateway monitoring is also enabled. Defaults to false.
+	EnvMetricsEnabled = "X_CSI_METRICS_ENABLED"
+
+	// EnvGatewayMonitoringEnabled enables gateway health monitoring.
+	EnvGatewayMonitoringEnabled = "X_CSI_GATEWAY_MONITORING_ENABLED"
+
+	// EnvGatewayMonitoringLeaderElectionEnabled enables leader election for gateway monitoring.
+	// When true, gateway monitoring only runs on the controller that holds the leader election lease.
+	EnvGatewayMonitoringLeaderElectionEnabled = "X_CSI_GATEWAY_MONITORING_LEADER_ELECTION_ENABLED"
+
+	// EnvGatewayMonitoringPollInterval sets the polling interval for gateway health checks.
+	EnvGatewayMonitoringPollInterval = "X_CSI_GATEWAY_MONITORING_POLL_INTERVAL"
+
+	// EnvMetricsPort sets the HTTP port for the Prometheus metrics endpoint.
+	EnvMetricsPort = "X_CSI_METRICS_PORT"
+
+	// EnvMetricsTLSCertFile is the path to the TLS certificate file for the metrics endpoint.
+	// When both EnvMetricsTLSCertFile and EnvMetricsTLSKeyFile are set, the metrics endpoint
+	// is served over HTTPS instead of plain HTTP.
+	EnvMetricsTLSCertFile = "X_CSI_METRICS_TLS_CERT_FILE"
+
+	// EnvMetricsTLSKeyFile is the path to the TLS private key file for the metrics endpoint.
+	// When both EnvMetricsTLSCertFile and EnvMetricsTLSKeyFile are set, the metrics endpoint
+	// is served over HTTPS instead of plain HTTP.
+	EnvMetricsTLSKeyFile = "X_CSI_METRICS_TLS_KEY_FILE"
+
+	// EnvDriverNamespace is the name of the environment variable which stores the namespace where the driver is deployed
+	EnvDriverNamespace = "X_CSI_DRIVER_NAMESPACE"
+	// EnvSpaceReclamationEnabled enables the space reclamation feature.
+	EnvSpaceReclamationEnabled = "X_CSI_SPACE_RECLAMATION_ENABLED"
+
+	// EnvSpaceReclamationSchedule is the cron schedule for reclamation.
+	EnvSpaceReclamationSchedule = "X_CSI_SPACE_RECLAMATION_SCHEDULE"
+
+	// EnvSpaceReclamationMaxConcurrent is max concurrent reclamation jobs per node.
+	EnvSpaceReclamationMaxConcurrent = "X_CSI_SPACE_RECLAMATION_MAX_CONCURRENT"
+
+	// EnvSpaceReclamationTimeout is per-volume timeout in seconds.
+	EnvSpaceReclamationTimeout = "X_CSI_SPACE_RECLAMATION_TIMEOUT"
 )
