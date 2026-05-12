@@ -29,7 +29,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/rest"
 
+	"github.com/dell/csi-vxflexos/v2/k8sutils"
+	sio "github.com/dell/goscaleio"
 	siotypes "github.com/dell/goscaleio/types/v1"
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/stretchr/testify/assert"
@@ -935,4 +938,280 @@ func TestQueryArrayStatus_AllScenarios(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestStartGatewayMonitoring(t *testing.T) {
+	t.Run("starts successfully with valid config", func(t *testing.T) {
+		svc := &service{
+			adminClients: map[string]*sio.Client{},
+			opts: Opts{
+				GatewayMonitoringInterval: 5 * time.Second,
+				MetricsPort:               "0",
+			},
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		svc.startGatewayMonitoring(ctx)
+
+		assert.NotNil(t, svc.metricsServer, "metricsServer should be set after startGatewayMonitoring")
+		assert.NotNil(t, svc.gatewayMonitor, "gatewayMonitor should be set after startGatewayMonitoring")
+	})
+
+	t.Run("uses default poll interval when interval is zero", func(t *testing.T) {
+		svc := &service{
+			adminClients: map[string]*sio.Client{},
+			opts: Opts{
+				GatewayMonitoringInterval: 0,
+				MetricsPort:               "0",
+			},
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		svc.startGatewayMonitoring(ctx)
+
+		assert.NotNil(t, svc.metricsServer)
+		assert.NotNil(t, svc.gatewayMonitor)
+	})
+
+	t.Run("does not panic when metrics server port is already in use", func(t *testing.T) {
+		// Bind a listener to claim a port so that the second start fails.
+		ln, listenErr := net.Listen("tcp", ":0")
+		assert.NoError(t, listenErr)
+		defer ln.Close()
+
+		addr := ln.Addr().String()
+		// Extract just the port number (without colon) since Start() prepends one.
+		_, port, splitErr := net.SplitHostPort(addr)
+		assert.NoError(t, splitErr)
+
+		svc := &service{
+			adminClients: map[string]*sio.Client{},
+			opts: Opts{
+				MetricsPort: port,
+			},
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		// Should log an error but not panic.
+		assert.NotPanics(t, func() {
+			svc.startGatewayMonitoring(ctx)
+		})
+		assert.Nil(t, svc.metricsServer, "metricsServer should not be set when port binding fails")
+	})
+}
+
+func TestStartMetricsServer(t *testing.T) {
+	t.Run("starts successfully and sets metricsServer", func(t *testing.T) {
+		svc := &service{
+			opts: Opts{MetricsPort: "0"},
+		}
+		svc.startMetricsServer()
+		assert.NotNil(t, svc.metricsServer, "metricsServer should be set after startMetricsServer")
+	})
+
+	t.Run("does not panic when port is already in use", func(t *testing.T) {
+		ln, err := net.Listen("tcp", ":0")
+		assert.NoError(t, err)
+		defer ln.Close()
+
+		_, port, err := net.SplitHostPort(ln.Addr().String())
+		assert.NoError(t, err)
+
+		svc := &service{opts: Opts{MetricsPort: port}}
+		assert.NotPanics(t, func() { svc.startMetricsServer() })
+		assert.Nil(t, svc.metricsServer, "metricsServer should remain nil when binding fails")
+	})
+}
+
+func TestStartGatewayMonitor(t *testing.T) {
+	t.Run("does not start when metricsServer is nil", func(t *testing.T) {
+		svc := &service{
+			adminClients: map[string]*sio.Client{},
+			opts:         Opts{GatewayMonitoringInterval: 5 * time.Second},
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		assert.NotPanics(t, func() { svc.startGatewayMonitor(ctx) })
+		assert.Nil(t, svc.gatewayMonitor, "gatewayMonitor should remain nil when metricsServer is nil")
+	})
+
+	t.Run("starts gateway monitor when metricsServer is running", func(t *testing.T) {
+		svc := &service{
+			adminClients: map[string]*sio.Client{},
+			opts: Opts{
+				MetricsPort:               "0",
+				GatewayMonitoringInterval: 5 * time.Second,
+			},
+		}
+		svc.startMetricsServer()
+		assert.NotNil(t, svc.metricsServer)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		svc.startGatewayMonitor(ctx)
+		assert.NotNil(t, svc.gatewayMonitor, "gatewayMonitor should be set when metricsServer is running")
+	})
+}
+
+func TestStartGatewayMonitoringWithLeaderElection(t *testing.T) {
+	origLEFunc := k8sutils.LeaderElectionFunc
+	origInClusterFunc := k8sutils.InClusterConfigFunc
+	origNewForConfigFunc := k8sutils.NewForConfigFunc
+	origClientset := K8sClientset
+	defer func() {
+		k8sutils.LeaderElectionFunc = origLEFunc
+		k8sutils.InClusterConfigFunc = origInClusterFunc
+		k8sutils.NewForConfigFunc = origNewForConfigFunc
+		K8sClientset = origClientset
+	}()
+
+	t.Run("calls LeaderElectionFunc with correct lock name", func(t *testing.T) {
+		K8sClientset = fake.NewSimpleClientset()
+		leCalled := make(chan string, 1)
+
+		k8sutils.LeaderElectionFunc = func(_ *kubernetes.Interface, lockName string, _ string, _ func(context.Context)) error {
+			leCalled <- lockName
+			return nil
+		}
+
+		svc := &service{
+			adminClients: map[string]*sio.Client{},
+			opts: Opts{
+				MetricsPort:               "0",
+				GatewayMonitoringInterval: 5 * time.Second,
+			},
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		svc.startGatewayMonitoringWithLeaderElection(ctx)
+
+		select {
+		case name := <-leCalled:
+			assert.Equal(t, "gateway-monitor-csi-vxflexos-dellemc-com", name)
+		case <-ctx.Done():
+			t.Fatal("LeaderElectionFunc was not called within timeout")
+		}
+	})
+
+	t.Run("creates k8s clientset when K8sClientset is nil", func(t *testing.T) {
+		K8sClientset = nil
+		k8sutils.InClusterConfigFunc = func() (*rest.Config, error) {
+			return &rest.Config{}, nil
+		}
+		k8sutils.NewForConfigFunc = func(_ *rest.Config) (kubernetes.Interface, error) {
+			return fake.NewSimpleClientset(), nil
+		}
+		leCalled := make(chan bool, 1)
+		k8sutils.LeaderElectionFunc = func(_ *kubernetes.Interface, _ string, _ string, _ func(context.Context)) error {
+			leCalled <- true
+			return nil
+		}
+
+		svc := &service{
+			adminClients: map[string]*sio.Client{},
+			opts:         Opts{MetricsPort: "0"},
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		svc.startGatewayMonitoringWithLeaderElection(ctx)
+
+		select {
+		case <-leCalled:
+			// success: LE was reached after creating the clientset
+		case <-ctx.Done():
+			t.Fatal("LeaderElectionFunc was not called within timeout")
+		}
+	})
+
+	t.Run("logs error when k8s clientset creation fails", func(t *testing.T) {
+		K8sClientset = nil
+		k8sutils.InClusterConfigFunc = func() (*rest.Config, error) {
+			return nil, errors.New("no in-cluster config")
+		}
+
+		svc := &service{
+			adminClients: map[string]*sio.Client{},
+			opts:         Opts{MetricsPort: "0"},
+		}
+
+		// Should not panic even when clientset creation fails.
+		assert.NotPanics(t, func() {
+			svc.startGatewayMonitoringWithLeaderElection(context.Background())
+		})
+	})
+
+	t.Run("logs error when LeaderElectionFunc returns error", func(t *testing.T) {
+		K8sClientset = fake.NewSimpleClientset()
+		k8sutils.LeaderElectionFunc = func(_ *kubernetes.Interface, _ string, _ string, _ func(context.Context)) error {
+			return errors.New("injected leader election failure")
+		}
+
+		svc := &service{
+			adminClients: map[string]*sio.Client{},
+			opts:         Opts{MetricsPort: "0"},
+		}
+
+		assert.NotPanics(t, func() {
+			svc.startGatewayMonitoringWithLeaderElection(context.Background())
+		})
+	})
+
+	t.Run("runFunc stops monitoring when context is cancelled", func(t *testing.T) {
+		K8sClientset = fake.NewSimpleClientset()
+
+		// Capture the runFunc provided to LeaderElectionFunc and invoke it directly
+		// so we can test it without needing a real k8s cluster.
+		var capturedRunFunc func(context.Context)
+		k8sutils.LeaderElectionFunc = func(_ *kubernetes.Interface, _ string, _ string, fn func(context.Context)) error {
+			capturedRunFunc = fn
+			return nil
+		}
+
+		svc := &service{
+			adminClients: map[string]*sio.Client{},
+			opts: Opts{
+				MetricsPort:               "0",
+				GatewayMonitoringInterval: 5 * time.Second,
+			},
+		}
+		parentCtx, parentCancel := context.WithCancel(context.Background())
+		defer parentCancel()
+
+		svc.startGatewayMonitoringWithLeaderElection(parentCtx)
+		assert.NotNil(t, capturedRunFunc, "LeaderElectionFunc should have been called")
+
+		// Pre-start the metrics server so that startGatewayMonitor can proceed.
+		svc.startMetricsServer()
+		assert.NotNil(t, svc.metricsServer, "metricsServer should be running before runFunc is invoked")
+
+		// Run the captured func with a short-lived context to simulate lease expiry.
+		leCtx, leCancel := context.WithCancel(context.Background())
+		done := make(chan struct{})
+		go func() {
+			capturedRunFunc(leCtx)
+			close(done)
+		}()
+
+		// Give monitoring a moment to start, then cancel the lease context.
+		time.Sleep(50 * time.Millisecond)
+		leCancel()
+
+		select {
+		case <-done:
+			// runFunc returned after context cancellation — success.
+		case <-time.After(5 * time.Second):
+			t.Fatal("runFunc did not return within timeout after context cancellation")
+		}
+
+		// The metrics server must still be running after the monitor is stopped.
+		assert.NotNil(t, svc.metricsServer, "metricsServer should still be running after lease is released")
+		assert.Nil(t, svc.gatewayMonitor, "gatewayMonitor should be nil after lease is released")
+	})
 }

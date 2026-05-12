@@ -1,4 +1,4 @@
-// Copyright © 2019-2025 Dell Inc. or its subsidiaries. All Rights Reserved.
+// Copyright © 2019-2026 Dell Inc. or its subsidiaries. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -30,7 +31,6 @@ import (
 
 	"sigs.k8s.io/yaml"
 
-	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -2662,6 +2662,20 @@ func ExtractIP(endpoint string) (string, error) {
 	return ip.String(), nil
 }
 
+// ExtractHost returns the hostname or IP address from endpoint, stripping any port.
+// Unlike ExtractIP, it accepts both IP addresses and hostnames.
+func ExtractHost(endpoint string) (string, error) {
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return "", err
+	}
+	host := u.Hostname()
+	if host == "" {
+		return "", fmt.Errorf("no host in endpoint: %s", endpoint)
+	}
+	return host, nil
+}
+
 func oidcPrechecks(array *ArrayConnectionData) error {
 	if array.OidcClientID == "" {
 		return status.Error(codes.FailedPrecondition, "missing OidcClientID")
@@ -2746,7 +2760,7 @@ func (s *service) systemProbe(ctx context.Context, array *ArrayConnectionData) e
 	// Create ScaleIO API client if needed
 	if s.adminClients[systemID] == nil {
 		skipCertificateValidation := array.SkipCertificateValidation || array.Insecure
-		client, err := goscaleio.NewClientWithArgs(array.Endpoint, "", math.MaxInt64, skipCertificateValidation, !s.opts.DisableCerts)
+		client, err := goscaleio.NewClientWithArgs(array.Endpoint, "", math.MaxInt64, skipCertificateValidation, !s.opts.DisableCerts, "")
 		if err != nil {
 			return status.Errorf(codes.FailedPrecondition,
 				"unable to create ScaleIO client: %s", err.Error())
@@ -3137,12 +3151,6 @@ func (s *service) DeleteSnapshot(
 	req *csi.DeleteSnapshotRequest) (
 	*csi.DeleteSnapshotResponse, error,
 ) {
-	// Display any secrets passed in
-	secrets := req.GetSecrets()
-	for k, v := range secrets {
-		log.Infof("secret: %s = %s", k, v)
-	}
-
 	// Validate snapshot volume
 	csiSnapID := req.GetSnapshotId()
 	if csiSnapID == "" {
@@ -3348,7 +3356,7 @@ func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.Controlle
 
 		fsName := fs.Name
 		cr := req.GetCapacityRange()
-		log.Infof("cr:%d", cr)
+		log.Infof("cr:%+v", cr)
 		requestedSize := int(cr.GetRequiredBytes())
 		log.Infof("req.size:%d", requestedSize)
 		log.Infof("Executing ExpandVolume: reqID=%s, fsName=%s, requestedSize=%d", reqID, fsName, requestedSize)
@@ -3416,6 +3424,15 @@ func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.Controlle
 		return csiResp, nil
 	}
 
+	// Determine if node expansion is required based on volume capability.
+	// Per CSI spec, if the volume is used as a raw block device, the SP MAY set
+	// node_expansion_required to false to skip NodeExpandVolume on the node.
+	nodeExpansionRequired := true
+	if volCap := req.GetVolumeCapability(); volCap != nil && volCap.GetBlock() != nil {
+		log.Info("Volume capability is raw block; setting NodeExpansionRequired to false")
+		nodeExpansionRequired = false
+	}
+
 	volID := getVolumeIDFromCsiVolumeID(csiVolID)
 	systemID := s.getSystemIDFromCsiVolumeID(csiVolID)
 	if systemID == "" {
@@ -3442,7 +3459,7 @@ func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.Controlle
 
 	volName := vol.Name
 	cr := req.GetCapacityRange()
-	log.Infof("cr:%d", cr)
+	log.Infof("cr:%+v", cr)
 	requestedSize, err := validateVolSize(cr)
 	if err != nil {
 		return nil, err
@@ -3466,7 +3483,7 @@ func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.Controlle
 			volName, requestedSize, allocatedSize)
 		return &csi.ControllerExpandVolumeResponse{
 			CapacityBytes:         requestedSize * bytesInKiB,
-			NodeExpansionRequired: true,
+			NodeExpansionRequired: nodeExpansionRequired,
 		}, nil
 	}
 
@@ -3489,11 +3506,11 @@ func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.Controlle
 		}
 	}
 
-	// return the response with NodeExpansionRequired = true, so that CO could call
-	// NodeExpandVolume subsequently
+	// return the response with NodeExpansionRequired set based on volume capability;
+	// raw block volumes do not need node expansion, filesystem volumes do
 	csiResp := &csi.ControllerExpandVolumeResponse{
 		CapacityBytes:         requestedSize * bytesInKiB,
-		NodeExpansionRequired: true,
+		NodeExpansionRequired: nodeExpansionRequired,
 	}
 	return csiResp, nil
 }

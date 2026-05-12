@@ -1,0 +1,41 @@
+kind: PrometheusRule
+metadata:
+  name: example-alerts
+  namespace: vxflexos
+spec:
+  groups:
+    - name: powerflex_gateway_alerts
+      interval: 30s
+      rules:
+        # Gateway is currently unreachable
+        - alert: PowerFlexGatewayDown
+          expr: powerflex_gateway_up == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "PowerFlex gateway {{ $labels.gateway_endpoint }} is down"
+            description: >
+              Gateway {{ $labels.gateway_endpoint }} for system {{ $labels.system_id }} has been unreachable for at least 1 minute.
+
+        # Gateway has failed 3 or more probes in a row
+        - alert: PowerFlexGatewayConsecutiveFailures
+          expr: powerflex_gateway_consecutive_failures >= 3
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "PowerFlex gateway {{ $labels.gateway_endpoint }} has {{ $value }} consecutive failures"
+            description: >
+              Gateway {{ $labels.gateway_endpoint }} for system {{ $labels.system_id }} has failed {{ $value }} consecutive health checks. Threshold: 3.
+
+        # No successful probe in the last 5 minutes
+        - alert: PowerFlexGatewayProbeStale
+          expr: (time() - powerflex_gateway_last_successful_probe_timestamp_seconds) > 300
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "PowerFlex gateway {{ $labels.gateway_endpoint }} has no recent successful probe"
+            description: >
+              Gateway {{ $labels.gateway_endpoint }} for system {{ $labels.system_id }} last succeeded {{ $value | humanizeDuration }} ago. Expected every 30s.
