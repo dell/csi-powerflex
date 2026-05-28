@@ -65,6 +65,3 @@ Sample manifests:
 - [`samples/rbac/`](samples/rbac/) — RBAC ClusterRole for VGS CRDs
 - [`samples/helm/`](samples/helm/) — Helm values for snapshot-controller / csi-snapshotter sidecars
 
-## Documentation
-For more detailed information on the driver, please refer to [Container Storage Modules documentation](https://dell.github.io/csm-docs/).
-
