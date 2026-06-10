@@ -79,7 +79,7 @@ For example, here is the output of a request to build an offline bundle for the 
 * Pulling and saving container images
 
 ...
-   quay.io/dell/container-storage-modules/csi-vxflexos:v2.17.0
+   quay.io/dell/container-storage-modules/csi-vxflexos:v2.18.0
 ...
 
 *
@@ -155,19 +155,19 @@ Preparing a offline bundle for installation
 *
 * Loading docker images
 
-Loaded image: quay.io/dell/container-storage-modules/csi-vxflexos:v2.17.0
+Loaded image: quay.io/dell/container-storage-modules/csi-vxflexos:v2.18.0
 ...
 
 *
 * Tagging and pushing images
 
-   quay.io/dell/container-storage-modules/csi-vxflexos:v2.17.0 -> localregistry:5000/dell-csm-operator/csi-vxflexos:v2.17.0
+   quay.io/dell/container-storage-modules/csi-vxflexos:v2.18.0 -> localregistry:5000/dell-csm-operator/csi-vxflexos:v2.18.0
    ...
 
 *
 * Preparing files within /root/dell-csm-operator-bundle
 
-   changing: quay.io/dell/container-storage-modules/csi-vxflexos:v2.17.0 -> localregistry:5000/dell-csm-operator/csi-vxflexos:v2.17.0
+   changing: quay.io/dell/container-storage-modules/csi-vxflexos:v2.18.0 -> localregistry:5000/dell-csm-operator/csi-vxflexos:v2.18.0
    ...
 
 *

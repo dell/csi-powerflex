@@ -20,7 +20,7 @@ PROG="${0}"
 NODE_VERIFY=1
 VERIFY=1
 MODE="install"
-DEFAULT_VERSION="v2.17.0"
+DEFAULT_VERSION="v2.18.0"
 WATCHLIST=""
 
 # export the name of the debug log, so child processes will see it
@@ -395,8 +395,8 @@ done
 
 DRIVERDIR="${SCRIPTDIR}/../"
 
-# Derive helm chart version from DEFAULT_DRIVER_VERSION (single source of truth)
-DRIVERVERSION="${DRIVER}-${DEFAULT_DRIVER_VERSION#v}"
+# Derive helm chart version from DEFAULT_VERSION (single source of truth)
+DRIVERVERSION="${DRIVER}-${DEFAULT_VERSION#v}"
 
 # Allow override via --helm-charts-version
 if [ -n "$HELMCHARTVERSION" ]; then
@@ -421,7 +421,7 @@ RELEASE=$(get_release_name "${DRIVER}")
 # by default, NODEUSER is root
 NODEUSER="${NODEUSER:-root}"
 if [[ -z ${DRIVER_VERSION} ]]; then
-   DRIVER_VERSION=${DEFAULT_DRIVER_VERSION}
+   DRIVER_VERSION=${DEFAULT_VERSION}
 fi
 
 

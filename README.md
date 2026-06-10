@@ -42,7 +42,7 @@ You can run an integration test on a Linux system by populating the file `env.sh
 with values for your PowerFlex system and then run "make integration-test".
 
 ## Runtime Dependencies
-The Node portion of the driver can only be run on nodes which have network connectivity to a “`PowerFlex Cluster`” via PowerFlex SDC Client (which is used by the driver). This means that the `scini` kernel module must be loaded. 
+The Node portion of the driver can only be run on nodes which have network connectivity to a "PowerFlex Cluster" via PowerFlex SDC Client (which is used by the driver). This means that the `scini` kernel module must be loaded. 
 
 Also, if the `X_CSI_VXFLEXOS_SDCGUID` environment variable is not set, the driver will attempt to query the SDC GUID automatically. If this fails, the driver will not run.
 
@@ -65,3 +65,5 @@ Sample manifests:
 - [`samples/rbac/`](samples/rbac/) — RBAC ClusterRole for VGS CRDs
 - [`samples/helm/`](samples/helm/) — Helm values for snapshot-controller / csi-snapshotter sidecars
 
+## Documentation
+For more detailed information on the driver, please refer to [Container Storage Modules documentation](https://www.dell.com/support/product-details/en-us/product/container-storage-modules/resources/manuals).
