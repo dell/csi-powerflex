@@ -279,13 +279,22 @@ func TestDeleteVolumeGroupSnapshot_MissingGroupSnapshotId(t *testing.T) {
 
 func TestDeleteVolumeGroupSnapshot_InvalidGroupSnapshotId(t *testing.T) {
 	gc := &groupControllerService{s: &service{}}
-	_, err := gc.DeleteVolumeGroupSnapshot(context.Background(), &csi.DeleteVolumeGroupSnapshotRequest{
+	resp, err := gc.DeleteVolumeGroupSnapshot(context.Background(), &csi.DeleteVolumeGroupSnapshotRequest{
 		GroupSnapshotId: "nohyphen",
 	})
-	assert.Error(t, err)
-	st, _ := status.FromError(err)
-	assert.Equal(t, codes.InvalidArgument, st.Code())
-	assert.Contains(t, st.Message(), "invalid group_snapshot_id")
+	// CSI spec v1.12: DeleteVolumeGroupSnapshot MUST be idempotent - invalid ID returns OK
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+}
+
+func TestDeleteVolumeGroupSnapshot_SystemNotAvailable(t *testing.T) {
+	gc := &groupControllerService{s: &service{}}
+	resp, err := gc.DeleteVolumeGroupSnapshot(context.Background(), &csi.DeleteVolumeGroupSnapshotRequest{
+		GroupSnapshotId: "fake-system-cg-id",
+	})
+	// CSI spec v1.12: DeleteVolumeGroupSnapshot MUST be idempotent - system not available returns OK
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
 }
 
 func TestGetVolumeGroupSnapshot_MissingGroupSnapshotId(t *testing.T) {
@@ -302,10 +311,11 @@ func TestGetVolumeGroupSnapshot_InvalidGroupSnapshotId(t *testing.T) {
 	_, err := gc.GetVolumeGroupSnapshot(context.Background(), &csi.GetVolumeGroupSnapshotRequest{
 		GroupSnapshotId: "invalid",
 	})
+	// CSI spec v1.12: GetVolumeGroupSnapshot with non-existent ID MUST return NotFound
 	assert.Error(t, err)
 	st, _ := status.FromError(err)
-	assert.Equal(t, codes.InvalidArgument, st.Code())
-	assert.Contains(t, st.Message(), "invalid group_snapshot_id")
+	assert.Equal(t, codes.NotFound, st.Code())
+	assert.Contains(t, st.Message(), "group snapshot invalid not found")
 }
 
 // --- parseGroupSnapshotID tests ---

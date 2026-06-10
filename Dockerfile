@@ -13,7 +13,7 @@
 # some arguments that must be supplied
 ARG GOIMAGE
 ARG BASEIMAGE
-ARG VERSION="2.17.0"
+ARG VERSION="2.18.0"
 
 # Stage to build the driver
 FROM $GOIMAGE AS builder
@@ -38,7 +38,7 @@ LABEL vendor="Dell Technologies" \
     name="csi-powerflex" \
     summary="CSI Driver for Dell EMC PowerFlex" \
     description="CSI Driver for provisioning persistent storage from Dell EMC PowerFlex" \
-    release="1.17.0" \
+    release="1.18.0" \
     version=$VERSION \
     license="Apache-2.0"
 COPY ./licenses /licenses

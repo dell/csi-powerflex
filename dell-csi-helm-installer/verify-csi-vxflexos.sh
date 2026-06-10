@@ -22,7 +22,7 @@ function verify-csi-vxflexos() {
   verify_sdc_installation
   verify_alpha_snap_resources
   verify_snap_requirements
-  verify_helm_3
+  verify_helm
   verify_authorization_proxy_server
 }
 

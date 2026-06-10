@@ -169,10 +169,22 @@ func (gc *groupControllerService) DeleteVolumeGroupSnapshot(
 	// Parse systemID and consistency group ID from the composite group snapshot ID (format: systemID-cgID)
 	systemID, cgID, err := parseGroupSnapshotID(req.GetGroupSnapshotId())
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid group_snapshot_id: %s", err.Error())
+		// CSI spec v1.12: DeleteVolumeGroupSnapshot MUST be idempotent
+		// Invalid or non-existent ID MUST return OK
+		log.Infof("DeleteVolumeGroupSnapshot: invalid ID format %s, returning OK for idempotency", req.GetGroupSnapshotId())
+		return &csi.DeleteVolumeGroupSnapshotResponse{}, nil
 	}
 
 	if err := s.requireProbe(ctx, systemID); err != nil {
+		// Distinguish between "system not configured" (NotFound) and "temporary probe failure" (FailedPrecondition)
+		st, _ := status.FromError(err)
+		if st.Code() == codes.NotFound {
+			// CSI spec v1.12: DeleteVolumeGroupSnapshot MUST be idempotent
+			// System not configured in driver — snapshot cannot exist, return OK
+			log.Infof("DeleteVolumeGroupSnapshot: system %s not configured, returning OK for idempotency", systemID)
+			return &csi.DeleteVolumeGroupSnapshotResponse{}, nil
+		}
+		// Temporary probe/connection failure — propagate error so Kubernetes retries
 		return nil, err
 	}
 
@@ -241,7 +253,8 @@ func (gc *groupControllerService) GetVolumeGroupSnapshot(
 
 	systemID, cgID, err := parseGroupSnapshotID(req.GetGroupSnapshotId())
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid group_snapshot_id: %s", err.Error())
+		// CSI spec v1.12: GetVolumeGroupSnapshot with non-existent ID MUST return NotFound
+		return nil, status.Errorf(codes.NotFound, "group snapshot %s not found: %s", req.GetGroupSnapshotId(), err.Error())
 	}
 
 	if err := s.requireProbe(ctx, systemID); err != nil {

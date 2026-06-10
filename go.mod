@@ -3,17 +3,17 @@ module github.com/dell/csi-vxflexos/v2
 // In order to run unit tests on Windows, you need a stubbed Windows implementation
 // of the gofsutil package. Use the following replace statements if necessary.
 
-go 1.26
+go 1.26.0
 
 require (
-	github.com/dell/csi-metadata-retriever v1.14.0
+	github.com/dell/csi-metadata-retriever v1.14.1-0.20260507183518-95b34213d778
 	github.com/dell/csmlog v1.1.0
-	github.com/dell/dell-csi-extensions/common v1.11.0
-	github.com/dell/dell-csi-extensions/podmon v1.11.0
-	github.com/dell/dell-csi-extensions/replication v1.14.0
+	github.com/dell/dell-csi-extensions/common v1.11.1-0.20260529195841-0544bf8e97a5
+	github.com/dell/dell-csi-extensions/podmon v1.11.1-0.20260529195841-0544bf8e97a5
+	github.com/dell/dell-csi-extensions/replication v1.14.1-0.20260529195841-0544bf8e97a5
 	github.com/dell/gobrick v1.17.0
 	github.com/dell/gocsi v1.17.0
-	github.com/dell/gofsutil v1.22.0
+	github.com/dell/gofsutil v1.22.1-0.20260529192800-47109d9e0162
 	github.com/dell/gonvme v1.14.0
 	github.com/dell/goscaleio v1.23.0
 	github.com/apparentlymart/go-cidr v1.1.0
@@ -30,17 +30,14 @@ require (
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/oauth2 v0.36.0
 	google.golang.org/grpc v1.81.0
-	google.golang.org/protobuf v1.36.11
-	k8s.io/api v0.35.4
-	k8s.io/apimachinery v0.35.4
-	k8s.io/client-go v0.35.4
+	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
+	k8s.io/api v0.36.1
+	k8s.io/apimachinery v0.36.1
+	k8s.io/client-go v0.36.1
 	sigs.k8s.io/yaml v1.6.0
 )
 
-require (
-	github.com/google/go-cmp v0.7.0 // indirect
-	golang.org/x/net v0.53.0 // indirect
-)
+require golang.org/x/net v0.53.0 // indirect
 
 require (
 	github.com/dell/goiscsi v1.15.0 // indirect
