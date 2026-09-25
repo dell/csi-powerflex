@@ -1,4 +1,4 @@
-// Copyright © 2024 Dell Inc. or its subsidiaries. All Rights Reserved.
+// Copyright © 2024-2026 Dell Inc. or its subsidiaries. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dell/csi-vxflexos/v2/service"
+	"github.com/Ecosystems/container-storage-modules/src/csi-vxflexos/v2/service"
 	"github.com/cucumber/godog"
 	v1 "k8s.io/api/apps/v1"
 	v1Core "k8s.io/api/core/v1"
@@ -87,13 +87,25 @@ func (f *feature) isEverythingWorking() error {
 	return nil
 }
 
-func (f *feature) verifyZoneInfomation(secret, namespace string) error {
+func (f *feature) verifyZoneInformation(secret, namespace string) error {
 	arrays, err := f.getZoneFromSecret(secret, namespace)
 	if err != nil {
 		return err
 	}
 
 	for _, array := range arrays {
+		// Check zones[] first (multi-zone support), then fall back to legacy zone
+		if len(array.Zones) > 0 {
+			for _, z := range array.Zones {
+				if z.LabelKey != "" {
+					f.zoneKey = z.LabelKey
+					break
+				}
+			}
+			if f.zoneKey != "" {
+				break
+			}
+		}
 		if array.AvailabilityZone == nil {
 			continue
 		}
@@ -112,7 +124,7 @@ func (f *feature) verifyZoneInfomation(secret, namespace string) error {
 
 	result, err := execLocalCommand(justString)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	nodes := []v1Core.Node{}
@@ -153,11 +165,11 @@ func (f *feature) verifyZoneInfomation(secret, namespace string) error {
 	}
 
 	if scInfo.AllowedTopologies == nil {
-		return fmt.Errorf("no topologies found for storage class %s not found", storageClass)
+		return fmt.Errorf("no topologies found for storage class %s", storageClass)
 	}
 
 	if scInfo.AllowedTopologies[0].MatchLabelExpressions[0].Key != f.zoneKey {
-		return fmt.Errorf("storage class %s does not have the proper zone lablel %s", storageClass, f.zoneKey)
+		return fmt.Errorf("storage class %s does not have the proper zone label %s", storageClass, f.zoneKey)
 	}
 
 	// Add supported zones from the test storage class.
@@ -500,6 +512,7 @@ func (f *feature) areAllRestoresRunning() error {
 		}
 
 		if runningCount != int(f.zoneReplicaCount) {
+			attempts++
 			time.Sleep(10 * time.Second)
 			continue
 		}
@@ -545,7 +558,7 @@ func InitializeScenario(s *godog.ScenarioContext) {
 
 	s.Step(`^a VxFlexOS service$`, f.aVxFlexOSService)
 	s.Step(`^verify driver is configured and running correctly$`, f.isEverythingWorking)
-	s.Step(`^verify zone information from secret "([^"]*)" in namespace "([^"]*)"$`, f.verifyZoneInfomation)
+	s.Step(`^verify zone information from secret "([^"]*)" in namespace "([^"]*)"$`, f.verifyZoneInformation)
 	s.Step(`^create zone volume and pod in "([^"]*)"$`, f.createZoneVolumes)
 	s.Step(`^delete zone volume and pod in "([^"]*)"$`, f.deleteZoneVolumes)
 	s.Step(`^check the statefulset for zones$`, f.checkStatfulSetStatus)

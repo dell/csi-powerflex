@@ -115,6 +115,106 @@ func TestPreInit(t *testing.T) {
 			expectedResult: "192.168.1.1,192.168.1.2\\&192.168.2.1,192.168.2.2",
 		},
 		{
+			name: "should error when MDM is empty and blockProtocol is SDC",
+			connectionInfo: []*ArrayConnectionData{
+				{
+					SystemID:      "sys1",
+					Mdm:           "",
+					BlockProtocol: "SDC",
+				},
+			},
+			errorExpected:  true,
+			expectedResult: "array at index 0 (systemID: sys1) requires MDM for blockProtocol \"SDC\" but the 'mdm' field is not set in the config secret",
+		},
+		{
+			name: "should error when MDM is empty and blockProtocol is auto",
+			connectionInfo: []*ArrayConnectionData{
+				{
+					SystemID:      "sys1",
+					Mdm:           "",
+					BlockProtocol: "auto",
+				},
+			},
+			errorExpected:  true,
+			expectedResult: "array at index 0 (systemID: sys1) requires MDM for blockProtocol \"auto\" but the 'mdm' field is not set in the config secret",
+		},
+		{
+			name: "should allow empty MDM when blockProtocol is NVMeTCP",
+			connectionInfo: []*ArrayConnectionData{
+				{
+					SystemID:      "sys1",
+					Mdm:           "",
+					BlockProtocol: "NVMeTCP",
+				},
+			},
+			errorExpected:  false,
+			expectedResult: "",
+		},
+		{
+			name: "should error on hostname in MDM",
+			connectionInfo: []*ArrayConnectionData{
+				{
+					SystemID: "sys1",
+					Mdm:      "my-mdm-host.local",
+				},
+			},
+			errorExpected:  true,
+			expectedResult: "array at index 0 (systemID: sys1) has invalid MDM value \"my-mdm-host.local\"; only numeric IPv4 addresses are accepted",
+		},
+		{
+			name: "should error on malformed IP in MDM",
+			connectionInfo: []*ArrayConnectionData{
+				{
+					SystemID: "sys1",
+					Mdm:      "999.999.999.999",
+				},
+			},
+			errorExpected:  true,
+			expectedResult: "array at index 0 (systemID: sys1) has invalid MDM value \"999.999.999.999\"; only numeric IPv4 addresses are accepted",
+		},
+		{
+			name: "should trim whitespace from MDM IPs",
+			connectionInfo: []*ArrayConnectionData{
+				{
+					Mdm: " 192.168.1.1 , 192.168.1.2 ",
+				},
+			},
+			errorExpected:  false,
+			expectedResult: "192.168.1.1,192.168.1.2",
+		},
+		{
+			name: "should error on second array with invalid MDM",
+			connectionInfo: []*ArrayConnectionData{
+				{
+					SystemID: "sys1",
+					Mdm:      "192.168.1.1",
+				},
+				{
+					SystemID: "sys2",
+					Mdm:      "not-an-ip",
+				},
+			},
+			errorExpected:  true,
+			expectedResult: "array at index 1 (systemID: sys2) has invalid MDM value \"not-an-ip\"; only numeric IPv4 addresses are accepted",
+		},
+		{
+			name: "should error when second array has empty MDM with auto blockProtocol",
+			connectionInfo: []*ArrayConnectionData{
+				{
+					SystemID:      "sys1",
+					Mdm:           "192.168.1.1",
+					BlockProtocol: "auto",
+				},
+				{
+					SystemID:      "sys2",
+					Mdm:           "",
+					BlockProtocol: "auto",
+				},
+			},
+			errorExpected:  true,
+			expectedResult: "array at index 1 (systemID: sys2) requires MDM for blockProtocol \"auto\" but the 'mdm' field is not set in the config secret",
+		},
+		{
 			name: "should fail if zones configured but unable to fetch node labels",
 			connectionInfo: []*ArrayConnectionData{
 				{
@@ -249,6 +349,86 @@ func TestPreInitWithDefaultProviders(t *testing.T) {
 
 	assert.Nil(t, err)
 	assert.FileExists(t, nodeMdmsFile)
+}
+
+func TestValidateAndTrimMDM(t *testing.T) {
+	tests := []struct {
+		name           string
+		index          int
+		systemID       string
+		mdm            string
+		errorExpected  bool
+		expectedResult string
+	}{
+		{
+			name:           "valid single IP",
+			index:          0,
+			systemID:       "sys1",
+			mdm:            "10.0.0.1",
+			expectedResult: "10.0.0.1",
+		},
+		{
+			name:           "valid multiple IPs",
+			index:          0,
+			systemID:       "sys1",
+			mdm:            "10.0.0.1,10.0.0.2",
+			expectedResult: "10.0.0.1,10.0.0.2",
+		},
+		{
+			name:           "trim whitespace",
+			index:          0,
+			systemID:       "sys1",
+			mdm:            " 10.0.0.1 , 10.0.0.2 ",
+			expectedResult: "10.0.0.1,10.0.0.2",
+		},
+		{
+			name:          "reject hostname",
+			index:         0,
+			systemID:      "sys1",
+			mdm:           "my-host.local",
+			errorExpected: true,
+		},
+		{
+			name:          "reject malformed IP",
+			index:         1,
+			systemID:      "sys2",
+			mdm:           "999.999.999.999",
+			errorExpected: true,
+		},
+		{
+			name:          "reject IPv6 address",
+			index:         0,
+			systemID:      "sys1",
+			mdm:           "::1",
+			errorExpected: true,
+		},
+		{
+			name:          "reject mixed valid and invalid",
+			index:         0,
+			systemID:      "sys1",
+			mdm:           "10.0.0.1,bad-ip",
+			errorExpected: true,
+		},
+		{
+			name:          "empty after trim returns error",
+			index:         0,
+			systemID:      "sys1",
+			mdm:           " , ",
+			errorExpected: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result, err := validateAndTrimMDM(test.index, test.systemID, test.mdm)
+			if test.errorExpected {
+				assert.NotNil(t, err)
+			} else {
+				assert.Nil(t, err)
+				assert.Equal(t, test.expectedResult, result)
+			}
+		})
+	}
 }
 
 func TestGetMdmList(t *testing.T) {

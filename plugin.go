@@ -19,8 +19,8 @@ package main
 import "C"
 
 import (
-	"github.com/dell/csi-vxflexos/v2/provider"
-	"github.com/dell/csi-vxflexos/v2/service"
+	"github.com/Ecosystems/container-storage-modules/src/csi-vxflexos/v2/provider"
+	"github.com/Ecosystems/container-storage-modules/src/csi-vxflexos/v2/service"
 )
 
 ////////////////////////////////////////////////////////////////////////////////

@@ -22,8 +22,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dell/csi-vxflexos/v2/k8sutils"
-	"github.com/dell/gocsi"
+	"github.com/Ecosystems/container-storage-modules/src/csi-vxflexos/v2/k8sutils"
+	"github.com/Ecosystems/container-storage-modules/src/gocsi"
 	"github.com/stretchr/testify/assert"
 	"k8s.io/client-go/kubernetes"
 	fake "k8s.io/client-go/kubernetes/fake"

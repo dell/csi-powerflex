@@ -25,9 +25,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dell/csi-vxflexos/v2/provider"
-	"github.com/dell/csi-vxflexos/v2/service"
-	csiutils "github.com/dell/gocsi/utils/csi"
+	"github.com/Ecosystems/container-storage-modules/src/csi-vxflexos/v2/provider"
+	"github.com/Ecosystems/container-storage-modules/src/csi-vxflexos/v2/service"
+	csiutils "github.com/Ecosystems/container-storage-modules/src/gocsi/utils/csi"
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/cucumber/godog"
 	"google.golang.org/grpc"

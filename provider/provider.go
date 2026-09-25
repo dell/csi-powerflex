@@ -14,24 +14,41 @@
 package provider
 
 import (
-	"github.com/dell/csi-vxflexos/v2/service"
-	"github.com/dell/csmlog"
-	"github.com/dell/gocsi"
+	"context"
+
+	"github.com/Ecosystems/container-storage-modules/src/csi-vxflexos/v2/service"
+	"github.com/Ecosystems/container-storage-modules/src/csmlog"
+	"github.com/Ecosystems/container-storage-modules/src/gocsi"
+	"google.golang.org/grpc"
 )
 
 // Log init
 // var Log = logrus.New()
-var log = csmlog.GetLogger()
+var log = csmlog.WithFields(csmlog.Fields{})
 
 // New returns a new Mock Storage Plug-in Provider.
 func New() gocsi.StoragePluginProvider {
 	svc := service.New()
+
+	// Create a wrapper that will return the interceptor after it's initialized
+	interceptorWrapper := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		interceptor := service.GetOperationInterceptor()
+		if interceptor != nil {
+			return interceptor(ctx, req, info, handler)
+		}
+		// If interceptor not yet initialized, just call the handler
+		return handler(ctx, req)
+	}
+
 	return &gocsi.StoragePlugin{
 		Controller:                svc,
 		Identity:                  svc,
 		Node:                      svc,
 		BeforeServe:               svc.BeforeServe,
 		RegisterAdditionalServers: svc.RegisterAdditionalServers,
+		Interceptors: []grpc.UnaryServerInterceptor{
+			interceptorWrapper,
+		},
 
 		EnvVars: []string{
 			// Enable request validation

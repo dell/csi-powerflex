@@ -67,9 +67,9 @@ Feature: VxFlex OS CSI interface
       | error                                     | errormsg                                 |
       | "none"                                    | "none"                                   |
       | "GobrickDisconnectError"                  | "Failed to disconnect NVME device"       |
-      | "GOFSMockGetMountsError"                  | "none"                                   |
+      | "GOFSMockGetMountsError"                  | "failed to get mounts for staging path"  |
       | "GOFSMockGetMounts_deleted"               | "none"                                   |
-      | "GOFSMockUnmountError"                    | "none"                                   |
+      | "GOFSMockUnmountError"                    | "Unable to Unmount staging target path"  |
       | "GOFSMockGetMounts_unknowndevice"         | "none"                                   |
       
   Scenario Outline: Idempotent Node stage volume
@@ -112,7 +112,7 @@ Feature: VxFlex OS CSI interface
       | "NoVolumeID"      | "Volume ID is required"                |
       | "NoStagingTarget" | "StagingTargetPath is required"        |
       | "EphemeralVolume" | "none"                                 |
-      | "UnmountError"    | "Unable to remove staging target path" |
+      | "UnmountError"    | "Unable to Unmount staging target path" |
 
   Scenario: Node stage NVMe XFS volume with FSCheck enabled in checkOnly mode succeeds
     Given a VxFlexOS service

@@ -20,9 +20,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dell/gobrick"
-	"github.com/dell/gonvme"
-	"github.com/dell/goscaleio"
+	csmlog "github.com/Ecosystems/container-storage-modules/src/csmlog"
+	"github.com/Ecosystems/container-storage-modules/src/gobrick"
+	"github.com/Ecosystems/container-storage-modules/src/gonvme"
+	"github.com/Ecosystems/container-storage-modules/src/goscaleio"
 )
 
 const (
@@ -44,10 +45,10 @@ type NVMEConnector interface {
 func getNVMETCPTargetsInfoFromStorage(system *goscaleio.System) ([]string, error) {
 	allSdt, err := system.GetAllSdts()
 	if err != nil {
-		log.Infof("failed to get SDT from system %s : %v", system.System.ID, err)
+		csmlog.Infof("failed to get SDT from system %s : %v", system.System.ID, err)
 		return nil, err
 	} else if len(allSdt) == 0 {
-		log.Infof("system %s returned empty SDT: %v", system.System.ID, allSdt)
+		csmlog.Infof("system %s returned empty SDT: %v", system.System.ID, allSdt)
 		return nil, fmt.Errorf("system %s returned empty SDT", system.System.ID)
 	}
 	// sort data by id
@@ -57,7 +58,7 @@ func getNVMETCPTargetsInfoFromStorage(system *goscaleio.System) ([]string, error
 	var portals []string
 	for _, t := range allSdt {
 		if len(t.IPList) == 0 || t.IPList[0].IP == "" {
-			log.Debugf("SDT %s has no IPs; skipping", t.ID)
+			csmlog.Debugf("SDT %s has no IPs; skipping", t.ID)
 			continue
 		}
 		portals = append(portals, net.JoinHostPort(t.IPList[0].IP, "4420"))
@@ -76,17 +77,17 @@ func (s *service) discoverNVMeTargets(system *goscaleio.System) ([]gonvme.NVMeTa
 		var ip string
 		ip, _, err = net.SplitHostPort(portal)
 		if err != nil {
-			log.Infof("Invalid portal format, skipping: %s (%v)", portal, err)
+			csmlog.Infof("Invalid portal format, skipping: %s (%v)", portal, err)
 			continue
 		}
 		if _, exists := discoveredTargets[ip]; exists {
 			continue
 		}
-		log.Infof("Trying to discover NVMe target from portal %s", ip)
+		csmlog.Infof("Trying to discover NVMe target from portal %s", ip)
 		var targets []gonvme.NVMeTarget
 		targets, err = s.nvmeLib.DiscoverNVMeTCPTargets(ip, false)
 		if err != nil {
-			log.Infof("couldn't discover targets with portal %s: %s", ip, err)
+			csmlog.Infof("couldn't discover targets with portal %s: %s", ip, err)
 			continue
 		}
 		for _, target := range targets {
@@ -96,7 +97,7 @@ func (s *service) discoverNVMeTargets(system *goscaleio.System) ([]gonvme.NVMeTa
 	}
 
 	if len(discoveredTargets) == 0 {
-		log.Warnf("failed to discover NVMe targets for array %s", system.System.ID)
+		csmlog.Warnf("failed to discover NVMe targets for array %s", system.System.ID)
 	}
 
 	targets := make([]gonvme.NVMeTarget, 0, len(discoveredTargets))
@@ -126,9 +127,9 @@ func (s *service) getNVMeTargetNqnSnapshot() map[string]string {
 func (s *service) connectToNVMeTargets(system *goscaleio.System, targets []gonvme.NVMeTarget) error {
 	connected := false
 	for _, t := range targets {
-		log.Infof("Connecting to NVMe target %v", t)
+		csmlog.Infof("Connecting to NVMe target %v", t)
 		if err := s.nvmeLib.NVMeTCPConnect(t, false); err != nil {
-			log.Errorf("couldn't connect to the nvme target %v: %s", t, err)
+			csmlog.Errorf("couldn't connect to the nvme target %v: %s", t, err)
 			continue
 		}
 		connected = true

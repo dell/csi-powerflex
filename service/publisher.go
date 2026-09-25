@@ -17,8 +17,9 @@ import (
 	"context"
 	"strconv"
 
-	"github.com/dell/goscaleio"
-	siotypes "github.com/dell/goscaleio/types/v1"
+	csmlog "github.com/Ecosystems/container-storage-modules/src/csmlog"
+	"github.com/Ecosystems/container-storage-modules/src/goscaleio"
+	siotypes "github.com/Ecosystems/container-storage-modules/src/goscaleio/types/v1"
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -36,8 +37,9 @@ type NVMePublisher struct {
 	vol *siotypes.Volume
 }
 
+// Publish publishes the volume to the NVMe host.
 func (p *NVMePublisher) Publish(ctx context.Context, req *csi.ControllerPublishVolumeRequest, adminClient *goscaleio.Client, systemID, csiVolID string) (*csi.ControllerPublishVolumeResponse, error) {
-	log.Debugf("ControllerPublish - in NVMePublisher")
+	csmlog.WithContext(ctx).Debug("ControllerPublishVolume using NVMe publisher")
 	volumeContext := req.GetVolumeContext()
 	nodeID := req.GetNodeId()
 	am := req.GetVolumeCapability().GetAccessMode()
@@ -52,7 +54,7 @@ func (p *NVMePublisher) Publish(ctx context.Context, req *csi.ControllerPublishV
 	if len(p.vol.MappedSdcInfo) > 0 {
 		for _, mappedSdcInfo := range p.vol.MappedSdcInfo {
 			if mappedSdcInfo.SdcName == nvmeHost.Sdc.Name {
-				log.Debug("volume already mapped")
+				csmlog.WithContext(ctx).Debug("volume already mapped")
 				if err := validateAndCompareQoS(volumeContext, p.vol.Name, mappedSdcInfo); err != nil {
 					return nil, err
 				}
@@ -86,7 +88,7 @@ func (p *NVMePublisher) Publish(ctx context.Context, req *csi.ControllerPublishV
 
 	mapVolumeNVMeParam := &siotypes.MapVolumeNVMeParam{
 		HostID:                nvmeHost.Sdc.ID,
-		AllowMultipleMappings: allowMultipleMappings,
+		AllowMultipleMappings: strconv.FormatBool(allowMultipleMappings),
 		AllHosts:              "",
 	}
 
@@ -108,8 +110,9 @@ type SDCPublisher struct {
 	vol *siotypes.Volume
 }
 
+// Publish publishes the volume to the SDC host.
 func (p *SDCPublisher) Publish(ctx context.Context, req *csi.ControllerPublishVolumeRequest, adminClient *goscaleio.Client, systemID, csiVolID string) (*csi.ControllerPublishVolumeResponse, error) {
-	log.Debugf("ControllerPublish - in SDCPublisher")
+	csmlog.WithContext(ctx).Debug("ControllerPublishVolume using SDC publisher")
 	volumeContext := req.GetVolumeContext()
 	nodeID := req.GetNodeId()
 	am := req.GetVolumeCapability().GetAccessMode()
@@ -124,7 +127,7 @@ func (p *SDCPublisher) Publish(ctx context.Context, req *csi.ControllerPublishVo
 	if len(p.vol.MappedSdcInfo) > 0 {
 		for _, mappedSdcInfo := range p.vol.MappedSdcInfo {
 			if mappedSdcInfo.SdcID == sdcID {
-				log.Debug("volume already mapped")
+				csmlog.WithContext(ctx).Debug("volume already mapped")
 				if err := validateAndCompareQoS(volumeContext, p.vol.Name, mappedSdcInfo); err != nil {
 					return nil, err
 				}
@@ -158,7 +161,7 @@ func (p *SDCPublisher) Publish(ctx context.Context, req *csi.ControllerPublishVo
 
 	mapVolumeSdcParam := &siotypes.MapVolumeSdcParam{
 		SdcID:                 sdcID,
-		AllowMultipleMappings: allowMultipleMappings,
+		AllowMultipleMappings: strconv.FormatBool(allowMultipleMappings),
 		AllSdcs:               "",
 	}
 	err = targetVolume.MapVolumeSdc(mapVolumeSdcParam)

@@ -37,9 +37,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/dell/csi-vxflexos/v2/k8sutils"
+	"github.com/Ecosystems/container-storage-modules/src/csi-vxflexos/v2/k8sutils"
 
-	"github.com/dell/csi-vxflexos/v2/service"
+	"github.com/Ecosystems/container-storage-modules/src/csi-vxflexos/v2/service"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -47,8 +47,8 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
-	csiext "github.com/dell/dell-csi-extensions/podmon"
-	"github.com/dell/goscaleio"
+	csiext "github.com/Ecosystems/container-storage-modules/src/dell-csi-extensions/podmon"
+	"github.com/Ecosystems/container-storage-modules/src/goscaleio"
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/cucumber/godog"
 )

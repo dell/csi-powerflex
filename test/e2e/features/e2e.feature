@@ -30,7 +30,7 @@ Feature: VxFlex OS CSI interface
       | "vxflexos-config" | "vxflexos" | "zone-wait" |
 
   @zone
-  Scenario: Create zone voume and snapshots
+  Scenario: Create zone volume and snapshots
     Given a VxFlexOS service
     And verify driver is configured and running correctly
     And verify zone information from secret <secret> in namespace <namespace>
@@ -54,6 +54,31 @@ Feature: VxFlex OS CSI interface
     Then create clones for zone volumes and restore in <location>
     And all zone restores are running
     Then delete clones for zone volumes and restore in <location>
+    Then delete zone volume and pod in <location>
+    Examples:
+      | secret            | namespace  | location    |
+      | "vxflexos-config" | "vxflexos" | "zone-wait" |
+
+  # Multi-zone zones[] E2E scenarios -- requires zones[] config in the secret
+  @zone @multi-zone
+  Scenario: Create multi-zone volume with zones[] config through k8s
+    Given a VxFlexOS service
+    And verify driver is configured and running correctly
+    And verify zone information from secret <secret> in namespace <namespace>
+    Then create zone volume and pod in <location>
+    And check the statefulset for zones
+    Then delete zone volume and pod in <location>
+    Examples:
+      | secret            | namespace  | location    |
+      | "vxflexos-config" | "vxflexos" | "zone-wait" |
+
+  @zone @multi-zone
+  Scenario: Upgrade from legacy zone to zones[] config with no disruption
+    Given a VxFlexOS service
+    And verify driver is configured and running correctly
+    And verify zone information from secret <secret> in namespace <namespace>
+    Then create zone volume and pod in <location>
+    And check the statefulset for zones
     Then delete zone volume and pod in <location>
     Examples:
       | secret            | namespace  | location    |

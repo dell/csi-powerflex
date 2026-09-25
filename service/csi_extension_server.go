@@ -17,9 +17,10 @@ import (
 	"context"
 	"fmt"
 
-	podmon "github.com/dell/dell-csi-extensions/podmon"
-	sio "github.com/dell/goscaleio"
-	siotypes "github.com/dell/goscaleio/types/v1"
+	csmlog "github.com/Ecosystems/container-storage-modules/src/csmlog"
+	podmon "github.com/Ecosystems/container-storage-modules/src/dell-csi-extensions/podmon"
+	sio "github.com/Ecosystems/container-storage-modules/src/goscaleio"
+	siotypes "github.com/Ecosystems/container-storage-modules/src/goscaleio/types/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -30,7 +31,7 @@ const (
 )
 
 func (s *service) ValidateVolumeHostConnectivity(ctx context.Context, req *podmon.ValidateVolumeHostConnectivityRequest) (*podmon.ValidateVolumeHostConnectivityResponse, error) {
-	log.Infof("ValidateVolumeHostConnectivity called %+v", req)
+	csmlog.WithContext(ctx).Infof("ValidateVolumeHostConnectivity called %+v", req)
 	rep := &podmon.ValidateVolumeHostConnectivityResponse{
 		Messages: make([]string, 0),
 	}
@@ -72,7 +73,7 @@ func (s *service) ValidateVolumeHostConnectivity(ctx context.Context, req *podmo
 		rep.Connected = false
 		nodeIP := s.GetNodeIPByCSINodeID(nodeID)
 		if len(nodeIP) == 0 {
-			log.Errorf("could not resolve IP address for nodeID=%s", nodeID)
+			csmlog.WithContext(ctx).Errorf("could not resolve IP address for nodeID=%s", nodeID)
 			return nil, fmt.Errorf("failed to resolve IP address for nodeID=%s", nodeID)
 		}
 
@@ -81,9 +82,9 @@ func (s *service) ValidateVolumeHostConnectivity(ctx context.Context, req *podmo
 		connected, err := s.QueryArrayStatus(ctx, url)
 		if err != nil {
 			message = fmt.Sprintf("connectivity unknown for array %s to node %s due to %s", systemID, nodeID, err)
-			log.Error(message)
+			csmlog.WithContext(ctx).Error(message)
 			rep.Messages = append(rep.Messages, message)
-			log.Errorf("%s", err.Error())
+			csmlog.WithContext(ctx).Errorf("%s", err.Error())
 		}
 
 		if connected {
@@ -92,7 +93,7 @@ func (s *service) ValidateVolumeHostConnectivity(ctx context.Context, req *podmo
 		} else {
 			message = fmt.Sprintf("array %s is not connected to node %s", systemID, nodeID)
 		}
-		log.Info(message)
+		csmlog.WithContext(ctx).Info(message)
 		rep.Messages = append(rep.Messages, message)
 	} else {
 		sdc, err := s.systems[systemID].FindSdc("SdcGUID", req.GetNodeId())
@@ -137,7 +138,7 @@ func (s *service) ValidateVolumeHostConnectivity(ctx context.Context, req *podmo
 		}
 
 		if platformInfo.GenType == siotypes.GenTypeEC {
-			log.Infof("Found Gentype EC system %s", systemID)
+			csmlog.WithContext(ctx).Infof("Found Gentype EC system %s", systemID)
 			metrics, err := adminClient.GetMetrics("volume", []string{volID})
 			if err != nil {
 				rep.Messages = append(rep.Messages, fmt.Sprintf("Could not retrieve volume statistics: %s, error: %s", volID, err.Error()))
@@ -159,7 +160,7 @@ func (s *service) ValidateVolumeHostConnectivity(ctx context.Context, req *podmo
 				rep.IosInProgress = true
 			}
 		} else {
-			log.Infof("Found Legacy system %s", systemID)
+			csmlog.WithContext(ctx).Infof("Found Legacy system %s", systemID)
 			stats, err := volume.GetVolumeStatistics()
 			if err != nil {
 				rep.Messages = append(rep.Messages, fmt.Sprintf("Could not retrieve volume statistics: %s, error: %s", volID, err.Error()))
@@ -176,13 +177,13 @@ func (s *service) ValidateVolumeHostConnectivity(ctx context.Context, req *podmo
 		}
 	}
 
-	log.Infof("ValidateVolumeHostConnectivity reply %+v", rep)
+	csmlog.WithContext(ctx).Infof("ValidateVolumeHostConnectivity reply %+v", rep)
 	return rep, nil
 }
 
 func getMetric(metrics []siotypes.Metric, name string) float64 {
 	for _, m := range metrics {
-		if m.Name == name {
+		if m.Name == name && len(m.Values) > 0 {
 			return m.Values[0]
 		}
 	}

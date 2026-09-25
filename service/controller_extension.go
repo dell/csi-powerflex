@@ -4,11 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	csmlog "github.com/Ecosystems/container-storage-modules/src/csmlog"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	sio "github.com/dell/goscaleio"
-	siotypes "github.com/dell/goscaleio/types/v1"
+	sio "github.com/Ecosystems/container-storage-modules/src/goscaleio"
+	siotypes "github.com/Ecosystems/container-storage-modules/src/goscaleio/types/v1"
 )
 
 // SystemCapacityCalculator is an interface for calculating system capacity.
@@ -24,8 +25,9 @@ type PowerFlexGen1 struct {
 	s      *service
 }
 
+// GetSystemCapacity returns the system capacity for a Gen1 PowerFlex system.
 func (p *PowerFlexGen1) GetSystemCapacity(systemID string) (int64, error) {
-	log.Debugf("Getting system capacity for system ID: %s", systemID)
+	csmlog.Debugf("Getting system capacity for system ID: %s", systemID)
 	stats, err := p.system.GetStatistics()
 	if err != nil {
 		return 0, err
@@ -36,8 +38,9 @@ func (p *PowerFlexGen1) GetSystemCapacity(systemID string) (int64, error) {
 	return int64(stats.CapacityAvailableForVolumeAllocationInKb * bytesInKiB), nil
 }
 
+// GetStoragePoolCapacity returns the storage pool capacity for a Gen1 PowerFlex system.
 func (p *PowerFlexGen1) GetStoragePoolCapacity(systemID, protectionDomain, spName string) (int64, error) {
-	log.Debugf("Getting storage pool capacity for system ID: %s, storage pool: %s", systemID, spName)
+	csmlog.Debugf("Getting storage pool capacity for system ID: %s, storage pool: %s", systemID, spName)
 	pdID, err := p.s.getProtectionDomainIDFromName(systemID, protectionDomain)
 	if err != nil {
 		return 0, err
@@ -68,8 +71,9 @@ type PowerFlexGen2 struct {
 	s      *service
 }
 
+// GetSystemCapacity returns the system capacity for a Gen2 PowerFlex system.
 func (p *PowerFlexGen2) GetSystemCapacity(systemID string) (int64, error) {
-	log.Debugf("Getting system capacity for system ID: %s", systemID)
+	csmlog.Debugf("Getting system capacity for system ID: %s", systemID)
 	metrics, err := p.client.GetMetrics("system", []string{systemID})
 	if err != nil {
 		return 0, status.Errorf(codes.Internal,
@@ -82,8 +86,9 @@ func (p *PowerFlexGen2) GetSystemCapacity(systemID string) (int64, error) {
 	return int64(getMetric(metrics.Resources[0].Metrics, "physical_free")), nil
 }
 
+// GetStoragePoolCapacity returns the storage pool capacity for a Gen2 PowerFlex system.
 func (p *PowerFlexGen2) GetStoragePoolCapacity(systemID, protectionDomain, spName string) (int64, error) {
-	log.Debugf("Getting storage pool capacity for system ID: %s, storage pool: %s", systemID, spName)
+	csmlog.Debugf("Getting storage pool capacity for system ID: %s, storage pool: %s", systemID, spName)
 	pdID, err := p.s.getProtectionDomainIDFromName(systemID, protectionDomain)
 	if err != nil {
 		return 0, err
@@ -91,7 +96,7 @@ func (p *PowerFlexGen2) GetStoragePoolCapacity(systemID, protectionDomain, spNam
 
 	sp, err := p.client.FindStoragePool(systemID, spName, "", pdID)
 	if err != nil {
-		log.Errorf("Error finding storage pool: %s", err)
+		csmlog.Errorf("Error finding storage pool: %s", err)
 		return 0, status.Errorf(codes.Internal,
 			"unable to look up storage pool: %s on system: %s, err: %s",
 			spName, systemID, err.Error())
@@ -123,7 +128,7 @@ func (s *service) getSystemCapacityCalculator(systemID string, service *service)
 	}
 
 	if platformInfo.GenType == siotypes.GenTypeEC {
-		log.Infof("GetType: %s", siotypes.GenTypeEC)
+		csmlog.Infof("GetType: %s", siotypes.GenTypeEC)
 		return &PowerFlexGen2{client: adminClient, system: system, s: service}, nil
 	}
 	return &PowerFlexGen1{client: adminClient, system: system, s: service}, nil
@@ -131,7 +136,7 @@ func (s *service) getSystemCapacityCalculator(systemID string, service *service)
 
 // Gets capacity of a given storage system. When storage pool name is provided, gets capcity of this storage pool only.
 func (s *service) getSystemCapacity(ctx context.Context, systemID, protectionDomain string, spName ...string) (int64, error) {
-	log.Infof("Get capacity for system: %s, pool %s", systemID, spName)
+	csmlog.WithContext(ctx).Infof("Get capacity for system: %s, pool %s", systemID, spName)
 
 	if err := s.requireProbe(ctx, systemID); err != nil {
 		return 0, err

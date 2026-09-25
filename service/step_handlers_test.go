@@ -23,8 +23,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dell/goscaleio"
-	types "github.com/dell/goscaleio/types/v1"
+	csmlog "github.com/Ecosystems/container-storage-modules/src/csmlog"
+	"github.com/Ecosystems/container-storage-modules/src/goscaleio"
+	types "github.com/Ecosystems/container-storage-modules/src/goscaleio/types/v1"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	codes "google.golang.org/grpc/codes"
@@ -144,12 +145,12 @@ const (
 func getHandler() http.Handler {
 	handler := http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
-			log.Infof("handler called: %s %s", r.Method, r.URL)
+			csmlog.Infof("handler called: %s %s", r.Method, r.URL)
 			if scaleioRouter == nil {
 				getRouter().ServeHTTP(w, r)
 			}
 		})
-	log.Infof("Clearing volume caches\n")
+	csmlog.Infof("Clearing volume caches\n")
 	volumeIDToName = make(map[string]string)
 	fileSystemIDName = make(map[string]string)
 	fileSystemIDToSizeTotal = make(map[string]string)
@@ -343,7 +344,7 @@ func handleVersion(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 
-	log.Infof("Mock Api Version: %s", apiVersion)
+	csmlog.Infof("Mock Api Version: %s", apiVersion)
 	w.Write([]byte(apiVersion))
 }
 
@@ -392,7 +393,7 @@ func handleNFSSnapshots(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
-			log.Infof("error decoding json: %s\n", err.Error())
+			csmlog.Errorf("failed to decode JSON request: %v", err)
 		}
 		resp := types.CreateFileSystemSnapshotResponse{}
 		resp.ID = hex.EncodeToString([]byte(req.Name))
@@ -411,15 +412,15 @@ func handleNFSSnapshots(w http.ResponseWriter, r *http.Request) {
 			array.fileSystems[resp.ID]["size_total"] = sizeTotal
 		}
 		if debug {
-			log.Infof("request name: %s id: %s\n", req.Name, resp.ID)
+			csmlog.Infof("request name: %s id: %s\n", req.Name, resp.ID)
 		}
 		encoder := json.NewEncoder(w)
 		err = encoder.Encode(resp)
 		if err != nil {
-			log.Infof("error encoding json: %s\n", err.Error())
+			csmlog.Errorf("failed to encode JSON response: %v", err)
 		}
 
-		log.Infof("end make fileSystemSnapshots")
+		csmlog.Infof("end make fileSystemSnapshots")
 	}
 }
 
@@ -489,7 +490,7 @@ func handleNFSExports(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
-			log.Infof("error decoding json: %s\n", err.Error())
+			csmlog.Errorf("failed to decode JSON request: %v", err)
 		}
 
 		// good response
@@ -526,15 +527,15 @@ func handleNFSExports(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if debug {
-			log.Infof("request name: %s id: %s\n", req.Name, resp.ID)
+			csmlog.Infof("request name: %s id: %s\n", req.Name, resp.ID)
 		}
 		encoder := json.NewEncoder(w)
 		err = encoder.Encode(resp)
 		if err != nil {
-			log.Infof("error encoding json: %s\n", err.Error())
+			csmlog.Errorf("failed to encode JSON response: %v", err)
 		}
 
-		log.Infof("end make nfsExports")
+		csmlog.Infof("end make nfsExports")
 	// Read all the Volumes
 	case http.MethodGet:
 		if stepHandlersErrors.NFSExportInstancesError {
@@ -562,7 +563,7 @@ func handleNFSExports(w http.ResponseWriter, r *http.Request) {
 				nfsExp := new(types.NFSExport)
 				err := json.Unmarshal(data, nfsExp)
 				if err != nil {
-					log.Infof("error unmarshalling json: %s\n", string(data))
+					csmlog.Errorf("failed to unmarshal JSON: %v", err)
 				}
 				instances = append(instances, nfsExp)
 			}
@@ -598,7 +599,7 @@ func handleNFSExports(w http.ResponseWriter, r *http.Request) {
 			nfsExp := new(types.NFSExport)
 			err := json.Unmarshal(data, nfsExp)
 			if err != nil {
-				log.Infof("error unmarshalling json: %s\n", string(data))
+				csmlog.Errorf("failed to unmarshal JSON: %v", err)
 			}
 			instances = append(instances, nfsExp)
 		}
@@ -606,7 +607,7 @@ func handleNFSExports(w http.ResponseWriter, r *http.Request) {
 		encoder := json.NewEncoder(w)
 		err := encoder.Encode(instances)
 		if err != nil {
-			log.Infof("error encoding json: %s\n", err)
+			csmlog.Errorf("failed to encode JSON response: %v", err)
 		}
 	}
 }
@@ -628,7 +629,7 @@ func handleGetNFSExports(w http.ResponseWriter, r *http.Request) {
 
 		// Insert to map if it doesn't exist.
 		if nfsExportIDName[id] == "" {
-			log.Infof("Did not find id %s \n", id)
+			csmlog.Infof("Did not find id %s \n", id)
 			writeError(w, "could not find nfsExport ", http.StatusNotFound, codes.NotFound)
 			return
 		}
@@ -639,7 +640,7 @@ func handleGetNFSExports(w http.ResponseWriter, r *http.Request) {
 			nfsExp = array.nfsExports[id]
 		}
 
-		log.Infof("Get id %s\n", id)
+		csmlog.Infof("Get id %s\n", id)
 		if nfsExp != nil {
 			replacementMap["__ID__"] = nfsExp["id"]
 			replacementMap["__NAME__"] = nfsExp["name"]
@@ -682,13 +683,13 @@ func handleGetNFSExports(w http.ResponseWriter, r *http.Request) {
 		nfsExp1 := new(types.NFSExport)
 		err := json.Unmarshal(data, nfsExp1)
 		if err != nil {
-			log.Infof("error unmarshalling json: %s\n", string(data))
+			csmlog.Errorf("failed to unmarshal JSON: %v", err)
 		}
 
 		encoder := json.NewEncoder(w)
 		err = encoder.Encode(nfsExp1)
 		if err != nil {
-			log.Infof("error encoding json: %s\n", err)
+			csmlog.Errorf("failed to encode JSON response: %v", err)
 		}
 	case http.MethodDelete:
 		vars := mux.Vars(r)
@@ -696,7 +697,7 @@ func handleGetNFSExports(w http.ResponseWriter, r *http.Request) {
 
 		// Insert to map if it doesn't exist.
 		if nfsExportIDName[id] == "" {
-			log.Infof("Did not find id %s \n", id)
+			csmlog.Infof("Did not find id %s \n", id)
 			writeError(w, "could not find nfsExport ", http.StatusNotFound, codes.NotFound)
 			return
 		}
@@ -718,7 +719,7 @@ func handleGetNFSExports(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("fsidname", nfsExportIDName[id])
 
 		if nfsExportIDName[id] == "" {
-			log.Infof("Did not find id %s \n", id)
+			csmlog.Infof("Did not find id %s \n", id)
 			writeError(w, "could not find nfsExport ", http.StatusNotFound, codes.NotFound)
 			return
 		}
@@ -732,7 +733,7 @@ func handleGetNFSExports(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
-			log.Infof("error decoding json: %s\n", err.Error())
+			csmlog.Errorf("failed to decode JSON request: %v", err)
 		}
 		fmt.Printf("patchReq:%#v\n", req)
 		if len(req.AddReadOnlyRootHosts) != 0 {
@@ -792,7 +793,7 @@ func handleFileSystems(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
-			log.Infof("error decoding json: %s\n", err.Error())
+			csmlog.Errorf("failed to decode JSON request: %v", err)
 		}
 
 		// good response
@@ -812,15 +813,15 @@ func handleFileSystems(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if debug {
-			log.Infof("request name: %s id: %s\n", req.Name, resp.ID)
+			csmlog.Infof("request name: %s id: %s\n", req.Name, resp.ID)
 		}
 		encoder := json.NewEncoder(w)
 		err = encoder.Encode(resp)
 		if err != nil {
-			log.Infof("error encoding json: %s\n", err.Error())
+			csmlog.Errorf("failed to encode JSON response: %v", err)
 		}
 
-		log.Infof("end make fileSystems")
+		csmlog.Infof("end make fileSystems")
 	// Read all the Volumes
 	case http.MethodGet:
 		instances := make([]*types.FileSystem, 0)
@@ -840,7 +841,7 @@ func handleFileSystems(w http.ResponseWriter, r *http.Request) {
 				fs := new(types.FileSystem)
 				err := json.Unmarshal(data, fs)
 				if err != nil {
-					log.Infof("error unmarshalling json: %s\n", string(data))
+					csmlog.Errorf("failed to unmarshal JSON: %v", err)
 				}
 				instances = append(instances, fs)
 			}
@@ -863,7 +864,7 @@ func handleFileSystems(w http.ResponseWriter, r *http.Request) {
 			fs := new(types.FileSystem)
 			err := json.Unmarshal(data, fs)
 			if err != nil {
-				log.Infof("error unmarshalling json: %s\n", string(data))
+				csmlog.Errorf("failed to unmarshal JSON: %v", err)
 			}
 			instances = append(instances, fs)
 		}
@@ -871,7 +872,7 @@ func handleFileSystems(w http.ResponseWriter, r *http.Request) {
 		encoder := json.NewEncoder(w)
 		err := encoder.Encode(instances)
 		if err != nil {
-			log.Infof("error encoding json: %s\n", err)
+			csmlog.Errorf("failed to encode JSON response: %v", err)
 		}
 	}
 }
@@ -889,22 +890,22 @@ func handleRestoreSnapshotNFS(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
-			log.Infof("error decoding json: %s\n", err.Error())
+			csmlog.Errorf("failed to decode JSON request: %v", err)
 		}
 
 		// good response
 		resp := new(types.RestoreFsSnapResponse)
 		resp.ID = req.SnapshotID
 		if debug {
-			log.Infof("response id: %s\n", resp.ID)
+			csmlog.Infof("response id: %s\n", resp.ID)
 		}
 		encoder := json.NewEncoder(w)
 		err = encoder.Encode(resp)
 		if err != nil {
-			log.Infof("error encoding json: %s\n", err.Error())
+			csmlog.Errorf("failed to encode JSON response: %v", err)
 		}
 
-		log.Infof("end make restore fs from snaspshot")
+		csmlog.Infof("end make restore fs from snaspshot")
 	}
 }
 
@@ -923,7 +924,7 @@ func handleGetFileSystems(w http.ResponseWriter, r *http.Request) {
 
 		// Insert to map if it doesn't exist.
 		if fileSystemIDName[id] == "" {
-			log.Infof("Did not find id %s \n", id)
+			csmlog.Infof("Did not find id %s \n", id)
 			writeError(w, "could not find filesystem ", http.StatusNotFound, codes.NotFound)
 			return
 		}
@@ -934,7 +935,7 @@ func handleGetFileSystems(w http.ResponseWriter, r *http.Request) {
 			fs = array.fileSystems[id]
 		}
 
-		log.Infof("Get id %s\n", id)
+		csmlog.Infof("Get id %s\n", id)
 		if fs != nil {
 			replacementMap["__ID__"] = fs["id"]
 			replacementMap["__NAME__"] = fs["name"]
@@ -965,13 +966,13 @@ func handleGetFileSystems(w http.ResponseWriter, r *http.Request) {
 		fs1 := new(types.FileSystem)
 		err := json.Unmarshal(data, fs1)
 		if err != nil {
-			log.Infof("error unmarshalling json: %s\n", string(data))
+			csmlog.Errorf("failed to unmarshal JSON: %v", err)
 		}
 
 		encoder := json.NewEncoder(w)
 		err = encoder.Encode(fs1)
 		if err != nil {
-			log.Infof("error encoding json: %s\n", err)
+			csmlog.Errorf("failed to encode JSON response: %v", err)
 		}
 	case http.MethodDelete:
 		if inducedError.Error() == "DeleteSnapshotError" {
@@ -983,7 +984,7 @@ func handleGetFileSystems(w http.ResponseWriter, r *http.Request) {
 
 		// Insert to map if it doesn't exist.
 		if fileSystemIDName[id] == "" {
-			log.Infof("Did not find id %s \n", id)
+			csmlog.Infof("Did not find id %s \n", id)
 			writeError(w, "could not find filesystem ", http.StatusNotFound, codes.NotFound)
 			return
 		}
@@ -1002,7 +1003,7 @@ func handleGetFileSystems(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
-			log.Infof("error decoding json: %s\n", err.Error())
+			csmlog.Errorf("failed to decode JSON request: %v", err)
 		}
 		if inducedError.Error() == "ModifyFSError" {
 			writeError(w, "Modify filesystem failed with error:", http.StatusRequestTimeout, codes.Internal)
@@ -1023,7 +1024,7 @@ func handleGetFileSystems(w http.ResponseWriter, r *http.Request) {
 			array.fileSystems[id]["graceperiod"] = strconv.Itoa(req.GracePeriod)
 		}
 		w.WriteHeader(http.StatusNoContent)
-		log.Infof("end modify file systems")
+		csmlog.Infof("end modify file systems")
 	}
 
 	// returnJSONFile("features", "get_file_system_response.json", w, nil)
@@ -1058,7 +1059,7 @@ func handlePeerMdmInstances(w http.ResponseWriter, _ *http.Request) {
 func returnJSONFile(directory, filename string, w http.ResponseWriter, replacements map[string]string) (jsonBytes []byte) {
 	jsonBytes, err := os.ReadFile(filepath.Join(directory, filename))
 	if err != nil {
-		log.Infof("Couldn't read %s/%s\n", directory, filename)
+		csmlog.Infof("Couldn't read %s/%s\n", directory, filename)
 		if w != nil {
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -1086,17 +1087,17 @@ func returnJSONFile(directory, filename string, w http.ResponseWriter, replaceme
 		}
 
 		if debug {
-			log.Infof("Edited payload:\n%s\n", jsonString)
+			csmlog.Infof("Edited payload:\n%s\n", jsonString)
 		}
 		jsonBytes = []byte(jsonString)
 	}
 	if debug {
-		log.Infof("jsonBytes:\n%s\n", jsonBytes)
+		csmlog.Infof("jsonBytes:\n%s\n", jsonBytes)
 	}
 	if w != nil {
 		_, err = w.Write(jsonBytes)
 		if err != nil {
-			log.Infof("Couldn't write to ResponseWriter")
+			csmlog.Infof("Couldn't write to ResponseWriter")
 			w.WriteHeader(http.StatusInternalServerError)
 			return make([]byte, 0)
 		}
@@ -1236,12 +1237,12 @@ func handleVolumeInstances(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
-			log.Infof("error decoding json: %s\n", err.Error())
+			csmlog.Errorf("failed to decode JSON request: %v", err)
 		}
 		if volumeNameToID[req.Name] != "" {
 			w.WriteHeader(http.StatusInternalServerError)
 			// duplicate volume name response
-			log.Infof("request for volume creation of duplicate name: %s\n", req.Name)
+			csmlog.Infof("request for volume creation of duplicate name: %s\n", req.Name)
 			resp := new(types.Error)
 			resp.Message = sioGatewayVolumeNameInUse
 			resp.HTTPStatusCode = http.StatusInternalServerError
@@ -1249,7 +1250,7 @@ func handleVolumeInstances(w http.ResponseWriter, r *http.Request) {
 			encoder := json.NewEncoder(w)
 			err = encoder.Encode(resp)
 			if err != nil {
-				log.Infof("error encoding json: %s\n", err.Error())
+				csmlog.Errorf("failed to encode JSON response: %v", err)
 			}
 			return
 		}
@@ -1275,15 +1276,15 @@ func handleVolumeInstances(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if debug {
-			log.Infof("request name: %s id: %s\n", req.Name, resp.ID)
+			csmlog.Infof("request name: %s id: %s\n", req.Name, resp.ID)
 		}
 		encoder := json.NewEncoder(w)
 		err = encoder.Encode(resp)
 		if err != nil {
-			log.Infof("error encoding json: %s\n", err.Error())
+			csmlog.Errorf("failed to encode JSON response: %v", err)
 		}
 
-		log.Infof("end make volumes")
+		csmlog.Infof("end make volumes")
 	// Read all the Volumes
 	case http.MethodGet:
 		instances := make([]*types.Volume, 0)
@@ -1305,7 +1306,7 @@ func handleVolumeInstances(w http.ResponseWriter, r *http.Request) {
 				vol := new(types.Volume)
 				err := json.Unmarshal(data, vol)
 				if err != nil {
-					log.Infof("error unmarshalling json: %s\n", string(data))
+					csmlog.Errorf("failed to unmarshal JSON: %v", err)
 				}
 				instances = append(instances, vol)
 			}
@@ -1330,7 +1331,7 @@ func handleVolumeInstances(w http.ResponseWriter, r *http.Request) {
 			vol := new(types.Volume)
 			err := json.Unmarshal(data, vol)
 			if err != nil {
-				log.Infof("error unmarshalling json: %s\n", string(data))
+				csmlog.Errorf("failed to unmarshal JSON: %v", err)
 			}
 			instances = append(instances, vol)
 		}
@@ -1338,7 +1339,7 @@ func handleVolumeInstances(w http.ResponseWriter, r *http.Request) {
 		encoder := json.NewEncoder(w)
 		err := encoder.Encode(instances)
 		if err != nil {
-			log.Infof("error encoding json: %s\n", err)
+			csmlog.Errorf("failed to encode JSON response: %v", err)
 		}
 	}
 }
@@ -1348,7 +1349,7 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 	from := vars["from"]
 	id := vars["id"]
 	action := vars["action"]
-	log.Infof("action from %s id %s action %s", from, id, action)
+	csmlog.Infof("action from %s id %s action %s", from, id, action)
 	switch action {
 	case "setSdcName":
 		if stepHandlersErrors.SetSdcNameError {
@@ -1359,7 +1360,7 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
-			log.Infof("error decoding json: %s\n", err.Error())
+			csmlog.Errorf("failed to decode JSON request: %v", err)
 		}
 		fmt.Printf("SdcName: %s\n", req.SdcName)
 		sdcIDToName = make(map[string]string, 0)
@@ -1382,13 +1383,13 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
-			log.Infof("error decoding json: %s\n", err.Error())
+			csmlog.Errorf("failed to decode JSON request: %v", err)
 		}
 		resp := types.ApproveSdcResponse{SdcID: "d0f055a700000000"}
 		encoder := json.NewEncoder(w)
 		err = encoder.Encode(resp)
 		if err != nil {
-			log.Infof("error encoding json: %s\n", err.Error())
+			csmlog.Errorf("failed to encode JSON response: %v", err)
 		}
 
 	case "addMappedSdc":
@@ -1400,7 +1401,7 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
-			log.Infof("error decoding json: %s\n", err.Error())
+			csmlog.Errorf("failed to decode JSON request: %v", err)
 		}
 		fmt.Printf("SdcID: %s\n", req.SdcID)
 		if req.SdcID == "d0f055a700000000" {
@@ -1419,7 +1420,7 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
-			log.Infof("error decoding json: %s\n", err.Error())
+			csmlog.Errorf("failed to decode JSON request: %v", err)
 		}
 		fmt.Printf("HostID: %s\n", req.HostID)
 		if req.HostID == goodSdcIDNVMe {
@@ -1436,7 +1437,7 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
-			log.Infof("error decoding json: %s\n", err.Error())
+			csmlog.Errorf("failed to decode JSON request: %v", err)
 		}
 		for i, val := range sdcMappings {
 			if val.SdcID == req.SdcID {
@@ -1453,7 +1454,7 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
-			log.Infof("error decoding json: %s\n", err.Error())
+			csmlog.Errorf("failed to decode JSON request: %v", err)
 		}
 		for i, val := range sdcMappings {
 			if val.SdcID == req.HostID {
@@ -1470,7 +1471,7 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
-			log.Infof("error decoding json: %s\n", err.Error())
+			csmlog.Errorf("failed to decode JSON request: %v", err)
 		}
 		fmt.Printf("SdcID: %s\n", req.SdcID)
 		if req.SdcID == "d0f055a700000000" {
@@ -1492,7 +1493,7 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
-			log.Infof("error decoding json: %s\n", err.Error())
+			csmlog.Errorf("failed to decode JSON request: %v", err)
 		}
 		for _, snapParam := range req.SnapshotDefs {
 			// For now, only a single snapshot ID is supported
@@ -1633,7 +1634,7 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 		encoder := json.NewEncoder(w)
 		err := encoder.Encode(resp)
 		if err != nil {
-			log.Infof("error encoding json: %s\n", err)
+			csmlog.Errorf("failed to encode JSON response: %v", err)
 		}
 	case "switchoverReplicationConsistencyGroup":
 		fallthrough
@@ -1665,7 +1666,7 @@ func getSdcMappings(volumeID string) string {
 		bytes, err = json.Marshal(&emptyMappings)
 	}
 	if err != nil {
-		log.Infof("Json marshalling error: %s", err.Error())
+		csmlog.Infof("Json marshalling error: %s", err.Error())
 		return ""
 	}
 	if debug {
@@ -1679,7 +1680,7 @@ func handleRelationships(w http.ResponseWriter, r *http.Request) {
 	from := vars["from"]
 	id := vars["id"]
 	to := vars["to"]
-	log.Infof("relationship from %s id %s to %s", from, id, to)
+	csmlog.Infof("relationship from %s id %s to %s", from, id, to)
 	switch to {
 	case "Sdc":
 		if stepHandlersErrors.GetSdcInstancesError {
@@ -1705,14 +1706,14 @@ func handleRelationships(w http.ResponseWriter, r *http.Request) {
 				sdc := new(types.Sdc)
 				err := json.Unmarshal(data, sdc)
 				if err != nil {
-					log.Infof("error unmarshalling json: %s\n", string(data))
+					csmlog.Errorf("failed to unmarshal JSON: %v", err)
 				}
 				instances = append(instances, sdc)
 			}
 			encoder := json.NewEncoder(w)
 			err := encoder.Encode(instances)
 			if err != nil {
-				log.Infof("error encoding json: %s\n", err)
+				csmlog.Errorf("failed to encode JSON response: %v", err)
 			}
 			setSdcNameSuccess = false
 			return
@@ -1733,6 +1734,8 @@ func handleRelationships(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			returnJSONFile("features", "get_volume_statistics.json", w, nil)
+		} else if from == "ReplicationConsistencyGroup" {
+			returnJSONFile("features", "get_rcg_statistics.json", w, nil)
 		} else {
 			writeError(w, "Unsupported relationship from type", http.StatusRequestTimeout, codes.Internal)
 		}
@@ -1765,16 +1768,16 @@ func handleRelationships(w http.ResponseWriter, r *http.Request) {
 			pair := new(types.ReplicationPair)
 			err := json.Unmarshal(data, pair)
 			if err != nil {
-				log.Infof("error unmarshalling json: %s\n", string(data))
+				csmlog.Errorf("failed to unmarshal JSON: %v", err)
 			}
-			log.Infof("pair +%v", pair)
+			csmlog.Infof("pair +%v", pair)
 			instances = append(instances, pair)
 		}
 
 		encoder := json.NewEncoder(w)
 		err := encoder.Encode(instances)
 		if err != nil {
-			log.Infof("error encoding json: %s\n", err)
+			csmlog.Errorf("failed to encode JSON response: %v", err)
 		}
 	default:
 		writeError(w, "Unsupported relationship to type", http.StatusRequestTimeout, codes.Internal)
@@ -1807,7 +1810,7 @@ func handleInstances(w http.ResponseWriter, r *http.Request) {
 	id := vars["id"]
 	id = extractIDFromStruct(id)
 	if true {
-		log.Infof("handle instances type %s id %s\n", objType, id)
+		csmlog.Infof("handle instances type %s id %s\n", objType, id)
 	}
 	switch objType {
 	case "Volume":
@@ -1825,7 +1828,7 @@ func handleInstances(w http.ResponseWriter, r *http.Request) {
 				vol = array.volumes[id]
 			}
 
-			log.Infof("Get id %s for %s\n", id, objType)
+			csmlog.Infof("Get id %s for %s\n", id, objType)
 			if vol != nil {
 				replacementMap["__ID__"] = vol["id"]
 				replacementMap["__NAME__"] = vol["name"]
@@ -1845,7 +1848,7 @@ func handleInstances(w http.ResponseWriter, r *http.Request) {
 			}
 			returnJSONFile("features", "volume.json.template", w, replacementMap)
 		} else {
-			log.Infof("Did not find id %s for %s\n", id, objType)
+			csmlog.Infof("Did not find id %s for %s\n", id, objType)
 			writeError(w, "volume not found: "+id, http.StatusNotFound, codes.NotFound)
 		}
 
@@ -1909,12 +1912,12 @@ func handleQueryVolumeIDByKey(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(&req)
 	if err != nil {
-		log.Infof("error decoding json: %s\n", err.Error())
+		csmlog.Errorf("failed to decode JSON request: %v", err)
 	}
 	if volumeNameToID[req.Name] != "" {
 		resp := new(types.VolumeResp)
 		resp.ID = volumeNameToID[req.Name]
-		log.Infof("found volume %s id %s\n", req.Name, volumeNameToID[req.Name])
+		csmlog.Infof("found volume %s id %s", req.Name, volumeNameToID[req.Name])
 		encoder := json.NewEncoder(w)
 		if stepHandlersErrors.BadVolIDJSON {
 			err = encoder.Encode("thisWill://causeUnmarshalErr")
@@ -1922,10 +1925,10 @@ func handleQueryVolumeIDByKey(w http.ResponseWriter, r *http.Request) {
 			err = encoder.Encode(resp.ID)
 		}
 		if err != nil {
-			log.Infof("error encoding json: %s\n", err.Error())
+			csmlog.Errorf("failed to encode JSON response: %v", err)
 		}
 	} else {
-		log.Infof("did not find volume %s\n", req.Name)
+		csmlog.Infof("did not find volume %s\n", req.Name)
 		volumeNameToID[req.Name] = ""
 		writeError(w, fmt.Sprintf("Volume not found %s", req.Name), http.StatusNotFound, codes.NotFound)
 
@@ -1944,14 +1947,14 @@ func handleReplicationConsistencyGroupInstances(w http.ResponseWriter, r *http.R
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
-			log.Infof("error decoding json: %s\n", err.Error())
+			csmlog.Errorf("failed to decode JSON request: %v", err)
 		}
 
 		fmt.Printf("POST to ReplicationConsistencyGroup %s\n", req.Name)
 		for _, ctx := range systemArrays[r.Host].replicationConsistencyGroups {
 			if ctx["name"] == req.Name {
 				w.WriteHeader(http.StatusInternalServerError)
-				log.Infof("request for rcg creation of duplicate name: %s\n", req.Name)
+				csmlog.Infof("request for rcg creation of duplicate name: %s\n", req.Name)
 				resp := types.Error{
 					Message:        "The Replication Consistency Group already exists",
 					HTTPStatusCode: http.StatusInternalServerError, ErrorCode: 6,
@@ -1959,7 +1962,7 @@ func handleReplicationConsistencyGroupInstances(w http.ResponseWriter, r *http.R
 				encoder := json.NewEncoder(w)
 				err = encoder.Encode(resp)
 				if err != nil {
-					log.Infof("error encoding json: %s\n", err.Error())
+					csmlog.Errorf("failed to encode JSON response: %v", err)
 				}
 				return
 			}
@@ -1995,7 +1998,7 @@ func handleReplicationConsistencyGroupInstances(w http.ResponseWriter, r *http.R
 		array.replicationConsistencyGroups[remoteRCGID]["replicationDirection"] = "RemoteToLocal"
 
 		if debug {
-			log.Infof("request name: %s id: %s\n", req.Name, resp.ID)
+			csmlog.Infof("request name: %s id: %s\n", req.Name, resp.ID)
 		}
 
 		if inducedError.Error() == "StorageGroupAlreadyExists" || inducedError.Error() == "StorageGroupAlreadyExistsUnretriavable" {
@@ -2006,7 +2009,7 @@ func handleReplicationConsistencyGroupInstances(w http.ResponseWriter, r *http.R
 		encoder := json.NewEncoder(w)
 		err = encoder.Encode(resp)
 		if err != nil {
-			log.Infof("error encoding json: %s\n", err.Error())
+			csmlog.Errorf("failed to encode JSON response: %v", err)
 		}
 	case http.MethodGet:
 		if inducedError.Error() == "GetReplicationConsistencyGroupsError" {
@@ -2040,7 +2043,7 @@ func handleReplicationConsistencyGroupInstances(w http.ResponseWriter, r *http.R
 			rcg := new(types.ReplicationConsistencyGroup)
 			err := json.Unmarshal(data, rcg)
 			if err != nil {
-				log.Infof("error unmarshalling json: %s\n", string(data))
+				csmlog.Errorf("failed to unmarshal JSON: %v", err)
 			}
 
 			instances = append(instances, rcg)
@@ -2049,7 +2052,7 @@ func handleReplicationConsistencyGroupInstances(w http.ResponseWriter, r *http.R
 		encoder := json.NewEncoder(w)
 		err := encoder.Encode(instances)
 		if err != nil {
-			log.Infof("error encoding json: %s\n", err)
+			csmlog.Errorf("failed to encode JSON response: %v", err)
 		}
 
 	}
@@ -2066,13 +2069,13 @@ func handleReplicationPairInstances(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
-			log.Infof("error decoding json: %s\n", err.Error())
+			csmlog.Errorf("failed to decode JSON request: %v", err)
 		}
 		fmt.Printf("POST to ReplicationPair %s Request %+v\n", req.Name, req)
 		for _, ctx := range systemArrays[r.Host].replicationPairs {
 			if ctx["name"] == req.Name {
 				w.WriteHeader(http.StatusInternalServerError)
-				log.Infof("request for replication pair creation of duplicate name: %s\n", req.Name)
+				csmlog.Infof("request for replication pair creation of duplicate name: %s\n", req.Name)
 
 				resp := new(types.Error)
 				resp.Message = "Replication Pair name already in use"
@@ -2081,7 +2084,7 @@ func handleReplicationPairInstances(w http.ResponseWriter, r *http.Request) {
 				encoder := json.NewEncoder(w)
 				err = encoder.Encode(resp)
 				if err != nil {
-					log.Infof("error encoding json: %s\n", err.Error())
+					csmlog.Errorf("failed to encode JSON response: %v", err)
 				}
 				return
 			}
@@ -2117,7 +2120,7 @@ func handleReplicationPairInstances(w http.ResponseWriter, r *http.Request) {
 		volumeIDToReplicationState[req.DestinationVolumeID] = "Replicated"
 
 		if debug {
-			log.Infof("request name: %s id: %s sourceVolume %s\n", req.Name, resp.ID, req.SourceVolumeID)
+			csmlog.Infof("request name: %s id: %s sourceVolume %s\n", req.Name, resp.ID, req.SourceVolumeID)
 		}
 
 		if inducedError.Error() == "ReplicationPairAlreadyExists" || inducedError.Error() == "ReplicationPairAlreadyExistsUnretrievable" {
@@ -2128,7 +2131,7 @@ func handleReplicationPairInstances(w http.ResponseWriter, r *http.Request) {
 		encoder := json.NewEncoder(w)
 		err = encoder.Encode(resp)
 		if err != nil {
-			log.Infof("error encoding json: %s\n", err.Error())
+			csmlog.Errorf("failed to encode JSON response: %v", err)
 		}
 	case http.MethodGet:
 		if inducedError.Error() == "GetReplicationPairError" {
@@ -2149,24 +2152,24 @@ func handleReplicationPairInstances(w http.ResponseWriter, r *http.Request) {
 			replacementMap["__DESTINATION_VOLUME__"] = pair["remoteVolumeId"]
 			replacementMap["__RP_GROUP__"] = pair["replicationConsistencyGroupId"]
 
-			log.Infof("replicatPair replacementMap %v\n", replacementMap)
+			csmlog.Infof("replicatPair replacementMap %v\n", replacementMap)
 			data := returnJSONFile("features", "replication_pair.template", nil, replacementMap)
 
-			log.Infof("replication-pair-data %s\n", string(data))
+			csmlog.Infof("replication-pair-data %s\n", string(data))
 			pair := new(types.ReplicationPair)
 			err := json.Unmarshal(data, pair)
 			if err != nil {
-				log.Infof("error unmarshalling json: %s\n", string(data))
+				csmlog.Errorf("failed to unmarshal JSON: %v", err)
 			}
 
-			log.Infof("replication-pair +%v", pair)
+			csmlog.Infof("replication-pair +%v", pair)
 			instances = append(instances, pair)
 		}
 
 		encoder := json.NewEncoder(w)
 		err := encoder.Encode(instances)
 		if err != nil {
-			log.Infof("error encoding json: %s\n", err)
+			csmlog.Errorf("failed to encode JSON response: %v", err)
 		}
 	}
 }
@@ -2182,7 +2185,7 @@ func handleFileTreeQuotas(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
-			log.Infof("error decoding json: %s\n", err.Error())
+			csmlog.Errorf("failed to decode JSON request: %v", err)
 		}
 
 		// good response
@@ -2205,14 +2208,14 @@ func handleFileTreeQuotas(w http.ResponseWriter, r *http.Request) {
 			array.treeQuotas[resp.ID]["hardlimit"] = strconv.Itoa(req.HardLimit)
 		}
 		if debug {
-			log.Infof("request \"dummy-name\" id: %s\n", resp.ID)
+			csmlog.Infof("request \"dummy-name\" id: %s\n", resp.ID)
 		}
 		encoder := json.NewEncoder(w)
 		err = encoder.Encode(resp)
 		if err != nil {
-			log.Infof("error encoding json: %s\n", err.Error())
+			csmlog.Errorf("failed to encode JSON response: %v", err)
 		}
-		log.Infof("end make tree quotas")
+		csmlog.Infof("end make tree quotas")
 	case http.MethodGet:
 		if inducedError.Error() == "GetQuotaByFSIDError" {
 			writeError(w, "Fetching tree quota for filesystem failed, error:", http.StatusRequestTimeout, codes.Internal)
@@ -2235,7 +2238,7 @@ func handleFileTreeQuotas(w http.ResponseWriter, r *http.Request) {
 				tq := new(types.TreeQuota)
 				err := json.Unmarshal(data, tq)
 				if err != nil {
-					log.Infof("error unmarshalling json: %s\n", string(data))
+					csmlog.Errorf("failed to unmarshal JSON: %v", err)
 				}
 				instances = append(instances, tq)
 			}
@@ -2257,7 +2260,7 @@ func handleFileTreeQuotas(w http.ResponseWriter, r *http.Request) {
 			tq := new(types.TreeQuota)
 			err := json.Unmarshal(data, tq)
 			if err != nil {
-				log.Infof("error unmarshalling json: %s\n", string(data))
+				csmlog.Errorf("failed to unmarshal JSON: %v", err)
 			}
 			instances = append(instances, tq)
 		}
@@ -2265,9 +2268,9 @@ func handleFileTreeQuotas(w http.ResponseWriter, r *http.Request) {
 		encoder := json.NewEncoder(w)
 		err := encoder.Encode(instances)
 		if err != nil {
-			log.Infof("error encoding json: %s\n", err)
+			csmlog.Errorf("failed to encode JSON response: %v", err)
 		}
-		log.Infof("end get tree quotas")
+		csmlog.Infof("end get tree quotas")
 	}
 }
 
@@ -2286,7 +2289,7 @@ func handleGetFileTreeQuotas(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&req)
 		if err != nil {
-			log.Infof("error decoding json: %s\n", err.Error())
+			csmlog.Errorf("failed to decode JSON request: %v", err)
 		}
 		fmt.Printf("patchReq:%#v\n", req)
 		if array, ok := systemArrays[r.Host]; ok {
@@ -2296,7 +2299,7 @@ func handleGetFileTreeQuotas(w http.ResponseWriter, r *http.Request) {
 			array.treeQuotas[id]["hardlimit"] = strconv.Itoa(req.HardLimit)
 		}
 		w.WriteHeader(http.StatusNoContent)
-		log.Infof("end modify tree quotas")
+		csmlog.Infof("end modify tree quotas")
 	}
 }
 
@@ -2310,6 +2313,6 @@ func writeError(w http.ResponseWriter, message string, httpStatus int, errorCode
 	encoder := json.NewEncoder(w)
 	err := encoder.Encode(resp)
 	if err != nil {
-		log.Infof("error encoding json: %s\n", err.Error())
+		csmlog.Errorf("failed to encode JSON response: %v", err)
 	}
 }

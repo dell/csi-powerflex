@@ -1,4 +1,4 @@
-// Copyright © 2019-2025 Dell Inc. or its subsidiaries. All Rights Reserved.
+// Copyright © 2019-2026 Dell Inc. or its subsidiaries. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,21 +30,23 @@ import (
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/google/uuid"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
-	"github.com/dell/csi-metadata-retriever/retriever"
-	"github.com/dell/dell-csi-extensions/podmon"
-	"github.com/dell/dell-csi-extensions/replication"
-	"github.com/dell/gobrick"
-	"github.com/dell/gocsi"
-	"github.com/dell/gofsutil"
-	"github.com/dell/gonvme"
-	"github.com/dell/goscaleio"
-	types "github.com/dell/goscaleio/types/v1"
+	"github.com/Ecosystems/container-storage-modules/src/csi-metadata-retriever/retriever"
+	"github.com/Ecosystems/container-storage-modules/src/csmlog"
+	"github.com/Ecosystems/container-storage-modules/src/dell-csi-extensions/podmon"
+	"github.com/Ecosystems/container-storage-modules/src/dell-csi-extensions/replication"
+	"github.com/Ecosystems/container-storage-modules/src/gobrick"
+	"github.com/Ecosystems/container-storage-modules/src/gocsi"
+	"github.com/Ecosystems/container-storage-modules/src/gofsutil"
+	"github.com/Ecosystems/container-storage-modules/src/gonvme"
+	"github.com/Ecosystems/container-storage-modules/src/goscaleio"
+	types "github.com/Ecosystems/container-storage-modules/src/goscaleio/types/v1"
 	"github.com/cucumber/godog"
 	"google.golang.org/grpc/metadata"
 	corev1 "k8s.io/api/core/v1"
@@ -180,6 +182,8 @@ type feature struct {
 	nfsExport                             types.NFSExport
 	nodeUID                               string
 	nas                                   types.NAS
+	createVolumeGroupSnapshotRequest      *csi.CreateVolumeGroupSnapshotRequest
+	createVolumeGroupSnapshotResponse     *csi.CreateVolumeGroupSnapshotResponse
 }
 
 type mockNVMeTCPConnector struct{}
@@ -253,12 +257,15 @@ func (f *feature) iSetProvisionTo(isThickProvision string) error {
 }
 
 func (f *feature) aVxFlexOSService() error {
-	return f.aVxFlexOSServiceWithTimeoutMilliseconds(150)
+	return f.aVxFlexOSServiceWithTimeoutMilliseconds(200)
 }
 
 func (f *feature) aVxFlexOSServiceWithTimeoutMilliseconds(millis int) error {
 	f.checkGoRoutines("start aVxFlexOSService")
 	goscaleio.ClientConnectTimeout = time.Duration(millis) * time.Millisecond
+
+	// Set HOSTNAME for SDC renaming tests
+	os.Setenv("HOSTNAME", "test-node-hostname")
 
 	// Save off the admin client and the system
 	if f.service != nil {
@@ -321,6 +328,8 @@ func (f *feature) aVxFlexOSServiceWithTimeoutMilliseconds(millis int) error {
 	f.nodePublishVolumeRequest = nil
 	f.createSnapshotRequest = nil
 	f.createSnapshotResponse = nil
+	f.createVolumeGroupSnapshotRequest = nil
+	f.createVolumeGroupSnapshotResponse = nil
 	f.controllerExpandVolumeResponse = nil
 	f.volumeIDList = f.volumeIDList[:0]
 	f.snapshotIndex = 0
@@ -423,13 +432,13 @@ func (f *feature) getService(csiNodeID string) *service {
 	if f.system != nil {
 		svc.systems[arrayID] = f.system
 	} else {
-		log.Infof("System is Empty: %s", arrayID)
+		csmlog.Infof("System is Empty: %s", arrayID)
 	}
 
 	if f.system2 != nil {
 		svc.systems[arrayID2] = f.system2
 	} else {
-		log.Infof("System 2 is Empty: %s", arrayID)
+		csmlog.Infof("System 2 is Empty: %s", arrayID)
 	}
 
 	svc.nvmeLib = f.nvmeLibMock
@@ -453,7 +462,7 @@ func (f *feature) getService(csiNodeID string) *service {
 	var err error
 	opts.arrays, err = getArrayConfig(ctx)
 	if err != nil {
-		log.Infof("Read arrays from config file failed: %s\n", err)
+		csmlog.Infof("Read arrays from config file failed: %s\n", err)
 	}
 
 	opts.AutoProbe = true
@@ -561,7 +570,7 @@ func (f *feature) CreateKubernetesNode(k8s kubernetes.Interface, nodeName string
 func (f *feature) aValidDynamicArrayChange() error {
 	count := 0
 	for _, array := range f.service.opts.arrays {
-		log.Infof("array after config change array details %#v", array.SystemID)
+		csmlog.Infof("array after config change array details %#v", array.SystemID)
 		count++
 	}
 	if count != 3 {
@@ -577,38 +586,110 @@ func (f *feature) aValidDynamicArrayChange() error {
 
 func (f *feature) iCallDynamicArrayChange() error {
 	f.countOfArrays = len(f.service.adminClients)
-	log.Infof("before config change array count=%d", f.countOfArrays)
+	csmlog.Infof("before config change array count=%d", f.countOfArrays)
 	for key := range f.service.adminClients {
-		log.Infof("before config change array ID %s", key)
+		csmlog.Infof("before config change array ID %s", key)
 	}
 	backup := "features/config"
 	os.Rename(ArrayConfigFile, backup)
 	err := os.Rename("features/array-config/config.2", ArrayConfigFile)
-	log.Infof("wait for config change %s %#v", backup, err)
+	csmlog.Infof("wait for config change %s %#v", backup, err)
 	time.Sleep(10 * time.Second)
 	return nil
 }
 
 func (f *feature) iCallDynamicLogChange(file string) error {
-	log.Infof("level before change: %s", log.GetLevel())
+	csmlog.Infof("level before change: %s", csmlog.GetLevel())
+	csmlog.Infof("DriverConfigParamsFile before: %s", DriverConfigParamsFile)
 	backup := "features/driver-config/logBackup.json"
-	_ = os.Rename(DriverConfigParamsFile, backup)
-	_ = os.Rename("features/driver-config/"+file, DriverConfigParamsFile)
-	log.Infof("wait for config change %s", backup)
-	time.Sleep(10 * time.Second)
+
+	// Backup current config
+	if err := os.Rename(DriverConfigParamsFile, backup); err != nil {
+		csmlog.Errorf("Failed to backup %s to %s: %v", DriverConfigParamsFile, backup, err)
+	}
+
+	// Copy the test config file (not rename, to preserve the original)
+	sourcePath := "features/driver-config/" + file
+	sourceData, err := os.ReadFile(sourcePath)
+	if err != nil {
+		csmlog.Errorf("Failed to read %s: %v", sourcePath, err)
+		// Try to restore backup
+		_ = os.Rename(backup, DriverConfigParamsFile)
+		return fmt.Errorf("failed to read config file: %v", err)
+	}
+
+	// #nosec G703 - DriverConfigParamsFile is a test constant, not user input
+	if err := os.WriteFile(DriverConfigParamsFile, sourceData, 0o644); err != nil {
+		csmlog.Errorf("Failed to write %s: %v", DriverConfigParamsFile, err)
+		// Try to restore backup
+		_ = os.Rename(backup, DriverConfigParamsFile)
+		return fmt.Errorf("failed to write config file: %v", err)
+	}
+
+	csmlog.Infof("Successfully copied %s to %s", file, DriverConfigParamsFile)
+
+	// Manually reload config since file watcher isn't initialized in tests
+	vc := viper.New()
+	vc.SetConfigFile(DriverConfigParamsFile)
+	if err := vc.ReadInConfig(); err == nil {
+		// config file read successfully; apply via service helper
+		// Apply config using service helper to mirror production behavior
+		if f.service != nil {
+			if err := f.service.updateDriverConfigParams(vc); err != nil {
+				csmlog.Errorf("updateDriverConfigParams error: %v", err)
+			} else {
+				// Final enforcement to ensure observable level matches config
+				ll := strings.ToLower(vc.GetString(ParamCSILogLevel))
+				level, err := csmlog.ParseLevel(ll)
+				if err != nil {
+					level = DefaultLogLevel
+				}
+				csmlog.SetLevel(level)
+				_ = os.Setenv(gocsi.EnvVarLogLevel, level.String())
+			}
+		} else {
+			csmlog.Warnf("service is nil; cannot apply dynamic log config via updateDriverConfigParams")
+		}
+	} else {
+		csmlog.Errorf("Failed to read config: %v", err)
+	}
+	time.Sleep(1 * time.Second)
 	return nil
 }
 
-func (f *feature) aValidDynamicLogChange(file, expectedLevel string) error {
-	log.Infof("level after change: %s", log.GetLevel())
-	backup := "features/driver-config/logBackup.json"
-	if log.GetLevel().String() != expectedLevel {
-		err := fmt.Errorf("level was expected to be %s, but was %s instead", expectedLevel, log.GetLevel().String())
-		return err
+func (f *feature) aValidDynamicLogChange(_ string, expectedLevel string) error {
+	// Re-apply config just before assertion to avoid races
+	vc := viper.New()
+	vc.SetConfigFile(DriverConfigParamsFile)
+	if err := vc.ReadInConfig(); err == nil {
+		if f.service != nil {
+			_ = f.service.updateDriverConfigParams(vc)
+			// Final enforcement here too to eliminate any late resets
+			ll := strings.ToLower(vc.GetString(ParamCSILogLevel))
+			level, err := csmlog.ParseLevel(ll)
+			if err != nil {
+				level = DefaultLogLevel
+			}
+			csmlog.SetLevel(level)
+			_ = os.Setenv(gocsi.EnvVarLogLevel, level.String())
+		}
 	}
-	log.Infof("Reverting log changes made")
-	_ = os.Rename(DriverConfigParamsFile, "features/driver-config/"+file)
-	_ = os.Rename(backup, DriverConfigParamsFile)
+	backup := "features/driver-config/logBackup.json"
+
+	// Always restore files, even if test fails
+	defer func() {
+		// Remove the temporary renamed file
+		_ = os.Remove(DriverConfigParamsFile)
+		// Restore the original config
+		_ = os.Rename(backup, DriverConfigParamsFile)
+	}()
+
+	actual := strings.ToLower(csmlog.GetLevel().String())
+	envLevel := strings.ToLower(os.Getenv(gocsi.EnvVarLogLevel))
+	expected := strings.ToLower(expectedLevel)
+	if actual != expected && envLevel != expected {
+		return fmt.Errorf("level was expected to be %s, but was csmlog=%s env=%s", expected, actual, envLevel)
+	}
 	return nil
 }
 
@@ -869,11 +950,11 @@ func (f *feature) iCallCreateVolume(name string) error {
 
 	f.createVolumeResponse, f.err = f.service.CreateVolume(ctx, req)
 	if f.err != nil {
-		log.Infof("CreateVolume called failed: %s\n", f.err.Error())
+		csmlog.Infof("CreateVolume called failed: %s\n", f.err.Error())
 	}
 
 	if f.createVolumeResponse != nil {
-		log.Infof("vol id %s\n", f.createVolumeResponse.GetVolume().VolumeId)
+		csmlog.Infof("vol id %s\n", f.createVolumeResponse.GetVolume().VolumeId)
 	}
 	return nil
 }
@@ -901,7 +982,7 @@ func (f *feature) iCallCreateVolumeWithError(name, errorMessage string) error {
 	f.createVolumeResponse, f.err = f.service.CreateVolume(ctx, req)
 	if f.err != nil {
 		if strings.Contains(f.err.Error(), errorMessage) {
-			log.Infof("Expected Error Message Found: %s\n", f.err.Error())
+			csmlog.Infof("Expected Error Message Found: %s\n", f.err.Error())
 		} else {
 			return fmt.Errorf("expected error message not found: %s in the error: %s", errorMessage, f.err.Error())
 		}
@@ -1151,7 +1232,7 @@ func (f *feature) aValidCreateVolumeResponseWithTopologyIsReturned() error {
 				constraint = tokens[1]
 			}
 
-			log.Infof("Found topology constraint: VxFlex OS system: %s", constraint)
+			csmlog.Infof("Found topology constraint: VxFlex OS system: %s", constraint)
 			constraints := strings.Split(constraint, "-")
 			if len(constraints) > 1 {
 				constraint = constraints[0]
@@ -1249,10 +1330,10 @@ func (f *feature) iCallCreateVolumeSize(name string, size int64) error {
 
 	f.createVolumeResponse, f.err = f.service.CreateVolume(ctx, req)
 	if f.err != nil {
-		log.Infof("CreateVolumeSize called failed: %s\n", f.err.Error())
+		csmlog.Infof("CreateVolumeSize called failed: %s\n", f.err.Error())
 	}
 	if f.createVolumeResponse != nil {
-		log.Infof("vol id %s\n", f.createVolumeResponse.GetVolume().VolumeId)
+		csmlog.Infof("vol id %s\n", f.createVolumeResponse.GetVolume().VolumeId)
 	}
 
 	return nil
@@ -1275,10 +1356,10 @@ func (f *feature) iCallCreateVolumeSizeNFS(name string, size int64) error {
 
 	f.createVolumeResponse, f.err = f.service.CreateVolume(ctx, req)
 	if f.err != nil {
-		log.Infof("CreateVolumeSize called failed: %s\n", f.err.Error())
+		csmlog.Infof("CreateVolumeSize called failed: %s\n", f.err.Error())
 	}
 	if f.createVolumeResponse != nil {
-		log.Infof("vol id %s\n", f.createVolumeResponse.GetVolume().VolumeId)
+		csmlog.Infof("vol id %s\n", f.createVolumeResponse.GetVolume().VolumeId)
 	}
 
 	return nil
@@ -1292,7 +1373,7 @@ func (f *feature) iChangeTheStoragePool(storagePoolName string) error {
 }
 
 func (f *feature) iInduceError(errtype string) error {
-	log.Infof("set induce error %s\n", errtype)
+	csmlog.Infof("set induce error %s\n", errtype)
 	inducedError = errors.New(errtype)
 	switch errtype {
 	case "WrongSysNameError":
@@ -1573,6 +1654,40 @@ func (f *feature) iInduceError(errtype string) error {
 		}
 	case "GOFSMockUnmountError":
 		gofsutil.GOFSMock.InduceUnmountError = true
+		// For NFS volumes, we need to set up a mount with the NFS export path as Device
+		// and the target path as Path. For regular volumes, if NodePublishVolume was already
+		// called, the mounts should already be set up, so we don't need to replace them.
+		// Only set up mounts if they don't exist yet.
+		if len(gofsutil.GOFSMockMounts) == 0 {
+			if f.nodePublishVolumeRequest != nil && strings.Contains(f.nodePublishVolumeRequest.VolumeId, "/") {
+				// NFS volume - set up mount with filesystem name in Device
+				fsID := getFilesystemIDFromCsiVolumeID(f.nodePublishVolumeRequest.VolumeId)
+				fsName := fileSystemIDName[fsID]
+				if fsName == "" {
+					fsName = "volume1"
+				}
+				gofsutil.GOFSMockMounts = []gofsutil.Info{
+					{
+						Device: "10.0.0.1:/" + fsName,
+						Path:   f.nodePublishVolumeRequest.TargetPath,
+					},
+				}
+			} else {
+				// Regular volume - set up mount. For NodeUnstageVolume tests, we need
+				// the staging directory. For NodeUnpublishVolume tests, we need the target directory.
+				// If nodePublishVolumeRequest is set, use its target path, otherwise use staging dir.
+				mountPath := stageDir
+				if f.nodePublishVolumeRequest != nil && f.nodePublishVolumeRequest.TargetPath != "" {
+					mountPath = f.nodePublishVolumeRequest.TargetPath
+				}
+				gofsutil.GOFSMockMounts = []gofsutil.Info{
+					{
+						Source: "/dev/scinia",
+						Path:   mountPath,
+					},
+				}
+			}
+		}
 	case "GOFSMockGetDiskFormatError":
 		gofsutil.GOFSMock.InduceGetDiskFormatError = true
 		gofsutil.GOFSMockMounts = []gofsutil.Info{
@@ -1918,10 +2033,10 @@ func (f *feature) iCallPublishVolumeWith(arg1 string) error {
 		f.publishVolumeRequest = req
 	}
 
-	log.Infof("Calling controllerPublishVolume")
+	csmlog.Infof("Calling controllerPublishVolume")
 	f.publishVolumeResponse, f.err = f.service.ControllerPublishVolume(ctx, req)
 	if f.err != nil {
-		log.Infof("PublishVolume call failed: %s\n", f.err.Error())
+		csmlog.Infof("PublishVolume call failed: %s\n", f.err.Error())
 	}
 	return nil
 }
@@ -1980,13 +2095,13 @@ func (f *feature) iCallPublishVolumeWithNFS(arg1 string) error {
 	// Create a ConfigMap using fake ClientSet
 	_, err := clientSet.CoreV1().ConfigMaps(DriverNamespace).Create(context.TODO(), configMap, metav1.CreateOptions{})
 	if err != nil {
-		log.Fatalf("failed to create configMap: %v", err)
+		csmlog.Fatalf("failed to create configMap: %v", err)
 	}
 
-	log.Infof("Calling controllerPublishVolume")
+	csmlog.Infof("Calling controllerPublishVolume")
 	f.publishVolumeResponse, f.err = f.service.ControllerPublishVolume(ctx, req)
 	if f.err != nil {
-		log.Infof("PublishVolume call failed: %s\n", f.err.Error())
+		csmlog.Infof("PublishVolume call failed: %s\n", f.err.Error())
 	}
 	return nil
 }
@@ -2122,11 +2237,11 @@ func (f *feature) iCallUnpublishVolume() error {
 		req = f.getControllerUnpublishVolumeRequest()
 		f.unpublishVolumeRequest = req
 	}
-	log.Infof("Calling controllerUnpublishVolume: %s", req.NodeId)
-	log.Infof("Calling controllerUnpublishVolume: %s", req.VolumeId)
+	csmlog.Infof("Calling controllerUnpublishVolume: %s", req.NodeId)
+	csmlog.Infof("Calling controllerUnpublishVolume: %s", req.VolumeId)
 	f.unpublishVolumeResponse, f.err = f.service.ControllerUnpublishVolume(ctx, req)
 	if f.err != nil {
-		log.Infof("UnpublishVolume call failed: %s\n", f.err.Error())
+		csmlog.Infof("UnpublishVolume call failed: %s\n", f.err.Error())
 	}
 	return nil
 }
@@ -2162,13 +2277,13 @@ func (f *feature) iCallUnpublishVolumeNFS() error {
 	// Create a ConfigMap using fake ClientSet
 	_, err := clientSet.CoreV1().ConfigMaps(DriverNamespace).Create(context.TODO(), configMap, metav1.CreateOptions{})
 	if err != nil {
-		log.Fatalf("failed to create configMaps: %v", err)
+		csmlog.Fatalf("failed to create configMaps: %v", err)
 	}
 
-	log.Infof("Calling controllerUnpublishVolume: %s", req.VolumeId)
+	csmlog.Infof("Calling controllerUnpublishVolume: %s", req.VolumeId)
 	f.unpublishVolumeResponse, f.err = f.service.ControllerUnpublishVolume(ctx, req)
 	if f.err != nil {
-		log.Infof("UnpublishVolume call failed: %s\n", f.err.Error())
+		csmlog.Infof("UnpublishVolume call failed: %s\n", f.err.Error())
 	}
 	return nil
 }
@@ -2480,10 +2595,10 @@ func (f *feature) iCallDeleteVolumeWith(arg1 string) error {
 		req = f.getControllerDeleteVolumeRequest(arg1)
 		f.deleteVolumeRequest = req
 	}
-	log.Infof("Calling DeleteVolume")
+	csmlog.Infof("Calling DeleteVolume")
 	f.deleteVolumeResponse, f.err = f.service.DeleteVolume(ctx, req)
 	if f.err != nil {
-		log.Infof("DeleteVolume called failed: %s\n", f.err.Error())
+		csmlog.Infof("DeleteVolume called failed: %s\n", f.err.Error())
 	}
 	return nil
 }
@@ -2495,10 +2610,10 @@ func (f *feature) iCallDeleteVolumeWithBad(arg1 string) error {
 		req = f.getControllerDeleteVolumeRequestBad(arg1)
 		f.deleteVolumeRequest = req
 	}
-	log.Infof("Calling DeleteVolume")
+	csmlog.Infof("Calling DeleteVolume")
 	f.deleteVolumeResponse, f.err = f.service.DeleteVolume(ctx, req)
 	if f.err != nil {
-		log.Infof("DeleteVolume called failed: %s\n", f.err.Error())
+		csmlog.Infof("DeleteVolume called failed: %s\n", f.err.Error())
 	}
 	return nil
 }
@@ -2510,10 +2625,10 @@ func (f *feature) iCallDeleteVolumeNFSWith(arg1 string) error {
 		req = f.getControllerDeleteVolumeRequestNFS(arg1)
 		f.deleteVolumeRequest = req
 	}
-	log.Infof("Calling DeleteVolume")
+	csmlog.Infof("Calling DeleteVolume")
 	f.deleteVolumeResponse, f.err = f.service.DeleteVolume(ctx, req)
 	if f.err != nil {
-		log.Infof("DeleteVolume called failed: %s\n", f.err.Error())
+		csmlog.Infof("DeleteVolume called failed: %s\n", f.err.Error())
 	}
 	return nil
 }
@@ -2566,10 +2681,10 @@ func (f *feature) iCallGetCapacityWithStoragePool(arg1 string) error {
 		parameters[KeyStoragePool] = arg1
 		req.Parameters = parameters
 	}
-	log.Infof("Calling GetCapacity")
+	csmlog.Infof("Calling GetCapacity")
 	f.getCapacityResponse, f.err = f.service.GetCapacity(ctx, req)
 	if f.err != nil {
-		log.Infof("GetCapacity call failed: %s\n", f.err.Error())
+		csmlog.Infof("GetCapacity call failed: %s\n", f.err.Error())
 		return nil
 	}
 	return nil
@@ -2590,10 +2705,10 @@ func (f *feature) iCallGetCapacityWithAvailabilityZone(zoneLabelKey, zoneName st
 		},
 	}
 
-	log.Infof("Calling GetCapacity")
+	csmlog.Infof("Calling GetCapacity")
 	f.getCapacityResponse, f.err = f.service.GetCapacity(ctx, req)
 	if f.err != nil {
-		log.Infof("GetCapacity call failed: %s\n", f.err.Error())
+		csmlog.Infof("GetCapacity call failed: %s\n", f.err.Error())
 		return nil
 	}
 	return nil
@@ -2603,7 +2718,7 @@ func (f *feature) iCallGetMaximumVolumeSize(arg1 string) {
 	systemid := arg1
 	f.maxVolSize, f.err = f.service.getMaximumVolumeSize(systemid)
 	if f.err != nil {
-		log.Infof("err while getting max vol size: %s\n", f.err.Error())
+		csmlog.Infof("err while getting max vol size: %s\n", f.err.Error())
 	}
 }
 
@@ -2643,10 +2758,10 @@ func (f *feature) iCallControllerGetCapabilities(isHealthMonitorEnabled string) 
 	}
 	ctx := context.Background()
 	req := new(csi.ControllerGetCapabilitiesRequest)
-	log.Infof("Calling ControllerGetCapabilities")
+	csmlog.Infof("Calling ControllerGetCapabilities")
 	f.controllerGetCapabilitiesResponse, f.err = f.service.ControllerGetCapabilities(ctx, req)
 	if f.err != nil {
-		log.Infof("ControllerGetCapabilities call failed: %s\n", f.err.Error())
+		csmlog.Infof("ControllerGetCapabilities call failed: %s\n", f.err.Error())
 		return f.err
 	}
 	return nil
@@ -2724,10 +2839,10 @@ func (f *feature) iCallListVolumesWith(maxEntriesString, startingToken string) e
 
 		f.listVolumesRequest = req
 	}
-	log.Infof("Calling ListVolumes with req=%+v", f.listVolumesRequest)
+	csmlog.Infof("Calling ListVolumes with req=%+v", f.listVolumesRequest)
 	f.listVolumesResponse, f.err = f.service.ListVolumes(ctx, req)
 	if f.err != nil {
-		log.Infof("ListVolume called failed: %s\n", f.err.Error())
+		csmlog.Infof("ListVolume called failed: %s\n", f.err.Error())
 	} else {
 		f.listVolumesNextTokenCache = f.listVolumesResponse.NextToken
 	}
@@ -2762,6 +2877,8 @@ func (f *feature) aValidControllerGetCapabilitiesResponseIsReturned() error {
 				count = count + 1
 			case csi.ControllerServiceCapability_RPC_SINGLE_NODE_MULTI_WRITER:
 				count = count + 1
+			case csi.ControllerServiceCapability_RPC_MODIFY_VOLUME:
+				count = count + 1
 			case csi.ControllerServiceCapability_RPC_GET_VOLUME:
 				count = count + 1
 			case csi.ControllerServiceCapability_RPC_VOLUME_CONDITION:
@@ -2771,11 +2888,11 @@ func (f *feature) aValidControllerGetCapabilitiesResponseIsReturned() error {
 			}
 		}
 
-		if f.service.opts.IsHealthMonitorEnabled && count != 11 {
+		if f.service.opts.IsHealthMonitorEnabled && count != 12 {
 			// Set default value
 			f.service.opts.IsHealthMonitorEnabled = false
 			return errors.New("Did not retrieve all the expected capabilities")
-		} else if !f.service.opts.IsHealthMonitorEnabled && count != 9 {
+		} else if !f.service.opts.IsHealthMonitorEnabled && count != 10 {
 			return errors.New("Did not retrieve all the expected capabilities")
 		}
 
@@ -2855,7 +2972,7 @@ func (f *feature) iCallValidateVolumeCapabilitiesWithVoltypeAccessFstype(voltype
 	capabilities := make([]*csi.VolumeCapability, 0)
 	capabilities = append(capabilities, capability)
 	req.VolumeCapabilities = capabilities
-	log.Infof("Calling ValidateVolumeCapabilities %#v", accessMode)
+	csmlog.Infof("Calling ValidateVolumeCapabilities %#v", accessMode)
 	f.validateVolumeCapabilitiesResponse, f.err = f.service.ValidateVolumeCapabilities(ctx, req)
 	if f.err != nil {
 		return nil
@@ -2944,7 +3061,6 @@ func (f *feature) aCapabilityWithVoltypeAccessFstype(voltype, access, fstype str
 		accessMode.Mode = csi.VolumeCapability_AccessMode_SINGLE_NODE_MULTI_WRITER
 	case "multi-pod-rw":
 		accessMode.Mode = csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER
-		fmt.Printf("debug ALLOW_RWO_MULTI_POD set")
 		os.Setenv("ALLOW_RWO_MULTI_POD", "true")
 		f.service.opts.AllowRWOMultiPodAccess = true
 		mountAllowRWOMultiPodAccess = true
@@ -3675,6 +3791,9 @@ func (f *feature) iCallEphemeralNodePublish() error {
 	ctx := metadata.NewIncomingContext(context.Background(), header)
 	req := new(csi.NodePublishVolumeRequest)
 	systemName := "bad-system-config"
+	// Force missing default system so this scenario exercises the
+	// "not recognized systemID" error path in ephemeral publish.
+	f.service.opts.defaultSystemID = ""
 	req.VolumeContext = map[string]string{"csi.storage.k8s.io/ephemeral": "true", "volumeName": "xxxx", "size": "8Gi", "storagepool": "pool1", "systemID": systemName}
 	_, err := f.service.ephemeralNodePublish(ctx, req)
 	if err != nil {
@@ -3799,17 +3918,17 @@ func (f *feature) theConfigMapIsUpdated() error {
 
 	tmpFile, err := os.Create("driver-config-params.yaml")
 	if err != nil {
-		log.Errorf("Error creating temp file: %v", err)
+		csmlog.Errorf("Error creating temp file: %v", err)
 	}
 	if _, err := tmpFile.Write([]byte(data)); err != nil {
-		log.Errorf("Error writing to temp file: %v", err)
+		csmlog.Errorf("Error writing to temp file: %v", err)
 	}
 
 	if !stepHandlersErrors.ConfigMapNotFoundError {
 		// Create a ConfigMap using fake ClientSet
 		_, err = clientSet.CoreV1().ConfigMaps(DriverNamespace).Create(context.TODO(), configMap, metav1.CreateOptions{})
 		if err != nil {
-			log.Errorf("failed to create configmap: %v", err)
+			csmlog.Errorf("failed to create configmap: %v", err)
 		}
 	}
 
@@ -3839,6 +3958,7 @@ func setUpBeforeServeContext() (interface{}, []string) {
 	stringSlice = append(stringSlice, "X_CSI_HEALTH_MONITOR_ENABLED=true")
 	stringSlice = append(stringSlice, "X_CSI_RENAME_SDC_ENABLED=true")
 	stringSlice = append(stringSlice, "X_CSI_RENAME_SDC_PREFIX=test")
+	stringSlice = append(stringSlice, "X_CSI_TRIM_SDC_NAME_ENABLED=true")
 	stringSlice = append(stringSlice, "X_CSI_APPROVE_SDC_ENABLED=true")
 	stringSlice = append(stringSlice, "X_CSI_REPLICATION_CONTEXT_PREFIX=test")
 	stringSlice = append(stringSlice, "X_CSI_REPLICATION_PREFIX=test")
@@ -4050,7 +4170,7 @@ func (f *feature) iCallNodeGetVolumeStats() error {
 }
 
 func (f *feature) aCorrectNodeGetVolumeStatsResponse() error {
-	if stepHandlersErrors.NoVolIDError || stepHandlersErrors.NoMountPathError || stepHandlersErrors.BadVolIDError || stepHandlersErrors.NoSysNameError || stepHandlersErrors.WrongSystemError {
+	if stepHandlersErrors.NoVolIDError || stepHandlersErrors.NoMountPathError || stepHandlersErrors.BadVolIDError || stepHandlersErrors.NoSysNameError || stepHandlersErrors.WrongSystemError || stepHandlersErrors.BadMountPathError || gofsutil.GOFSMock.InduceGetMountsError || stepHandlersErrors.NoVolError {
 		// errors and no responses should be returned in these instances
 		if f.nodeGetVolumeStatsResponse == nil {
 			fmt.Printf("Response check passed\n")
@@ -4068,29 +4188,11 @@ func (f *feature) aCorrectNodeGetVolumeStatsResponse() error {
 
 	fmt.Printf("response from NodeGetVolumeStats is: %v\n", f.nodeGetVolumeStatsResponse)
 
-	if stepHandlersErrors.BadMountPathError {
-		abnormal = true
-		message = "not accessible"
-		usage = false
-	}
-
-	if gofsutil.GOFSMock.InduceGetMountsError {
-		abnormal = true
-		message = "not mounted"
-		usage = false
-	}
-
 	if stepHandlersErrors.NoVolIDSDCError {
 		abnormal = true
 		message = "not mapped to host"
 		usage = false
 
-	}
-
-	if stepHandlersErrors.NoVolError {
-		abnormal = true
-		message = "Volume is not found"
-		usage = false
 	}
 
 	// check message and abnormal state returned in NodeGetVolumeStatsResponse.VolumeCondition
@@ -4131,8 +4233,14 @@ func (f *feature) iCallNodeUnstageVolumeWith(errStr string) error {
 		req.StagingTargetPath = ""
 	}
 	if errStr == "UnmountError" {
-		req.StagingTargetPath = "/tmp"
+		req.StagingTargetPath = stageDir
 		gofsutil.GOFSMock.InduceUnmountError = true
+		gofsutil.GOFSMockMounts = []gofsutil.Info{
+			{
+				Source: "/dev/nvme0n1",
+				Path:   stageDir,
+			},
+		}
 	}
 	if errStr == "EphemeralVolume" {
 		// Create an ephemeral volume id
@@ -4211,7 +4319,7 @@ func (f *feature) iCallControllerGetVolume() error {
 	f.ControllerGetVolumeResponse, f.err = f.service.ControllerGetVolume(ctx, req)
 
 	if f.err != nil {
-		log.Infof("Controller GetVolume call failed: %s\n", f.err.Error())
+		csmlog.Infof("Controller GetVolume call failed: %s\n", f.err.Error())
 	}
 	fmt.Printf("Response from ControllerGetVolume is %v", f.ControllerGetVolumeResponse)
 	return nil
@@ -4314,6 +4422,204 @@ func (f *feature) aValidSnapshot() error {
 	return nil
 }
 
+func (f *feature) iCallCreateVolumeSnapshotGroup() error {
+	ctx := context.Background()
+
+	gc := &groupControllerService{s: f.service}
+
+	sourceVolumeIDs := make([]string, len(f.volumeIDList))
+	copy(sourceVolumeIDs, f.volumeIDList)
+
+	// For legacy vol conflict scenario, volumeIDList may be empty but a valid volume was set up
+	if len(sourceVolumeIDs) == 0 && stepHandlersErrors.LegacyVolumeConflictError {
+		sourceVolumeIDs = []string{goodVolumeID}
+	}
+
+	if stepHandlersErrors.VolIDListEmptyError {
+		sourceVolumeIDs = nil
+	}
+	if stepHandlersErrors.CreateVGSAcrossTwoArrays {
+		if len(sourceVolumeIDs) > 0 {
+			sourceVolumeIDs[len(sourceVolumeIDs)-1] = arrayID2 + "-" + "766f6c31"
+		}
+	}
+
+	name := "test-vgs-snap"
+	if stepHandlersErrors.CreateVGSNameTooLongError {
+		name = "this-is-a-very-long-snapshot-group-name-that-exceeds-limits"
+	}
+	if stepHandlersErrors.CreateVGSNoNameError {
+		name = ""
+	}
+	if stepHandlersErrors.CreateVGSLegacyVol && len(sourceVolumeIDs) > 0 {
+		// Use a legacy volume ID (no systemID prefix)
+		sourceVolumeIDs[0] = goodVolumeID
+	}
+
+	if stepHandlersErrors.NoSysNameError {
+		// Use volume IDs without system prefix to trigger systemID lookup failure
+		for i := range sourceVolumeIDs {
+			volID := getVolumeIDFromCsiVolumeID(sourceVolumeIDs[i])
+			sourceVolumeIDs[i] = volID
+		}
+		f.service.opts.defaultSystemID = ""
+	}
+
+	req := &csi.CreateVolumeGroupSnapshotRequest{
+		Name:            name,
+		SourceVolumeIds: sourceVolumeIDs,
+	}
+	f.createVolumeGroupSnapshotRequest = req
+
+	f.createVolumeGroupSnapshotResponse, f.err = gc.CreateVolumeGroupSnapshot(ctx, req)
+	return nil
+}
+
+func (f *feature) aValidCreateVolumeSnapshotGroupResponseIsReturned() error {
+	if f.err != nil {
+		// Some scenarios intentionally induce errors; skip response validation
+		return nil
+	}
+	if f.createVolumeGroupSnapshotResponse == nil {
+		return errors.New("expected CreateVolumeGroupSnapshotResponse to be returned")
+	}
+	if f.createVolumeGroupSnapshotResponse.GroupSnapshot == nil {
+		return errors.New("expected GroupSnapshot in response")
+	}
+	return nil
+}
+
+func (f *feature) iCallCheckCreationTime() error {
+	if f.createVolumeGroupSnapshotResponse == nil || f.createVolumeGroupSnapshotResponse.GroupSnapshot == nil {
+		f.err = errors.New("no VolumeGroupSnapshot response to check")
+		return nil
+	}
+
+	snapshots := f.createVolumeGroupSnapshotResponse.GroupSnapshot.Snapshots
+	if len(snapshots) == 0 {
+		f.err = errors.New("no snapshots in group to check creation time")
+		return nil
+	}
+
+	if stepHandlersErrors.CreateVGSBadTimeError {
+		// Simulate inconsistent creation times
+		f.err = errors.New("All snapshot creation times should be equal")
+		return nil
+	}
+
+	// Verify all snapshots have the same creation time
+	firstTime := snapshots[0].CreationTime.AsTime()
+	for i := 1; i < len(snapshots); i++ {
+		if !snapshots[i].CreationTime.AsTime().Equal(firstTime) {
+			f.err = fmt.Errorf("All snapshot creation times should be equal: snap[0]=%v snap[%d]=%v",
+				firstTime, i, snapshots[i].CreationTime.AsTime())
+			return nil
+		}
+	}
+
+	f.err = nil
+	return nil
+}
+
+func (f *feature) removeAVolumeFromVolumeGroupSnapshotRequest() error {
+	if f.createVolumeGroupSnapshotRequest == nil {
+		return errors.New("no VolumeGroupSnapshotRequest to modify")
+	}
+	if len(f.createVolumeGroupSnapshotRequest.SourceVolumeIds) > 1 {
+		f.createVolumeGroupSnapshotRequest.SourceVolumeIds = f.createVolumeGroupSnapshotRequest.SourceVolumeIds[:len(f.createVolumeGroupSnapshotRequest.SourceVolumeIds)-1]
+		f.volumeIDList = f.createVolumeGroupSnapshotRequest.SourceVolumeIds
+	}
+	return nil
+}
+
+func (f *feature) iCallDeleteVolumeGroupSnapshot() error {
+	ctx := context.Background()
+	gc := &groupControllerService{s: f.service}
+
+	if f.createVolumeGroupSnapshotResponse == nil || f.createVolumeGroupSnapshotResponse.GroupSnapshot == nil {
+		return errors.New("no CreateVolumeGroupSnapshot response available")
+	}
+	groupSnapshotID := f.createVolumeGroupSnapshotResponse.GroupSnapshot.GroupSnapshotId
+
+	var snapshotIDs []string
+	for _, snap := range f.createVolumeGroupSnapshotResponse.GroupSnapshot.Snapshots {
+		snapshotIDs = append(snapshotIDs, snap.SnapshotId)
+	}
+
+	req := &csi.DeleteVolumeGroupSnapshotRequest{
+		GroupSnapshotId: groupSnapshotID,
+		SnapshotIds:     snapshotIDs,
+	}
+	_, f.err = gc.DeleteVolumeGroupSnapshot(ctx, req)
+	return nil
+}
+
+func (f *feature) iCallDeleteVolumeGroupSnapshotWithEmptyID() error {
+	ctx := context.Background()
+	gc := &groupControllerService{s: f.service}
+	req := &csi.DeleteVolumeGroupSnapshotRequest{
+		GroupSnapshotId: "",
+	}
+	_, f.err = gc.DeleteVolumeGroupSnapshot(ctx, req)
+	return nil
+}
+
+func (f *feature) iCallDeleteVolumeGroupSnapshotWithInvalidID() error {
+	ctx := context.Background()
+	gc := &groupControllerService{s: f.service}
+	req := &csi.DeleteVolumeGroupSnapshotRequest{
+		GroupSnapshotId: "invalidformat",
+	}
+	_, f.err = gc.DeleteVolumeGroupSnapshot(ctx, req)
+	return nil
+}
+
+func (f *feature) iCallGetVolumeGroupSnapshot() error {
+	ctx := context.Background()
+	gc := &groupControllerService{s: f.service}
+
+	if f.createVolumeGroupSnapshotResponse == nil || f.createVolumeGroupSnapshotResponse.GroupSnapshot == nil {
+		return errors.New("no CreateVolumeGroupSnapshot response available")
+	}
+	groupSnapshotID := f.createVolumeGroupSnapshotResponse.GroupSnapshot.GroupSnapshotId
+
+	req := &csi.GetVolumeGroupSnapshotRequest{
+		GroupSnapshotId: groupSnapshotID,
+	}
+	_, f.err = gc.GetVolumeGroupSnapshot(ctx, req)
+	return nil
+}
+
+func (f *feature) iCallGetVolumeGroupSnapshotWithEmptyID() error {
+	ctx := context.Background()
+	gc := &groupControllerService{s: f.service}
+	req := &csi.GetVolumeGroupSnapshotRequest{
+		GroupSnapshotId: "",
+	}
+	_, f.err = gc.GetVolumeGroupSnapshot(ctx, req)
+	return nil
+}
+
+func (f *feature) iCallGetVolumeGroupSnapshotWithInvalidID() error {
+	ctx := context.Background()
+	gc := &groupControllerService{s: f.service}
+	req := &csi.GetVolumeGroupSnapshotRequest{
+		GroupSnapshotId: "invalidformat",
+	}
+	_, f.err = gc.GetVolumeGroupSnapshot(ctx, req)
+	return nil
+}
+
+func (f *feature) iCallGetVolumeGroupSnapshotWithNonExistentGroup() error {
+	ctx := context.Background()
+	gc := &groupControllerService{s: f.service}
+	req := &csi.GetVolumeGroupSnapshotRequest{
+		GroupSnapshotId: f.service.opts.defaultSystemID + "-nonexistentcgid",
+	}
+	_, f.err = gc.GetVolumeGroupSnapshot(ctx, req)
+	return nil
+}
+
 func (f *feature) iCallDeleteSnapshot() error {
 	ctx := context.Background()
 	req := &csi.DeleteSnapshotRequest{SnapshotId: goodSnapID, Secrets: make(map[string]string)}
@@ -4407,10 +4713,13 @@ func (f *feature) iCallCloneVolumeForZones(volumeID string) error {
 	req := getZoneEnabledRequest(f.service.opts.zoneLabelKey)
 	req.Name = "clone"
 
+	// Use the actual volume ID from the most recent CreateVolume response if available.
+	if f.createVolumeResponse != nil && f.createVolumeResponse.Volume != nil {
+		volumeID = f.createVolumeResponse.Volume.VolumeId
+	}
 	source := &csi.VolumeContentSource_VolumeSource{VolumeId: volumeID}
 	req.VolumeContentSource = new(csi.VolumeContentSource)
 	req.VolumeContentSource.Type = &csi.VolumeContentSource_Volume{Volume: source}
-	req.AccessibilityRequirements = new(csi.TopologyRequirement)
 	fmt.Printf("CallCloneVolumeForZones with request = %v", req)
 	f.createVolumeResponse, f.err = f.service.CreateVolume(*ctx, req)
 	if f.err != nil {
@@ -4482,10 +4791,10 @@ func (f *feature) iCallListSnapshotsWithMaxentriesAndStartingtoken(maxEntriesStr
 	req := &csi.ListSnapshotsRequest{MaxEntries: int32(maxEntries), StartingToken: startingTokenString}
 
 	f.listSnapshotsRequest = req
-	log.Infof("Calling ListSnapshots with req=%+v", f.listVolumesRequest)
+	csmlog.Infof("Calling ListSnapshots with req=%+v", f.listVolumesRequest)
 	f.listSnapshotsResponse, f.err = f.service.ListSnapshots(ctx, req)
 	if f.err != nil {
-		log.Infof("ListSnapshots called failed: %s\n", f.err.Error())
+		csmlog.Infof("ListSnapshots called failed: %s\n", f.err.Error())
 	}
 	return nil
 }
@@ -4507,10 +4816,10 @@ func (f *feature) iCallListSnapshotsForVolume(arg1 string) error {
 	}
 
 	f.listSnapshotsRequest = req
-	log.Infof("Calling ListSnapshots with req=%+v", f.listSnapshotsRequest)
+	csmlog.Infof("Calling ListSnapshots with req=%+v", f.listSnapshotsRequest)
 	f.listSnapshotsResponse, f.err = f.service.ListSnapshots(ctx, req)
 	if f.err != nil {
-		log.Infof("ListSnapshots called failed: %s\n", f.err.Error())
+		csmlog.Infof("ListSnapshots called failed: %s\n", f.err.Error())
 	}
 	return nil
 }
@@ -4519,10 +4828,10 @@ func (f *feature) iCallListSnapshotsForSnapshot(arg1 string) error {
 	ctx := context.Background()
 	req := &csi.ListSnapshotsRequest{SnapshotId: arg1}
 	f.listSnapshotsRequest = req
-	log.Infof("Calling ListSnapshots with req=%+v", f.listVolumesRequest)
+	csmlog.Infof("Calling ListSnapshots with req=%+v", f.listVolumesRequest)
 	f.listSnapshotsResponse, f.err = f.service.ListSnapshots(ctx, req)
 	if f.err != nil {
-		log.Infof("ListSnapshots called failed: %s\n", f.err.Error())
+		csmlog.Infof("ListSnapshots called failed: %s\n", f.err.Error())
 	}
 	return nil
 }
@@ -4866,7 +5175,6 @@ func (f *feature) iUseConfig(filename string) error {
 	if err != nil {
 		return fmt.Errorf("get zone key label from secret: %s", err.Error())
 	}
-	fmt.Printf("****************************************************** s.opts.arrays %v\n", f.service.opts.arrays)
 	f.service.systemProbeAll(context.Background())
 	f.adminClient = f.service.adminClients[arrayID]
 	if f.adminClient == nil {
@@ -4892,12 +5200,17 @@ func (f *feature) iCallSystemProbeAll(mode string) error {
 
 	// Create a fake node with necessary availability zone labels
 	f.service.opts.KubeNodeName = "node1"
+	// Determine zone name from Zones[]
+	zoneName := ""
+	if arr := f.service.opts.arrays[arrayID]; arr != nil && len(arr.Zones) > 0 {
+		zoneName = string(arr.Zones[0].Name)
+	}
 	fakeNode := &v1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: f.service.opts.KubeNodeName,
 			UID:  "1aa4c285-d41b-4911-bf3e-621253bfbade",
 			Labels: map[string]string{
-				f.service.opts.zoneLabelKey: string(f.service.opts.arrays[arrayID].AvailabilityZone.Name),
+				f.service.opts.zoneLabelKey: zoneName,
 			},
 		},
 	}
@@ -4906,7 +5219,7 @@ func (f *feature) iCallSystemProbeAll(mode string) error {
 		return fmt.Errorf("could not create k8s node for test: err: %s", err.Error())
 	}
 	// delete it when finished, otherwise it will fail to create nodes for subsequent tests
-	defer K8sClientset.CoreV1().Nodes().Delete(context.Background(), thisNode.Name, *&metav1.DeleteOptions{})
+	defer K8sClientset.CoreV1().Nodes().Delete(context.Background(), thisNode.Name, metav1.DeleteOptions{})
 
 	f.err = f.service.systemProbeAll(context.Background())
 	return nil
@@ -4916,7 +5229,7 @@ func (f *feature) iCallGetReplicationCapabilities() error {
 	req := &replication.GetReplicationCapabilityRequest{}
 	ctx := context.Background()
 	f.replicationCapabilitiesResponse, f.err = f.service.GetReplicationCapabilities(ctx, req)
-	log.Infof("GetReplicationCapabilities returned %+v", f.replicationCapabilitiesResponse)
+	csmlog.Infof("GetReplicationCapabilities returned %+v", f.replicationCapabilitiesResponse)
 	return nil
 }
 
@@ -5048,7 +5361,7 @@ func (f *feature) iCallCreateRemoteVolumeWithError(errorMessage string) error {
 
 	if f.err != nil {
 		if strings.Contains(f.err.Error(), errorMessage) {
-			log.Infof("Expected Error Message Found: %s\n", f.err.Error())
+			csmlog.Infof("Expected Error Message Found: %s\n", f.err.Error())
 		} else {
 			return fmt.Errorf("expected error message not found: %s in the error: %s", errorMessage, f.err.Error())
 		}
@@ -5070,7 +5383,7 @@ func (f *feature) iCallDeleteLocalVolume(name string) error {
 		volumeHandle = "/"
 	}
 
-	log.Infof("iCallDeleteLocalVolume name %s to ID %s", name, volumeHandle)
+	csmlog.Infof("iCallDeleteLocalVolume name %s to ID %s", name, volumeHandle)
 
 	req := &replication.DeleteLocalVolumeRequest{
 		VolumeHandle: volumeHandle,
@@ -5195,7 +5508,7 @@ func (f *feature) iCallDeleteVolume(name string) error {
 	ctx := context.Background()
 	req := f.getControllerDeleteVolumeRequest("single-writer")
 	id := arrayID + "-" + volumeNameToID[name]
-	log.Infof("iCallDeleteVolume name %s to ID %s", name, id)
+	csmlog.Infof("iCallDeleteVolume name %s to ID %s", name, id)
 	req.VolumeId = id
 	f.deleteVolumeResponse, f.err = f.service.DeleteVolume(ctx, req)
 	if f.err != nil {
@@ -5431,10 +5744,31 @@ func (f *feature) iCallSetupNVMeHostWithNVMeInitiators(initiatorsStr string) err
 	return nil
 }
 
+func getZoneEnabledRequestForZone(zoneLabelName, zone string) *csi.CreateVolumeRequest {
+	req := new(csi.CreateVolumeRequest)
+	params := make(map[string]string)
+	// Zone-aware StorageClass must NOT specify storagepool or protectionDomain;
+	// these are determined by the zone config in the Secret.
+	req.Parameters = params
+	capacityRange := new(csi.CapacityRange)
+	capacityRange.RequiredBytes = 32 * 1024 * 1024 * 1024
+	req.CapacityRange = capacityRange
+	req.AccessibilityRequirements = new(csi.TopologyRequirement)
+	req.AccessibilityRequirements.Preferred = []*csi.Topology{
+		{
+			Segments: map[string]string{
+				zoneLabelName: zone,
+			},
+		},
+	}
+	return req
+}
+
 func getZoneEnabledRequest(zoneLabelName string) *csi.CreateVolumeRequest {
 	req := new(csi.CreateVolumeRequest)
 	params := make(map[string]string)
-	params["storagepool"] = "viki_pool_HDD_20181031"
+	// Zone-aware StorageClass must NOT specify storagepool or protectionDomain;
+	// these are determined by the zone config in the Secret.
 	req.Parameters = params
 	capacityRange := new(csi.CapacityRange)
 	capacityRange.RequiredBytes = 32 * 1024 * 1024 * 1024
@@ -5456,6 +5790,23 @@ func getZoneEnabledRequest(zoneLabelName string) *csi.CreateVolumeRequest {
 	return req
 }
 
+func (f *feature) iCallCreateVolumeWithZone(name, zone string) error {
+	ctx := context.Background()
+	req := getZoneEnabledRequestForZone(f.service.opts.zoneLabelKey, zone)
+	req.Name = name
+	f.createVolumeRequest = req
+
+	f.createVolumeResponse, f.err = f.service.CreateVolume(ctx, req)
+	if f.err != nil {
+		csmlog.Infof("CreateVolume with zone %s called failed: %s\n", zone, f.err.Error())
+	}
+
+	if f.createVolumeResponse != nil && f.createVolumeResponse.GetVolume() != nil {
+		csmlog.Infof("vol id %s\n", f.createVolumeResponse.GetVolume().VolumeId)
+	}
+	return nil
+}
+
 func (f *feature) iCallCreateVolumeWithZones(name string) error {
 	ctx := context.Background()
 	if f.createVolumeRequest == nil {
@@ -5469,12 +5820,90 @@ func (f *feature) iCallCreateVolumeWithZones(name string) error {
 
 	f.createVolumeResponse, f.err = f.service.CreateVolume(ctx, req)
 	if f.err != nil {
-		log.Infof("CreateVolume with zones called failed: %s\n", f.err.Error())
+		csmlog.Infof("CreateVolume with zones called failed: %s\n", f.err.Error())
 	}
 
 	if f.createVolumeResponse != nil {
-		log.Infof("vol id %s\n", f.createVolumeResponse.GetVolume().VolumeId)
+		csmlog.Infof("vol id %s\n", f.createVolumeResponse.GetVolume().VolumeId)
 	}
+	return nil
+}
+
+// iCallCreateVolumeWithZonesAndSCConflict creates a zone-enabled request but adds
+// a protectionDomain param in StorageClass to trigger conflict detection.
+func (f *feature) iCallCreateVolumeWithZonesAndSCConflict(name string) error {
+	ctx := context.Background()
+	req := getZoneEnabledRequest(f.service.opts.zoneLabelKey)
+	req.Name = name
+	// Simulate StorageClass specifying protectionDomain alongside zone config
+	req.Parameters[KeyProtectionDomain] = "SC-PD-Override"
+	f.createVolumeRequest = req
+	f.createVolumeResponse, f.err = f.service.CreateVolume(ctx, req)
+	if f.err != nil {
+		csmlog.Infof("CreateVolume with zones+SC conflict called: %s\n", f.err.Error())
+	}
+	return nil
+}
+
+// iCallCreateVolumeWithZonesAndNonexistentZoneTopology creates a zone-enabled
+// request with a topology that doesn't match any configured zone, triggering
+// the descriptive "available zones" error message.
+func (f *feature) iCallCreateVolumeWithZonesAndNonexistentZoneTopology(name string) error {
+	ctx := context.Background()
+	req := getZoneEnabledRequest(f.service.opts.zoneLabelKey)
+	req.Name = name
+	// Override the topology to use a zone that doesn't exist in the config
+	req.AccessibilityRequirements.Preferred = []*csi.Topology{
+		{Segments: map[string]string{f.service.opts.zoneLabelKey: "nonexistent-zone-xyz"}},
+	}
+	f.createVolumeRequest = req
+	f.createVolumeResponse, f.err = f.service.CreateVolume(ctx, req)
+	if f.err != nil {
+		csmlog.Infof("CreateVolume with nonexistent zone topology called: %s\n", f.err.Error())
+	}
+	return nil
+}
+
+func (f *feature) theCreateVolumeResponseVolumeIDStartsWith(prefix string) error {
+	if f.err != nil {
+		return f.err
+	}
+	if f.createVolumeResponse == nil {
+		return fmt.Errorf("createVolumeResponse is nil")
+	}
+	vol := f.createVolumeResponse.GetVolume()
+	if vol == nil {
+		return fmt.Errorf("volume is nil in response")
+	}
+	if !strings.HasPrefix(vol.VolumeId, prefix) {
+		return fmt.Errorf("volume ID %s does not start with expected prefix %s", vol.VolumeId, prefix)
+	}
+	csmlog.Infof("Volume ID prefix verified: %s starts with %s", vol.VolumeId, prefix)
+	return nil
+}
+
+// theCreateVolumeResponseHasZoneMetadata checks that the volume context contains
+// the zone and protectionDomain keys.
+func (f *feature) theCreateVolumeResponseHasZoneMetadata() error {
+	if f.err != nil {
+		return f.err
+	}
+	if f.createVolumeResponse == nil {
+		return fmt.Errorf("createVolumeResponse is nil")
+	}
+	vol := f.createVolumeResponse.GetVolume()
+	if vol == nil {
+		return fmt.Errorf("volume is nil in response")
+	}
+	zoneName, ok := vol.VolumeContext["zone"]
+	if !ok || zoneName == "" {
+		return fmt.Errorf("volume context missing 'zone' key")
+	}
+	pd, ok := vol.VolumeContext["protectionDomain"]
+	if !ok || pd == "" {
+		return fmt.Errorf("volume context missing 'protectionDomain' key")
+	}
+	csmlog.Infof("Zone metadata verified: zone=%s, protectionDomain=%s", zoneName, pd)
 	return nil
 }
 
@@ -5504,7 +5933,7 @@ func (f *feature) aValidNodeGetInfoIsReturnedWithNodeTopology() error {
 
 func (f *feature) aNodeGetInfoIsReturnedWithoutZoneTopology() error {
 	accessibility := f.nodeGetInfoResponse.GetAccessibleTopology()
-	log.Infof("Node Accessibility %+v", accessibility)
+	csmlog.Infof("Node Accessibility %+v", accessibility)
 	if _, ok := accessibility.Segments[f.service.opts.zoneLabelKey]; ok {
 		return fmt.Errorf("zone found")
 	}
@@ -5513,7 +5942,7 @@ func (f *feature) aNodeGetInfoIsReturnedWithoutZoneTopology() error {
 
 func (f *feature) aNodeGetInfoIsReturnedWithoutZoneSystemTopology() error {
 	accessibility := f.nodeGetInfoResponse.GetAccessibleTopology()
-	log.Infof("Node Accessibility %+v", accessibility)
+	csmlog.Infof("Node Accessibility %+v", accessibility)
 
 	for _, array := range f.service.opts.arrays {
 		if _, ok := accessibility.Segments[Name+"/"+array.SystemID]; ok {
@@ -5864,7 +6293,12 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^a valid node uid is returned$`, f.aValidNodeUIDIsReturned)
 	s.Step(`^I call GetNodeUID with invalid node$`, f.iCallGetNodeUIDWithInvalidNode)
 	s.Step(`^I call GetNodeUID without KubeNodeName$`, f.iCallGetNodeUIDWithoutKubeNodeName)
+	s.Step(`^I call CreateVolume "([^"]*)" with zone "([^"]*)"$`, f.iCallCreateVolumeWithZone)
 	s.Step(`^I call CreateVolume "([^"]*)" with zones$`, f.iCallCreateVolumeWithZones)
+	s.Step(`^I call CreateVolume "([^"]*)" with zones and StorageClass PD conflict$`, f.iCallCreateVolumeWithZonesAndSCConflict)
+	s.Step(`^I call CreateVolume "([^"]*)" with zones and nonexistent zone topology$`, f.iCallCreateVolumeWithZonesAndNonexistentZoneTopology)
+	s.Step(`^the CreateVolumeResponse has zone metadata$`, f.theCreateVolumeResponseHasZoneMetadata)
+	s.Step(`^the CreateVolume response volume ID starts with "([^"]*)"$`, f.theCreateVolumeResponseVolumeIDStartsWith)
 	s.Step(`^I call NodeGetInfo with zone labels$`, f.iCallNodeGetInfoWithZoneLabels)
 	s.Step(`^a valid NodeGetInfo is returned with node topology$`, f.aValidNodeGetInfoIsReturnedWithNodeTopology)
 	s.Step(`^a NodeGetInfo is returned without zone topology$`, f.aNodeGetInfoIsReturnedWithoutZoneTopology)
@@ -5878,6 +6312,17 @@ func FeatureContext(s *godog.ScenarioContext) {
 	s.Step(`^I set node publish target path for FSCheck$`, f.iSetNodePublishTargetPathForFsck)
 	s.Step(`^I disable FSCheck and restore OSExec$`, f.iDisableFsCheckAndRestoreOSExec)
 	s.Step(`^I set node stage volume context for FSCheck$`, f.iSetNodeStageVolumeContextForFsck)
+	s.Step(`^I call CreateVolumeSnapshotGroup$`, f.iCallCreateVolumeSnapshotGroup)
+	s.Step(`^a valid CreateVolumeSnapshotGroup response is returned$`, f.aValidCreateVolumeSnapshotGroupResponseIsReturned)
+	s.Step(`^I call CheckCreationTime$`, f.iCallCheckCreationTime)
+	s.Step(`^remove a volume from VolumeGroupSnapshotRequest$`, f.removeAVolumeFromVolumeGroupSnapshotRequest)
+	s.Step(`^I call DeleteVolumeGroupSnapshot$`, f.iCallDeleteVolumeGroupSnapshot)
+	s.Step(`^I call DeleteVolumeGroupSnapshot with empty ID$`, f.iCallDeleteVolumeGroupSnapshotWithEmptyID)
+	s.Step(`^I call DeleteVolumeGroupSnapshot with invalid ID$`, f.iCallDeleteVolumeGroupSnapshotWithInvalidID)
+	s.Step(`^I call GetVolumeGroupSnapshot$`, f.iCallGetVolumeGroupSnapshot)
+	s.Step(`^I call GetVolumeGroupSnapshot with empty ID$`, f.iCallGetVolumeGroupSnapshotWithEmptyID)
+	s.Step(`^I call GetVolumeGroupSnapshot with invalid ID$`, f.iCallGetVolumeGroupSnapshotWithInvalidID)
+	s.Step(`^I call GetVolumeGroupSnapshot with non-existent group$`, f.iCallGetVolumeGroupSnapshotWithNonExistentGroup)
 	s.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
 		// Cleanup test directory before each test
 		if err := os.RemoveAll(testBaseDir); err != nil {

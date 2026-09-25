@@ -5,14 +5,14 @@
 The `csi-offline-bundle.sh` script can be used to create a package for the offline installation of Dell CSI storage providers for deployment via Helm.  
 
 This includes the following drivers:
-* [PowerFlex](https://github.com/dell/csi-vxflexos)
-* [PowerMax](https://github.com/dell/csi-powermax)
-* [PowerScale](https://github.com/dell/csi-powerscale)
-* [PowerStore](https://github.com/dell/csi-powerstore)
-* [Unity](https://github.com/dell/csi-unity)
+* [PowerFlex](https://github.com/Ecosystems/container-storage-modules/src/csi-vxflexos)
+* [PowerMax](https://github.com/Ecosystems/container-storage-modules/src/csi-powermax)
+* [PowerScale](https://github.com/Ecosystems/container-storage-modules/src/csi-powerscale)
+* [PowerStore](https://github.com/Ecosystems/container-storage-modules/src/csi-powerstore)
+* [Unity](https://github.com/Ecosystems/container-storage-modules/src/csi-unity)
 
 The `csm-offline-bundle.sh` script can be used to create a package for the offline installation of Dell CSI storage providers for deployment via the CSM Operator.
-* [Dell CSM Operator](https://github.com/dell/csm-operator)
+* [Dell CSM Operator](https://github.com/Ecosystems/container-storage-modules/src/csm-operator)
 
 ## Dependencies
 
@@ -60,7 +60,7 @@ The resulting offline bundle file can be copied to another machine, if necessary
 
 For example, here is the output of a request to build an offline bundle for the Dell CSM Operator:
 ```
-[user@anothersystem /home/user]# git clone https://github.com/dell/csm-operator.git
+[user@anothersystem /home/user]# git clone https://github.com/Ecosystems/container-storage-modules/src/csm-operator.git
 
 ```
 ```
@@ -79,7 +79,7 @@ For example, here is the output of a request to build an offline bundle for the 
 * Pulling and saving container images
 
 ...
-   quay.io/dell/container-storage-modules/csi-vxflexos:v2.17.0
+   quay.io/dell/container-storage-modules/csi-vxflexos:v2.18.0
 ...
 
 *
@@ -155,19 +155,19 @@ Preparing a offline bundle for installation
 *
 * Loading docker images
 
-Loaded image: quay.io/dell/container-storage-modules/csi-vxflexos:v2.17.0
+Loaded image: quay.io/dell/container-storage-modules/csi-vxflexos:v2.18.0
 ...
 
 *
 * Tagging and pushing images
 
-   quay.io/dell/container-storage-modules/csi-vxflexos:v2.17.0 -> localregistry:5000/dell-csm-operator/csi-vxflexos:v2.17.0
+   quay.io/dell/container-storage-modules/csi-vxflexos:v2.18.0 -> localregistry:5000/dell-csm-operator/csi-vxflexos:v2.18.0
    ...
 
 *
 * Preparing files within /root/dell-csm-operator-bundle
 
-   changing: quay.io/dell/container-storage-modules/csi-vxflexos:v2.17.0 -> localregistry:5000/dell-csm-operator/csi-vxflexos:v2.17.0
+   changing: quay.io/dell/container-storage-modules/csi-vxflexos:v2.18.0 -> localregistry:5000/dell-csm-operator/csi-vxflexos:v2.18.0
    ...
 
 *

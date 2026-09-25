@@ -36,8 +36,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dell/gofsutil"
-	"github.com/dell/goscaleio"
+	"github.com/Ecosystems/container-storage-modules/src/gofsutil"
+	"github.com/Ecosystems/container-storage-modules/src/goscaleio"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -122,18 +122,30 @@ func makeBoundPVRWX(pvName, volID, pvcName, pvcNamespace, fsType string) *corev1
 }
 
 // newTestManager creates a SpaceReclamationManager in SDC mode for testing.
+// Automatically registers cleanup to stop the cron scheduler if it's started.
 func newTestManager(t *testing.T, client *fake.Clientset, cfg SpaceReclamationConfig) *SpaceReclamationManager {
 	t.Helper()
 	mgr, err := NewSpaceReclamationManager(context.Background(), cfg, client, cfg.NodeName, false)
 	require.NoError(t, err)
+	t.Cleanup(func() {
+		if mgr.cronSched != nil {
+			mgr.cronSched.Stop()
+		}
+	})
 	return mgr
 }
 
 // newTestManagerNVMe creates a SpaceReclamationManager in NVMe mode for testing.
+// Automatically registers cleanup to stop the cron scheduler if it's started.
 func newTestManagerNVMe(t *testing.T, client *fake.Clientset, cfg SpaceReclamationConfig) *SpaceReclamationManager {
 	t.Helper()
 	mgr, err := NewSpaceReclamationManager(context.Background(), cfg, client, cfg.NodeName, true)
 	require.NoError(t, err)
+	t.Cleanup(func() {
+		if mgr.cronSched != nil {
+			mgr.cronSched.Stop()
+		}
+	})
 	return mgr
 }
 
@@ -1207,7 +1219,11 @@ func TestInitSpaceReclamation_SetsManagerOnService(t *testing.T) {
 	assert.Equal(t, "test-node-init", svc.spaceReclaimMgr.config.NodeName)
 	assert.Equal(t, "0 2 * * 0", svc.spaceReclaimMgr.config.Schedule)
 
-	svc.spaceReclaimMgr.cronSched.Stop()
+	t.Cleanup(func() {
+		if svc.spaceReclaimMgr != nil && svc.spaceReclaimMgr.cronSched != nil {
+			svc.spaceReclaimMgr.cronSched.Stop()
+		}
+	})
 }
 
 // TestInitSpaceReclamation_InvalidScheduleDoesNotPanic verifies initSpaceReclamation

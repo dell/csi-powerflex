@@ -11,5 +11,5 @@
 # limitations under the License.
 #
 
-CSI_LOG_LEVEL: "NOT_VALID"
-CSI_LOG_FORMAT: ""
+CSI_LOG_LEVEL: "not_valid"
+CSI_LOG_FORMAT: "JSON"

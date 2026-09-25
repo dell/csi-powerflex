@@ -1,3 +1,4 @@
+@gateway_monitoring
 Feature: PowerFlex Gateway Monitoring
   As a storage administrator
   I want the CSI PowerFlex driver to monitor gateway health and expose Prometheus metrics

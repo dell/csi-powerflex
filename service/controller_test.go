@@ -1,4 +1,4 @@
-// Copyright © 2024 Dell Inc. or its subsidiaries. All Rights Reserved.
+// Copyright © 2024-2026 Dell Inc. or its subsidiaries. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,13 +28,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dell/goscaleio"
-	sio "github.com/dell/goscaleio"
-	siotypes "github.com/dell/goscaleio/types/v1"
+	"github.com/Ecosystems/container-storage-modules/src/goscaleio"
+	sio "github.com/Ecosystems/container-storage-modules/src/goscaleio"
+	siotypes "github.com/Ecosystems/container-storage-modules/src/goscaleio/types/v1"
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/stretchr/testify/assert"
 	"golang.org/x/oauth2"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/fake"
 )
 
 func Test_service_getZoneFromZoneLabelKey(t *testing.T) {
@@ -189,8 +193,10 @@ func Test_service_getSystemIDFromZoneLabelKey(t *testing.T) {
 					arrays: map[string]*ArrayConnectionData{
 						"array1": {
 							SystemID: validSystemID,
-							AvailabilityZone: &AvailabilityZone{
-								Name: validZone,
+							Zones: []AvailabilityZone{
+								{
+									Name: validZone,
+								},
 							},
 						},
 					},
@@ -236,10 +242,12 @@ func Test_service_getSystemIDFromZoneLabelKey(t *testing.T) {
 					arrays: map[string]*ArrayConnectionData{
 						"array1": {
 							SystemID: validSystemID,
-							AvailabilityZone: &AvailabilityZone{
-								// ensure the zone name will not match the topology key value
-								// in the request
-								Name: validZone + "no-match",
+							Zones: []AvailabilityZone{
+								{
+									// ensure the zone name will not match the topology key value
+									// in the request
+									Name: validZone + "no-match",
+								},
 							},
 						},
 					},
@@ -879,4 +887,463 @@ func TestParseScopes(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestCreateVolumeZoneCapacityExhaustion verifies that a failure in one zone
+// does not prevent provisioning in another zone on the same or a different system.
+func TestCreateVolumeZoneCapacityExhaustion(t *testing.T) {
+	zoneLabelKey := "topology.kubernetes.io/zone"
+	clientA, _ := sio.NewClientWithArgs("https://powerflex-a.example.com", "", math.MaxInt64, true, false, "")
+	clientB, _ := sio.NewClientWithArgs("https://powerflex-b.example.com", "", math.MaxInt64, true, false, "")
+
+	svc := &service{
+		opts: Opts{
+			zoneLabelKey: zoneLabelKey,
+			arrays: map[string]*ArrayConnectionData{
+				"sysA": {
+					SystemID: "sysA",
+					Zones: []AvailabilityZone{
+						{
+							Name:     "zoneA",
+							LabelKey: zoneLabelKey,
+							ProtectionDomains: []ProtectionDomain{
+								{Name: "PDA", Pools: []PoolName{"poolA"}},
+							},
+						},
+					},
+				},
+				"sysB": {
+					SystemID: "sysB",
+					Zones: []AvailabilityZone{
+						{
+							Name:     "zoneB",
+							LabelKey: zoneLabelKey,
+							ProtectionDomains: []ProtectionDomain{
+								{Name: "PDB", Pools: []PoolName{"poolB"}},
+							},
+						},
+					},
+				},
+			},
+		},
+		adminClients: map[string]*sio.Client{
+			"sysA": clientA,
+			"sysB": clientB,
+		},
+		systems: map[string]*sio.System{
+			"sysA": {System: &siotypes.System{ID: "sysA"}},
+			"sysB": {System: &siotypes.System{ID: "sysB"}},
+		},
+		platformInfos: map[string]*PlatformInfo{
+			"sysA": {SystemID: "sysA", ArrayVersion: 4.0, GenType: "EC"},
+			"sysB": {SystemID: "sysB", ArrayVersion: 4.0, GenType: "EC"},
+		},
+		storagePoolIDToName: map[string]string{
+			"spidA": "poolA",
+			"spidB": "poolB",
+		},
+		volumePrefixToSystems: make(map[string][]string),
+	}
+
+	for _, arr := range svc.opts.arrays {
+		_ = normalizeZoneConfig(arr)
+	}
+
+	// zoneA create fails with capacity-related error
+	origCreateVolumeFunc := createVolumeFunc
+	createVolumeFunc = func(_ *goscaleio.Client, _ *siotypes.VolumeParam, storagePoolName, protectionDomain string) (*siotypes.VolumeResp, error) {
+		if storagePoolName == "poolA" && protectionDomain == "PDA" {
+			return nil, fmt.Errorf("capacity exhausted")
+		}
+		return &siotypes.VolumeResp{ID: "vol-id"}, nil
+	}
+	defer func() { createVolumeFunc = origCreateVolumeFunc }()
+
+	origGetVolByIDFunc := getVolByIDFunc
+	getVolByIDFunc = func(_ *service, id string, _ string) (*siotypes.Volume, error) {
+		return &siotypes.Volume{
+			ID:            id,
+			SizeInKb:      32 * 1024 * 1024,
+			StoragePoolID: "spidB",
+			Name:          "mock-volume",
+			GenType:       "EC",
+		}, nil
+	}
+	defer func() { getVolByIDFunc = origGetVolByIDFunc }()
+
+	origGetProtectionDomainIDFromNameFunc := getProtectionDomainIDFromNameFunc
+	getProtectionDomainIDFromNameFunc = func(_ *goscaleio.Client, _, protectionDomainName string) (string, error) {
+		if protectionDomainName == "PDA" {
+			return "pdidA", nil
+		}
+		return "pdidB", nil
+	}
+	defer func() { getProtectionDomainIDFromNameFunc = origGetProtectionDomainIDFromNameFunc }()
+
+	origFindStoragePoolFunc := findStoragePoolFunc
+	findStoragePoolFunc = func(_ *goscaleio.Client, _, name, _, _ string) (*siotypes.StoragePool, error) {
+		if name == "poolA" {
+			return &siotypes.StoragePool{ID: "spidA", Name: "poolA"}, nil
+		}
+		return &siotypes.StoragePool{ID: "spidB", Name: "poolB"}, nil
+	}
+	defer func() { findStoragePoolFunc = origFindStoragePoolFunc }()
+
+	t.Run("zone A capacity exhaustion returns error", func(t *testing.T) {
+		req := &csi.CreateVolumeRequest{
+			Name: "vol-zoneA",
+			VolumeCapabilities: []*csi.VolumeCapability{
+				{
+					AccessType: &csi.VolumeCapability_Mount{Mount: &csi.VolumeCapability_MountVolume{}},
+					AccessMode: &csi.VolumeCapability_AccessMode{Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER},
+				},
+			},
+			CapacityRange: &csi.CapacityRange{RequiredBytes: 32 * 1024 * 1024 * 1024},
+			AccessibilityRequirements: &csi.TopologyRequirement{
+				Preferred: []*csi.Topology{
+					{Segments: map[string]string{zoneLabelKey: "zoneA"}},
+				},
+			},
+		}
+
+		_, err := svc.CreateVolume(context.Background(), req)
+		if err == nil {
+			t.Fatalf("expected error for zoneA capacity exhaustion, got nil")
+		}
+	})
+
+	t.Run("zone B provisioning unaffected after zone A failure", func(t *testing.T) {
+		req := &csi.CreateVolumeRequest{
+			Name: "vol-zoneB",
+			VolumeCapabilities: []*csi.VolumeCapability{
+				{
+					AccessType: &csi.VolumeCapability_Mount{Mount: &csi.VolumeCapability_MountVolume{}},
+					AccessMode: &csi.VolumeCapability_AccessMode{Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER},
+				},
+			},
+			CapacityRange: &csi.CapacityRange{RequiredBytes: 32 * 1024 * 1024 * 1024},
+			AccessibilityRequirements: &csi.TopologyRequirement{
+				Preferred: []*csi.Topology{
+					{Segments: map[string]string{zoneLabelKey: "zoneB"}},
+				},
+			},
+		}
+
+		resp, err := svc.CreateVolume(context.Background(), req)
+		if err != nil {
+			t.Fatalf("expected zoneB provisioning to succeed, got error: %v", err)
+		}
+		if resp == nil || resp.Volume == nil {
+			t.Fatalf("expected non-nil volume response for zoneB")
+		}
+	})
+}
+
+func TestFilterZonesBySystem(t *testing.T) {
+	zones := map[ZoneName]ZoneContent{
+		"zoneA": {systemID: "sys1"},
+		"zoneB": {systemID: "sys2"},
+		"zoneC": {systemID: "sys1"},
+	}
+
+	t.Run("filters zones for target system", func(t *testing.T) {
+		filtered := filterZonesBySystem(zones, "sys1")
+		if len(filtered) != 2 {
+			t.Fatalf("expected 2 zones for sys1, got %d", len(filtered))
+		}
+		if _, ok := filtered["zoneA"]; !ok {
+			t.Errorf("expected zoneA in filtered map")
+		}
+		if _, ok := filtered["zoneC"]; !ok {
+			t.Errorf("expected zoneC in filtered map")
+		}
+	})
+
+	t.Run("returns empty map when no zones match system", func(t *testing.T) {
+		filtered := filterZonesBySystem(zones, "sys3")
+		if len(filtered) != 0 {
+			t.Fatalf("expected 0 zones for sys3, got %d", len(filtered))
+		}
+	})
+}
+
+// ── ExecuteResumeOnReplicationGroup ──────────────────────────────────
+// Covers the failover=true branch (line 4101-4103).
+
+func TestExecuteResumeOnReplicationGroup_FailoverTrue(_ *testing.T) {
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, `{}`)
+	}))
+	defer ts.Close()
+
+	svc := &service{}
+	client, _ := sio.NewClientWithArgs(ts.URL, "4.0", 0, true, false, "")
+	group := &siotypes.ReplicationConsistencyGroup{ID: "rcg-1"}
+	// failover=true should call ExecuteRestoreOnReplicationGroup; any HTTP error is fine
+	_ = svc.ExecuteResumeOnReplicationGroup(client, group, true)
+}
+
+func TestExecuteResumeOnReplicationGroup_FailoverFalse(_ *testing.T) {
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, `{}`)
+	}))
+	defer ts.Close()
+
+	svc := &service{}
+	client, _ := sio.NewClientWithArgs(ts.URL, "4.0", 0, true, false, "")
+	group := &siotypes.ReplicationConsistencyGroup{ID: "rcg-1"}
+	_ = svc.ExecuteResumeOnReplicationGroup(client, group, false)
+}
+
+// ── CreateReplicationConsistencyGroup ────────────────────────────────
+// Covers the "both peerMdmID and remoteSystemID set" guard (line 3935-3936).
+
+func TestCreateReplicationConsistencyGroup_BothIDsSet(t *testing.T) {
+	svc := &service{
+		adminClients: map[string]*sio.Client{"sys1": {}},
+	}
+	_, err := svc.CreateReplicationConsistencyGroup("sys1", "name", "30", "pdLocal", "pdRemote", "peerMdm1", "remoteSys1")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "peerMdmID and remoteSystemID cannot both be present")
+}
+
+func TestCreateReplicationConsistencyGroup_NoAdminClient(t *testing.T) {
+	svc := &service{adminClients: map[string]*sio.Client{}}
+	_, err := svc.CreateReplicationConsistencyGroup("missing", "name", "30", "pdLocal", "pdRemote", "", "")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "can't find adminClient by id missing")
+}
+
+// ── DeleteReplicationConsistencyGroup ────────────────────────────────
+// Cover the GetReplicationConsistencyGroupByID error path.
+
+func TestDeleteReplicationConsistencyGroup_GetGroupError(t *testing.T) {
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprint(w, `{"message":"not found","httpStatusCode":404,"errorCode":0}`)
+	}))
+	defer ts.Close()
+
+	client, _ := sio.NewClientWithArgs(ts.URL, "4.0", 0, true, false, "")
+	svc := &service{adminClients: map[string]*sio.Client{"sys1": client}}
+	err := svc.DeleteReplicationConsistencyGroup("sys1", "nonexistent-group")
+	assert.Error(t, err)
+}
+
+// ── ControllerGetVolume ───────────────────────────────────────────────
+// Cover: systemID empty + no default (line 3889-3891).
+
+func TestControllerGetVolume_NoDefaultSystem(t *testing.T) {
+	svc := &service{
+		opts: Opts{defaultSystemID: ""},
+	}
+	// volume ID with no embedded systemID prefix
+	req := &csi.ControllerGetVolumeRequest{VolumeId: "plainvolid"}
+	_, err := svc.ControllerGetVolume(context.Background(), req)
+	assert.Error(t, err)
+	st, _ := status.FromError(err)
+	assert.Equal(t, codes.InvalidArgument, st.Code())
+	assert.Contains(t, st.Message(), "systemID is not found")
+}
+
+// ── createQuota ───────────────────────────────────────────────────────
+// Cover: size <= 0 returns early (line 830-833), softLimit >= size (line 836-837),
+// softLimitInt == 0 (line 841-842).
+
+func TestCreateQuota_SizeZero(t *testing.T) {
+	ts := buildCreateQuotaTestServer(t)
+	defer ts.Close()
+
+	client, _ := sio.NewClientWithArgs(ts.URL, "4.0", 0, true, false, "")
+	svc := &service{adminClients: map[string]*sio.Client{"sys1": client}}
+	// size=0 should skip quota creation and return ("", nil)
+	id, err := svc.createQuota("fs1", "/path", "20", "0", 0, true, "sys1")
+	assert.NoError(t, err)
+	assert.Equal(t, "", id)
+}
+
+func TestCreateQuota_SoftLimitExceedsSize(t *testing.T) {
+	ts := buildCreateQuotaTestServer(t)
+	defer ts.Close()
+
+	client, _ := sio.NewClientWithArgs(ts.URL, "4.0", 0, true, false, "")
+	svc := &service{adminClients: map[string]*sio.Client{"sys1": client}}
+	// softLimit=101% makes softLimitInt = (101 * size) / 100 >= size
+	_, err := svc.createQuota("fs1", "/path", "101", "0", 1048576, true, "sys1")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "softLimit")
+}
+
+func TestCreateQuota_SoftLimitZero(t *testing.T) {
+	ts := buildCreateQuotaTestServer(t)
+	defer ts.Close()
+
+	client, _ := sio.NewClientWithArgs(ts.URL, "4.0", 0, true, false, "")
+	svc := &service{adminClients: map[string]*sio.Client{"sys1": client}}
+	// softLimit=0% → softLimitInt = 0 → rejected
+	_, err := svc.createQuota("fs1", "/path", "0", "0", 1048576, true, "sys1")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "softLimit")
+}
+
+// buildCreateQuotaTestServer returns an httptest server that serves minimal
+// responses for the FindSystem / GetFileSystemByIDName / ModifyFileSystem
+// calls that createQuota makes before reaching the size-check branches.
+func buildCreateQuotaTestServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	return httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		// FindSystem → GetInstance("") → GET api/types/System/instances
+		case strings.Contains(r.URL.Path, "types/System/instances"):
+			fmt.Fprintf(w, `[{"id":"sys1","name":"sys1"}]`)
+		// GetFileSystemByIDName → GET /rest/v1/file-systems/{id}
+		case strings.Contains(r.URL.Path, "rest/v1/file-systems"):
+			if r.Method == http.MethodPatch {
+				// ModifyFileSystem PATCH → success
+				fmt.Fprint(w, `{}`)
+			} else {
+				fmt.Fprintf(w, `{"id":"fs1","name":"fs1","sizeTotal":1073741824,"storedData":0,"storedDataRoot":0}`)
+			}
+		default:
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, `{}`)
+		}
+	}))
+}
+
+// ── DeleteVolume (block path) ─────────────────────────────────────────
+// Cover: "must be a hexadecimal number" path (line 1523-1527) and
+// volume in use → FailedPrecondition (line 1544-1548).
+
+func TestDeleteVolume_HexError(t *testing.T) {
+	ts := buildDeleteVolumeTestServer(t, func(r *http.Request) (int, string) {
+		if strings.Contains(r.URL.Path, "instances/Volume") {
+			return http.StatusBadRequest, `{"message":"must be a hexadecimal number","httpStatusCode":400,"errorCode":0}`
+		}
+		return http.StatusOK, `{}`
+	})
+	defer ts.Close()
+
+	client, _ := sio.NewClientWithArgs(ts.URL, "4.0", 0, true, false, "")
+	sys := sio.NewSystem(client)
+	sys.System = &siotypes.System{ID: "sys1"}
+	svc := &service{
+		opts:                    Opts{defaultSystemID: "sys1"},
+		adminClients:            map[string]*sio.Client{"sys1": client},
+		systems:                 map[string]*sio.System{"sys1": sys},
+		connectedSystemNameToID: map[string]string{},
+	}
+
+	req := &csi.DeleteVolumeRequest{VolumeId: "sys1-notahex"}
+	resp, err := svc.DeleteVolume(context.Background(), req)
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+}
+
+func TestDeleteVolume_VolumeInUse(t *testing.T) {
+	volJSON := `{"id":"abc123","name":"vol","mappedSdcInfo":[{"sdcId":"sdc1"}],"volumeReplicationState":"UnmarkedForReplication"}`
+	ts := buildDeleteVolumeTestServer(t, func(r *http.Request) (int, string) {
+		if strings.Contains(r.URL.Path, "instances/Volume::abc123") {
+			return http.StatusOK, volJSON
+		}
+		return http.StatusOK, `{}`
+	})
+	defer ts.Close()
+
+	client, _ := sio.NewClientWithArgs(ts.URL, "4.0", 0, true, false, "")
+	sys := sio.NewSystem(client)
+	sys.System = &siotypes.System{ID: "sys1"}
+	svc := &service{
+		opts:                    Opts{defaultSystemID: "sys1"},
+		adminClients:            map[string]*sio.Client{"sys1": client},
+		systems:                 map[string]*sio.System{"sys1": sys},
+		connectedSystemNameToID: map[string]string{},
+	}
+
+	req := &csi.DeleteVolumeRequest{VolumeId: "sys1-abc123"}
+	_, err := svc.DeleteVolume(context.Background(), req)
+	assert.Error(t, err)
+	st, _ := status.FromError(err)
+	assert.Equal(t, codes.FailedPrecondition, st.Code())
+	assert.Contains(t, st.Message(), "volume in use")
+}
+
+// buildDeleteVolumeTestServer creates a TLS test server with a configurable route handler.
+func buildDeleteVolumeTestServer(t *testing.T, handler func(r *http.Request) (int, string)) *httptest.Server {
+	t.Helper()
+	return httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		code, body := handler(r)
+		w.WriteHeader(code)
+		fmt.Fprint(w, body)
+	}))
+}
+
+// ── systemProbeAll ────────────────────────────────────────────────────
+// Cover: usingZones=true, zoneName="" → arrays with zone config are skipped.
+
+func TestSystemProbeAll_ZonesNoNodeLabel(t *testing.T) {
+	fakeK8s := fake.NewSimpleClientset()
+	// Node with NO zone label
+	node := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "mynode",
+			Labels: map[string]string{},
+		},
+	}
+	_, _ = fakeK8s.CoreV1().Nodes().Create(context.Background(), node, metav1.CreateOptions{})
+	K8sClientset = fakeK8s
+	defer func() { K8sClientset = nil }()
+
+	svc := &service{
+		mode: "node",
+		opts: Opts{
+			KubeNodeName: "mynode",
+			zoneLabelKey: "topology.kubernetes.io/zone",
+			arrays: map[string]*ArrayConnectionData{
+				"sys1": {
+					SystemID: "sys1",
+					Endpoint: "http://127.0.0.1",
+					Zones: []AvailabilityZone{
+						{Name: "zoneA", LabelKey: "topology.kubernetes.io/zone"},
+					},
+				},
+			},
+		},
+		adminClients:  map[string]*sio.Client{},
+		systems:       map[string]*sio.System{},
+		platformInfos: map[string]*PlatformInfo{},
+	}
+
+	// All arrays have zone config but node has no label → allArrayFail=true → error
+	err := svc.systemProbeAll(context.Background())
+	assert.Error(t, err)
+}
+
+// ── getMaximumVolumeSize ──────────────────────────────────────────────
+// Cover: GetMaxVol returns a non-numeric string → ParseFloat error (line 2653-2657).
+
+func TestGetMaximumVolumeSize_NonNumericResponse(t *testing.T) {
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(r.URL.Path, "querySystemLimits") {
+			// Return a limits payload where maximumVolumeSize is not a number
+			fmt.Fprint(w, `{"systemLimitEntryList":[{"type":"maximumVolumeSize","maximumValue":"not-a-number"}]}`)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, `{}`)
+	}))
+	defer ts.Close()
+
+	client, _ := sio.NewClientWithArgs(ts.URL, "4.0", 0, true, false, "")
+	// Clear cache for this systemID
+	delete(maxVolumesSizeForArray, "sysParseFail")
+
+	svc := &service{adminClients: map[string]*sio.Client{"sysParseFail": client}}
+	_, err := svc.getMaximumVolumeSize("sysParseFail")
+	assert.Error(t, err)
 }
