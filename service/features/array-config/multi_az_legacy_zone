@@ -1,0 +1,20 @@
+[
+   {
+      "endpoint": "http://127.0.0.1",
+      "username": "username",
+      "password": "password",
+      "insecure": true,
+      "isDefault": true,
+      "systemID": "14dbbf5617523654",
+      "zone": {
+         "name": "zoneA",
+         "labelKey": "zone.csi-vxflexos.dellemc.com",
+         "protectionDomains": [
+            {
+               "name": "PD1",
+               "pools": ["pool1"]
+            }
+         ]
+      }
+   }
+]

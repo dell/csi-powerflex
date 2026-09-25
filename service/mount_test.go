@@ -19,9 +19,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/dell/csi-metadata-retriever/retriever"
-	"github.com/dell/csi-vxflexos/v2/k8sutils"
-	"github.com/dell/gofsutil"
+	"github.com/Ecosystems/container-storage-modules/src/csi-metadata-retriever/retriever"
+	"github.com/Ecosystems/container-storage-modules/src/csi-vxflexos/v2/k8sutils"
+	"github.com/Ecosystems/container-storage-modules/src/gofsutil"
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"

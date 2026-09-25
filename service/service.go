@@ -35,24 +35,25 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dell/csi-metadata-retriever/retriever"
-	"github.com/dell/csi-vxflexos/v2/core"
-	"github.com/dell/csi-vxflexos/v2/k8sutils"
-	svcmetrics "github.com/dell/csi-vxflexos/v2/service/metrics"
-	"github.com/dell/csmlog"
-	"github.com/dell/dell-csi-extensions/podmon"
-	"github.com/dell/dell-csi-extensions/replication"
-	"github.com/dell/gobrick"
-	"github.com/dell/gocsi"
-	csictx "github.com/dell/gocsi/context"
-	"github.com/dell/gonvme"
-	"github.com/dell/goscaleio"
-	sio "github.com/dell/goscaleio"
-	siotypes "github.com/dell/goscaleio/types/v1"
+	"github.com/Ecosystems/container-storage-modules/src/csi-metadata-retriever/retriever"
+	"github.com/Ecosystems/container-storage-modules/src/csi-vxflexos/v2/core"
+	"github.com/Ecosystems/container-storage-modules/src/csi-vxflexos/v2/k8sutils"
+	"github.com/Ecosystems/container-storage-modules/src/csi-vxflexos/v2/service/collectors"
+	svcmetrics "github.com/Ecosystems/container-storage-modules/src/csi-vxflexos/v2/service/metrics"
+	"github.com/Ecosystems/container-storage-modules/src/csmlog"
+	"github.com/Ecosystems/container-storage-modules/src/dell-csi-extensions/podmon"
+	"github.com/Ecosystems/container-storage-modules/src/dell-csi-extensions/replication"
+	"github.com/Ecosystems/container-storage-modules/src/gobrick"
+	"github.com/Ecosystems/container-storage-modules/src/gocsi"
+	csictx "github.com/Ecosystems/container-storage-modules/src/gocsi/context"
+	"github.com/Ecosystems/container-storage-modules/src/gonvme"
+	"github.com/Ecosystems/container-storage-modules/src/goscaleio"
+	sio "github.com/Ecosystems/container-storage-modules/src/goscaleio"
+	siotypes "github.com/Ecosystems/container-storage-modules/src/goscaleio/types/v1"
 	"github.com/apparentlymart/go-cidr/cidr"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/fsnotify/fsnotify"
-	"github.com/sirupsen/logrus"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/viper"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"k8s.io/client-go/kubernetes"
@@ -71,6 +72,9 @@ const (
 	// Name is the name of the CSI plug-in.
 	Name = "csi-vxflexos.dellemc.com"
 
+	// VerboseName is a longer description of the driver, used in the Application-Type HTTP header.
+	VerboseName = "CSI Driver for Dell EMC PowerFlex"
+
 	// KeyThickProvisioning is the key used to get a flag indicating that
 	// a volume should be thick provisioned from the volume create params
 	KeyThickProvisioning = "thickprovisioning"
@@ -82,20 +86,23 @@ const (
 	// SystemTopologySystemValue is the supported topology key
 	SystemTopologySystemValue string = "csi-vxflexos.dellemc.com"
 
-	DefaultLogLevel = csmlog.DebugLevel
+	// DefaultLogLevel is the default log level for the driver.
+	DefaultLogLevel = csmlog.InfoLevel
 
-	// ParamCSILogLevel csi driver csmlog level
-
-	ParamCSILogLevel  = "CSI_LOG_LEVEL"
-	DriverConfigMap   = "vxflexos-config-params"
+	// ParamCSILogLevel is the CSI driver csmlog level.
+	ParamCSILogLevel = "CSI_LOG_LEVEL"
+	// DriverConfigMap is the name of the driver config map.
+	DriverConfigMap = "vxflexos-config-params"
+	// ConfigMapFilePath is the file path to the driver config params.
 	ConfigMapFilePath = "/vxflexos-config-params/driver-config-params.yaml"
 
 	// defaultNodeChrootPath for nvme commands
 	defaultNodeChrootPath = "/noderoot"
 
-	// Supported protocols
+	// NVMeTCP is the NVMe over TCP protocol.
 	NVMeTCP = "NVMeTCP"
-	SDC     = "SDC"
+	// SDC is the ScaleIO Data Client protocol.
+	SDC = "SDC"
 
 	// Timeout for making http requests
 	Timeout = time.Second * 5
@@ -127,39 +134,51 @@ var KubeConfig string
 // K8sClientset is the client to query k8s
 var K8sClientset kubernetes.Interface
 
+// globalOperationInterceptor is the shared CSI operation interceptor used across the driver.
+var globalOperationInterceptor grpc.UnaryServerInterceptor
+
+// PodmonAPIToken is the shared secret token for authenticating podmon API requests.
+// This variable is package-scoped; each driver binary maintains its own instance.
+var PodmonAPIToken string
+
 // Log controlls the logger
 // give default value, will be overwritten by configmap
 
 // ArrayConnectionData contains data required to connect to array
 type ArrayConnectionData struct {
-	SystemID                  string            `json:"systemID"`
-	Username                  string            `json:"username"`
-	Password                  string            `json:"password"`
-	Endpoint                  string            `json:"endpoint"`
-	SkipCertificateValidation bool              `json:"skipCertificateValidation,omitempty"`
-	Insecure                  bool              `json:"insecure,omitempty"`
-	IsDefault                 bool              `json:"isDefault,omitempty"`
-	AllSystemNames            string            `json:"allSystemNames"`
-	NasName                   string            `json:"nasName"`
-	Mdm                       string            `json:"mdm,omitempty"`
-	AvailabilityZone          *AvailabilityZone `json:"zone,omitempty"`
-	BlockProtocol             string            `json:"blockProtocol,omitempty"`
-	AuthType                  string            `json:"authType,omitempty"`
-	CiamClientID              string            `json:"ciamClientId,omitempty"`
-	CiamClientSecret          string            `json:"ciamClientSecret,omitempty"`
-	OidcClientID              string            `json:"oidcClientId,omitempty"`
-	OidcClientSecret          string            `json:"oidcClientSecret,omitempty"`
-	Issuer                    string            `json:"issuer,omitempty"`
-	Scopes                    string            `json:"scopes,omitempty"`
+	SystemID                  string             `json:"systemID"`
+	Username                  string             `json:"username"`
+	Password                  string             `json:"password"`
+	Endpoint                  string             `json:"endpoint"`
+	SkipCertificateValidation bool               `json:"skipCertificateValidation,omitempty"`
+	Insecure                  bool               `json:"insecure,omitempty"`
+	IsDefault                 bool               `json:"isDefault,omitempty"`
+	AllSystemNames            string             `json:"allSystemNames"`
+	NasName                   string             `json:"nasName"`
+	Mdm                       string             `json:"mdm,omitempty"`
+	AvailabilityZone          *AvailabilityZone  `json:"zone,omitempty"`
+	Zones                     []AvailabilityZone `json:"zones,omitempty"`
+	BlockProtocol             string             `json:"blockProtocol,omitempty"`
+	AuthType                  string             `json:"authType,omitempty"`
+	CiamClientID              string             `json:"ciamClientId,omitempty"`
+	CiamClientSecret          string             `json:"ciamClientSecret,omitempty"`
+	OidcClientID              string             `json:"oidcClientId,omitempty"`
+	OidcClientSecret          string             `json:"oidcClientSecret,omitempty"`
+	Issuer                    string             `json:"issuer,omitempty"`
+	Scopes                    string             `json:"scopes,omitempty"`
 }
 
-// Definitions to make AvailabilityZone decomposition easier to read.
-type (
-	ZoneName             string
-	ZoneTargetMap        map[ZoneName][]ProtectionDomain
-	ProtectionDomainName string
-	PoolName             string
-)
+// ZoneName is the name of an availability zone.
+type ZoneName string
+
+// ZoneTargetMap maps a zone name to a list of protection domains.
+type ZoneTargetMap map[ZoneName][]ProtectionDomain
+
+// ProtectionDomainName is the name of a protection domain.
+type ProtectionDomainName string
+
+// PoolName is the name of a storage pool.
+type PoolName string
 
 // AvailabilityZone provides a mapping between cluster zones labels and storage systems
 type AvailabilityZone struct {
@@ -180,7 +199,7 @@ type ProtectionDomain struct {
 	Pools []PoolName           `json:"pools"`
 }
 
-// Update when the manifest version changes.
+// ManifestSemver is the manifest version of the driver.
 var ManifestSemver string
 
 // Manifest is the SP's manifest.
@@ -200,6 +219,7 @@ type Service interface {
 	ProcessMapSecretChange() error
 }
 
+// NetworkInterface is an abstraction for network interface operations.
 type NetworkInterface interface {
 	InterfaceByName(name string) (*net.Interface, error)
 	Addrs(interfaceObj *net.Interface) ([]net.Addr, error)
@@ -222,6 +242,7 @@ type Opts struct {
 	IsHealthMonitorEnabled                 bool   // allow driver to make use of the alpha feature gate, CSIVolumeHealth
 	IsSdcRenameEnabled                     bool   // allow driver to enable renaming SDC
 	SdcPrefix                              string // prefix to be set for SDC name
+	TrimSDCNameEnabled                     bool   // truncate SDC name to 31 chars (PowerFlex limit)
 	IsApproveSDCEnabled                    bool
 	replicationContextPrefix               string
 	replicationPrefix                      string
@@ -247,6 +268,7 @@ type Opts struct {
 	MetricsTLSKeyFile                      string // path to TLS key for the metrics endpoint
 }
 
+// PlatformInfo contains platform information for a PowerFlex system.
 type PlatformInfo struct {
 	SystemID     string
 	ArrayVersion float64
@@ -259,6 +281,7 @@ type service struct {
 	// NOTE: GroupControllerServer is served by a separate groupControllerService type (see groupcontroller.go).
 	csi.UnimplementedIdentityServer
 	csi.UnimplementedNodeServer
+	replication.UnimplementedReplicationServer
 
 	opts                Opts
 	adminClients        map[string]*sio.Client
@@ -289,12 +312,19 @@ type service struct {
 	metricsServer           *svcmetrics.SharedMetricsServer
 	gatewayMonitor          *svcmetrics.GatewayMonitor
 	spaceReclaimMgr         *SpaceReclamationManager
+	roundingEmitter         *RoundingEventEmitter
+	granularityMetrics      *svcmetrics.GranularityMetrics
+	collectorManager        *collectors.CollectorManager
+	metricsStale            *prometheus.GaugeVec
+	operationInterceptor    grpc.UnaryServerInterceptor
 }
 
+// Config contains driver configuration parameters.
 type Config struct {
 	InterfaceNames map[string]string `yaml:"interfaceNames"`
 }
 
+// GetIPAddressByInterfacefunc is a function type for getting IP address by interface name.
 type GetIPAddressByInterfacefunc func(string, NetworkInterface) (string, error)
 
 func (s *service) InterfaceByName(name string) (*net.Interface, error) {
@@ -310,10 +340,10 @@ func (s *service) ProcessMapSecretChange() error {
 	// Update dynamic config params
 	vc := viper.New()
 	vc.AutomaticEnv()
-	log.WithFields(csmlog.Fields{"file": DriverConfigParamsFile}).Info("driver configuration file")
+	csmlog.WithFields(csmlog.Fields{"file": DriverConfigParamsFile}).Info("driver configuration file")
 	vc.SetConfigFile(DriverConfigParamsFile)
 	if err := vc.ReadInConfig(); err != nil {
-		log.Errorf("unable to read config file, using default values: %v", err)
+		csmlog.Errorf("unable to read config file, using default values: %v", err)
 	}
 	if err := s.updateDriverConfigParams(vc); err != nil {
 		return err
@@ -323,9 +353,9 @@ func (s *service) ProcessMapSecretChange() error {
 		// Putting in mutex to allow tests to pass with race flag
 		mx.Lock()
 		defer mx.Unlock()
-		log.WithFields(csmlog.Fields{"file": DriverConfigParamsFile}).Info("driver configuration file")
+		csmlog.WithFields(csmlog.Fields{"file": DriverConfigParamsFile}).Info("driver configuration file")
 		if err := s.updateDriverConfigParams(vc); err != nil {
-			log.Warn(err.Error())
+			csmlog.Warn(err.Error())
 		}
 	})
 
@@ -333,27 +363,48 @@ func (s *service) ProcessMapSecretChange() error {
 	va := viper.New()
 	va.SetConfigFile(ArrayConfigFile)
 
-	log.WithFields(csmlog.Fields{"file": ArrayConfigFile}).Info("driver configuration file")
+	csmlog.WithFields(csmlog.Fields{"file": ArrayConfigFile}).Info("driver configuration file")
 
 	va.WatchConfig()
 
 	va.OnConfigChange(func(_ fsnotify.Event) {
-		// Putting in mutex to allow tests to pass with race flag
+		// Putting in mutex to allow tests to pass with race flag and to protect
+		// s.opts.arrays / adminClients while we reload and resolve default pools.
 		mx.Lock()
 		defer mx.Unlock()
-		log.WithFields(csmlog.Fields{"file": ArrayConfigFile}).Info("driver configuration file")
+		csmlog.WithFields(csmlog.Fields{"file": ArrayConfigFile}).Info("driver configuration file")
 		var err error
 		s.opts.arrays, err = getArrayConfig(context.Background())
 		if err != nil {
-			log.Errorf("unable to reload multi array config file: %v", err)
+			csmlog.Errorf("unable to reload multi array config file: %v", err)
+			return
 		}
 		err = s.doProbe(context.Background())
 		if err != nil {
-			log.Errorf("unable to probe array in multi array config: %v", err)
+			csmlog.Errorf("unable to probe array in multi array config: %v", err)
+			return
+		}
+		// After probing, resolve empty pools for any zone entries that omit pools.
+		// Admin clients are now connected, so we can query the PowerFlex API.
+		// This is done under the reload lock to avoid races with RPC handlers.
+		for _, arr := range s.opts.arrays {
+			if len(arr.Zones) > 0 && s.adminClients[arr.SystemID] != nil {
+				system := s.systems[arr.SystemID]
+				if system != nil {
+					lookup := &goscaleioPoolLookup{system: system}
+					if resolveErr := resolveDefaultPools(arr.SystemID, arr.Zones, lookup); resolveErr != nil {
+						csmlog.Errorf("unable to resolve default pools for system %s: %v", arr.SystemID, resolveErr)
+					} else {
+						csmlog.Infof("resolved default pools for system %s zones", arr.SystemID)
+					}
+				} else {
+					csmlog.Warnf("system %s has zones[] configured but no system client after probe; default pool resolution skipped", arr.SystemID)
+				}
+			}
 		}
 		// log csiNode topology keys
 		if err = s.logCsiNodeTopologyKeys(); err != nil {
-			log.Errorf("unable to log csiNode topology keys: %v", err)
+			csmlog.Errorf("unable to log csiNode topology keys: %v", err)
 		}
 	})
 	return nil
@@ -363,7 +414,7 @@ func (s *service) logCsiNodeTopologyKeys() error {
 	if K8sClientset == nil {
 		err := k8sutils.CreateKubeClientSet(KubeConfig)
 		if err != nil {
-			log.Errorf("unable to create k8s clientset for query: %v", err)
+			csmlog.Errorf("unable to create k8s clientset for query: %v", err)
 			return err
 		}
 		K8sClientset = k8sutils.Clientset
@@ -371,49 +422,46 @@ func (s *service) logCsiNodeTopologyKeys() error {
 
 	csiNodes, err := K8sClientset.StorageV1().CSINodes().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
-		log.Errorf("unable to get node list: %v", err)
+		csmlog.Errorf("unable to get node list: %v", err)
 		return err
 	}
 	node, err := s.NodeGetInfo(context.Background(), nil)
 	if node != nil {
-		log.WithFields(csmlog.Fields{"node info": node.NodeId}).Info("NodeInfo ID")
+		csmlog.WithFields(csmlog.Fields{"node info": node.NodeId}).Info("NodeInfo ID")
 		segMap := node.AccessibleTopology.Segments
 
 		for key := range segMap {
-			log.WithFields(csmlog.Fields{"node info key": key}).Info("NodeInfo topologykeys")
+			csmlog.WithFields(csmlog.Fields{"node info key": key}).Info("NodeInfo topologykeys")
 		}
 
 		if err == nil {
-			for i, csiNode := range csiNodes.Items {
-				if len(csiNode.Spec.Drivers) > 0 {
-					csinodeID := csiNode.Spec.Drivers[i].NodeID
-					csiNodeName := csiNode.Spec.Drivers[i].Name
-					if csinodeID == node.NodeId && csiNodeName == Name {
-						csinodeID := csiNode.Spec.Drivers[i].NodeID
-						log.WithFields(csmlog.Fields{"csinode": csiNode.Name}).Info("csiNode name")
-						log.WithFields(csmlog.Fields{"csinode ID": csinodeID}).Info("csiNode id")
-						tkeys := csiNode.Spec.Drivers[i].TopologyKeys
+			for _, csiNode := range csiNodes.Items {
+				for _, driver := range csiNode.Spec.Drivers {
+					if driver.NodeID == node.NodeId && driver.Name == Name {
+						csmlog.WithFields(csmlog.Fields{"csinode": csiNode.Name}).Info("csiNode name")
+						csmlog.WithFields(csmlog.Fields{"csinode ID": driver.NodeID}).Info("csiNode id")
+						tkeys := driver.TopologyKeys
 						if tkeys != nil {
-							log.WithFields(csmlog.Fields{"csinode topologykeys": len(tkeys)}).Info("count")
+							csmlog.WithFields(csmlog.Fields{"csinode topologykeys": len(tkeys)}).Info("count")
 							needMap := make(map[string]string)
 							for key := range segMap {
 								for _, tkey := range tkeys {
 									if tkey != key {
 										needMap[key] = "missing"
 									} else {
-										log.WithFields(csmlog.Fields{"csinode topologykeys": "ok"}).Info("found")
+										csmlog.WithFields(csmlog.Fields{"csinode topologykeys": "ok"}).Info("found")
 									}
 								}
 							}
 							for akey := range needMap {
-								log.WithFields(csmlog.Fields{"csinode missing topology key": akey}).Info("node key")
+								csmlog.WithFields(csmlog.Fields{"csinode missing topology key": akey}).Info("node key")
 							}
 						}
 					}
 				}
 			}
 		} else {
-			log.Errorf("unable to list csiNodes in cluster: %v", err)
+			csmlog.Errorf("unable to list csiNodes in cluster: %v", err)
 		}
 	}
 	return nil
@@ -431,15 +479,15 @@ func New() Service {
 func (s *service) updateDriverConfigParams(v *viper.Viper) error {
 	logFormat := v.GetString("CSI_LOG_FORMAT")
 	logFormat = strings.ToLower(logFormat)
-	log.WithFields(csmlog.Fields{"format": logFormat}).Info("Read CSI_LOG_FORMAT from log configuration file")
-	if strings.EqualFold(logFormat, "json") {
-		log.SetFormatter(&logrus.JSONFormatter{})
+	csmlog.WithFields(csmlog.Fields{"format": logFormat}).Info("Read CSI_LOG_FORMAT from log configuration file")
+	if strings.EqualFold(logFormat, "text") {
+		csmlog.SetFormat("text")
 	} else {
-		// use text formatter by defualt
-		if logFormat != "text" {
-			log.WithFields(csmlog.Fields{"format": logFormat}).Info("CSI_LOG_FORMAT value not recognized, setting to text")
+		// use json formatter by default
+		if logFormat != "json" {
+			csmlog.WithFields(csmlog.Fields{"format": logFormat}).Info("CSI_LOG_FORMAT value not recognized, setting to json")
 		}
-		log.SetFormatter(&logrus.TextFormatter{})
+		csmlog.SetFormat("json")
 	}
 
 	level := DefaultLogLevel
@@ -447,12 +495,12 @@ func (s *service) updateDriverConfigParams(v *viper.Viper) error {
 		logLevel := v.GetString(ParamCSILogLevel)
 		if logLevel != "" {
 			logLevel = strings.ToLower(logLevel)
-			log.WithFields(csmlog.Fields{"level": logLevel}).Info("Read CSI_LOG_LEVEL from log configuration file")
+			csmlog.WithFields(csmlog.Fields{"level": logLevel}).Info("Read CSI_LOG_LEVEL from log configuration file")
 			var err error
 			level, err = csmlog.ParseLevel(logLevel)
 			if err != nil {
-				log.Errorf("CSI_LOG_LEVEL %s value not recognized, setting to debug error: %s ", logLevel, err.Error())
-				log.SetLevel(DefaultLogLevel)
+				csmlog.Errorf("invalid CSI_LOG_LEVEL %s, defaulting to %s: %v", logLevel, DefaultLogLevel, err)
+				csmlog.SetLevel(DefaultLogLevel)
 				return fmt.Errorf("input log level %q is not valid", logLevel)
 			}
 		}
@@ -490,7 +538,7 @@ func (s *service) BeforeServe(
 			"FsCheckMode":            s.opts.FsCheckMode,
 		}
 
-		log.WithFields(fields).Infof("configured %s", Name)
+		csmlog.WithFields(fields).Infof("configured %s", Name)
 	}()
 
 	// Get the SP's operating mode.
@@ -507,19 +555,19 @@ func (s *service) BeforeServe(
 	// Process configuration file and initialize system clients
 	opts.arrays, err = getArrayConfig(ctx)
 	if err != nil {
-		log.Warnf("unable to get arrays from config: %s", err.Error())
+		csmlog.Warnf("unable to get arrays from config: %s", err.Error())
 		return err
 	}
 
 	// if custom zoning is being used, find the common label from the array secret
 	opts.zoneLabelKey, err = getZoneKeyLabelFromSecret(opts.arrays)
 	if err != nil {
-		log.Warnf("unable to get zone key from secret: %s", err.Error())
+		csmlog.Warnf("unable to get zone key from secret: %s", err.Error())
 		return err
 	}
 
 	if err = s.ProcessMapSecretChange(); err != nil {
-		log.Warnf("unable to configure dynamic configMap secret change detection : %s", err.Error())
+		csmlog.Warnf("unable to configure dynamic configMap secret change detection : %s", err.Error())
 		return err
 	}
 
@@ -558,6 +606,11 @@ func (s *service) BeforeServe(
 	if sdcPrefix, ok := csictx.LookupEnv(ctx, EnvSDCPrefix); ok {
 		opts.SdcPrefix = sdcPrefix
 	}
+	if trimSDCName, ok := csictx.LookupEnv(ctx, EnvTrimSDCNameEnabled); ok {
+		if trimSDCName == "true" {
+			opts.TrimSDCNameEnabled = true
+		}
+	}
 	if approveSDC, ok := csictx.LookupEnv(ctx, EnvIsApproveSDCEnabled); ok {
 		if approveSDC == "true" {
 			opts.IsApproveSDCEnabled = true
@@ -590,7 +643,7 @@ func (s *service) BeforeServe(
 		opts.replicationPrefix = replicationPrefix
 	}
 	if MaxVolumesPerNode, err := ParseInt64FromContext(ctx, EnvMaxVolumesPerNode); err != nil {
-		log.Warnf("error while parsing env variable '%s', %s, defaulting to 0", EnvMaxVolumesPerNode, err)
+		csmlog.Warnf("error while parsing env variable '%s', %s, defaulting to 0", EnvMaxVolumesPerNode, err)
 		opts.MaxVolumesPerNode = 0
 	} else {
 		opts.MaxVolumesPerNode = MaxVolumesPerNode
@@ -599,12 +652,12 @@ func (s *service) BeforeServe(
 		// Trimming spaces if any
 		externalAccess = strings.TrimSpace(externalAccess)
 		if externalAccess == "" {
-			log.Infof("externalAccess is not provided")
+			csmlog.Infof("externalAccess is not provided")
 			opts.ExternalAccess = ""
 		} else {
 			opts.ExternalAccess, err = ParseCIDR(externalAccess)
 			if err != nil {
-				log.Warnf("error while parsing the externalAccess : %s, defaulting to empty", err)
+				csmlog.Warnf("error while parsing the externalAccess : %s, defaulting to empty", err)
 				opts.ExternalAccess = ""
 			}
 		}
@@ -625,9 +678,16 @@ func (s *service) BeforeServe(
 		opts.PodmonPollingFreq = podmonPollRate
 	}
 
+	// Load podmon API token for authenticating requests to node podmon API endpoints
+	if podmonAPIToken, ok := csictx.LookupEnv(ctx, EnvPodmonAPIToken); ok && strings.TrimSpace(podmonAPIToken) != "" {
+		PodmonAPIToken = strings.TrimSpace(podmonAPIToken)
+	} else if opts.IsPodmonEnabled {
+		csmlog.Warnf("%s is not set; podmon API endpoints will not require authentication", EnvPodmonAPIToken)
+	}
+
 	// log csiNode topology keys
 	if err = s.logCsiNodeTopologyKeys(); err != nil {
-		log.Errorf("unable to log csiNode topology keys: %v", err)
+		csmlog.Errorf("unable to log csiNode topology keys: %v", err)
 	}
 
 	if EnvAuthType, ok := csictx.LookupEnv(ctx, EnvAuthType); ok {
@@ -639,7 +699,7 @@ func (s *service) BeforeServe(
 		if strings.EqualFold(fsCheckEnabled, "true") {
 			opts.FsCheckEnabled = true
 		} else if fsCheckEnabled != "" && !strings.EqualFold(fsCheckEnabled, "false") {
-			log.Warnf("invalid value %q for %s, defaulting to false", fsCheckEnabled, EnvFsCheckEnabled)
+			csmlog.Warnf("invalid value %q for %s, defaulting to false", fsCheckEnabled, EnvFsCheckEnabled)
 		}
 	}
 
@@ -651,12 +711,12 @@ func (s *service) BeforeServe(
 		case "checkandrepair":
 			opts.FsCheckMode = "checkAndRepair"
 		default:
-			log.Warnf("invalid value %q for %s, defaulting to \"checkOnly\"", fsCheckMode, EnvFsCheckMode)
+			csmlog.Warnf("invalid value %q for %s, defaulting to \"checkOnly\"", fsCheckMode, EnvFsCheckMode)
 		}
 	}
 
-	log.Infof("FsCheckEnabled: %s", strconv.FormatBool(opts.FsCheckEnabled))
-	log.Infof("FsCheckMode: %s", opts.FsCheckMode)
+	csmlog.Infof("FsCheckEnabled: %s", strconv.FormatBool(opts.FsCheckEnabled))
+	csmlog.Infof("FsCheckMode: %s", opts.FsCheckMode)
 
 	// Setting package-level FSCK variables
 	mountFsCheckEnabled = opts.FsCheckEnabled
@@ -666,30 +726,30 @@ func (s *service) BeforeServe(
 	if s.mode == "node" {
 		// Ensure k8s client is initialized for FS check event recording
 		if k8sutils.Clientset == nil {
-			log.Infof("Initializing k8s client for FS check events...")
+			csmlog.Infof("Initializing k8s client for FS check events...")
 			if err := k8sutils.CreateKubeClientSet(); err != nil {
-				log.Errorf("Failed to initialize k8s client for FS check events: %v - PVC events will not be posted", err)
+				csmlog.Errorf("Failed to initialize k8s client for FS check events: %v - PVC events will not be posted", err)
 			}
 		}
 		metadataRetrieverClient = retriever.NewMetadataRetrieverClient(nil, 30*time.Second)
-		log.Infof("Successfully initialized the Metadata Retriever Client: %s", metadataRetrieverClient)
+		csmlog.Infof("Successfully initialized the Metadata Retriever Client: %s", metadataRetrieverClient)
 
 		mountFsCheckEventRecorder = initFsCheckEventRecorder()
-		log.Infof("Successfully initialized the FS check event recorder: %s", mountFsCheckEventRecorder)
+		csmlog.Infof("Successfully initialized the FS check event recorder: %s", mountFsCheckEventRecorder)
 	}
 
 	opts.probeTimeout = DefaultAPITimeout
 	if envProbeTimeout, ok := csictx.LookupEnv(ctx, EnvMaxProbeTimeout); ok {
 		duration, err := time.ParseDuration(envProbeTimeout)
 		if err != nil {
-			log.Warnf("error while parsing env variable '%s', %s, defaulting to %s", EnvMaxProbeTimeout, err, DefaultAPITimeout)
+			csmlog.Warnf("error while parsing env variable '%s', %s, defaulting to %s", EnvMaxProbeTimeout, err, DefaultAPITimeout)
 			opts.probeTimeout = DefaultAPITimeout
 		} else {
-			log.Infof("env variable '%s' provided with value %s", EnvMaxProbeTimeout, envProbeTimeout)
+			csmlog.Infof("env variable '%s' provided with value %s", EnvMaxProbeTimeout, envProbeTimeout)
 			opts.probeTimeout = duration
 		}
 	} else {
-		log.Infof("env variable '%s' not provided, defaulting to %s", EnvMaxProbeTimeout, DefaultAPITimeout)
+		csmlog.Infof("env variable '%s' not provided, defaulting to %s", EnvMaxProbeTimeout, DefaultAPITimeout)
 	}
 
 	// pb parses an environment variable into a boolean value. If an error
@@ -698,7 +758,7 @@ func (s *service) BeforeServe(
 		if v, ok := csictx.LookupEnv(ctx, n); ok {
 			b, err := strconv.ParseBool(v)
 			if err != nil {
-				log.WithFields(csmlog.Fields{n: v}).Debug("invalid boolean value. defaulting to false")
+				csmlog.WithFields(csmlog.Fields{n: v}).Debug("invalid boolean value. defaulting to false")
 				return false
 			}
 			return b
@@ -725,7 +785,7 @@ func (s *service) BeforeServe(
 		if d, parseErr := time.ParseDuration(gatewayMonInterval); parseErr == nil {
 			opts.GatewayMonitoringInterval = d
 		} else {
-			log.Warnf("invalid value %q for %s, defaulting to 30s", gatewayMonInterval, EnvGatewayMonitoringPollInterval)
+			csmlog.Warnf("invalid value %q for %s, defaulting to 30s", gatewayMonInterval, EnvGatewayMonitoringPollInterval)
 			opts.GatewayMonitoringInterval = 30 * time.Second
 		}
 	}
@@ -752,45 +812,59 @@ func (s *service) BeforeServe(
 
 	// Setup NVMe host for array version >= 4.0
 	nvmeInitiators, err := s.getInitiators()
-	log.Infof("nvmeInitiators: %s", nvmeInitiators)
+	csmlog.Infof("nvmeInitiators: %s", nvmeInitiators)
 	if err != nil {
-		log.Errorf("can not get initiators of the node: %s", err.Error())
+		csmlog.Errorf("can not get initiators of the node: %s", err.Error())
 	}
 
 	for _, arr := range s.opts.arrays {
-		log.Infof("checking array version for array: %s", arr.SystemID)
+		csmlog.Infof("checking array version for array: %s", arr.SystemID)
 		version, err := s.getArrayVersion(ctx, arr.SystemID)
 		if err != nil {
-			log.Errorf("can not get version of the array: %s", err.Error())
+			csmlog.Errorf("can not get version of the array: %s", err.Error())
 		} else {
-			log.Infof("array version: %f", version)
+			csmlog.Infof("array version: %f", version)
 		}
 
 		switch arr.BlockProtocol {
 		case NVMeTCP:
-			log.Infof("block protocol is set to NVMeTCP")
+			csmlog.Infof("block protocol is set to NVMeTCP")
 			if version < 4.0 {
-				log.Warnf("NVMeTCP transport is not supported for array version %f", version)
+				csmlog.Warnf("NVMeTCP transport is not supported for array version %f", version)
 			}
 			if len(nvmeInitiators) == 0 {
-				log.Errorf("NVMeTCP transport was requested but NVMe initiator is not available")
+				csmlog.Errorf("NVMeTCP transport was requested but NVMe initiator is not available")
 			}
 			s.useNVME = true
 		case SDC:
-			log.Infof("block protocol is set to SDC")
+			csmlog.Infof("block protocol is set to SDC")
 			s.useSDC = true
 		case "auto":
-			log.Infof("block protocol is set to auto — node will be either SDC or NVMe, or SDC by default")
+			csmlog.Infof("block protocol is set to auto — node will be either SDC or NVMe, or SDC by default")
 			s.configureAutoBlockProtocol(ctx, version, len(nvmeInitiators))
 		default:
-			log.Infof("block protocol is not set, defaulting to NFS")
+			csmlog.Infof("block protocol is not set, defaulting to NFS")
 		}
 
 		if s.useNVME {
+			if s.adminClients[arr.SystemID] == nil {
+				csmlog.Infof("skipping NVMe host setup for array %s: not probed (may be in a different zone)", arr.SystemID)
+				continue
+			}
 			if err := s.setupNVMeHost(nvmeInitiators, arr.SystemID); err != nil {
-				log.Errorf("can not setup NVMe host for array: %s", err.Error())
+				csmlog.Errorf("can not setup NVMe host for array: %s", err.Error())
 			}
 		}
+	}
+
+	// Initialize rounding event emitter for controller mode (FR-5).
+	// Uses K8sClientset if already set; falls back to k8sutils.Clientset.
+	if s.roundingEmitter == nil {
+		cs := K8sClientset
+		if cs == nil {
+			cs = k8sutils.Clientset
+		}
+		s.roundingEmitter = NewRoundingEventEmitter(cs, Name)
 	}
 
 	if s.mode == "node" {
@@ -808,22 +882,25 @@ func (s *service) BeforeServe(
 	// disabled while gateway monitoring is enabled, suppress gateway monitoring
 	// and log a warning so the misconfiguration is visible in the driver logs.
 	if s.opts.GatewayMonitoringEnabled && !s.opts.MetricsEnabled {
-		log.Warnf("%s is true but %s is false — gateway monitoring will not start; enable the metrics server first",
+		csmlog.Warnf("%s is true but %s is false — gateway monitoring will not start; enable the metrics server first",
 			EnvGatewayMonitoringEnabled, EnvMetricsEnabled)
 		s.opts.GatewayMonitoringEnabled = false
 	}
 
-	// Start the metrics server on every non-node controller pod when the
+	// Start the metrics server on every pod (controller and node) when the
 	// metrics service is enabled.  The gateway polling loop is started
 	// separately below only on the leader.
-	if s.opts.MetricsEnabled && s.mode != "node" {
+	if s.opts.MetricsEnabled {
 		s.startMetricsServer()
+		if s.metricsServer != nil {
+			s.startCollectors(ctx)
+		}
 	}
 
 	// Start the gateway polling loop when gateway monitoring is enabled.
 	if s.opts.GatewayMonitoringEnabled && s.mode != "node" {
 		if s.opts.GatewayMonitoringLeaderElectionEnabled {
-			log.Info("Gateway monitoring leader election enabled — polling will start on the lease holder")
+			csmlog.Info("Gateway monitoring leader election enabled — polling will start on the lease holder")
 			go s.startGatewayMonitoringWithLeaderElection(ctx)
 		} else {
 			s.startGatewayMonitor(ctx)
@@ -831,13 +908,33 @@ func (s *service) BeforeServe(
 	}
 
 	if _, ok := csictx.LookupEnv(ctx, "X_CSI_VXFLEXOS_NO_PROBE_ON_START"); !ok {
-		log.Infof("BeforeServe probing starting %s", time.Now().Format("15:04:05.000000000"))
+		csmlog.Infof("BeforeServe probing starting %s", time.Now().Format("15:04:05.000000000"))
 		newContext, cancel := context.WithTimeout(ctx, s.opts.probeTimeout)
 		defer cancel()
 
 		err := s.doProbe(newContext)
 
-		log.Infof("BeforeServe probing complete %s", time.Now().Format("15:04:05.000000000"))
+		csmlog.Infof("BeforeServe probing complete %s", time.Now().Format("15:04:05.000000000"))
+
+		// After probing, resolve empty pools for any zone entries that omit pools.
+		// Admin clients are now connected, so we can query the PowerFlex API.
+		if err == nil {
+			for _, arr := range s.opts.arrays {
+				if len(arr.Zones) > 0 && s.adminClients[arr.SystemID] != nil {
+					system := s.systems[arr.SystemID]
+					if system != nil {
+						lookup := &goscaleioPoolLookup{system: system}
+						if resolveErr := resolveDefaultPools(arr.SystemID, arr.Zones, lookup); resolveErr != nil {
+							return fmt.Errorf("failed to resolve default pools for system %s: %w", arr.SystemID, resolveErr)
+						}
+						csmlog.Infof("resolved default pools for system %s zones", arr.SystemID)
+					} else {
+						csmlog.Warnf("system %s has zones[] configured but no system client after probe; default pool resolution skipped", arr.SystemID)
+					}
+				}
+			}
+		}
+
 		return err
 	}
 
@@ -845,10 +942,9 @@ func (s *service) BeforeServe(
 }
 
 func (s *service) configureAutoBlockProtocol(ctx context.Context, version float64, nvmeInitiators int) {
-	log := log.WithContext(ctx)
 	// do nodeProbe to detect SDC
 	if err := s.nodeProbe(ctx); err != nil {
-		log.Infof("nodeProbe failed: %s", err.Error())
+		csmlog.WithContext(ctx).Infof("nodeProbe failed: %s", err.Error())
 	}
 
 	isSDC := s.opts.SdcGUID != ""
@@ -856,54 +952,59 @@ func (s *service) configureAutoBlockProtocol(ctx context.Context, version float6
 
 	switch {
 	case isSDC:
-		log.Infof("SDC available, using SDC")
+		csmlog.WithContext(ctx).Info("SDC is available; using SDC protocol")
 		s.useSDC = true
 	case isNVMe:
-		log.Infof("NVMeTCP available, using NVMeTCP")
+		csmlog.WithContext(ctx).Info("NVMe/TCP is available; using NVMe/TCP protocol")
 		s.useNVME = true
 	default:
-		log.Info("neither SDC nor NVMeTCP detected, using NFS")
+		csmlog.WithContext(ctx).Info("Neither SDC nor NVMe/TCP was detected; using NFS protocol")
 	}
 }
 
 func (s *service) setupNVMeHost(nvmeInitiators []string, systemID string) error {
-	log.Infof("setting up NVMe host for array %s", systemID)
-	defer log.Infof("finished setting up NVMe host for array %s", systemID)
+	csmlog.Infof("setting up NVMe host for array %s", systemID)
+	defer csmlog.Infof("finished setting up NVMe host for array %s", systemID)
 
 	if len(nvmeInitiators) == 0 {
 		return fmt.Errorf("NVMe initiators not found on node")
 	}
-	log.Infof("NVMe initiators found on node: %s", nvmeInitiators)
+	csmlog.Infof("NVMe initiators found on node: %s", nvmeInitiators)
+
+	adminClient := s.adminClients[systemID]
+	if adminClient == nil {
+		return fmt.Errorf("admin client not found for system %s", systemID)
+	}
 
 	// Set up NVMe host
-	system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
+	system, err := adminClient.FindSystem(systemID, "", "")
 	if err != nil {
-		log.Errorf("unable to find system: %s", err.Error())
+		csmlog.Errorf("unable to find system: %s", err.Error())
 		return err
 	}
 
 	// Check if host with same name exists
 	hosts, err := system.GetAllNvmeHosts()
 	if err != nil {
-		log.Errorf("unable to get nvme hosts: %s", err.Error())
+		csmlog.Errorf("unable to get nvme hosts: %s", err.Error())
 		return err
 	}
 
 	// Get node ID
 	s.nodeID, err = s.generateNodeID()
 	if err != nil {
-		log.Errorf("failed to generate node ID: %s", err.Error())
+		csmlog.Errorf("failed to generate node ID: %s", err.Error())
 		return err
 	}
 
 	for _, host := range hosts {
 		if host.Name == s.nodeID {
-			log.Infof("host with same name already exists: %s", host.Name)
+			csmlog.Infof("host with same name already exists: %s", host.Name)
 			return nil
 		}
 		if host.Nqn != "" && slices.Contains(nvmeInitiators, host.Nqn) {
 			s.nodeID = host.Name
-			log.Infof("Found existing host with matching NQN: %s", host.Name)
+			csmlog.Infof("Found existing host with matching NQN: %s", host.Name)
 			return nil
 		}
 	}
@@ -916,7 +1017,7 @@ func (s *service) setupNVMeHost(nvmeInitiators []string, systemID string) error 
 
 	_, err = system.CreateNvmeHost(nvmeHostParams)
 	if err != nil {
-		log.Errorf("unable to create nvme host: %s", err.Error())
+		csmlog.Errorf("unable to create nvme host: %s", err.Error())
 		return err
 	}
 
@@ -946,14 +1047,14 @@ func (s *service) updateConfigMap(getIPAddressByInterfacefunc GetIPAddressByInte
 
 	configFileData, err := os.ReadFile(filepath.Clean(configFilePath))
 	if err != nil {
-		log.Errorf("Failed to read ConfigMap file: %v", err)
+		csmlog.Errorf("Failed to read ConfigMap file: %v", err)
 		return
 	}
 
 	var config Config
 	err = yaml.Unmarshal(configFileData, &config)
 	if err != nil {
-		log.Errorf("Failed to parse configMap data: %v", err)
+		csmlog.Errorf("Failed to parse configMap data: %v", err)
 		return
 	}
 
@@ -972,7 +1073,7 @@ func (s *service) updateConfigMap(getIPAddressByInterfacefunc GetIPAddressByInte
 			// Find the IP of the Interfaces
 			ipAddress, err := getIPAddressByInterfacefunc(interfaceName, &service{})
 			if err != nil {
-				log.Infof("Error while getting IP address for interface %s: %v\n", interfaceName, err)
+				csmlog.Errorf("failed to get IP address for interface %s: %v", interfaceName, err)
 				continue
 			}
 			ipAddresses = append(ipAddresses, ipAddress)
@@ -986,7 +1087,7 @@ func (s *service) updateConfigMap(getIPAddressByInterfacefunc GetIPAddressByInte
 	if K8sClientset == nil {
 		err = k8sutils.CreateKubeClientSet()
 		if err != nil {
-			log.Errorf("Failed to create Kubernetes ClientSet: %v", err)
+			csmlog.Errorf("Failed to create Kubernetes ClientSet: %v", err)
 			return
 		}
 		K8sClientset = k8sutils.Clientset
@@ -995,7 +1096,7 @@ func (s *service) updateConfigMap(getIPAddressByInterfacefunc GetIPAddressByInte
 	// Get the vxflexos-config-params ConfigMap
 	cm, err := K8sClientset.CoreV1().ConfigMaps(DriverNamespace).Get(context.TODO(), driverConfigMap, metav1.GetOptions{})
 	if err != nil {
-		log.Errorf("Failed to get ConfigMap: %v", err)
+		csmlog.Errorf("Failed to get ConfigMap: %v", err)
 		return
 	}
 
@@ -1004,7 +1105,7 @@ func (s *service) updateConfigMap(getIPAddressByInterfacefunc GetIPAddressByInte
 
 		err := yaml.Unmarshal([]byte(existingYaml), &configData)
 		if err != nil {
-			log.Errorf("Failed to parse ConfigMap data: %v", err)
+			csmlog.Errorf("Failed to parse ConfigMap data: %v", err)
 			return
 		}
 
@@ -1014,13 +1115,13 @@ func (s *service) updateConfigMap(getIPAddressByInterfacefunc GetIPAddressByInte
 				interfaceNames[node] = ipAddressList
 			}
 		} else {
-			log.Errorf("interfaceNames key missing or not in expected format")
+			csmlog.Errorf("interfaceNames key missing or not in expected format")
 			return
 		}
 
 		updatedYaml, err := yaml.Marshal(configData)
 		if err != nil {
-			log.Errorf("Failed to marshal updated data: %v", err)
+			csmlog.Errorf("Failed to marshal updated data: %v", err)
 			return
 		}
 		cm.Data["driver-config-params.yaml"] = string(updatedYaml)
@@ -1029,11 +1130,11 @@ func (s *service) updateConfigMap(getIPAddressByInterfacefunc GetIPAddressByInte
 	// Update the vxflexos-config-params ConfigMap
 	_, err = K8sClientset.CoreV1().ConfigMaps("vxflexos").Update(context.TODO(), cm, metav1.UpdateOptions{})
 	if err != nil {
-		log.Errorf("Failed to update ConfigMap: %v", err)
+		csmlog.Errorf("Failed to update ConfigMap: %v", err)
 		return
 	}
 
-	log.Infof("ConfigMap updated successfully")
+	csmlog.Infof("ConfigMap updated successfully")
 }
 
 func (s *service) getIPAddressByInterface(interfaceName string, networkInterface NetworkInterface) (string, error) {
@@ -1100,7 +1201,7 @@ func (s *service) isNFSEnabled(ctx context.Context, systemID string) (bool, erro
 
 	// If no NAS name configured, NFS cannot be used
 	if strings.TrimSpace(array.NasName) == "" {
-		log.Warnf("nasName value not found in secret, it is mandatory parameter for NFS volume operations")
+		csmlog.WithContext(ctx).Warn("nasName is not set in the secret; it is required for NFS volume operations")
 		return false, nil
 	}
 
@@ -1119,7 +1220,7 @@ func (s *service) doProbe(ctx context.Context) error {
 	defer px.Unlock()
 
 	if !s.isNodeMode() {
-		log.Info("[doProbe] controllerProbe")
+		csmlog.WithContext(ctx).Info("[doProbe] running controller probe")
 		if err := s.systemProbeAll(ctx); err != nil {
 			return err
 		}
@@ -1128,13 +1229,13 @@ func (s *service) doProbe(ctx context.Context) error {
 	// Do a node probe
 	if !s.isControllerMode() {
 		// Probe all systems managed by driver
-		log.Info("[doProbe] nodeProbe")
+		csmlog.WithContext(ctx).Info("[doProbe] running node probe")
 		if err := s.systemProbeAll(ctx); err != nil {
 			return err
 		}
 
 		if err := s.nodeProbe(ctx); err != nil {
-			log.Infof("nodeProbe failed: %s", err.Error())
+			csmlog.WithContext(ctx).Infof("nodeProbe failed: %v", err)
 		}
 	}
 	return nil
@@ -1142,7 +1243,7 @@ func (s *service) doProbe(ctx context.Context) error {
 
 // RegisterAdditionalServers registers any additional grpc services that use the CSI socket.
 func (s *service) RegisterAdditionalServers(server *grpc.Server) {
-	log.Info("Registering additional GRPC servers")
+	csmlog.Info("Registering additional GRPC servers")
 	podmon.RegisterPodmonServer(server, s)
 	replication.RegisterReplicationServer(server, s)
 	csi.RegisterGroupControllerServer(server, &groupControllerService{s: s})
@@ -1160,7 +1261,7 @@ func (s *service) getVolProvisionType(params map[string]string) string {
 	if tp, ok := params[KeyThickProvisioning]; ok {
 		tpb, err := strconv.ParseBool(tp)
 		if err != nil {
-			log.Warnf("invalid boolean received %s=(%#v) in params",
+			csmlog.Warnf("invalid boolean received %s=(%#v) in params",
 				KeyThickProvisioning, tp)
 		} else if tpb {
 			volType = thickProvisioned
@@ -1239,10 +1340,18 @@ func (s *service) getSDCIPs(sdcGUID string, systemID string) ([]string, error) {
 	return id.Sdc.SdcIPs, nil
 }
 
+var findStoragePoolFunc = func(adminClient *goscaleio.Client, id, name, storagePoolID, protectionDomain string) (*siotypes.StoragePool, error) {
+	return adminClient.FindStoragePool(id, name, storagePoolID, protectionDomain)
+}
+
 // getStoragePoolID returns pool ID from the given name, system ID, and protectionDomain name
 func (s *service) getStoragePoolID(name, systemID, pdID string) (string, error) {
+	adminClient := s.adminClients[systemID]
+	if adminClient == nil {
+		return "", fmt.Errorf("admin client not found for system %s", systemID)
+	}
 	// Need to lookup ID from the gateway, with respect to PD if provided
-	pool, err := s.adminClients[systemID].FindStoragePool("", name, "", pdID)
+	pool, err := findStoragePoolFunc(adminClient, "", name, "", pdID)
 	if err != nil {
 		return "", err
 	}
@@ -1256,7 +1365,7 @@ func (s *service) getCSIVolume(vol *siotypes.Volume, systemID string) *csi.Volum
 	storagePoolName := s.getStoragePoolNameFromID(systemID, vol.StoragePoolID)
 	installationID, err := s.getArrayInstallationID(systemID)
 	if err != nil {
-		log.Infof("getCSIVolume error system not found: %s with error: %v\n", systemID, err)
+		csmlog.Infof("getCSIVolume error system not found: %s with error: %v\n", systemID, err)
 	}
 
 	// Make the additional volume attributes
@@ -1284,7 +1393,7 @@ func (s *service) getCSIVolumeFromFilesystem(fs *siotypes.FileSystem, systemID s
 	storagePoolName := s.getStoragePoolNameFromID(systemID, fs.StoragePoolID)
 	installationID, err := s.getArrayInstallationID(systemID)
 	if err != nil {
-		log.Infof("getCSIVolumeFromFilesystem error system not found: %s with error: %v\n", systemID, err)
+		csmlog.Infof("getCSIVolumeFromFilesystem error system not found: %s with error: %v\n", systemID, err)
 	}
 
 	// Make the additional volume attributes
@@ -1363,7 +1472,7 @@ func (s *service) getStoragePoolNameFromID(systemID, id string) string {
 			storagePoolName = pool.Name
 			s.storagePoolIDToName[id] = pool.Name
 		} else {
-			log.Infof("Could not found StoragePool: %s on system %s", id, systemID)
+			csmlog.Infof("Could not found StoragePool: %s on system %s", id, systemID)
 		}
 	}
 	return storagePoolName
@@ -1381,16 +1490,16 @@ func (s *service) logStatistics() {
 			"HeapReleased": memstats.HeapReleased,
 			"StackSys":     memstats.StackSys,
 		}
-		log.WithFields(fields).Infof("resource statistics counter: %d", s.statisticsCounter)
+		csmlog.WithFields(fields).Infof("resource statistics counter: %d", s.statisticsCounter)
 	}
 }
 
-func getArrayConfig(_ context.Context) (map[string]*ArrayConnectionData, error) {
+func getArrayConfig(ctx context.Context) (map[string]*ArrayConnectionData, error) {
 	arrays := make(map[string]*ArrayConnectionData)
 
 	_, err := os.Stat(ArrayConfigFile)
 	if err != nil {
-		log.Errorf("Found error %v while checking stat of file %s ", err, ArrayConfigFile)
+		csmlog.WithContext(ctx).Errorf("Found error %v while checking stat of file %s ", err, ArrayConfigFile)
 		if os.IsNotExist(err) {
 			return nil, fmt.Errorf("file %s does not exist", ArrayConfigFile)
 		}
@@ -1415,6 +1524,7 @@ func getArrayConfig(_ context.Context) (map[string]*ArrayConnectionData, error) 
 		}
 
 		noOfDefaultArray := 0
+		crossSystemZones := make(map[ZoneName]string)
 		for i, c := range creds {
 			systemID := c.SystemID
 			if _, ok := arrays[systemID]; ok {
@@ -1433,13 +1543,13 @@ func getArrayConfig(_ context.Context) (map[string]*ArrayConnectionData, error) 
 				return nil, fmt.Errorf("invalid value for Endpoint at index %d", i)
 			}
 			if strings.TrimSpace(c.BlockProtocol) == "" {
-				log.Infof("BlockProtocol is not set, defaulting to auto")
+				csmlog.WithContext(ctx).Infof("BlockProtocol is not set, defaulting to auto")
 				c.BlockProtocol = "auto"
 			}
 			// ArrayConnectionData
 			if c.AllSystemNames != "" {
 				names := strings.Split(c.AllSystemNames, ",")
-				log.Infof("Powerflex systemID %s AllSytemNames given %#v\n", systemID, names)
+				csmlog.WithContext(ctx).Infof("Powerflex systemID %s AllSytemNames given %#v\n", systemID, names)
 			}
 
 			// for PowerFlex v4.0
@@ -1461,7 +1571,7 @@ func getArrayConfig(_ context.Context) (map[string]*ArrayConnectionData, error) 
 				"blockProtocol":             c.BlockProtocol,
 			}
 
-			log.WithFields(fields).Infof("configured %s", c.SystemID)
+			csmlog.WithFields(fields).Infof("configured %s", c.SystemID)
 
 			if c.IsDefault {
 				noOfDefaultArray++
@@ -1474,13 +1584,134 @@ func getArrayConfig(_ context.Context) (map[string]*ArrayConnectionData, error) 
 			// copy in the arrayConnectionData to arrays
 			copyOfCred := ArrayConnectionData{}
 			copyOfCred = c
+
+			// normalize legacy singular "zone" to "zones[]"
+			if err := normalizeZoneConfig(&copyOfCred); err != nil {
+				return nil, err
+			}
+
+			// validate per-system PD uniqueness within zones[]
+			if err := validateZonePDUniqueness(copyOfCred.SystemID, copyOfCred.Zones); err != nil {
+				return nil, err
+			}
+
+			// validate that a zone name is not used by multiple systems
+			for _, z := range copyOfCred.Zones {
+				if prevSystem, ok := crossSystemZones[z.Name]; ok {
+					return nil, fmt.Errorf("zone %s is defined on multiple systems (%s and %s)", z.Name, prevSystem, copyOfCred.SystemID)
+				}
+				crossSystemZones[z.Name] = copyOfCred.SystemID
+			}
+
 			arrays[c.SystemID] = &copyOfCred
 		}
 	} else {
 		return nil, fmt.Errorf("arrays details are not provided in vxflexos-creds secret")
 	}
 
+	// Log zone config summary at startup for diagnostics
+	csmlog.WithContext(ctx).Info(getZoneConfigSummary(arrays))
+
 	return arrays, nil
+}
+
+// normalizeZoneConfig normalizes the legacy singular "zone" field into the
+// "zones[]" model. If both "zone" and "zones[]" are present, it returns an
+// error. If only "zone" is present, it is promoted to a single-element
+// "zones[]". AvailabilityZone is retained until preinit.go is migrated.
+func normalizeZoneConfig(a *ArrayConnectionData) error {
+	hasLegacy := a.AvailabilityZone != nil
+	hasZones := len(a.Zones) > 0
+
+	if hasLegacy && hasZones {
+		return fmt.Errorf("system %s: both 'zone' and 'zones' are present; use only 'zones'", a.SystemID)
+	}
+
+	if hasLegacy {
+		a.Zones = []AvailabilityZone{*a.AvailabilityZone}
+		// TODO(<ECSDF-XXXX>): preinit.go still reads AvailabilityZone; clear it once migrated.
+	}
+
+	return nil
+}
+
+// zonePoolLookup abstracts the PowerFlex API calls needed for default pool
+// resolution, enabling unit testing without a live array connection.
+type zonePoolLookup interface {
+	// FindPoolsForPD returns the storage pool names for the given PD name.
+	FindPoolsForPD(pdName string) ([]string, error)
+}
+
+// goscaleioPoolLookup implements zonePoolLookup using the goscaleio SDK.
+type goscaleioPoolLookup struct {
+	system *sio.System
+}
+
+func (g *goscaleioPoolLookup) FindPoolsForPD(pdName string) ([]string, error) {
+	pd, err := g.system.FindProtectionDomain("", pdName, "")
+	if err != nil {
+		return nil, err
+	}
+	pdEx, err := g.system.GetProtectionDomainEx(pd.ID)
+	if err != nil {
+		return nil, err
+	}
+	pools, err := pdEx.GetStoragePool("")
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, len(pools))
+	for i, p := range pools {
+		names[i] = p.Name
+	}
+	return names, nil
+}
+
+// resolveDefaultPools fills in the default storage pool for any zone entry
+// whose ProtectionDomains[0].Pools is empty. It queries the PowerFlex API
+// via the provided zonePoolLookup and assigns the first available pool.
+func resolveDefaultPools(systemID string, zones []AvailabilityZone, lookup zonePoolLookup) error {
+	for i := range zones {
+		if len(zones[i].ProtectionDomains) == 0 {
+			continue
+		}
+		if len(zones[i].ProtectionDomains) > 1 {
+			return fmt.Errorf("system %s zone %s: only one protection domain per zone is supported", systemID, zones[i].Name)
+		}
+		pd := &zones[i].ProtectionDomains[0]
+		if len(pd.Pools) > 0 {
+			continue
+		}
+		pools, err := lookup.FindPoolsForPD(string(pd.Name))
+		if err != nil {
+			return fmt.Errorf("system %s zone %s: failed to resolve pools for PD %q: %w", systemID, zones[i].Name, pd.Name, err)
+		}
+		if len(pools) == 0 {
+			return fmt.Errorf("system %s zone %s: no storage pools found for PD %q", systemID, zones[i].Name, pd.Name)
+		}
+		pd.Pools = []PoolName{PoolName(pools[0])}
+	}
+	return nil
+}
+
+// validateZonePDUniqueness rejects duplicate Protection Domain names within a
+// single system's zones[]. The same PD name on different systems is allowed.
+func validateZonePDUniqueness(systemID string, zones []AvailabilityZone) error {
+	seen := map[ProtectionDomainName]ZoneName{}
+	for _, z := range zones {
+		if len(z.ProtectionDomains) == 0 {
+			continue
+		}
+		if len(z.ProtectionDomains) > 1 {
+			return fmt.Errorf("system %s zone %s: only one protection domain per zone is supported", systemID, z.Name)
+		}
+		pd := z.ProtectionDomains[0].Name
+		if prev, ok := seen[pd]; ok {
+			return fmt.Errorf("system %s: duplicate protection domain %q used by both zone %q and zone %q", systemID, pd, prev, z.Name)
+		}
+		seen[pd] = z.Name
+	}
+	return nil
 }
 
 // getVolumeIDFromCsiVolumeId returns PowerFlex volume ID from CSI volume ID
@@ -1493,13 +1724,7 @@ func getVolumeIDFromCsiVolumeID(csiVolID string) string {
 		return csiVolID
 	}
 	tokens := strings.Split(csiVolID, "-")
-	index := len(tokens)
-	if index > 0 {
-		return tokens[index-1]
-	}
-	err := errors.New("csiVolID unexpected string")
-	log.Errorf("%s format error: %v", csiVolID, err)
-	return ""
+	return tokens[len(tokens)-1]
 }
 
 // getFilesystemIDFromCsiVolumeID returns PowerFlex filesystem ID from CSI volume ID
@@ -1509,18 +1734,11 @@ func getFilesystemIDFromCsiVolumeID(csiVolID string) string {
 	}
 	containsHyphen := strings.Contains(csiVolID, "/")
 	if containsHyphen {
-		i := strings.LastIndex(csiVolID, "/")
-		if i == -1 {
-			return csiVolID
-		}
 		tokens := strings.Split(csiVolID, "/")
-		index := len(tokens)
-		if index > 0 {
-			return tokens[index-1]
-		}
+		return tokens[len(tokens)-1]
 	}
 	err := errors.New("csiVolID unexpected string")
-	log.Errorf("%s format error: %v", csiVolID, err)
+	csmlog.Errorf("%s format error: %v", csiVolID, err)
 	return ""
 }
 
@@ -1565,9 +1783,6 @@ func (s *service) getSystemIDFromCsiVolumeID(csiVolID string) string {
 	containsSlash := strings.Contains(csiVolID, "/")
 	if containsSlash {
 		i := strings.LastIndex(csiVolID, "/")
-		if i == -1 {
-			return ""
-		}
 		tokens := strings.Split(csiVolID, "/")
 		// expected format: sysId/fsId
 		if len(tokens) == 2 {
@@ -1665,19 +1880,19 @@ func ParseCIDR(externalAccessCIDR string) (string, error) {
 	if !strings.Contains(externalAccessCIDR, "/") {
 		// if externalAccess is a plane ip we can add /32 from our end
 		externalAccessCIDR += "/32"
-		log.Debugf("externalAccess after appending netMask bit:  %v", externalAccessCIDR)
+		csmlog.Debugf("externalAccess after appending netMask bit:  %v", externalAccessCIDR)
 	}
 	ip, ipnet, err := net.ParseCIDR(externalAccessCIDR)
 	if err != nil {
 		return "", err
 	}
-	log.Debugf("Parsed CIDR: %s -> ip: %v net: %v", externalAccessCIDR, ip, ipnet)
+	csmlog.Debugf("Parsed CIDR: %s -> ip: %v net: %v", externalAccessCIDR, ip, ipnet)
 	start, _ := cidr.AddressRange(ipnet)
 	fromString, err := GetIPListWithMaskFromString(externalAccessCIDR)
 	if err != nil {
 		return "", err
 	}
-	log.Debugf("IP with Mask:  %v", fromString)
+	csmlog.Debugf("IP with Mask:  %v", fromString)
 	part := strings.Split(fromString, "/")
 
 	// ExernalAccess IP consists of Starting range IP of CIDR+Mask and hence concatenating the same to remove from the array
@@ -1688,14 +1903,14 @@ func ParseCIDR(externalAccessCIDR string) (string, error) {
 // ExternalAccessAlreadyAdded return true if externalAccess is present on ARRAY in any access mode type
 func externalAccessAlreadyAdded(export *siotypes.NFSExport, externalAccess string) bool {
 	if Contains(export.ReadWriteRootHosts, externalAccess) || Contains(export.ReadWriteHosts, externalAccess) || Contains(export.ReadOnlyRootHosts, externalAccess) || Contains(export.ReadOnlyHosts, externalAccess) {
-		log.Debugf("ExternalAccess is already added into Host Access list on array:  %v", externalAccess)
+		csmlog.Debugf("ExternalAccess is already added into Host Access list on array:  %v", externalAccess)
 		return true
 	}
-	log.Debugf("Going to add externalAccess into Host Access list on array:  %v", externalAccess)
+	csmlog.Debugf("Going to add externalAccess into Host Access list on array:  %v", externalAccess)
 	return false
 }
 
-func (s *service) unexportFilesystem(_ context.Context, _ *csi.ControllerUnpublishVolumeRequest, client *goscaleio.Client, fs *siotypes.FileSystem, volumeContextID string, nodeIPs []string, nodeID string) error {
+func (s *service) unexportFilesystem(ctx context.Context, _ *csi.ControllerUnpublishVolumeRequest, client *goscaleio.Client, fs *siotypes.FileSystem, volumeContextID string, nodeIPs []string, nodeID string) error {
 	nfsExportName := NFSExportNamePrefix + fs.Name
 	nfsExportExists := false
 	var nfsExportID string
@@ -1713,7 +1928,7 @@ func (s *service) unexportFilesystem(_ context.Context, _ *csi.ControllerUnpubli
 	}
 
 	if !nfsExportExists {
-		log.Infof("NFS Share: %s not found on array.", nfsExportName)
+		csmlog.WithContext(ctx).Infof("NFS Share: %s not found on array.", nfsExportName)
 		return nil
 	}
 
@@ -1734,7 +1949,7 @@ func (s *service) unexportFilesystem(_ context.Context, _ *csi.ControllerUnpubli
 		if len(nfsExportResp.ReadOnlyHosts) > 0 {
 			if index >= 0 {
 				modifyParam.RemoveReadOnlyHosts = append(modifyParam.RemoveReadOnlyHosts, nodeIP+"/255.255.255.255") // we can't remove without netmask
-				log.Debugf("Going to remove IP from ROHosts:  %v", nodeIP)
+				csmlog.WithContext(ctx).Debugf("Going to remove IP from ROHosts:  %v", nodeIP)
 			}
 		}
 	}
@@ -1745,7 +1960,7 @@ func (s *service) unexportFilesystem(_ context.Context, _ *csi.ControllerUnpubli
 		if len(nfsExportResp.ReadOnlyRootHosts) > 0 {
 			if index >= 0 {
 				modifyParam.RemoveReadOnlyRootHosts = append(modifyParam.RemoveReadOnlyRootHosts, nodeIP+"/255.255.255.255") // we can't remove without netmask
-				log.Debugf("Going to remove IP from RORootHosts:  %v", nodeIP)
+				csmlog.WithContext(ctx).Debugf("Going to remove IP from RORootHosts:  %v", nodeIP)
 			}
 		}
 	}
@@ -1753,14 +1968,14 @@ func (s *service) unexportFilesystem(_ context.Context, _ *csi.ControllerUnpubli
 	for _, nodeIP := range nodeIPs {
 		if Contains(nfsExportResp.ReadWriteHosts, nodeIP+"/255.255.255.255") {
 			modifyParam.RemoveReadWriteHosts = append(modifyParam.RemoveReadWriteHosts, nodeIP+"/255.255.255.255") // we can't remove without netmask
-			log.Debugf("Going to remove IP from RWHosts:  %v", nodeIP)
+			csmlog.WithContext(ctx).Debugf("Going to remove IP from RWHosts:  %v", nodeIP)
 		}
 	}
 
 	for _, nodeIP := range nodeIPs {
 		if Contains(nfsExportResp.ReadWriteRootHosts, nodeIP+"/255.255.255.255") {
 			modifyParam.RemoveReadWriteRootHosts = append(modifyParam.RemoveReadWriteRootHosts, nodeIP+"/255.255.255.255") // we can't remove without netmask
-			log.Debugf("Going to remove IP from RWRootHosts:  %v", nodeIP)
+			csmlog.WithContext(ctx).Debugf("Going to remove IP from RWRootHosts:  %v", nodeIP)
 		}
 	}
 
@@ -1768,14 +1983,14 @@ func (s *service) unexportFilesystem(_ context.Context, _ *csi.ControllerUnpubli
 	if err != nil {
 		return status.Errorf(codes.NotFound, "Allocating host %s access to NFS Export failed. Error: %v", nodeID, err)
 	}
-	log.Debugf("Host: %s access is removed from NFS Share: %s", nodeID, nfsExportID)
-	log.Debugf("ControllerUnpublishVolume successful for volid: [%s]", volumeContextID)
+	csmlog.WithContext(ctx).Debugf("Host: %s access is removed from NFS Share: %s", nodeID, nfsExportID)
+	csmlog.WithContext(ctx).Debugf("ControllerUnpublishVolume successful for volid: [%s]", volumeContextID)
 
 	return nil
 }
 
 // exportFilesystem - Method to export filesystem with idempotency
-func (s *service) exportFilesystem(_ context.Context, _ *csi.ControllerPublishVolumeRequest, client *goscaleio.Client, fs *siotypes.FileSystem, nodeIPs []string, externalAccess string, nodeID string, pContext map[string]string, am *csi.VolumeCapability_AccessMode) (*csi.ControllerPublishVolumeResponse, error) {
+func (s *service) exportFilesystem(ctx context.Context, _ *csi.ControllerPublishVolumeRequest, client *goscaleio.Client, fs *siotypes.FileSystem, nodeIPs []string, externalAccess string, nodeID string, pContext map[string]string, am *csi.VolumeCapability_AccessMode) (*csi.ControllerPublishVolumeResponse, error) {
 	for i, nodeIP := range nodeIPs {
 		nodeIPs[i] = nodeIP + "/255.255.255.255"
 	}
@@ -1801,7 +2016,7 @@ func (s *service) exportFilesystem(_ context.Context, _ *csi.ControllerPublishVo
 
 	// Create NFS export if it doesn't exist
 	if !nfsExportExists {
-		log.Debugf("NFS Export does not exist for fs: %s ,proceeding to create NFS Export", fs.Name)
+		csmlog.WithContext(ctx).Debugf("NFS Export does not exist for fs: %s ,proceeding to create NFS Export", fs.Name)
 		resp, err := client.CreateNFSExport(&siotypes.NFSExportCreate{
 			Name:         nfsExportName,
 			FileSystemID: fs.ID,
@@ -1884,13 +2099,13 @@ func (s *service) exportFilesystem(_ context.Context, _ *csi.ControllerPublishVo
 
 	// Idempotent case
 	if foundIdempotent {
-		log.Info("Host has access to the given host and exists in the required state.")
+		csmlog.WithContext(ctx).Info("Host has access to the given host and exists in the required state.")
 		return &csi.ControllerPublishVolumeResponse{PublishContext: pContext}, nil
 	}
 
 	// Check and remove the default host if given in external access
 	if Contains(nodeIPs, externalAccess) {
-		log.Debug("Setting externalAccess to empty as it contains the host ip")
+		csmlog.WithContext(ctx).Debug("Setting externalAccess to empty as it contains the host ip")
 		externalAccess = ""
 	}
 
@@ -1915,8 +2130,8 @@ func (s *service) exportFilesystem(_ context.Context, _ *csi.ControllerPublishVo
 		}
 	}
 
-	log.Debugf("NFS Export: %s is accessible to host: %s with access mode: %s", nfsExportID, nodeID, am.Mode)
-	log.Debugf("ControllerPublishVolume successful for volid: [%s]", pContext["volumeContextId"])
+	csmlog.WithContext(ctx).Debugf("NFS Export: %s is accessible to host: %s with access mode: %s", nfsExportID, nodeID, am.Mode)
+	csmlog.WithContext(ctx).Debugf("ControllerPublishVolume successful for volid: [%s]", pContext["volumeContextId"])
 
 	return &csi.ControllerPublishVolumeResponse{PublishContext: pContext}, nil
 }
@@ -1929,20 +2144,20 @@ func (s *service) UpdateVolumePrefixToSystemsMap(systemID string) error {
 	vols, _, err := s.listVolumes(systemID, 0, 1, true, false, "", "")
 	if err != nil {
 
-		log.Errorf("failed to list vols for array %s : %s ", systemID, err.Error())
+		csmlog.Errorf("failed to list vols for array %s : %s ", systemID, err.Error())
 		return fmt.Errorf("failed to list vols for array %s : %s ", systemID, err.Error())
 
 	}
 
 	if len(vols) == 0 {
 		// if system has no volumes, then there can't be a legacy vol on it
-		log.Infof("systemID: %s  has no volumes, not adding to volumePrefixToSystems map. \n", systemID)
+		csmlog.Infof("systemID: %s  has no volumes, not adding to volumePrefixToSystems map. \n", systemID)
 		return nil
 
 	}
 	volID := vols[0].ID
 
-	log.Infof("vol id in UpdateVolumePrefixToSystemsMap is: %s  from systemID: %s \n", volID, systemID)
+	csmlog.Infof("vol id in UpdateVolumePrefixToSystemsMap is: %s  from systemID: %s \n", volID, systemID)
 
 	// use first 24 bit from volume id as a key and system id as a value, and add this entry to the map
 
@@ -1953,16 +2168,16 @@ func (s *service) UpdateVolumePrefixToSystemsMap(systemID string) error {
 		// if key found:
 		// make sure systemID isn't already added for the specific key
 		if contains(s.volumePrefixToSystems[key], systemID) {
-			log.Infof("volumePrefixToSystems: systemID: %s  already added for key %s. Not adding for key again. \n", systemID, key)
+			csmlog.Infof("volumePrefixToSystems: systemID: %s  already added for key %s. Not adding for key again. \n", systemID, key)
 			return nil
 		}
 		// systemID has not been added to key before, add it
-		log.Infof("volumePrefixToSystems: Adding systemID %s to key %s \n", systemID, key)
+		csmlog.Infof("volumePrefixToSystems: Adding systemID %s to key %s \n", systemID, key)
 		s.volumePrefixToSystems[key] = append(s.volumePrefixToSystems[key], systemID)
 
 	} else {
 		// if key not found:
-		log.Infof("volumePrefixToSystems: adding new key, value pair: key %s, systemID: %s \n", key, systemID)
+		csmlog.Infof("volumePrefixToSystems: adding new key, value pair: key %s, systemID: %s \n", key, systemID)
 		s.volumePrefixToSystems[key] = []string{systemID}
 	}
 
@@ -1975,12 +2190,12 @@ func (s *service) checkVolumesMap(volumeID string) error {
 	// ID is legacy, so we  ensure it's only found on default system
 	if systemID == "" {
 
-		log.Infof("volume id in checkVolumesMap is: %s \n", volumeID)
-		log.Infof("volume %s ,assumed to be on default system. \n", volumeID)
+		csmlog.Infof("volume id in checkVolumesMap is: %s \n", volumeID)
+		csmlog.Infof("volume %s ,assumed to be on default system. \n", volumeID)
 
 		if len(volumeID) < 3 {
 			err := errors.New("vol ID too short")
-			log.Errorf("volume id %s is shorter than 3 chars, returning error: %v", volumeID, err)
+			csmlog.Errorf("volume id %s is shorter than 3 chars, returning error: %v", volumeID, err)
 			return fmt.Errorf("volume id %s is shorter than 3 chars, returning error", volumeID)
 		}
 
@@ -1992,13 +2207,13 @@ func (s *service) checkVolumesMap(volumeID string) error {
 			for _, systemID := range s.volumePrefixToSystems[key] {
 				vols, _, err := s.listVolumes(systemID, 0, 0, true, false, "", "")
 				if err != nil {
-					log.Errorf("failed to list vols for array %s : %s ", systemID, err.Error())
+					csmlog.Errorf("failed to list vols for array %s : %s ", systemID, err.Error())
 					return fmt.Errorf("failed to list vols for array %s : %s ", systemID, err.Error())
 				}
 				for _, vol := range vols {
 					if vol.ID == volumeID {
 						// legacy volume found on non-default system, this is an error
-						log.Errorf("found volume id %s on non-default system %s. expecting this volume id only on default system. aborting operation: %v", volumeID, systemID, err)
+						csmlog.Errorf("found volume id %s on non-default system %s. expecting this volume id only on default system. aborting operation: %v", volumeID, systemID, err)
 						return fmt.Errorf("found volume id %s on non-default system %s. expecting this volume id only on default system. aborting operation ", volumeID, systemID)
 					}
 				}
@@ -2006,12 +2221,12 @@ func (s *service) checkVolumesMap(volumeID string) error {
 		}
 
 		// volume was not found on a non default system.
-		log.Infof("checkVolumesMap returns OK")
+		csmlog.Infof("checkVolumesMap returns OK")
 		return nil
 	}
 
 	// volume was not legacy
-	log.Infof("Volume ID: %s contains system ID: %s. checkVolumesMap passed", volumeID, systemID)
+	csmlog.Infof("Volume ID: %s contains system ID: %s. checkVolumesMap passed", volumeID, systemID)
 	return nil
 }
 
@@ -2022,12 +2237,12 @@ func (s *service) calcKeyForMap(volumeID string) string {
 	return key
 }
 
-func (s *service) getProtectionDomainIDFromName(systemID, protectionDomainName string) (string, error) {
+var getProtectionDomainIDFromNameFunc = func(adminClient *goscaleio.Client, systemID, protectionDomainName string) (string, error) {
 	if protectionDomainName == "" {
-		log.Infof("Protection Domain not provided; there could be conflicts if two storage pools share a name")
+		csmlog.Infof("Protection Domain not provided; there could be conflicts if two storage pools share a name")
 		return "", nil
 	}
-	system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
+	system, err := adminClient.FindSystem(systemID, "", "")
 	if err != nil {
 		return "", err
 	}
@@ -2036,6 +2251,17 @@ func (s *service) getProtectionDomainIDFromName(systemID, protectionDomainName s
 		return "", err
 	}
 	return pd.ID, nil
+}
+
+func (s *service) getProtectionDomainIDFromName(systemID, protectionDomainName string) (string, error) {
+	if protectionDomainName == "" {
+		return "", nil
+	}
+	adminClient := s.adminClients[systemID]
+	if adminClient == nil {
+		return "", fmt.Errorf("admin client not found for system %s", systemID)
+	}
+	return getProtectionDomainIDFromNameFunc(adminClient, systemID, protectionDomainName)
 }
 
 func (s *service) getSystem(systemID string) (*siotypes.System, error) {
@@ -2094,7 +2320,7 @@ func (s *service) getProtectionDomain(systemID string, pdName string) (string, e
 		return "", errors.New("no protection domains found")
 	}
 
-	log.Infof("[getProtectionDomain] - PD not provived, using: %s, System: %s", pd[0].Name, systemID)
+	csmlog.Infof("[getProtectionDomain] - PD not provived, using: %s, System: %s", pd[0].Name, systemID)
 
 	pdID = pd[0].ID
 
@@ -2145,22 +2371,22 @@ func (s *service) findReplicationPairByVolID(systemID, volumeID string) (*siotyp
 }
 
 func (s *service) expandReplicationPair(ctx context.Context, req *csi.ControllerExpandVolumeRequest, systemID, volumeID string) error {
-	log.Infof("[expandReplicationPair] - Start: %s, %s", systemID, volumeID)
+	csmlog.WithContext(ctx).Infof("[expandReplicationPair] starting expansion for system %s, volume %s", systemID, volumeID)
 	pair, err := s.findReplicationPairByVolID(systemID, volumeID)
 	if err != nil {
 		return err
 	}
 
-	log.Infof("[expandReplicationPair] - Pair Found: %+v", pair)
+	csmlog.WithContext(ctx).Infof("[expandReplicationPair] found replication pair: %+v", pair)
 	group, err := s.getReplicationConsistencyGroupByID(systemID, pair.ReplicationConsistencyGroupID)
 	if err != nil {
 		return err
 	}
 
-	log.Infof("[expandReplicationPair] - Group Found: %+v", group)
+	csmlog.WithContext(ctx).Infof("[expandReplicationPair] found replication consistency group: %+v", group)
 	// Avoid getting in a expand attempt cycle.
 	if group.ReplicationDirection == "RemoteToLocal" {
-		log.Infof("[expandReplicationPair] - Only want to expand from LocalToRemote, if first call, there might be an issue.")
+		csmlog.WithContext(ctx).Info("[expandReplicationPair] skipping expansion because replication direction is RemoteToLocal")
 		return nil
 	}
 
@@ -2171,10 +2397,35 @@ func (s *service) expandReplicationPair(ctx context.Context, req *csi.Controller
 		return err
 	}
 
-	log.Infof("[expandReplicationPair] - ControllerExpandVolume expanded the remote volume first: %+v", resp)
-	log.Infof("[expandReplicationPair] - Ensuring remote has expanded...")
+	csmlog.WithContext(ctx).Infof("[expandReplicationPair] remote volume expanded successfully: %+v", resp)
+	csmlog.WithContext(ctx).Info("[expandReplicationPair] verifying that the remote volume expansion is complete")
 
-	requestedSize, err := validateVolSize(req.CapacityRange)
+	// Use cached PlatformInfo for genType so rounding is consistent with the
+	// outer ControllerExpandVolume call that already populated the cache.
+	// Propagate the error — a missing system entry must not silently fall back
+	// to Gen1 granularity and produce incorrect sizing on a Gen2/EC array.
+	//
+	// ASSUMPTION: This polling loop assumes the local and remote arrays have the
+	// same genType (same granularity). The remote volume is expanded via the mutated
+	// req (line 2393), but we poll the LOCAL volume (volumeID/systemID) and compare
+	// its size against requestedSize computed from the LOCAL system's genType.
+	// If the local array is Gen1 ("") but the remote is Gen2/EC ("EC"), the poll
+	// will time out waiting for a local volume size that matches the remote's 1 GiB
+	// rounding. Mixed Gen1/Gen2 replication topologies are not currently supported.
+	// TODO: Add explicit genType comparison between local and remote systems, or
+	// document this constraint in the replication feature specification.
+	expandPlatformInfo, err := s.GetPlatformInfo(systemID)
+	if err != nil {
+		return err
+	}
+	// Per validateVolSize contract: CALLERS MUST validate genType with isKnownGenType.
+	// If a future PFMP version returns a new genType, we must abort rather than
+	// silently applying Gen1 granularity to the polling-loop comparison.
+	if !isKnownGenType(expandPlatformInfo.GenType) {
+		csmlog.WithContext(ctx).Warnf("expandReplicationPair: unrecognized genType %q for system %s; aborting.", expandPlatformInfo.GenType, systemID)
+		return fmt.Errorf("unrecognised array generation type %q for system %s", expandPlatformInfo.GenType, systemID)
+	}
+	requestedSize, err := validateVolSize(req.CapacityRange, expandPlatformInfo.GenType)
 	if err != nil {
 		return err
 	}
@@ -2195,7 +2446,7 @@ func (s *service) expandReplicationPair(ctx context.Context, req *csi.Controller
 
 func (s *service) getNASServerIDFromName(systemID, nasName string) (string, error) {
 	if nasName == "" {
-		log.Infof("NAS server not provided.")
+		csmlog.Infof("NAS server not provided.")
 		return "", errors.New("NAS server not provided")
 	}
 	system, err := s.adminClients[systemID].FindSystem(systemID, "", "")
@@ -2215,7 +2466,7 @@ func (s *service) GetNfsTopology(systemID string) []*csi.Topology {
 	return []*csi.Topology{nfsTopology}
 }
 
-func (s *service) GetNodeLabels(_ context.Context) (map[string]string, error) {
+func (s *service) GetNodeLabels(ctx context.Context) (map[string]string, error) {
 	if K8sClientset == nil {
 		err := k8sutils.CreateKubeClientSet()
 		if err != nil {
@@ -2226,18 +2477,18 @@ func (s *service) GetNodeLabels(_ context.Context) (map[string]string, error) {
 
 	nodeName := s.opts.KubeNodeName
 	if nodeName == "" {
-		log.Infof("Using env variable for node name")
+		csmlog.WithContext(ctx).Infof("Using env variable for node name")
 		nodeName = os.Getenv("NODENAME")
 	}
 
-	log.Infof("Using: %s as nodeName", nodeName)
+	csmlog.WithContext(ctx).Infof("Using: %s as nodeName", nodeName)
 
 	// access the API to fetch node object
 	node, err := K8sClientset.CoreV1().Nodes().Get(context.TODO(), nodeName, v1.GetOptions{})
 	if err != nil {
 		return nil, status.Error(codes.Internal, GetMessage("Unable to fetch the node labels. Error: %v", err))
 	}
-	log.Debugf("Node labels: %v\n", node.Labels)
+	csmlog.WithContext(ctx).Debugf("Node labels: %v\n", node.Labels)
 	return node.Labels, nil
 }
 
@@ -2246,7 +2497,7 @@ func (s *service) GetNodeIPByCSINodeID(nodeID string) string {
 	// 1. List CSINodes
 	csiNodes, err := K8sClientset.StorageV1().CSINodes().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
-		log.Errorf("Error listing CSINodes: %v", err)
+		csmlog.Errorf("Error listing CSINodes: %v", err)
 		return ""
 	}
 
@@ -2264,7 +2515,7 @@ func (s *service) GetNodeIPByCSINodeID(nodeID string) string {
 	}
 
 	if kubeNodeName == "" {
-		log.Warnf("No Kubernetes node found for CSI nodeID: %s", nodeID)
+		csmlog.Warnf("No Kubernetes node found for CSI nodeID: %s", nodeID)
 		return ""
 	}
 
@@ -2287,36 +2538,44 @@ func (s *service) GetNodeIPByCSINodeID(nodeID string) string {
 func (s *service) QueryArrayStatus(ctx context.Context, url string) (bool, error) {
 	defer func() {
 		if err := recover(); err != nil {
-			log.Debugf("panic occurred in queryStatus: %v", err)
+			csmlog.WithContext(ctx).Debugf("Panic occurred while querying array status: %v", err)
 		}
 	}()
 	client := http.Client{
 		Timeout: Timeout,
 	}
-	resp, err := client.Get(url)
-
-	log.Debugf("Received response %+v for url %s", resp, url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		log.Errorf("failed to call API %s due to %s ", url, err.Error())
+		csmlog.WithContext(ctx).Errorf("Failed to create array status request for %s: %v", url, err)
+		return false, err
+	}
+	if PodmonAPIToken != "" {
+		req.Header.Set("Authorization", "Bearer "+PodmonAPIToken)
+	}
+	resp, err := client.Do(req)
+
+	csmlog.WithContext(ctx).Debugf("Received response %+v for URL %s", resp, url)
+	if err != nil {
+		csmlog.WithContext(ctx).Errorf("Failed to call array status API %s: %v", url, err)
 		return false, err
 	}
 	defer resp.Body.Close() // #nosec G307
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Errorf("failed to read API response due to %s ", err.Error())
+		csmlog.WithContext(ctx).Errorf("Failed to read array status API response: %v", err)
 		return false, err
 	}
 	if resp.StatusCode != 200 {
-		log.Errorf("Found unexpected response from the server while fetching array status %d ", resp.StatusCode)
+		csmlog.WithContext(ctx).Errorf("Received unexpected status code while fetching array status: %d", resp.StatusCode)
 		return false, fmt.Errorf("unexpected response from the server")
 	}
 	var statusResponse ArrayConnectivityStatus
 	err = json.Unmarshal(bodyBytes, &statusResponse)
 	if err != nil {
-		log.Errorf("unable to unmarshal and determine connectivity due to %s ", err)
+		csmlog.WithContext(ctx).Errorf("Failed to parse array status response: %v", err)
 		return false, err
 	}
-	log.Infof("API Response received is %+v\n", statusResponse)
+	csmlog.WithContext(ctx).Infof("Array status response: %+v", statusResponse)
 	// responseObject has last success and last attempt timestamp in Unix format
 	timeDiff := statusResponse.LastAttempt - statusResponse.LastSuccess
 	tolerance := SetPollingFrequency(ctx)
@@ -2324,11 +2583,11 @@ func (s *service) QueryArrayStatus(ctx context.Context, url string) (bool, error
 	// checking if the status response is stale and connectivity test is still running
 	// since nodeProbe is run at frequency tolerance/2, ideally below check should never be true
 	if (currTime - statusResponse.LastAttempt) > tolerance*2 {
-		log.Errorf("seems like connectivity test is not being run, current time is %d and last run was at %d", currTime, statusResponse.LastAttempt)
+		csmlog.WithContext(ctx).Errorf("Connectivity test appears stale; current time is %d and the last attempt was at %d", currTime, statusResponse.LastAttempt)
 		// considering connectivity is broken
 		return false, nil
 	}
-	log.Debugf("last connectivity was  %d sec back, tolerance is %d sec", timeDiff, tolerance)
+	csmlog.WithContext(ctx).Debugf("Last connectivity check was %d seconds ago; tolerance is %d seconds", timeDiff, tolerance)
 	// give 2s leeway for tolerance check
 	if timeDiff <= tolerance+2 {
 		return true, nil
@@ -2355,10 +2614,14 @@ func (s *service) SetPodZoneLabel(ctx context.Context, zoneLabel map[string]stri
 	for _, pod := range pods.Items {
 		if pod.Spec.NodeName == s.opts.KubeNodeName && pod.Labels["app"] != "" {
 			// only add labels to node pods. Controller pod is not restricted to a zone
-			if strings.Contains(pod.Name, "node") {
+			if strings.Contains(pod.Labels["app"], "node") {
 				podName = pod.Name
 			}
 		}
+	}
+
+	if podName == "" {
+		return status.Errorf(codes.NotFound, "no node pod found for node %s in namespace %s", s.opts.KubeNodeName, DriverNamespace)
 	}
 
 	pod, err := K8sClientset.CoreV1().Pods(DriverNamespace).Get(ctx, podName, v1.GetOptions{})
@@ -2367,7 +2630,7 @@ func (s *service) SetPodZoneLabel(ctx context.Context, zoneLabel map[string]stri
 	}
 
 	for key, value := range zoneLabel {
-		log.Infof("Setting Label: Key: %s, Value: %s for pod: %s\n", key, value, podName)
+		csmlog.WithContext(ctx).Infof("Setting label %s=%s on pod %s", key, value, podName)
 		pod.Labels[key] = value
 	}
 
@@ -2448,13 +2711,17 @@ func getZoneKeyLabelFromSecret(arrays map[string]*ArrayConnectionData) (string, 
 	zoneKeyLabel := ""
 
 	for _, array := range arrays {
-		if array.AvailabilityZone != nil {
+		// Check Zones[] slice first (multi-zone support)
+		for _, z := range array.Zones {
+			if z.LabelKey == "" {
+				csmlog.Warnf("array %s zone %s has no labelKey defined; node zone labels will use the default key", array.SystemID, z.Name)
+				continue
+			}
 			if zoneKeyLabel == "" {
-				// Assumes that the key parameter is not empty
-				zoneKeyLabel = array.AvailabilityZone.LabelKey
-			} else if zoneKeyLabel != array.AvailabilityZone.LabelKey {
-				log.Warnf("array %s zone key %s does not match %s", array.SystemID, array.AvailabilityZone.LabelKey, zoneKeyLabel)
-				return "", fmt.Errorf("array %s zone key %s does not match %s", array.SystemID, array.AvailabilityZone.LabelKey, zoneKeyLabel)
+				zoneKeyLabel = z.LabelKey
+			} else if zoneKeyLabel != z.LabelKey {
+				csmlog.Warnf("array %s zone %s key %s does not match %s", array.SystemID, z.Name, z.LabelKey, zoneKeyLabel)
+				return "", fmt.Errorf("array %s zone %s key %s does not match %s", array.SystemID, z.Name, z.LabelKey, zoneKeyLabel)
 			}
 		}
 	}
@@ -2462,7 +2729,7 @@ func getZoneKeyLabelFromSecret(arrays map[string]*ArrayConnectionData) (string, 
 	return zoneKeyLabel, nil
 }
 
-// isControllerMode returns true if the mode property of service s is set to "node", false otherwise.
+// isNodeMode returns true if the mode property of service s is set to "node", false otherwise.
 func (s *service) isNodeMode() bool {
 	return strings.EqualFold(s.mode, "node")
 }
@@ -2472,9 +2739,82 @@ func (s *service) isControllerMode() bool {
 	return strings.EqualFold(s.mode, "controller")
 }
 
+// configuredZoneNames returns a list of zone names configured for this array.
+func (array *ArrayConnectionData) configuredZoneNames() []string {
+	if len(array.Zones) == 0 {
+		return nil
+	}
+	names := make([]string, len(array.Zones))
+	for i, z := range array.Zones {
+		names[i] = string(z.Name)
+	}
+	return names
+}
+
+// getZoneConfigSummary returns a human-readable summary of all zone-to-PD
+// mappings across arrays, suitable for startup diagnostic logging.
+// Credential fields (username, password, token) are never included.
+func getZoneConfigSummary(arrays map[string]*ArrayConnectionData) string {
+	hasAnyZone := false
+	for _, arr := range arrays {
+		if len(arr.Zones) > 0 {
+			hasAnyZone = true
+			break
+		}
+	}
+	if !hasAnyZone {
+		return "zone config summary: no zone configuration detected"
+	}
+
+	var sb strings.Builder
+	sb.WriteString("zone config summary:")
+
+	// Sort system IDs for deterministic output
+	systemIDs := make([]string, 0, len(arrays))
+	for sysID := range arrays {
+		systemIDs = append(systemIDs, sysID)
+	}
+	sort.Strings(systemIDs)
+
+	for _, sysID := range systemIDs {
+		arr := arrays[sysID]
+		if len(arr.Zones) == 0 {
+			continue
+		}
+		for _, z := range arr.Zones {
+			for _, pd := range z.ProtectionDomains {
+				pools := make([]string, len(pd.Pools))
+				for i, p := range pd.Pools {
+					pools[i] = string(p)
+				}
+				sb.WriteString(fmt.Sprintf(" [system=%s zone=%s PD=%s pools=[%s]]",
+					sysID, z.Name, pd.Name, strings.Join(pools, ",")))
+			}
+		}
+	}
+
+	return sb.String()
+}
+
+// formatNodeZoneAssociation returns a log message describing a node's zone
+// association for diagnostic logging during NodeGetInfo.
+func formatNodeZoneAssociation(nodeID, zoneName, labelKey string) string {
+	return fmt.Sprintf("node %s associated with zone %s (label=%s)", nodeID, zoneName, labelKey)
+}
+
+// hasZoneConfig returns true if the array has any zone configuration.
+func (array *ArrayConnectionData) hasZoneConfig() bool {
+	return len(array.Zones) > 0
+}
+
 // isInZone returns true if the array is configured for use in the provided zoneName, false otherwise.
 func (array *ArrayConnectionData) isInZone(zoneName string) bool {
-	return array.AvailabilityZone != nil && array.AvailabilityZone.Name == ZoneName(zoneName)
+	for _, z := range array.Zones {
+		if z.Name == ZoneName(zoneName) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *service) initConnectors() {
@@ -2500,26 +2840,32 @@ func (s *service) getInitiators() ([]string, error) {
 
 	nvmeInitiators, err := s.nvmeConnector.GetInitiatorName(ctx)
 	if err != nil {
-		log.Error("nodeStartup could not get Initiator NQNs")
+		csmlog.Error("nodeStartup could not get Initiator NQNs")
 	} else if len(nvmeInitiators) == 0 {
-		log.Error("NVMe initiators not found on node")
+		csmlog.Error("NVMe initiators not found on node")
 	} else {
-		log.Debug("NVMe initiators found on node")
+		csmlog.Debug("NVMe initiators found on node")
 		nvmeAvailable = true
 	}
 
 	if !nvmeAvailable {
 		// If we haven't found any initiators we still can use NFS
-		log.Info("NVMe initiators not found on node")
+		csmlog.Info("NVMe initiators not found on node")
 	}
 
 	return nvmeInitiators, nil
 }
 
 func (s *service) GetPlatformInfo(systemID string) (*PlatformInfo, error) {
+	// CG-RC-001: use a per-systemID mutex so that the first concurrent write to
+	// s.platformInfos is serialised without blocking unrelated systemIDs.
+	lock := s.getProbeLock(systemID)
+	lock.Lock()
+	defer lock.Unlock()
+
 	platformInfo, ok := s.platformInfos[systemID]
 	if !ok {
-		log.Infof("Start: Retrieving Platform Info from Array using SystemId: %s", systemID)
+		csmlog.Debugf("Start: Retrieving Platform Info from Array using SystemId: %s", systemID)
 
 		platformInfo = &PlatformInfo{
 			SystemID: systemID,
@@ -2541,7 +2887,16 @@ func (s *service) GetPlatformInfo(systemID string) (*PlatformInfo, error) {
 
 		s.platformInfos[systemID] = platformInfo
 
-		log.Infof("End: Retrieved Platform Info from Array using SystemId: %s Version: %v GenType: %s", systemID, version, genType)
+		// FR-6: INFO-level structured log on fresh detection so operators can
+		// confirm which granularity boundary the driver will apply.
+		granularity := "8 GiB (Gen1)"
+		if genType == "EC" {
+			granularity = "1 GiB (Gen2/EC)"
+		}
+		csmlog.Infof("Array generation detected: systemID=%s version=%v genType=%q granularity=%s",
+			systemID, version, genType, granularity)
+
+		csmlog.Debugf("End: Retrieved Platform Info from Array using SystemId: %s Version: %v GenType: %s", systemID, version, genType)
 	}
 
 	return platformInfo, nil
@@ -2550,7 +2905,7 @@ func (s *service) GetPlatformInfo(systemID string) (*PlatformInfo, error) {
 func (s *service) GetGenType(systemID string) (string, error) {
 	system := s.systems[systemID]
 	if system == nil {
-		return "", nil
+		return "", fmt.Errorf("GetGenType: system %q not found in systems map", systemID)
 	}
 
 	// Query all ProtectionDomains for this system and return genType of first one
@@ -2563,7 +2918,7 @@ func (s *service) GetGenType(systemID string) (string, error) {
 		return pds[0].GenType, nil
 	}
 
-	return "", nil
+	return "", fmt.Errorf("GetGenType: system %q has no protection domains — cannot determine generation type", systemID)
 }
 
 func (s *service) GetPlatformVersion(systemID string) (float64, error) {
@@ -2609,19 +2964,19 @@ func (s *service) getHostIDAndType(systemID, nodeID string) (string, string, err
 
 	sdcID, err := s.getSDCID(nodeID, systemID)
 	if err != nil {
-		log.Infof("No SDC host found for nodeID %s: %v", nodeID, err)
+		csmlog.Infof("No SDC host found for nodeID %s: %v", nodeID, err)
 	}
 	if sdcID != "" {
-		log.Infof("SDC Host with ID %s found for nodeID %s", sdcID, nodeID)
+		csmlog.Infof("SDC Host with ID %s found for nodeID %s", sdcID, nodeID)
 		hostID = sdcID
 		hostType = SDC
 	} else {
 		nvmeHost, err := s.systems[systemID].FindSdc("Name", nodeID)
 		if err != nil {
-			log.Infof("No NVME host found for nodeID %s: %v", nodeID, err)
+			csmlog.Infof("No NVME host found for nodeID %s: %v", nodeID, err)
 		}
 		if nvmeHost != nil {
-			log.Infof("NVME Host with ID %s found for nodeID %s", nvmeHost.Sdc.ID, nodeID)
+			csmlog.Infof("NVME Host with ID %s found for nodeID %s", nvmeHost.Sdc.ID, nodeID)
 			hostID = nvmeHost.Sdc.ID
 			hostType = NVMeTCP
 		} else {
@@ -2636,23 +2991,23 @@ func (s *service) getHostIDAndType(systemID, nodeID string) (string, string, err
 // controller pod always exposes a /metrics endpoint. When MetricsTLSCertFile and
 // MetricsTLSKeyFile are both configured, the endpoint is served over HTTPS.
 func (s *service) startMetricsServer() {
-	log.Infof("Starting metrics server on port %s", s.opts.MetricsPort)
+	csmlog.Infof("Starting metrics server on port %s", s.opts.MetricsPort)
 	srv := svcmetrics.NewSharedMetricsServer()
 
 	var startErr error
 	if s.opts.MetricsTLSCertFile != "" && s.opts.MetricsTLSKeyFile != "" {
-		log.Infof("Metrics server TLS enabled (cert: %s, key: %s)", s.opts.MetricsTLSCertFile, s.opts.MetricsTLSKeyFile)
+		csmlog.Infof("Metrics server TLS enabled (cert: %s, key: %s)", s.opts.MetricsTLSCertFile, s.opts.MetricsTLSKeyFile)
 		startErr = srv.StartTLS(s.opts.MetricsPort, s.opts.MetricsTLSCertFile, s.opts.MetricsTLSKeyFile)
 	} else {
 		startErr = srv.Start(s.opts.MetricsPort)
 	}
 
 	if startErr != nil {
-		log.Errorf("failed to start metrics server: %v", startErr)
+		csmlog.Errorf("failed to start metrics server: %v", startErr)
 		return
 	}
 	s.metricsServer = srv
-	log.Infof("Metrics server started; endpoint available at %s/metrics", srv.GetAddr())
+	csmlog.Infof("Metrics server started; endpoint available at %s/metrics", srv.GetAddr())
 }
 
 // startGatewayMonitor starts the gateway polling loop using the provided context.
@@ -2660,7 +3015,7 @@ func (s *service) startMetricsServer() {
 // server's shared Prometheus registry.  It is called only on the leader.
 func (s *service) startGatewayMonitor(ctx context.Context) {
 	if s.metricsServer == nil {
-		log.Error("cannot start gateway monitor: metrics server is not running")
+		csmlog.WithContext(ctx).Error("Cannot start gateway monitor because the metrics server is not running")
 		return
 	}
 
@@ -2676,7 +3031,7 @@ func (s *service) startGatewayMonitor(ctx context.Context) {
 			if host, err := ExtractHost(arr.Endpoint); err == nil {
 				ip = host
 			} else {
-				log.Warnf("could not extract gateway address for system %s from endpoint %s: %v; using endpoint as metric label", id, arr.Endpoint, err)
+				csmlog.WithContext(ctx).Warnf("Could not extract gateway address for system %s from endpoint %s: %v; using the endpoint as the metric label", id, arr.Endpoint, err)
 				ip = arr.Endpoint
 			}
 		}
@@ -2692,11 +3047,11 @@ func (s *service) startGatewayMonitor(ctx context.Context) {
 		PollInterval: pollInterval,
 	})
 	if gmErr := gm.Start(ctx); gmErr != nil {
-		log.Errorf("failed to start gateway monitor: %v", gmErr)
+		csmlog.WithContext(ctx).Errorf("Failed to start gateway monitor: %v", gmErr)
 		return
 	}
 	s.gatewayMonitor = gm
-	log.Infof("Gateway monitoring started; metrics available at %s/metrics", s.metricsServer.GetAddr())
+	csmlog.WithContext(ctx).Infof("Gateway monitoring started; metrics are available at %s/metrics", s.metricsServer.GetAddr())
 }
 
 // startGatewayMonitoring starts both the metrics server and the gateway monitor.
@@ -2718,7 +3073,7 @@ func (s *service) startGatewayMonitoring(ctx context.Context) {
 func (s *service) startGatewayMonitoringWithLeaderElection(ctx context.Context) {
 	if K8sClientset == nil {
 		if err := k8sutils.CreateKubeClientSet(KubeConfig); err != nil {
-			log.Errorf("gateway monitoring leader election: failed to create k8s clientset: %v", err)
+			csmlog.WithContext(ctx).Errorf("Gateway monitoring leader election failed to create the Kubernetes clientset: %v", err)
 			return
 		}
 		K8sClientset = k8sutils.Clientset
@@ -2740,14 +3095,14 @@ func (s *service) startGatewayMonitoringWithLeaderElection(ctx context.Context) 
 		}()
 		defer cancel()
 
-		log.Infof("Gateway monitoring: acquired leader election lease %q", lockName)
+		csmlog.WithContext(ctx).Infof("Gateway monitoring acquired leader election lease %q", lockName)
 		s.startGatewayMonitor(monCtx)
 
 		// Block until the merged context is cancelled so the lease is held while
 		// monitoring is running. When cancelled the gateway monitor's own context
 		// will also be cancelled, stopping all polling goroutines.
 		<-monCtx.Done()
-		log.Infof("Gateway monitoring: released leader election lease %q — stopping gateway monitor", lockName)
+		csmlog.WithContext(ctx).Infof("Gateway monitoring released leader election lease %q; stopping the gateway monitor", lockName)
 		// Stop only the gateway monitor; the metrics server keeps running on this
 		// controller so that it continues to serve (now-empty) metrics until it
 		// either re-acquires the lease or the pod is terminated.
@@ -2758,6 +3113,293 @@ func (s *service) startGatewayMonitoringWithLeaderElection(ctx context.Context) 
 	}
 
 	if err := k8sutils.LeaderElectionFunc(&K8sClientset, lockName, DriverNamespace, runFunc); err != nil {
-		log.Errorf("gateway monitoring leader election failed: %v", err)
+		csmlog.WithContext(ctx).Errorf("Gateway monitoring leader election failed: %v", err)
+	}
+}
+
+// OperationInterceptor returns the gRPC unary interceptor that records CSI operation
+// metrics. It is nil until startCollectors has been called. Intended for use by the
+// provider when gocsi supports injecting server options at startup.
+func (s *service) OperationInterceptor() grpc.UnaryServerInterceptor {
+	return s.operationInterceptor
+}
+
+// GetOperationInterceptor returns the global operation interceptor for use by the provider
+func GetOperationInterceptor() grpc.UnaryServerInterceptor {
+	return globalOperationInterceptor
+}
+
+// startCollectors initializes and starts all PowerFlex collectors.
+func (s *service) startCollectors(ctx context.Context) {
+	csmlog.WithContext(ctx).Infof("startCollectors: starting collector initialization")
+	if s.metricsServer == nil {
+		csmlog.WithContext(ctx).Warn("startCollectors: metrics server not available, skipping collectors")
+		return
+	}
+
+	reg := s.metricsServer.GetRegistry()
+	baseManager := collectors.NewCollectorManager()
+	collectorInterval := metricsCollectionInterval()
+	runtimeConfig := metricsRuntimeConfig()
+
+	// Register the cross-array stale indicator metric.
+	s.metricsStale = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "dell_powerflex_metrics_stale",
+		Help: "Set to 1 when an array's metrics may be stale.",
+	}, []string{"system_id"})
+	if err := reg.Register(s.metricsStale); err != nil {
+		csmlog.WithContext(ctx).Warnf("startCollectors: could not register dell_powerflex_metrics_stale: %v", err)
+	}
+
+	// Register ER-K8S-BR64714-001-powerflex-gen2-1gb-granularity granularity metrics (FR-7).
+	if s.granularityMetrics == nil {
+		if promReg, ok := reg.(*prometheus.Registry); ok {
+			gm, err := svcmetrics.NewGranularityMetrics(promReg)
+			if err != nil {
+				csmlog.WithContext(ctx).Warnf("startCollectors: failed to register granularity metrics: %v", err)
+			} else {
+				s.granularityMetrics = gm
+			}
+		} else {
+			csmlog.WithContext(ctx).Warn("startCollectors: metrics registry is not a *prometheus.Registry, skipping granularity metrics")
+		}
+	}
+
+	// Build a single operation interceptor shared across all arrays.
+	// startCollectors is invoked from BeforeServe, which runs before the gRPC
+	// server begins handling requests, so globalOperationInterceptor will be
+	// set before any RPC is processed. The provider wrapper also handles a nil
+	// interceptor defensively in case the ordering changes in the future.
+	// The global_id label identifies the driver, while the legacy system_id
+	// series remains stable for backward-compatible dashboards.
+	legacySystemID := s.opts.defaultSystemID
+	if legacySystemID == "" {
+		legacySystemID = "unknown"
+	}
+	driverID := Name
+	if driverID == "" {
+		driverID = "unknown"
+	}
+	s.operationInterceptor = NewOperationInterceptor(reg, legacySystemID, driverID)
+	globalOperationInterceptor = s.operationInterceptor
+	csmlog.WithContext(ctx).Infof("startCollectors: gRPC operation interceptor metrics registered with system_id=%s and global_id=%s", legacySystemID, driverID)
+
+	type arrayCollectorConfig struct {
+		systemID           string
+		client             *sio.Client
+		managementEndpoint string
+		metadataClient     kubernetes.Interface
+		volumeMetadata     collectors.VolumeMetadataProvider
+		metricsRuntime     *collectors.MetricsRuntime
+	}
+
+	arrayConfigs := make([]arrayCollectorConfig, 0, len(s.adminClients))
+
+	csmlog.WithContext(ctx).Infof("startCollectors: starting collector initialization loop, adminClients count: %d", len(s.adminClients))
+	for sid, client := range s.adminClients {
+		managementEndpoint := "unknown"
+		if arrayCfg, ok := s.opts.arrays[sid]; ok && arrayCfg != nil && arrayCfg.Endpoint != "" {
+			managementEndpoint = arrayCfg.Endpoint
+		}
+
+		csmlog.WithContext(ctx).Infof("startCollectors[%s]: initializing metadata client", sid)
+		metadataClient := K8sClientset
+		if metadataClient == nil && k8sutils.Clientset != nil {
+			metadataClient = k8sutils.Clientset
+		}
+		if metadataClient == nil {
+			if err := k8sutils.CreateKubeClientSet(KubeConfig); err == nil {
+				metadataClient = k8sutils.Clientset
+				K8sClientset = metadataClient
+				csmlog.WithContext(ctx).Infof("startCollectors[%s]: initialized Kubernetes client for K8sMetadataChecker", sid)
+			} else {
+				csmlog.WithContext(ctx).Warnf("startCollectors[%s]: failed to initialize Kubernetes client for K8sMetadataChecker: %v", sid, err)
+			}
+		}
+		volumeMetadata := collectors.NewK8sMetadataChecker(metadataClient, Name)
+		if volumeMetadata.Available() {
+			csmlog.WithContext(ctx).Infof("startCollectors[%s]: K8sMetadataChecker available for PV validation", sid)
+		} else {
+			csmlog.WithContext(ctx).Warnf("startCollectors[%s]: K8sMetadataChecker not available, PV validation disabled", sid)
+		}
+
+		runtimeCfg := runtimeConfig
+		runtimeCfg.StaleReporter = func(id string, stale bool) {
+			if stale {
+				s.metricsStale.WithLabelValues(id).Set(1)
+				return
+			}
+			s.metricsStale.WithLabelValues(id).Set(0)
+		}
+		metricsRuntime := collectors.NewMetricsRuntimeWithConfig(sid, runtimeCfg)
+		baseHealth, err := collectors.NewDriverHealthCollector(reg, sid)
+		if err != nil {
+			csmlog.WithContext(ctx).Warnf("startCollectors[%s]: DriverHealthCollector register error: %v", sid, err)
+		} else {
+			baseManager.Register(baseHealth)
+		}
+
+		arrayConfigs = append(arrayConfigs, arrayCollectorConfig{
+			systemID:           sid,
+			client:             client,
+			managementEndpoint: managementEndpoint,
+			metadataClient:     metadataClient,
+			volumeMetadata:     volumeMetadata,
+			metricsRuntime:     metricsRuntime,
+		})
+	}
+
+	if len(baseManager.Collectors()) > 0 {
+		s.collectorManager = baseManager
+		s.collectorManager.Start(ctx, collectorInterval)
+		go func() {
+			<-ctx.Done()
+			if s.collectorManager != nil {
+				s.collectorManager.Stop()
+			}
+		}()
+	} else {
+		csmlog.WithContext(ctx).Warn("startCollectors: no driver health collectors could be registered; metrics will be incomplete")
+	}
+
+	startArrayCollectors := func(arrayCtx context.Context) {
+		arrayManager := collectors.NewCollectorManager()
+		for _, cfg := range arrayConfigs {
+			apiObserver, err := collectors.NewPowerFlexAPIObserver(reg, cfg.systemID)
+			if err != nil {
+				csmlog.WithContext(arrayCtx).Warnf("startCollectors[%s]: PowerFlexAPIObserver create error: %v", cfg.systemID, err)
+			} else {
+				cfg.client.SetRequestObserver(apiObserver)
+			}
+
+			metricsClient := collectors.NewPowerFlexMetricsClient(cfg.client, cfg.systemID)
+
+			sp, err := collectors.NewStoragePoolCollector(metricsClient, reg, cfg.systemID)
+			if err != nil {
+				csmlog.WithContext(arrayCtx).Warnf("startCollectors[%s]: StoragePoolCollector register error: %v", cfg.systemID, err)
+			} else {
+				sp.SetRuntime(cfg.metricsRuntime)
+				arrayManager.Register(sp)
+			}
+
+			rcg, err := collectors.NewRCGCollector(metricsClient, reg, cfg.systemID)
+			if err != nil {
+				csmlog.WithContext(arrayCtx).Warnf("startCollectors[%s]: RCGCollector register error: %v", cfg.systemID, err)
+			} else {
+				rcg.SetRuntime(cfg.metricsRuntime)
+				arrayManager.Register(rcg)
+			}
+
+			pfVolumeClient := collectors.NewPowerFlexVolumeClient(cfg.client, cfg.metadataClient, cfg.volumeMetadata, cfg.systemID)
+			vol, err := collectors.NewVolumeCollector(pfVolumeClient, reg, cfg.systemID)
+			if err != nil {
+				csmlog.WithContext(arrayCtx).Warnf("startCollectors[%s]: VolumeCollector register error: %v", cfg.systemID, err)
+			} else {
+				vol.SetRuntime(cfg.metricsRuntime)
+				arrayManager.Register(vol)
+			}
+
+			arrayHealth, err := collectors.NewArrayHealthCollector(collectors.NewPowerFlexArrayHealthClient(cfg.client), reg, cfg.systemID, cfg.managementEndpoint)
+			if err != nil {
+				csmlog.WithContext(arrayCtx).Warnf("startCollectors[%s]: ArrayHealthCollector register error: %v", cfg.systemID, err)
+			} else {
+				arrayHealth.SetRuntime(cfg.metricsRuntime)
+				arrayManager.Register(arrayHealth)
+			}
+		}
+
+		if len(arrayManager.Collectors()) == 0 {
+			csmlog.WithContext(arrayCtx).Warn("startCollectors: no array collectors could be registered; metrics will be incomplete")
+			return
+		}
+
+		arrayManager.Start(arrayCtx, collectorInterval)
+		go func() {
+			<-arrayCtx.Done()
+			arrayManager.Stop()
+		}()
+		csmlog.WithContext(arrayCtx).Infof("startCollectors: started %d array collectors across %d arrays", len(arrayManager.Collectors()), len(arrayConfigs))
+	}
+
+	if strings.EqualFold(s.mode, "controller") {
+		if metricsLeaderElectionEnabled() {
+			if k8sutils.Kubeclient != nil && k8sutils.Kubeclient.Clientset != nil {
+				go func() {
+					if err := k8sutils.LeaderElectionForMetrics(ctx, k8sutils.Kubeclient.Clientset, "powerflex-metrics", metricsLeaderElectionNamespace(), metricsLeaderElectionRenewDeadline(), metricsLeaderElectionLeaseDuration(), metricsLeaderElectionRetryPeriod(), startArrayCollectors); err != nil && ctx.Err() == nil {
+						csmlog.WithContext(ctx).Errorf("metrics leader election failed, falling back to local array metrics collection: %v", err)
+						startArrayCollectors(ctx)
+					}
+				}()
+			} else {
+				csmlog.WithContext(ctx).Warn("metrics leader election enabled but Kubernetes client is unavailable; starting array collectors locally")
+				startArrayCollectors(ctx)
+			}
+		} else {
+			startArrayCollectors(ctx)
+		}
+	} else {
+		csmlog.WithContext(ctx).Infof("startCollectors: skipping array collectors in node mode")
+	}
+
+	csmlog.WithContext(ctx).Infof("startCollectors: started %d driver health collectors across %d arrays", len(baseManager.Collectors()), len(s.adminClients))
+}
+
+func metricsLeaderElectionEnabled() bool {
+	if raw, ok := csictx.LookupEnv(context.Background(), EnvMetricsLeaderElectionEnabled); ok {
+		return strings.EqualFold(raw, "true")
+	}
+	return false
+}
+
+func metricsLeaderElectionNamespace() string {
+	if ns, ok := csictx.LookupEnv(context.Background(), EnvDriverNamespace); ok && ns != "" {
+		return ns
+	}
+	return DriverNamespace
+}
+
+func metricsLeaderElectionLeaseDuration() time.Duration {
+	return durationFromEnvOrDefault(EnvMetricsLeaderElectionLeaseDuration, 60*time.Second)
+}
+
+func metricsLeaderElectionRenewDeadline() time.Duration {
+	return durationFromEnvOrDefault(EnvMetricsLeaderElectionRenewDeadline, 40*time.Second)
+}
+
+func metricsLeaderElectionRetryPeriod() time.Duration {
+	return durationFromEnvOrDefault(EnvMetricsLeaderElectionRetryPeriod, 5*time.Second)
+}
+
+func durationFromEnvOrDefault(env string, defaultValue time.Duration) time.Duration {
+	if raw, ok := csictx.LookupEnv(context.Background(), env); ok {
+		if d, err := time.ParseDuration(raw); err == nil && d > 0 {
+			return d
+		}
+		csmlog.Warnf("invalid value %q for %s, defaulting to %s", raw, env, defaultValue)
+	}
+	return defaultValue
+}
+
+func intFromEnvOrDefault(env string, defaultValue int) int {
+	if raw, ok := csictx.LookupEnv(context.Background(), env); ok {
+		if v, err := strconv.Atoi(strings.TrimSpace(raw)); err == nil && v > 0 {
+			return v
+		}
+		csmlog.Warnf("invalid value %q for %s, defaulting to %d", raw, env, defaultValue)
+	}
+	return defaultValue
+}
+
+func metricsCollectionInterval() time.Duration {
+	return durationFromEnvOrDefault(EnvMetricsCollectionInterval, 30*time.Second)
+}
+
+func metricsRuntimeConfig() collectors.RuntimeConfig {
+	return collectors.RuntimeConfig{
+		Timeout:        durationFromEnvOrDefault(EnvMetricsArrayTimeout, 30*time.Second),
+		CacheTTL:       durationFromEnvOrDefault(EnvMetricsCollectionCacheTTL, 25*time.Second),
+		RateLimit:      intFromEnvOrDefault(EnvMetricsArrayRateLimit, 100),
+		CBThreshold:    intFromEnvOrDefault(EnvMetricsArrayCBThreshold, 3),
+		CBResetTimeout: durationFromEnvOrDefault(EnvMetricsArrayCBResetTimeout, 30*time.Second),
 	}
 }

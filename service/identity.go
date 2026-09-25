@@ -18,7 +18,8 @@ import (
 	"fmt"
 	"strings"
 
-	commonext "github.com/dell/dell-csi-extensions/common"
+	csmlog "github.com/Ecosystems/container-storage-modules/src/csmlog"
+	commonext "github.com/Ecosystems/container-storage-modules/src/dell-csi-extensions/common"
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -82,23 +83,23 @@ func (s *service) Probe(
 	*csi.ProbeResponse, error,
 ) {
 	if !strings.EqualFold(s.mode, "node") {
-		log.Debug("systemProbe")
+		csmlog.Debug("systemProbe")
 		if err := s.systemProbeAll(ctx); err != nil {
-			log.Infof("error in systemProbeAll: %s", err.Error())
+			csmlog.WithContext(ctx).Errorf("system probe failed: %v", err)
 			return nil, err
 		}
 	}
 	if !strings.EqualFold(s.mode, "controller") {
-		log.Debug("nodeProbe")
+		csmlog.Debug("nodeProbe")
 		if err := s.nodeProbe(ctx); err != nil {
-			log.Infof("error in nodeProbe: %s", err.Error())
+			csmlog.WithContext(ctx).Errorf("node probe failed: %v", err)
 			return nil, err
 		}
 	}
 	rep := &csi.ProbeResponse{
 		Ready: wrapperspb.Bool(true),
 	}
-	log.Debug(fmt.Sprintf("Probe returning: %v", rep.Ready.GetValue()))
+	csmlog.Debug(fmt.Sprintf("Probe returning: %v", rep.Ready.GetValue()))
 
 	return rep, nil
 }
@@ -108,9 +109,9 @@ func (s *service) ProbeController(ctx context.Context,
 	*commonext.ProbeControllerResponse, error,
 ) {
 	if !strings.EqualFold(s.mode, "node") {
-		log.Debug("systemProbe")
+		csmlog.WithContext(ctx).Debug("systemProbe")
 		if err := s.systemProbeAll(ctx); err != nil {
-			log.Infof("error in systemProbeAll: %s", err.Error())
+			csmlog.WithContext(ctx).Infof("error in systemProbeAll: %s", err.Error())
 			return nil, err
 		}
 	}

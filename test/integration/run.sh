@@ -26,7 +26,7 @@ echo $SDC_GUID
 
 testRun=$1
 
-GOOS=linux CGO_ENABLED=0 GO111MODULE=on go test -v -coverprofile=c.linux.out -timeout 60m -coverpkg=github.com/dell/csi-vxflexos/service -run "^$testRun\$\$" &
+GOOS=linux CGO_ENABLED=0 GO111MODULE=on go test -v -coverprofile=c.linux.out -timeout 60m -coverpkg=github.com/Ecosystems/container-storage-modules/src/csi-vxflexos/service -run "^$testRun\$\$" &
 if [ -f ./csi-sanity ] ; then
     sleep 5
     ./csi-sanity --csi.endpoint=./unix_sock --csi.testvolumeparameters=./pool.yml --csi.testvolumesize 8589934592

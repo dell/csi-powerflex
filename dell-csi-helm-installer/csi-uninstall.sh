@@ -28,6 +28,9 @@ if [ -f "${DEBUGLOG}" ]; then
   rm -f "${DEBUGLOG}"
 fi
 
+detect_helm_version
+validate_helm_version "${HELM_MAJOR_VERSION}"
+
 #
 # usage will print command execution help and then exit
 function usage() {

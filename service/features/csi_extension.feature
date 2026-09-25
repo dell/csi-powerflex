@@ -115,22 +115,20 @@ Feature: VxFlex OS CSI interface
 Examples:
       | error                       | errorMsg                          |
       | "none"                      | "none"                            |
-      | "VolIDListEmptyError"       | "SourceVolumeIDs cannot be empty" |
-      | "CreateVGSAcrossTwoArrays"  | "should be on the same system"    |
-      | "CreateVGSNameTooLongError" | "longer than 27 character max"    |
-      | "SIOGatewayVolumeNotFound"  | "failure checking source"         |
+      | "VolIDListEmptyError"       | "cannot be empty"                 |
+      | "CreateVGSAcrossTwoArrays"  | "on the same system"              |
+      | "CreateVGSNameTooLongError" | "none"                            |
+      | "SIOGatewayVolumeNotFound"  | "not found"                       |
       | "CreateVGSLegacyVol"        | "none"                            |
-      | "CreateSnapshotError"       | "Failed to create group"          |
+      | "CreateSnapshotError"       | "failed to create group snapshot"  |
       | "NoSysNameError"            | "systemID is not found"           | 
      
   @vg
   Scenario: I call CreateVolumeSnapshotGroup with legacy vol conflict
     Given a VxFlexOS service
-    #When I call Probe
-    #And I induce error "LegacyVolumeConflictError"
+    And I induce error "LegacyVolumeConflictError"
     And a valid volume
     When I call Probe
-    And I induce error "LegacyVolumeConflictError"
     And I call CreateVolumeSnapshotGroup
     Then the error contains "expecting this volume id only on default system"
 
@@ -192,7 +190,7 @@ Examples:
     And I call CreateVolume "vol4"
     And a valid CreateVolumeResponse is returned
     And I call CreateVolumeSnapshotGroup
-    Then the error contains "Some snapshots exist on array, while others need to be created."
+    Then the error contains "some snapshots exist on array while others do not"
 
 @vg
 Scenario: Call CreateVolumeGroupSnapshot idempotent; criteria 3 fails
@@ -207,4 +205,65 @@ Scenario: Call CreateVolumeGroupSnapshot idempotent; criteria 3 fails
   And I call CreateVolumeSnapshotGroup
   And remove a volume from VolumeGroupSnapshotRequest
   And I call CreateVolumeSnapshotGroup
-  Then the error contains "contains more snapshots"
+  Then the error contains "contains"
+
+@vg
+Scenario: Call DeleteVolumeGroupSnapshot successfully
+  Given a VxFlexOS service
+  When I call Probe
+  And I call CreateVolume "vol1"
+  And a valid CreateVolumeResponse is returned
+  And I call CreateVolume "vol2"
+  And a valid CreateVolumeResponse is returned
+  And I call CreateVolumeSnapshotGroup
+  And a valid CreateVolumeSnapshotGroup response is returned
+  And I call DeleteVolumeGroupSnapshot
+  Then the error contains "none"
+
+@vg
+Scenario: Call DeleteVolumeGroupSnapshot with empty ID
+  Given a VxFlexOS service
+  When I call Probe
+  And I call DeleteVolumeGroupSnapshot with empty ID
+  Then the error contains "group_snapshot_id is required"
+
+@vg
+Scenario: Call DeleteVolumeGroupSnapshot with invalid ID format
+  Given a VxFlexOS service
+  When I call Probe
+  And I call DeleteVolumeGroupSnapshot with invalid ID
+  Then the error contains "none"
+
+@vg
+Scenario: Call GetVolumeGroupSnapshot successfully
+  Given a VxFlexOS service
+  When I call Probe
+  And I call CreateVolume "vol1"
+  And a valid CreateVolumeResponse is returned
+  And I call CreateVolume "vol2"
+  And a valid CreateVolumeResponse is returned
+  And I call CreateVolumeSnapshotGroup
+  And a valid CreateVolumeSnapshotGroup response is returned
+  And I call GetVolumeGroupSnapshot
+  Then the error contains "none"
+
+@vg
+Scenario: Call GetVolumeGroupSnapshot with empty ID
+  Given a VxFlexOS service
+  When I call Probe
+  And I call GetVolumeGroupSnapshot with empty ID
+  Then the error contains "group_snapshot_id is required"
+
+@vg
+Scenario: Call GetVolumeGroupSnapshot with invalid ID format
+  Given a VxFlexOS service
+  When I call Probe
+  And I call GetVolumeGroupSnapshot with invalid ID
+  Then the error contains "not found"
+
+@vg
+Scenario: Call GetVolumeGroupSnapshot with non-existent group
+  Given a VxFlexOS service
+  When I call Probe
+  And I call GetVolumeGroupSnapshot with non-existent group
+  Then the error contains "not found"

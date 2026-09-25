@@ -20,12 +20,13 @@ import (
 	"strings"
 	"time"
 
+	csmlog "github.com/Ecosystems/container-storage-modules/src/csmlog"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	goscaleio "github.com/dell/goscaleio"
-	siotypes "github.com/dell/goscaleio/types/v1"
+	goscaleio "github.com/Ecosystems/container-storage-modules/src/goscaleio"
+	siotypes "github.com/Ecosystems/container-storage-modules/src/goscaleio/types/v1"
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 )
 
@@ -64,7 +65,7 @@ func (gc *groupControllerService) CreateVolumeGroupSnapshot(
 	ctx context.Context,
 	req *csi.CreateVolumeGroupSnapshotRequest,
 ) (*csi.CreateVolumeGroupSnapshotResponse, error) {
-	log.Infof("CSI GroupController CreateVolumeGroupSnapshot called with name: %s, sourceVolumeIds: %v", req.GetName(), req.GetSourceVolumeIds())
+	csmlog.WithContext(ctx).Infof("CSI GroupController CreateVolumeGroupSnapshot called with name: %s, sourceVolumeIds: %v", req.GetName(), req.GetSourceVolumeIds())
 
 	// Validate request
 	if req.GetName() == "" {
@@ -89,7 +90,7 @@ func (gc *groupControllerService) CreateVolumeGroupSnapshot(
 		return nil, err
 	}
 
-	log.Infof("Creating Snapshot Consistency Group on system: %s", systemID)
+	csmlog.WithContext(ctx).Infof("Creating Snapshot Consistency Group on system: %s", systemID)
 
 	// Build snapshot definitions for each source volume
 	baseName := req.GetName()
@@ -136,7 +137,7 @@ func (gc *groupControllerService) CreateVolumeGroupSnapshot(
 		}
 		return nil, status.Errorf(codes.Internal, "failed to create group snapshot with snapshots %v: %s", failedSnaps, err.Error())
 	}
-	log.Infof("CreateSnapshotConsistencyGroup response: %v", snapResponse)
+	csmlog.WithContext(ctx).Infof("CreateSnapshotConsistencyGroup response: %v", snapResponse)
 
 	// Build CSI response from array response
 	groupSnapshot, err = gc.buildCSIGroupSnapshot(ctx, snapResponse, systemID)
@@ -144,7 +145,7 @@ func (gc *groupControllerService) CreateVolumeGroupSnapshot(
 		return nil, err
 	}
 
-	log.Infof("CSI GroupController CreateVolumeGroupSnapshot response: group_snapshot_id=%s, snapshots=%d",
+	csmlog.WithContext(ctx).Infof("CSI GroupController CreateVolumeGroupSnapshot response: group_snapshot_id=%s, snapshots=%d",
 		groupSnapshot.GroupSnapshotId, len(groupSnapshot.Snapshots))
 	return &csi.CreateVolumeGroupSnapshotResponse{GroupSnapshot: groupSnapshot}, nil
 }
@@ -157,7 +158,7 @@ func (gc *groupControllerService) DeleteVolumeGroupSnapshot(
 	ctx context.Context,
 	req *csi.DeleteVolumeGroupSnapshotRequest,
 ) (*csi.DeleteVolumeGroupSnapshotResponse, error) {
-	log.Infof("CSI GroupController DeleteVolumeGroupSnapshot called with group_snapshot_id: %s, snapshot_ids: %v",
+	csmlog.WithContext(ctx).Infof("CSI GroupController DeleteVolumeGroupSnapshot called with group_snapshot_id: %s, snapshot_ids: %v",
 		req.GetGroupSnapshotId(), req.GetSnapshotIds())
 
 	if req.GetGroupSnapshotId() == "" {
@@ -169,10 +170,22 @@ func (gc *groupControllerService) DeleteVolumeGroupSnapshot(
 	// Parse systemID and consistency group ID from the composite group snapshot ID (format: systemID-cgID)
 	systemID, cgID, err := parseGroupSnapshotID(req.GetGroupSnapshotId())
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid group_snapshot_id: %s", err.Error())
+		// CSI spec v1.12: DeleteVolumeGroupSnapshot MUST be idempotent
+		// Invalid or non-existent ID MUST return OK
+		csmlog.WithContext(ctx).Infof("DeleteVolumeGroupSnapshot: invalid ID format %s, returning OK for idempotency", req.GetGroupSnapshotId())
+		return &csi.DeleteVolumeGroupSnapshotResponse{}, nil
 	}
 
 	if err := s.requireProbe(ctx, systemID); err != nil {
+		// Distinguish between "system not configured" (NotFound) and "temporary probe failure" (FailedPrecondition)
+		st, _ := status.FromError(err)
+		if st.Code() == codes.NotFound {
+			// CSI spec v1.12: DeleteVolumeGroupSnapshot MUST be idempotent
+			// System not configured in driver — snapshot cannot exist, return OK
+			csmlog.WithContext(ctx).Infof("DeleteVolumeGroupSnapshot: system %s not configured, returning OK for idempotency", systemID)
+			return &csi.DeleteVolumeGroupSnapshotResponse{}, nil
+		}
+		// Temporary probe/connection failure — propagate error so Kubernetes retries
 		return nil, err
 	}
 
@@ -194,7 +207,7 @@ func (gc *groupControllerService) DeleteVolumeGroupSnapshot(
 
 	if len(cgVols) == 0 {
 		// Already deleted — idempotent success
-		log.Infof("No snapshots found for consistency group %s on system %s; treating as already deleted", cgID, systemID)
+		csmlog.WithContext(ctx).Infof("No snapshots found for consistency group %s on system %s; treating as already deleted", cgID, systemID)
 		return &csi.DeleteVolumeGroupSnapshotResponse{}, nil
 	}
 
@@ -217,11 +230,11 @@ func (gc *groupControllerService) DeleteVolumeGroupSnapshot(
 		if err := tgtVol.RemoveVolume(removeModeOnlyMe); err != nil {
 			return nil, status.Errorf(codes.Internal, "error removing snapshot %s (%s): %s", vol.Name, vol.ID, err.Error())
 		}
-		log.Infof("Deleted snapshot %s (%s) from consistency group %s", vol.Name, vol.ID, cgID)
+		csmlog.WithContext(ctx).Infof("Deleted snapshot %s (%s) from consistency group %s", vol.Name, vol.ID, cgID)
 	}
 
 	s.clearCache()
-	log.Infof("Successfully deleted all snapshots in group %s on system %s", cgID, systemID)
+	csmlog.WithContext(ctx).Infof("Successfully deleted all snapshots in group %s on system %s", cgID, systemID)
 	return &csi.DeleteVolumeGroupSnapshotResponse{}, nil
 }
 
@@ -230,7 +243,7 @@ func (gc *groupControllerService) GetVolumeGroupSnapshot(
 	ctx context.Context,
 	req *csi.GetVolumeGroupSnapshotRequest,
 ) (*csi.GetVolumeGroupSnapshotResponse, error) {
-	log.Infof("CSI GroupController GetVolumeGroupSnapshot called with group_snapshot_id: %s, snapshot_ids: %v",
+	csmlog.WithContext(ctx).Infof("CSI GroupController GetVolumeGroupSnapshot called with group_snapshot_id: %s, snapshot_ids: %v",
 		req.GetGroupSnapshotId(), req.GetSnapshotIds())
 
 	if req.GetGroupSnapshotId() == "" {
@@ -241,7 +254,8 @@ func (gc *groupControllerService) GetVolumeGroupSnapshot(
 
 	systemID, cgID, err := parseGroupSnapshotID(req.GetGroupSnapshotId())
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid group_snapshot_id: %s", err.Error())
+		// CSI spec v1.12: GetVolumeGroupSnapshot with non-existent ID MUST return NotFound
+		return nil, status.Errorf(codes.NotFound, "group snapshot %s not found: %s", req.GetGroupSnapshotId(), err.Error())
 	}
 
 	if err := s.requireProbe(ctx, systemID); err != nil {
@@ -311,7 +325,7 @@ func (gc *groupControllerService) GetVolumeGroupSnapshot(
 		ReadyToUse:      allReady,
 	}
 
-	log.Infof("CSI GroupController GetVolumeGroupSnapshot response: group_snapshot_id=%s, snapshots=%d, ready=%v",
+	csmlog.WithContext(ctx).Infof("CSI GroupController GetVolumeGroupSnapshot response: group_snapshot_id=%s, snapshots=%d, ready=%v",
 		groupSnapshot.GroupSnapshotId, len(groupSnapshot.Snapshots), groupSnapshot.ReadyToUse)
 	return &csi.GetVolumeGroupSnapshotResponse{GroupSnapshot: groupSnapshot}, nil
 }
@@ -329,7 +343,7 @@ func parseGroupSnapshotID(groupSnapshotID string) (systemID string, cgID string,
 // checkCSIIdempotency checks if a CreateVolumeGroupSnapshot request is idempotent by
 // verifying that all expected snapshots already exist in the same consistency group.
 func (gc *groupControllerService) checkCSIIdempotency(
-	_ context.Context,
+	ctx context.Context,
 	snapshotDefs []*siotypes.SnapshotDef,
 	systemID string,
 	_ string,
@@ -398,7 +412,7 @@ func (gc *groupControllerService) checkCSIIdempotency(
 			"consistency group %s contains %d snapshots but expected %d", cgID, cgCount, len(idMap))
 	}
 
-	log.Infof("CreateVolumeGroupSnapshot request is idempotent for CG %s", cgID)
+	csmlog.WithContext(ctx).Infof("CreateVolumeGroupSnapshot request is idempotent for CG %s", cgID)
 
 	// Build VolumeGroupSnapshot from existing snapshots
 	var snapshots []*csi.Snapshot
@@ -428,7 +442,7 @@ func (gc *groupControllerService) checkCSIIdempotency(
 // buildCSIGroupSnapshot builds a VolumeGroupSnapshot response from the array's
 // CreateSnapshotConsistencyGroup response.
 func (gc *groupControllerService) buildCSIGroupSnapshot(
-	_ context.Context,
+	ctx context.Context,
 	snapResponse *siotypes.SnapshotVolumesResp,
 	systemID string,
 ) (*csi.VolumeGroupSnapshot, error) {
@@ -450,7 +464,7 @@ func (gc *groupControllerService) buildCSIGroupSnapshot(
 			tgtVol := goscaleio.NewVolume(adminClient)
 			tgtVol.Volume = vol
 			if err := tgtVol.SetVolumeName(assignedName); err != nil {
-				log.Errorf("Error setting name of snapshot id=%s name=%s: %s", snapID, assignedName, err.Error())
+				csmlog.WithContext(ctx).Errorf("failed to set snapshot name id=%s name=%s: %v", snapID, assignedName, err)
 			}
 		}
 
@@ -508,7 +522,7 @@ func createSnapshotName(baseName string, index int) string {
 
 	result := prefix + truncated
 
-	log.Infof("Truncated group snapshot name from %q to %q (%d chars) to fit PowerFlex %d-char limit",
+	csmlog.Infof("Truncated group snapshot name from %q to %q (%d chars) to fit PowerFlex %d-char limit",
 		fullName, result, len(result), maxPowerFlexNameLen)
 	return result
 }

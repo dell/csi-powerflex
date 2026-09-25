@@ -41,6 +41,9 @@ clean:
 build: generate vendor
 	CGO_ENABLED=0 GOOS=linux GO111MODULE=on go build -ldflags $(LDFLAGS) -mod=vendor
 
+build-binary:
+	CGO_ENABLED=0 GOOS=linux GO111MODULE=on go build -ldflags $(LDFLAGS) -mod=vendor
+
 # Windows or Linux; requires no hardware
 unit-test: go-code-tester
 	GITHUB_OUTPUT=/dev/null \

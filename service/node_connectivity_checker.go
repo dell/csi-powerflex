@@ -20,17 +20,50 @@ package service
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	csictx "github.com/dell/gocsi/context"
+	csmlog "github.com/Ecosystems/container-storage-modules/src/csmlog"
+	csictx "github.com/Ecosystems/container-storage-modules/src/gocsi/context"
 	"github.com/gorilla/mux"
 )
+
+// podmonAuthMiddleware returns a middleware that validates Bearer token authentication
+// for the podmon API endpoints. If the token is empty, authentication is skipped
+// for backward compatibility with deployments that have not yet configured a token.
+func podmonAuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		token := PodmonAPIToken
+		if token == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
+			http.Error(w, "missing authorization header", http.StatusUnauthorized)
+			return
+		}
+		const bearerPrefix = "Bearer "
+		// RFC 6750: the "Bearer" scheme is case-insensitive
+		if !strings.HasPrefix(strings.ToLower(authHeader), strings.ToLower(bearerPrefix)) {
+			http.Error(w, "invalid authorization header format", http.StatusUnauthorized)
+			return
+		}
+		provided := strings.TrimSpace(authHeader[len(bearerPrefix):])
+		if subtle.ConstantTimeCompare([]byte(provided), []byte(token)) != 1 {
+			http.Error(w, "invalid token", http.StatusUnauthorized)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
 
 // pollingFrequency in seconds
 var pollingFrequencyInSeconds int64
@@ -38,7 +71,7 @@ var pollingFrequencyInSeconds int64
 // startAPIService reads nodes to array status periodically
 func (s *service) startAPIService(ctx context.Context) {
 	if !s.opts.IsPodmonEnabled {
-		log.Info("podmon is not enabled")
+		csmlog.WithContext(ctx).Info("podmon is not enabled")
 		return
 	}
 	atomic.StoreInt64(&pollingFrequencyInSeconds, SetPollingFrequency(ctx))
@@ -47,14 +80,15 @@ func (s *service) startAPIService(ctx context.Context) {
 }
 
 // apiRouter serves http requests
-func (s *service) apiRouter(_ context.Context) {
-	log.Infof("starting http server on port %s", s.opts.PodmonPort)
+func (s *service) apiRouter(ctx context.Context) {
+	csmlog.WithContext(ctx).Infof("starting http server on port %s", s.opts.PodmonPort)
 	// create a new mux router
 	router := mux.NewRouter()
 	// route to connectivity status
 	// connectivityStatus is the handlers
 	router.HandleFunc(ArrayStatus, s.connectivityStatus).Methods("GET")
 	router.HandleFunc(ArrayStatus+"/"+"{systemID}", s.getArrayConnectivityStatus).Methods("GET")
+	router.Use(podmonAuthMiddleware)
 	// start http server to serve requests
 	server := &http.Server{
 		Addr:         s.opts.PodmonPort,
@@ -62,39 +96,48 @@ func (s *service) apiRouter(_ context.Context) {
 		ReadTimeout:  Timeout,
 		WriteTimeout: Timeout,
 	}
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), Timeout)
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			csmlog.WithContext(ctx).Errorf("unable to shutdown http server serving status requests due to %s", err)
+		}
+	}()
 	err := server.ListenAndServe()
-	if err != nil {
-		log.Errorf("unable to start http server to serve status requests due to %s", err)
+	if err != nil && err != http.ErrServerClosed {
+		csmlog.WithContext(ctx).Errorf("unable to start http server to serve status requests due to %s", err)
 	}
-	log.Infof("started http server to serve status requests at %s", s.opts.PodmonPort)
+	csmlog.WithContext(ctx).Infof("started http server to serve status requests at %s", s.opts.PodmonPort)
 }
 
 // connectivityStatus handler returns array connectivity status
-func (s *service) connectivityStatus(w http.ResponseWriter, _ *http.Request) {
-	log.Infof("connectivityStatus called, status is %v \n", s.probeStatus)
+func (s *service) connectivityStatus(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	csmlog.WithContext(ctx).Infof("connectivityStatus called, status is %v \n", s.probeStatus)
 	// w.Header().Set("Content-Type", "application/json")
 	if s.probeStatus == nil {
-		log.Errorf("error probeStatus map in cache is empty")
+		csmlog.WithContext(ctx).Errorf("error probeStatus map in cache is empty")
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Header().Set("Content-Type", "application/json")
 		return
 	}
 
 	// convert struct to JSON
-	log.Debugf("ProbeStatus fetched from the cache has %+v", s.probeStatus)
+	csmlog.WithContext(ctx).Debugf("ProbeStatus fetched from the cache has %+v", s.probeStatus)
 
 	jsonResponse, err := MarshalSyncMapToJSON(s.probeStatus)
 	if err != nil {
-		log.Errorf("error %s during marshaling to json", err)
+		csmlog.WithContext(ctx).Errorf("error %s during marshaling to json", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Header().Set("Content-Type", "application/json")
 		return
 	}
-	log.Info("sending connectivityStatus for all arrays ")
+	csmlog.WithContext(ctx).Info("sending connectivityStatus for all arrays ")
 	w.Header().Set("Content-Type", "application/json")
 	_, err = w.Write(jsonResponse)
 	if err != nil {
-		log.Errorf("unable to write response %s", err)
+		csmlog.WithContext(ctx).Errorf("unable to write response %s", err)
 	}
 }
 
@@ -108,11 +151,11 @@ func MarshalSyncMapToJSON(m *sync.Map) ([]byte, error) {
 			tmpMap[k.(string)] = value.(ArrayConnectivityStatus)
 			return true
 		default:
-			log.Errorf("invalid data is stored in cache")
+			csmlog.Errorf("invalid data is stored in cache")
 			return false
 		}
 	})
-	log.Debugf("map value is %+v", tmpMap)
+	csmlog.Debugf("map value is %+v", tmpMap)
 	if len(tmpMap) == 0 {
 		return nil, fmt.Errorf("invalid data is stored in cache")
 	}
@@ -122,7 +165,8 @@ func MarshalSyncMapToJSON(m *sync.Map) ([]byte, error) {
 // getArrayConnectivityStatus handler lists status of the requested array
 func (s *service) getArrayConnectivityStatus(w http.ResponseWriter, r *http.Request) {
 	systemID := mux.Vars(r)["systemID"]
-	log.Infof("GetArrayConnectivityStatus called for array %s \n", systemID)
+	ctx := r.Context()
+	csmlog.WithContext(ctx).Infof("GetArrayConnectivityStatus called for array %s \n", systemID)
 	status, found := s.probeStatus.Load(systemID)
 	if !found {
 		// specify status code
@@ -135,29 +179,29 @@ func (s *service) getArrayConnectivityStatus(w http.ResponseWriter, r *http.Requ
 	// convert status struct to JSON
 	jsonResponse, err := json.Marshal(status)
 	if err != nil {
-		log.Errorf("error %s during marshaling to json", err)
+		csmlog.WithContext(ctx).Errorf("error %s during marshaling to json", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Header().Set("Content-Type", "application/json")
 		return
 	}
-	log.Infof("sending response %+v for array %s \n", status, systemID)
+	csmlog.WithContext(ctx).Infof("sending response %+v for array %s \n", status, systemID)
 	// update response
 	_, err = w.Write(jsonResponse)
 	if err != nil {
-		log.Errorf("unable to write response %s", err)
+		csmlog.WithContext(ctx).Errorf("unable to write response %s", err)
 	}
 }
 
 // startNodeToArrayConnectivityCheck starts connectivityTest as one goroutine for each array
 func (s *service) startNodeToArrayConnectivityCheck(ctx context.Context) {
-	log.Debug("startNodeToArrayConnectivityCheck called")
+	csmlog.WithContext(ctx).Debug("startNodeToArrayConnectivityCheck called")
 	s.probeStatus = new(sync.Map)
 
 	for _, array := range s.opts.arrays {
 		go s.testConnectivityAndUpdateStatus(ctx, array.SystemID, Timeout)
 	}
 
-	log.Infof("startNodeToArrayConnectivityCheck is running probes at pollingFrequency %d ", pollingFrequencyInSeconds/2)
+	csmlog.WithContext(ctx).Infof("startNodeToArrayConnectivityCheck is running probes at pollingFrequency %d ", pollingFrequencyInSeconds/2)
 }
 
 // testConnectivityAndUpdateStatus runs probe to test connectivity from node to array
@@ -165,41 +209,43 @@ func (s *service) startNodeToArrayConnectivityCheck(ctx context.Context) {
 func (s *service) testConnectivityAndUpdateStatus(ctx context.Context, systemID string, timeout time.Duration) {
 	defer func() {
 		if err := recover(); err != nil {
-			log.Errorf("panic occurred in testConnectivityAndUpdateStatus: %s", err)
+			csmlog.WithContext(ctx).Errorf("panic occurred in testConnectivityAndUpdateStatus: %s", err)
+			// Only restart on panic and if context is still active
+			if ctx.Err() == nil {
+				go s.testConnectivityAndUpdateStatus(ctx, systemID, timeout)
+			}
 		}
-		// if panic occurs restart new goroutine
-		go s.testConnectivityAndUpdateStatus(ctx, systemID, timeout)
 	}()
 	var status ArrayConnectivityStatus
 	for {
 		select {
 		case <-ctx.Done():
-			log.Debugf("Context cancelled, stopping connectivity probe for array %s", systemID)
+			csmlog.WithContext(ctx).Debugf("Context cancelled, stopping connectivity probe for array %s", systemID)
 			return
 		default:
 		}
 		// add timeout to context
 		timeOutCtx, cancel := context.WithTimeout(ctx, timeout)
-		log.Debugf("Running probe for array %s at time %v \n", systemID, time.Now())
+		csmlog.WithContext(ctx).Debugf("Running probe for array %s at time %v \n", systemID, time.Now())
 		if existingStatus, ok := s.probeStatus.Load(systemID); !ok {
-			log.Debugf("%s not in probeStatus ", systemID)
+			csmlog.WithContext(ctx).Debugf("%s not in probeStatus ", systemID)
 		} else {
 			if status, ok = existingStatus.(ArrayConnectivityStatus); !ok {
-				log.Errorf("failed to extract ArrayConnectivityStatus for array '%s'", systemID)
+				csmlog.WithContext(ctx).Errorf("failed to extract ArrayConnectivityStatus for array '%s'", systemID)
 			}
 		}
 		// for the first time status will not be there.
-		log.Debugf("array %s , status is %+v", systemID, status)
+		csmlog.WithContext(ctx).Debugf("array %s , status is %+v", systemID, status)
 		// run nodeProbe to test connectivity
 		err := s.requireProbe(timeOutCtx, systemID)
 		if err == nil {
-			log.Debugf("Probe successful for %s", systemID)
+			csmlog.WithContext(ctx).Debugf("Probe successful for %s", systemID)
 			status.LastSuccess = time.Now().Unix()
 		} else {
-			log.Warnf("Probe failed for array '%s' error:'%s'", systemID, err)
+			csmlog.WithContext(ctx).Warnf("Probe failed for array '%s' error:'%s'", systemID, err)
 		}
 		status.LastAttempt = time.Now().Unix()
-		log.Debugf("array %s , storing status %+v", systemID, status)
+		csmlog.WithContext(ctx).Debugf("array %s , storing status %+v", systemID, status)
 		s.probeStatus.Store(systemID, status)
 		cancel()
 		// sleep for half the pollingFrequency and run check again
@@ -212,10 +258,10 @@ func SetPollingFrequency(ctx context.Context) int64 {
 	var pollingFrequency int64
 	if pollRateEnv, ok := csictx.LookupEnv(ctx, EnvPodmonArrayConnectivityPollRate); ok {
 		if pollingFrequency, _ = strconv.ParseInt(pollRateEnv, 10, 32); pollingFrequency != 0 {
-			log.Debugf("use pollingFrequency as %d seconds", pollingFrequency)
+			csmlog.WithContext(ctx).Debugf("use pollingFrequency as %d seconds", pollingFrequency)
 			return pollingFrequency
 		}
 	}
-	log.Debugf("use default pollingFrequency as %d seconds", DefaultPodmonPollRate)
+	csmlog.WithContext(ctx).Debugf("use default pollingFrequency as %d seconds", DefaultPodmonPollRate)
 	return DefaultPodmonPollRate
 }

@@ -1,25 +1,25 @@
-# Helm Installer for Dell EMC CSI Storage Providers
+# Helm Installer for Dell CSI Storage Providers
 
 ## Description
 
 This directory provides scripts to install, upgrade, uninstall the CSI drivers, and to verify the Kubernetes environment.
-These same scripts are present in all Dell EMC Container Storage Interface ([CSI](https://github.com/container-storage-interface/spec)) drivers. This includes the drivers for:
-* [PowerFlex](https://github.com/dell/csi-vxflexos)
-* [PowerMax](https://github.com/dell/csi-powermax)
-* [PowerScale](https://github.com/dell/csi-powerscale)
-* [PowerStore](https://github.com/dell/csi-powerstore)
-* [Unity](https://github.com/dell/csi-unity)
+These same scripts are present in all Dell Container Storage Interface ([CSI](https://github.com/container-storage-interface/spec)) drivers. This includes the drivers for:
+* [PowerFlex](https://github.com/Ecosystems/container-storage-modules/src/csi-vxflexos)
+* [PowerMax](https://github.com/Ecosystems/container-storage-modules/src/csi-powermax)
+* [PowerScale](https://github.com/Ecosystems/container-storage-modules/src/csi-powerscale)
+* [PowerStore](https://github.com/Ecosystems/container-storage-modules/src/csi-powerstore)
+* [Unity](https://github.com/Ecosystems/container-storage-modules/src/csi-unity)
 
 NOTE: This documentation uses the PowerFlex driver as an example. If working with a different driver, substitute the name as appropriate.
 
 ## Dependencies
 
-Installing any of the Dell EMC CSI Drivers requires a few utilities to be installed on the system running the installation.
+Installing any of the Dell CSI Drivers requires a few utilities to be installed on the system running the installation.
 
 | Dependency    | Usage  |
 | ------------- | ----- |
 | `kubectl`     | Kubectl is used to validate that the Kubernetes system meets the requirements of the driver. |
-| `helm`        | Helm v3 is used as the deployment tool for Charts. See, [Install Helm 3](https://helm.sh/docs/intro/install/) for instructions to install Helm 3. |
+| `helm`        | Helm v3 or v4 is used as the deployment tool for Charts. See, [Install Helm](https://helm.sh/docs/intro/install/) for instructions to install Helm. |
 | `sshpass`     | sshpass is used to check certain pre-requisities in worker nodes (in chosen drivers). |
 
 
@@ -36,7 +36,7 @@ This project provides the following capabilitites, each one is discussed in deta
 
 
 Most of these usages require the creation/specification of a values file. These files specify configuration settings that are passed into the driver and configure it for use. To create one of these files, the following steps should be followed:
-1. Download a template file for the driver to a new location, naming this new file is at the users discretion. The template files are always found at `https://github.com/dell/helm-charts/raw/csi-vxflexos-2.17.0/charts/csi-vxflexos/values.yaml`
+1. Download a template file for the driver to a new location, naming this new file is at the users discretion. The template files are always found at `https://github.com/dell/helm-charts/raw/csi-vxflexos-2.18.0/charts/csi-vxflexos/values.yaml`
 2. Edit the file such that it contains the proper configuration settings for the specific environment. These files are yaml formatted so maintaining the file structure is important.
 
 For example, to create a values file for the PowerFlex driver the following steps can be executed
@@ -45,7 +45,7 @@ For example, to create a values file for the PowerFlex driver the following step
 cd dell-csi-helm-installer
 
 # download the template file
- wget -O my-vxflexos-settings.yaml  https://github.com/dell/helm-charts/raw/csi-vxflexos-2.17.0/charts/csi-vxflexos/values.yaml
+ wget -O my-vxflexos-settings.yaml  https://github.com/dell/helm-charts/raw/csi-vxflexos-2.18.0/charts/csi-vxflexos/values.yaml
 
 # edit the newly created values file
 vi my-vxflexos-settings.yaml
@@ -61,6 +61,32 @@ Installing a driver is performed via the `csi-install.sh` script. This script re
 ./csi-install.sh --namespace vxflexos --values ./my-vxflexos-settings.yaml
 ```
 
+#### Installing from OCI Registry
+
+The driver can be installed from an OCI-compliant registry instead of using local Helm charts. This requires:
+
+1. A Kubernetes secret containing registry credentials (if authentication is required)
+2. The OCI registry URI for the Helm chart
+
+**Create a registry credentials secret:**
+```bash
+kubectl create secret generic registry-creds \
+  --from-literal=username=<your-username> \
+  --from-literal=password=<your-password> \
+  --namespace vxflexos
+```
+
+**Install from OCI registry:**
+```bash
+./csi-install.sh \
+  --namespace vxflexos \
+  --values ./my-vxflexos-settings.yaml \
+  --oci-chart oci://registry.example.com/charts/csi-vxflexos \
+  --registry-auth-secret registry-creds
+```
+
+**Note:** If the OCI registry does not require authentication, you can omit the `--registry-auth-secret` parameter.
+
 For usage information:
 ```
 [dell-csi-helm-installer]# ./csi-install.sh -h
@@ -77,6 +103,9 @@ Options:
   --node-verify-user[=]<username>          Username to SSH to worker nodes as, used to validate node requirements. Default is root
   --skip-verify                            Skip the kubernetes configuration verification to use the CSI driver, default will run verification
   --skip-verify-node                       Skip worker node verification checks
+  --helm-charts-version                    Helm chart version (format: full git tag for local e.g. csi-vxflexos-2.17.0; version number for OCI Registry e.g. 2.17.0)
+  --oci-chart[=]<oci-uri>                  OCI registry URI for Helm chart (e.g., oci://registry.example.com/charts/csi-vxflexos)
+  --registry-auth-secret[=]<secret-name>   Kubernetes secret containing registry credentials (username/password keys)
   -h                                       Help
 ```
 
@@ -88,6 +117,18 @@ Upgrading a driver is very similar to installation. The `csi-install.sh` script 
 ./csi-install.sh --namespace vxflexos --values ./my-vxflexos-settings.yaml --upgrade
 ```
 
+#### Upgrading from OCI Registry
+
+To upgrade from an OCI registry:
+```bash
+./csi-install.sh \
+  --namespace vxflexos \
+  --values ./my-vxflexos-settings.yaml \
+  --upgrade \
+  --oci-chart oci://registry.example.com/charts/csi-vxflexos \
+  --registry-auth-secret registry-creds
+```
+
 For usage information:
 ```
 [dell-csi-helm-installer]# ./csi-install.sh -h
@@ -104,6 +145,9 @@ Options:
   --node-verify-user[=]<username>          Username to SSH to worker nodes as, used to validate node requirements. Default is root
   --skip-verify                            Skip the kubernetes configuration verification to use the CSI driver, default will run verification
   --skip-verify-node                       Skip worker node verification checks
+  --helm-charts-version                    Helm chart version (format: full git tag for local e.g. csi-vxflexos-2.17.0; version number for OCI Registry e.g. 2.17.0)
+  --oci-chart[=]<oci-uri>                  OCI registry URI for Helm chart (e.g., oci://registry.example.com/charts/csi-vxflexos)
+  --registry-auth-secret[=]<secret-name>   Kubernetes secret containing registry credentials (username/password keys)
   -h                                       Help
 ```
 

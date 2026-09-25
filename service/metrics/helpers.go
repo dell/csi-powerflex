@@ -21,6 +21,7 @@ import (
 )
 
 // DefaultMetricsPort is the default HTTP port for the Prometheus metrics endpoint.
+// The driver serves metrics on 9090 by default to align with the current Helm chart.
 const DefaultMetricsPort = ":9090"
 
 // FormatMetricsAddr formats a metrics address for use in log messages and status

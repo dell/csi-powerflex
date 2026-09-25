@@ -1,4 +1,4 @@
-// Copyright © 2019-2024 Dell Inc. or its subsidiaries. All Rights Reserved.
+// Copyright © 2019-2026 Dell Inc. or its subsidiaries. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,10 +26,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dell/csmlog"
-	"github.com/dell/gofsutil"
-	"github.com/dell/goscaleio"
-	siotypes "github.com/dell/goscaleio/types/v1"
+	"github.com/Ecosystems/container-storage-modules/src/csmlog"
+	"github.com/Ecosystems/container-storage-modules/src/gofsutil"
+	"github.com/Ecosystems/container-storage-modules/src/goscaleio"
+	siotypes "github.com/Ecosystems/container-storage-modules/src/goscaleio/types/v1"
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -45,7 +45,8 @@ var (
 
 	// GetNodeLabels - Get the node labels
 	GetNodeLabels = getNodelabels
-	GetNodeUID    = getNodeUID
+	// GetNodeUID returns the node unique identifier.
+	GetNodeUID = getNodeUID
 )
 
 const (
@@ -76,10 +77,10 @@ func (s *service) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeR
 	}
 
 	volID := getVolumeIDFromCsiVolumeID(csiVolID)
-	log.Infof("[NodeStageVolume] volumeID: %s", volID)
+	csmlog.WithContext(ctx).Infof("[NodeStageVolume] volumeID: %s", volID)
 
 	systemID := s.getSystemIDFromCsiVolumeID(csiVolID)
-	log.Infof("[NodeStageVolume] systemID: %s harvested from csiVolID: %s", systemID, csiVolID)
+	csmlog.WithContext(ctx).Infof("[NodeStageVolume] extracted system ID: %s from CSI volume ID: %s", systemID, csiVolID)
 	if systemID == "" {
 		systemID = s.opts.defaultSystemID
 	}
@@ -87,7 +88,7 @@ func (s *service) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeR
 		return nil, status.Error(codes.InvalidArgument, "systemID is not found in the request and there is no default system")
 	}
 
-	log.Infof("[NodeStageVolume] We are about to probe the system with systemID %s", systemID)
+	csmlog.WithContext(ctx).Infof("[NodeStageVolume] probing system %s", systemID)
 	// Probe the system to make sure it is managed by driver
 	if err := s.requireProbe(ctx, systemID); err != nil {
 		return nil, err
@@ -146,7 +147,7 @@ func (s *service) NodeUnstageVolume(
 	// Skip ephemeral volumes. For ephemeral volumes, kubernetes gives us an internal ID, so we use the lockfile to find the Powerflex ID this is mapped to.
 	lockFile := ephemeralStagingMountPath + csiVolID + "/id"
 	if s.fileExist(lockFile) {
-		log.WithFields(fields).Info("Skipping ephemeral volume")
+		csmlog.WithContext(ctx).WithFields(fields).Info("Skipping ephemeral volume")
 		return &csi.NodeUnstageVolumeResponse{}, nil
 	}
 
@@ -161,15 +162,26 @@ func (s *service) NodeUnstageVolume(
 		return response, err
 	}
 
-	// Unmount the staging target path.
-	log.WithFields(fields).Info("unmounting directory")
-	if err := gofsutil.Unmount(ctx, stagingTargetPath); err != nil && !os.IsNotExist(err) {
-		log.Errorf("Unable to Unmount staging target path: %s", err)
+	// Check if staging target path is actually mounted before attempting to unmount
+	mounts, err := getPathMounts(ctx, stagingTargetPath)
+	if err != nil {
+		csmlog.WithContext(ctx).WithFields(fields).Warnf("Failed to get mounts for staging path: %v", err)
+		// Continue with unmount attempt despite check failure
+	} else if len(mounts) == 0 {
+		csmlog.WithContext(ctx).WithFields(fields).Info("Staging target path is not mounted; skipping unmount")
+	} else {
+		// Unmount the staging target path.
+		csmlog.WithContext(ctx).WithFields(fields).Info("Unmounting staging directory")
+		if err := gofsutil.Unmount(ctx, stagingTargetPath); err != nil && !os.IsNotExist(err) {
+			csmlog.WithContext(ctx).Errorf("Unable to unmount staging target path: %v", err)
+			return nil, status.Errorf(codes.Internal,
+				"Unable to Unmount staging target path %s: %v", stagingTargetPath, err)
+		}
 	}
 
-	log.WithFields(fields).Info("removing directory")
+	csmlog.WithContext(ctx).WithFields(fields).Info("Removing staging directory")
 	if err := os.Remove(stagingTargetPath); err != nil && !os.IsNotExist(err) {
-		log.Errorf("Unable to remove staging target path: %v", err)
+		csmlog.WithContext(ctx).Errorf("Unable to remove staging target path: %v", err)
 		err := fmt.Errorf("Unable to remove staging target path: %s error: %v", stagingTargetPath, err)
 		return &csi.NodeUnstageVolumeResponse{}, err
 	}
@@ -192,9 +204,9 @@ func (s *service) NodePublishVolume(
 	s.logStatistics()
 	volumeContext := req.GetVolumeContext()
 	if volumeContext != nil {
-		log.Info("VolumeContext:")
+		csmlog.WithContext(ctx).Info("VolumeContext:")
 		for key, value := range volumeContext {
-			log.WithFields(csmlog.Fields{key: value}).Info("found in VolumeContext")
+			csmlog.WithContext(ctx).WithFields(csmlog.Fields{key: value}).Info("Found VolumeContext entry")
 		}
 	}
 
@@ -202,7 +214,7 @@ func (s *service) NodePublishVolume(
 	if ok && strings.ToLower(ephemeral) == "true" {
 		resp, err := s.ephemeralNodePublish(ctx, req)
 		if err != nil {
-			log.Errorf("ephemeralNodePublish returned error: %v", err)
+			csmlog.WithContext(ctx).Errorf("ephemeralNodePublish returned an error: %v", err)
 		}
 		return resp, err
 	}
@@ -212,7 +224,7 @@ func (s *service) NodePublishVolume(
 		return nil, status.Error(codes.InvalidArgument,
 			"volume ID is required")
 	}
-	log.Infof("[NodePublishVolume] csiVolID: %s", csiVolID)
+	csmlog.WithContext(ctx).Infof("[NodePublishVolume] CSI volume ID: %s", csiVolID)
 
 	// Check for NFS protocol
 	fsType := volumeContext[KeyFsType]
@@ -222,10 +234,10 @@ func (s *service) NodePublishVolume(
 	}
 
 	volID := getVolumeIDFromCsiVolumeID(csiVolID)
-	log.Infof("[NodePublishVolume] volumeID: %s", volID)
+	csmlog.WithContext(ctx).Infof("[NodePublishVolume] volumeID: %s", volID)
 
 	systemID := s.getSystemIDFromCsiVolumeID(csiVolID)
-	log.Infof("[NodePublishVolume] systemID: %s harvested from csiVolID: %s", systemID, csiVolID)
+	csmlog.WithContext(ctx).Infof("[NodePublishVolume] extracted system ID: %s from CSI volume ID: %s", systemID, csiVolID)
 	if systemID == "" {
 		// use default system
 		systemID = s.opts.defaultSystemID
@@ -235,7 +247,7 @@ func (s *service) NodePublishVolume(
 			"systemID is not found in the request and there is no default system")
 	}
 
-	log.Infof("[NodePublishVolume] We are about to probe the system with systemID %s", systemID)
+	csmlog.WithContext(ctx).Infof("[NodePublishVolume] probing system %s", systemID)
 	// Probe the system to make sure it is managed by driver
 	if err := s.requireProbe(ctx, systemID); err != nil {
 		return nil, err
@@ -291,7 +303,7 @@ func (s *service) NodePublishVolume(
 		symlinkPath, _, err := gofsutil.WWNToDevicePathX(context.Background(), nguid)
 		if err != nil || symlinkPath == "" {
 			errmsg := fmt.Sprintf("device path not found for nguid %s: %s", nguid, err)
-			log.Error(errmsg)
+			csmlog.WithContext(ctx).Error(errmsg)
 			return nil, status.Error(codes.NotFound, errmsg)
 		}
 
@@ -350,24 +362,24 @@ func (s *service) NodeUnpublishVolume(
 		/* #nosec G304 */
 		idFromFile, err := os.ReadFile(lockFile)
 		if err != nil && os.IsNotExist(err) {
-			log.Errorf("NodeUnpublish with ephemeral volume. Was unable to read lockfile: %v", err)
+			csmlog.WithContext(ctx).Errorf("NodeUnpublishVolume for an ephemeral volume could not read lockfile %s: %v", lockFile, err)
 			return nil, status.Error(codes.Internal, "NodeUnpublish with ephemeral volume. Was unable to read lockfile")
 		}
 		// Convert volume id from []byte to string format
 		csiVolID = string(idFromFile)
-		log.Infof("Read volume ID: %s from lockfile: %s ", csiVolID, lockFile)
+		csmlog.WithContext(ctx).Infof("Read volume ID %s from lockfile %s", csiVolID, lockFile)
 	}
 
 	if isNFS {
 		fsID := getFilesystemIDFromCsiVolumeID(csiVolID)
-		log.Infof("NodeUnpublishVolume fileSystemID: %s", fsID)
+		csmlog.WithContext(ctx).Infof("[NodeUnpublishVolume] filesystem ID: %s", fsID)
 
 		systemID := s.getSystemIDFromCsiVolumeID(csiVolID)
 		if systemID == "" {
 			// use default system
 			systemID = s.opts.defaultSystemID
 		}
-		log.Infof("NodeUnpublishVolume systemID: %s", systemID)
+		csmlog.WithContext(ctx).Infof("[NodeUnpublishVolume] system ID: %s", systemID)
 		if systemID == "" {
 			return nil, status.Error(codes.InvalidArgument,
 				"systemID is not found in the request and there is no default system")
@@ -402,14 +414,14 @@ func (s *service) NodeUnpublishVolume(
 	}
 
 	volID := getVolumeIDFromCsiVolumeID(csiVolID)
-	log.Infof("NodeUnpublishVolume volumeID: %s", volID)
+	csmlog.WithContext(ctx).Infof("[NodeUnpublishVolume] volume ID: %s", volID)
 
 	systemID := s.getSystemIDFromCsiVolumeID(csiVolID)
 	if systemID == "" {
 		// use default system
 		systemID = s.opts.defaultSystemID
 	}
-	log.Infof("NodeUnpublishVolume systemID: %s", systemID)
+	csmlog.WithContext(ctx).Infof("[NodeUnpublishVolume] system ID: %s", systemID)
 	if systemID == "" {
 		return nil, status.Error(codes.InvalidArgument,
 			"systemID is not found in the request and there is no default system")
@@ -428,13 +440,13 @@ func (s *service) NodeUnpublishVolume(
 	}
 
 	if s.useNVME {
-		log.Infof("NodeUnpublishVolume: NVME volume %s, doing mount cleanup", csiVolID)
+		csmlog.WithContext(ctx).Infof("NodeUnpublishVolume: cleaning up NVMe volume %s", csiVolID)
 
 		if ephemeralVolume {
-			log.Info("Detected ephemeral")
+			csmlog.WithContext(ctx).Info("Detected ephemeral volume")
 			err := s.ephemeralNodeUnpublish(ctx, req)
 			if err != nil {
-				log.Errorf("ephemeralNodeUnpublish returned error: %v", err)
+				csmlog.WithContext(ctx).Errorf("ephemeralNodeUnpublish returned an error: %v", err)
 				return nil, err
 			}
 		}
@@ -449,24 +461,23 @@ func (s *service) NodeUnpublishVolume(
 
 	sdcMappedVol, err := s.getSDCMappedVol(volID, systemID, unpublishGetMappedVolMaxRetry)
 	if err != nil {
-		log.Infof("Error from getSDCMappedVol is: %#v", err)
-		log.Infof("Error message from getSDCMappedVol is: %s", err.Error())
+		csmlog.WithContext(ctx).Errorf("getSDCMappedVol error message: %s", err.Error())
 		// fix k8s 19 bug: ControllerUnpublishVolume is called before NodeUnpublishVolume
 		// cleanup target from pod
 		if err := gofsutil.Unmount(ctx, targetPath); err != nil {
-			log.Errorf("cleanup target mount: %s", err.Error())
+			csmlog.WithContext(ctx).Errorf("Failed to clean up target mount: %v", err)
 		}
 
 		if err := removeWithRetry(targetPath); err != nil {
-			log.Errorf("cleanup target path: %s", err.Error())
+			csmlog.WithContext(ctx).Errorf("Failed to clean up target path: %v", err)
 		}
 		// dont cleanup pvtMount in case it is in use elsewhere on the node
 
 		if ephemeralVolume {
-			log.Info("Detected ephemeral")
+			csmlog.WithContext(ctx).Info("Detected ephemeral volume")
 			err := s.ephemeralNodeUnpublish(ctx, req)
 			if err != nil {
-				log.Errorf("ephemeralNodeUnpublish returned error: %s", err.Error())
+				csmlog.WithContext(ctx).Errorf("ephemeralNodeUnpublish returned an error: %v", err)
 				return nil, err
 			}
 		}
@@ -480,10 +491,10 @@ func (s *service) NodeUnpublishVolume(
 	}
 
 	if ephemeralVolume {
-		log.Info("Detected ephemeral")
+		csmlog.WithContext(ctx).Info("Detected ephemeral volume")
 		err := s.ephemeralNodeUnpublish(ctx, req)
 		if err != nil {
-			log.Errorf("ephemeralNodeUnpublish returned error: %v", err)
+			csmlog.WithContext(ctx).Errorf("ephemeralNodeUnpublish returned an error: %v", err)
 			return nil, err
 		}
 
@@ -500,18 +511,18 @@ func (s *service) getSDCMappedVol(volumeID string, systemID string, maxRetry int
 	var err error
 	for i := 0; i < maxRetry; i++ {
 		if id, ok := s.connectedSystemNameToID[systemID]; ok {
-			log.Infof("Node publish getMappedVol name: %s id: %s", systemID, id)
+			csmlog.Infof("Node publish getMappedVol name: %s id: %s", systemID, id)
 			systemID = id
 		}
 		sdcMappedVol, err = getMappedVol(volumeID, systemID)
 		if sdcMappedVol != nil {
 			break
 		}
-		log.Infof("Node publish getMappedVol retry: %d", i)
+		csmlog.Infof("Node publish getMappedVol retry: %d", i)
 		time.Sleep(getMappedVolDelay)
 	}
 	if err != nil {
-		log.Infof("SDC returned volume %s on system %s not published to node", volumeID, systemID)
+		csmlog.Infof("SDC returned volume %s on system %s not published to node", volumeID, systemID)
 		return nil, err
 	}
 	return sdcMappedVol, err
@@ -523,12 +534,12 @@ func getMappedVol(volID string, systemID string) (*goscaleio.SdcMappedVolume, er
 	localVols, _ := goscaleio.GetLocalVolumeMap()
 	var sdcMappedVol *goscaleio.SdcMappedVolume
 	if len(localVols) == 0 {
-		log.Infof("Length of localVols (goscaleio.GetLocalVolumeMap()) is 0 \n")
+		csmlog.Infof("Length of localVols (goscaleio.GetLocalVolumeMap()) is 0 \n")
 	}
 	for _, v := range localVols {
 		if v.VolumeID == volID && v.MdmID == systemID {
 			sdcMappedVol = v
-			log.Infof("Found matching SDC mapped volume %v", sdcMappedVol)
+			csmlog.Infof("Found matching SDC mapped volume %v", sdcMappedVol)
 			break
 		}
 	}
@@ -545,7 +556,7 @@ func (s *service) getSystemName(_ context.Context, systems []string) bool {
 		if id, ok := s.connectedSystemNameToID[systemID]; ok {
 			for _, system := range systems {
 				if id == system {
-					log.Infof("nodeProbe found system Name: %s with id %s", systemID, id)
+					csmlog.Infof("nodeProbe found system Name: %s with id %s", systemID, id)
 					connectedSystemID = append(connectedSystemID, systemID)
 				}
 			}
@@ -559,7 +570,7 @@ func (s *service) getSystemName(_ context.Context, systems []string) bool {
 func (s *service) nodeProbe(ctx context.Context) error {
 	// skip SDC based probe if it is pure NVMe
 	if s.useNVME == true {
-		log.Info("skipping SDC based probe as the node is pure NVMe")
+		csmlog.WithContext(ctx).Info("skipping SDC based probe as the node is pure NVMe")
 		return nil
 	}
 
@@ -575,12 +586,12 @@ func (s *service) nodeProbe(ctx context.Context) error {
 			}
 
 			s.opts.SdcGUID = guid
-			log.WithFields(csmlog.Fields{"guid": s.opts.SdcGUID}).Info("set SDC GUID")
+			csmlog.WithContext(ctx).WithFields(csmlog.Fields{"guid": s.opts.SdcGUID}).Info("Set SDC GUID")
 		}
 
 		// support for pre-approved guid
 		if s.opts.IsApproveSDCEnabled {
-			log.Infof("Approve SDC enabled")
+			csmlog.WithContext(ctx).Info("SDC auto-approval is enabled")
 			if err := s.approveSDC(s.opts); err != nil {
 				return err
 			}
@@ -615,7 +626,7 @@ func (s *service) nodeProbe(ctx context.Context) error {
 				s.privDir, err.Error())
 		}
 	} else {
-		log.Infof("scini module not loaded, perhaps it was intentional")
+		csmlog.WithContext(ctx).Info("scini module is not loaded; skipping SDC-based node setup")
 	}
 
 	return nil
@@ -646,7 +657,7 @@ func (s *service) approveSDC(opts Opts) error {
 
 		// Check if SDC is already approved (only if SDC is found)
 		if sdc != nil && sdc.Sdc.SdcApproved {
-			log.Infof("SDC already approved, SDC GUID: %s", sdc.Sdc.SdcGUID)
+			csmlog.Infof("SDC already approved, SDC GUID: %s", sdc.Sdc.SdcGUID)
 			continue
 		}
 
@@ -654,7 +665,7 @@ func (s *service) approveSDC(opts Opts) error {
 
 		switch mode {
 		case "None":
-			log.Infof("Approval not required, RestrictedSdcMode is: %s", mode)
+			csmlog.Infof("Approval not required, RestrictedSdcMode is: %s", mode)
 		case "Guid", "ApprovedIp":
 			// Approve with SdcGUID (common for both modes)
 			resp, err := system.ApproveSdc(&siotypes.ApproveSdcParam{
@@ -663,7 +674,7 @@ func (s *service) approveSDC(opts Opts) error {
 			if err != nil {
 				return status.Errorf(codes.FailedPrecondition, "%s", err)
 			}
-			log.Infof("SDC ID %s approved successfully using mode: %s", resp.SdcID, mode)
+			csmlog.Infof("SDC ID %s approved successfully using mode: %s", resp.SdcID, mode)
 
 			// Additional step for ApprovedIp mode
 			if mode == "ApprovedIp" {
@@ -676,7 +687,7 @@ func (s *service) approveSDC(opts Opts) error {
 				if err != nil {
 					return status.Errorf(codes.FailedPrecondition, "failed to set approved IPs: %s", err)
 				}
-				log.Infof("Approved IPs added successfully for SDC ID: %s", resp.SdcID)
+				csmlog.Infof("Approved IPs added successfully for SDC ID: %s", resp.SdcID)
 			}
 		default:
 			return status.Errorf(codes.InvalidArgument, "unsupported RestrictedSdcMode: %s", mode)
@@ -740,18 +751,11 @@ func (s *service) renameSDC(opts Opts) error {
 		}
 		sdcID := sdc.Sdc.ID
 
-		var newName string
-		if len(opts.SdcPrefix) > 0 {
-			// case1: if IsSdcRenameEnabled=true and prefix given then set the prefix+worker_node_name for sdc name.
-			newName = opts.SdcPrefix + "-" + hostName
-		} else {
-			// case2: if IsSdcRenameEnabled=true and prefix not given then set worker_node_name for sdc name.
-			newName = hostName
-		}
+		newName := buildSDCName(opts.SdcPrefix, hostName, opts.TrimSDCNameEnabled)
 		if sdc.Sdc.Name == newName {
-			log.Infof("SDC is already named: %s.", newName)
+			csmlog.Infof("SDC is already named: %s.", newName)
 		} else {
-			log.Infof("Assigning name: %s to SDC with GUID %s on system %s", newName, s.opts.SdcGUID,
+			csmlog.Infof("Assigning name: %s to SDC with GUID %s on system %s", newName, s.opts.SdcGUID,
 				systemID)
 			err = s.adminClients[systemID].RenameSdc(sdcID, newName)
 			if err != nil {
@@ -766,12 +770,30 @@ func (s *service) renameSDC(opts Opts) error {
 	return nil
 }
 
+// buildSDCName constructs the SDC name from prefix and hostname, applying optional
+// truncation to the PowerFlex 31-character name limit when trimEnabled is true.
+func buildSDCName(prefix, hostName string, trimEnabled bool) string {
+	var name string
+	if len(prefix) > 0 {
+		// case1: if IsSdcRenameEnabled=true and prefix given then set the prefix+worker_node_name for sdc name.
+		name = prefix + "-" + hostName
+	} else {
+		// case2: if IsSdcRenameEnabled=true and prefix not given then set worker_node_name for sdc name.
+		name = hostName
+	}
+	if trimEnabled && len(name) > 31 {
+		csmlog.Debugf("SDC name %s exceeds 31 characters, truncating to %s", name, name[:31])
+		name = name[:31]
+	}
+	return name
+}
+
 func (s *service) getSDCName(sdcGUID string, systemID string) error {
 	sdc, err := s.systems[systemID].FindSdc("SdcGUID", sdcGUID)
 	if err != nil {
 		return status.Errorf(codes.FailedPrecondition, "%s", err)
 	}
-	log.Infof("SDC name set to: %s.", sdc.Sdc.Name)
+	csmlog.Infof("SDC name set to: %s.", sdc.Sdc.Name)
 	return nil
 }
 
@@ -782,7 +804,7 @@ func kmodLoaded(opts Opts) bool {
 	if opts.Lsmod == "" {
 		out, err = exec.Command("lsmod").CombinedOutput()
 		if err != nil {
-			log.Errorf("error from lsmod: %v", err)
+			csmlog.Errorf("error from lsmod: %v", err)
 			return false
 		}
 	} else {
@@ -822,7 +844,7 @@ func getSystemsKnownToSDC() ([]string, error) {
 		set[s.SystemID] = struct{}{}
 
 		systems = append(systems, s.SystemID)
-		log.WithFields(csmlog.Fields{"ID": s.SystemID}).Info("Found connected system")
+		csmlog.WithFields(csmlog.Fields{"ID": s.SystemID}).Info("Found connected system")
 
 	}
 
@@ -909,14 +931,14 @@ func (s *service) NodeGetInfo(
 	// Fetch SDC GUID
 	if s.opts.SdcGUID == "" {
 		if err := s.nodeProbe(ctx); err != nil {
-			log.Infof("failed to probe node: %s", err)
+			csmlog.Infof("failed to probe node: %s", err)
 		}
 	}
 
 	// Fetch Node ID
 	if len(connectedSystemID) == 0 {
 		if err := s.nodeProbe(ctx); err != nil {
-			log.Infof("failed to probe node: %s", err)
+			csmlog.Infof("failed to probe node: %s", err)
 		}
 	}
 
@@ -944,11 +966,11 @@ func (s *service) NodeGetInfo(
 		}
 	}
 
-	log.Debugf("MaxVolumesPerNode: %v\n", maxVxflexosVolumesPerNode)
+	csmlog.Debugf("MaxVolumesPerNode: %v\n", maxVxflexosVolumesPerNode)
 
 	// Create the topology keys
 	// csi-vxflexos.dellemc.com/<systemID>: <provisionerName>
-	log.Infof("Arrays: %+v", s.opts.arrays)
+	csmlog.Infof("Arrays: %+v", s.opts.arrays)
 	topology := map[string]string{}
 
 	if zone, ok := labels[s.opts.zoneLabelKey]; ok {
@@ -956,13 +978,17 @@ func (s *service) NodeGetInfo(
 
 		err = s.SetPodZoneLabel(ctx, topology)
 		if err != nil {
-			log.Warnf("Unable to set availability zone label '%s:%s' for this pod", topology[s.opts.zoneLabelKey], zone)
+			csmlog.Warnf("Unable to set availability zone label '%s:%s' for this pod", topology[s.opts.zoneLabelKey], zone)
 		}
 	}
 
 	nodeID, err := GetNodeUID(ctx, s)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, GetMessage("Could not fetch node UID"))
+	}
+	// Log node-to-zone association at INFO for diagnostics
+	if zone, ok := labels[s.opts.zoneLabelKey]; ok && s.opts.zoneLabelKey != "" {
+		csmlog.Infof(formatNodeZoneAssociation(nodeID, zone, s.opts.zoneLabelKey))
 	}
 
 	if s.opts.SdcGUID != "" {
@@ -973,6 +999,7 @@ func (s *service) NodeGetInfo(
 		nodeID = s.nodeID
 	}
 
+	matchedSystems := make([]string, 0, len(s.opts.arrays))
 	for _, array := range s.opts.arrays {
 		// Check if NFS protocol is enabled on the array
 		isNFSEnabled, err := s.isNFSEnabled(ctx, array.SystemID)
@@ -983,18 +1010,34 @@ func (s *service) NodeGetInfo(
 			topology[Name+"/"+array.SystemID+"-nfs"] = "true"
 		}
 		if zone, ok := topology[s.opts.zoneLabelKey]; ok {
-			if zone == string(array.AvailabilityZone.Name) {
-				// Add only the secret values with the correct zone.
-				log.Infof("Zone found for node ID: %s, adding system ID: %s to node topology", nodeID, array.SystemID)
-				s.populateNodeTopology(topology, array.SystemID)
+			// Check if this node's zone matches any of the system's zones.
+			// normalizeZoneConfig (called inside getArrayConfig) always promotes
+			// the legacy singular "zone" field into Zones[] before the driver
+			// starts, so this loop covers both legacy and multi-zone configs.
+			for _, z := range array.Zones {
+				if zone == string(z.Name) {
+					csmlog.Infof("Zone %s found for node ID: %s, adding system ID: %s to node topology", zone, nodeID, array.SystemID)
+					s.populateNodeTopology(topology, array.SystemID)
+					matchedSystems = append(matchedSystems, array.SystemID)
+					break
+				}
 			}
 		} else {
-			log.Infof("No zoning found for node ID: %s, adding system ID: %s", nodeID, array.SystemID)
+			csmlog.Infof("No zoning found for node ID: %s, adding system ID: %s", nodeID, array.SystemID)
 			s.populateNodeTopology(topology, array.SystemID)
+			matchedSystems = append(matchedSystems, array.SystemID)
 		}
 	}
 
-	log.Debugf("NodeId: %v\n", nodeID)
+	if zone, ok := topology[s.opts.zoneLabelKey]; ok {
+		if len(matchedSystems) > 0 {
+			csmlog.Infof("Node %s in zone %s mapped to PowerFlex system(s): %s", nodeID, zone, strings.Join(matchedSystems, ","))
+		} else {
+			csmlog.Warnf("Node %s in zone %s did not match any configured PowerFlex zones", nodeID, zone)
+		}
+	}
+
+	csmlog.Debugf("NodeId: %v\n", nodeID)
 	return &csi.NodeGetInfoResponse{
 		NodeId: nodeID,
 		AccessibleTopology: &csi.Topology{
@@ -1010,7 +1053,7 @@ func (s *service) populateNodeTopology(topology map[string]string, systemID stri
 		system := s.systems[systemID]
 		_, err := s.discoverNVMeTargets(system)
 		if err != nil {
-			log.Infof("Failed to connect to NVMe targets: %s", err)
+			csmlog.Infof("Failed to connect to NVMe targets: %s", err)
 		} else {
 			topology[Name+"/"+systemID+"-nvmetcp"] = "true"
 		}
@@ -1057,8 +1100,7 @@ func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolume
 
 	// make sure systemID we get is managed by the driver
 	if err := s.requireProbe(ctx, systemID); err != nil {
-		log := log.WithContext(ctx)
-		log.Infof("System: %s is not managed by driver; volume stats will not be collected", systemID)
+		csmlog.WithContext(ctx).Infof("System: %s is not managed by driver; volume stats will not be collected", systemID)
 		return nil, err
 	}
 
@@ -1066,13 +1108,18 @@ func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolume
 	if err != nil {
 		// volume not known to SDC, next check if it exists at all
 		_, _, err := s.listVolumes(systemID, 0, 0, false, false, volID, "")
-		if err != nil && strings.Contains(err.Error(), sioGatewayVolumeNotFound) {
-			message = fmt.Sprintf("Volume is not found by node driver at %s", time.Now().Format("2006-01-02 15:04:05"))
-		} else if err != nil {
+		if err != nil {
+			// Check for various volume not found error patterns
+			if strings.Contains(err.Error(), sioGatewayVolumeNotFound) ||
+				strings.Contains(err.Error(), "Invalid volume") ||
+				strings.Contains(err.Error(), "not found") {
+				// volume not found on array - return NotFound error per CSI spec
+				return nil, status.Error(codes.NotFound, fmt.Sprintf("Volume %s not found", volID))
+			}
 			// error was returned, but had nothing to do with the volume not being on the array (may be env related)
 			return nil, err
 		}
-		// volume was found, but was not known to SDC. This is abnormal.
+		// volume was found, but was not known to SDC. This is abnormal - keep existing unhealthy behavior for health monitoring
 		healthy = false
 		if message == "" {
 			message = fmt.Sprintf("volume: %s was not mapped to host: %v", volID, err)
@@ -1083,29 +1130,27 @@ func (s *service) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolume
 	// check if volume path is accessible
 	if healthy {
 		_, err = os.ReadDir(volPath)
-		if err != nil && healthy {
-			healthy = false
-			message = fmt.Sprintf("volume path: %s is not accessible: %v", volPath, err)
+		if err != nil {
+			// volume path not accessible - return NotFound error per CSI spec
+			return nil, status.Error(codes.NotFound, fmt.Sprintf("Volume path %s not found", volPath))
 		}
 	}
 
+	// check if path is mounted on node
 	if healthy {
-
-		// check if path is mounted on node
 		mounts, err := getPathMounts(ctx, volPath)
 		if len(mounts) > 0 {
 			for _, m := range mounts {
 				if m.Path == volPath {
-					log.Infof("volPath: %s is mounted", volPath)
+					csmlog.WithContext(ctx).Infof("volPath: %s is mounted", volPath)
 					mounted = true
 				}
 			}
 		}
 		if len(mounts) == 0 || !mounted || err != nil {
-			healthy = false
-			message = fmt.Sprintf("volPath: %s is not mounted: %v", volPath, err)
+			// volume path not mounted - return NotFound error per CSI spec
+			return nil, status.Error(codes.NotFound, fmt.Sprintf("Volume path %s is not mounted", volPath))
 		}
-
 	}
 
 	if healthy {
@@ -1179,14 +1224,14 @@ func (s *service) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolum
 
 	err = s.nodeProbe(ctx)
 	if err != nil {
-		log.Error("nodeProbe failed with error :" + err.Error())
+		csmlog.WithContext(ctx).Errorf("nodeProbe failed: %v", err)
 	}
 
 	volumePath := req.GetVolumePath()
 	if volumePath == "" {
-		log.Error("Volume path required")
+		csmlog.WithContext(ctx).Error("Volume path is required")
 		return nil, status.Error(codes.InvalidArgument,
-			"Volume path required")
+			"Volume path is required")
 	}
 
 	// Check if volume path is a directory.
@@ -1197,7 +1242,7 @@ func (s *service) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolum
 		return nil, status.Error(codes.NotFound, "Could not stat volume path: "+volumePath)
 	}
 	if s.useSDC && !volumePathInfo.Mode().IsDir() {
-		log.Infof("Volume path %s is not a directory- assuming a raw block device mount", volumePath)
+		csmlog.WithContext(ctx).Infof("Volume path %s is not a directory; assuming a raw block device mount", volumePath)
 		return &csi.NodeExpandVolumeResponse{}, nil
 	}
 
@@ -1214,7 +1259,7 @@ func (s *service) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolum
 	}
 
 	volumeID := getVolumeIDFromCsiVolumeID(csiVolID)
-	log.Infof("NodeExpandVolume volumeID: %s", volumeID)
+	csmlog.WithContext(ctx).Infof("NodeExpandVolume volumeID: %s", volumeID)
 
 	if volumeID == "" {
 		return nil, status.Error(codes.InvalidArgument,
@@ -1226,7 +1271,7 @@ func (s *service) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolum
 		// use default system
 		systemID = s.opts.defaultSystemID
 	}
-	log.Infof("NodeExpandVolume systemID: %s", systemID)
+	csmlog.WithContext(ctx).Infof("NodeExpandVolume systemID: %s", systemID)
 	if systemID == "" {
 		return nil, status.Error(codes.InvalidArgument,
 			"systemID is not found in the request and there is no default system")
@@ -1247,7 +1292,7 @@ func (s *service) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolum
 	if s.useNVME {
 
 		nguid, err := buildNGUID(volumeID, systemID)
-		log.Infof("printing nguidddd %s", nguid)
+		csmlog.WithContext(ctx).Infof("Computed NGUID %s for volume expansion", nguid)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to build NGUID: %s", err.Error())
 		}
@@ -1256,7 +1301,7 @@ func (s *service) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolum
 		if err != nil {
 			deviceNames, _ := gofsutil.GetSysBlockDevicesForVolumeWWN(context.Background(), nguid)
 			for _, deviceName := range deviceNames {
-				log.Infof("printing devicenames %s", deviceName)
+				csmlog.WithContext(ctx).Infof("Found device %s for NGUID %s", deviceName, nguid)
 			}
 
 			if len(deviceNames) > 0 {
@@ -1264,24 +1309,24 @@ func (s *service) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolum
 					if strings.HasPrefix(deviceName, "nvme") {
 						nvmeControllerDevice, err := gofsutil.GetNVMeController(deviceName)
 						if err != nil {
-							log.Errorf("Failed to rescan device (%s) with error (%s)", deviceName, err.Error())
+							csmlog.WithContext(ctx).Errorf("Failed to rescan device (%s) with error (%s)", deviceName, err.Error())
 							return nil, status.Error(codes.Internal, err.Error())
 						}
 						if nvmeControllerDevice != "" {
 							devicePath := "/dev/" + nvmeControllerDevice
-							log.Infof("Rescanning unmounted (raw block) device %s to expand size", devicePath)
+							csmlog.WithContext(ctx).Infof("Rescanning unmounted (raw block) device %s to expand size", devicePath)
 							err = s.nvmeLib.DeviceRescan(devicePath)
 							if err != nil {
-								log.Errorf("Failed to rescan device (%s) with error (%s)", devicePath, err.Error())
+								csmlog.WithContext(ctx).Errorf("Failed to rescan device (%s) with error (%s)", devicePath, err.Error())
 								return nil, status.Error(codes.Internal, err.Error())
 							}
 						}
 					} else {
 						devicePath := "/sys/block" + "/" + deviceName
-						log.Infof("Rescanning unmounted (raw block) device %s to expand size", deviceName)
+						csmlog.WithContext(ctx).Infof("Rescanning unmounted (raw block) device %s to expand size", deviceName)
 						err = gofsutil.DeviceRescan(context.Background(), devicePath)
 						if err != nil {
-							log.Errorf("Failed to rescan device (%s) with error (%s)", devicePath, err.Error())
+							csmlog.WithContext(ctx).Errorf("Failed to rescan device (%s) with error (%s)", devicePath, err.Error())
 							return nil, status.Error(codes.Internal, err.Error())
 						}
 					}
@@ -1290,30 +1335,30 @@ func (s *service) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolum
 
 				mpathDev, err := gofsutil.GetMpathNameFromDevice(ctx, devName)
 				if err != nil {
-					log.Errorf("Failed to fetch mpath name for device (%s) with error (%s)", devName, err.Error())
+					csmlog.WithContext(ctx).Errorf("Failed to fetch mpath name for device (%s) with error (%s)", devName, err.Error())
 					return nil, status.Error(codes.Internal, err.Error())
 				}
 				if mpathDev != "" {
 					err = gofsutil.ResizeMultipath(context.Background(), mpathDev)
 					if err != nil {
-						log.Errorf("Failed to resize filesystem: device  (%s) with error (%s)", mpathDev, err.Error())
+						csmlog.WithContext(ctx).Errorf("Failed to resize filesystem: device  (%s) with error (%s)", mpathDev, err.Error())
 						return nil, status.Error(codes.Internal, err.Error())
 					}
 				}
 
 				return &csi.NodeExpandVolumeResponse{}, nil
 			}
-			log.Errorf("Failed to find mount info for (%s) with error (%s)", volname, err.Error())
+			csmlog.WithContext(ctx).Errorf("Failed to find mount info for (%s) with error (%s)", volname, err.Error())
 			return nil, status.Error(codes.Internal,
 				fmt.Sprintf("Failed to find mount info for (%s) with error (%s)", volname, err.Error()))
 		}
-		log.Infof("Mount info for volume %s: %+v", volname, devMnt)
+		csmlog.WithContext(ctx).Infof("Mount info for volume %s: %+v", volname, devMnt)
 
 		// Expand the filesystem with the actual expanded volume size.
 		if devMnt.MPathName != "" {
 			err = gofsutil.ResizeMultipath(context.Background(), devMnt.MPathName)
 			if err != nil {
-				log.Errorf("Failed to resize filesystem: device  (%s) with error (%s)", devMnt.MountPoint, err.Error())
+				csmlog.WithContext(ctx).Errorf("Failed to resize filesystem: device  (%s) with error (%s)", devMnt.MountPoint, err.Error())
 				return nil, status.Error(codes.Internal, err.Error())
 			}
 		}
@@ -1329,15 +1374,15 @@ func (s *service) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolum
 		// Determine file system type
 		fsType, err := gofsutil.FindFSType(context.Background(), devMnt.MountPoint)
 		if err != nil {
-			log.Errorf("Failed to fetch filesystem for volume  (%s) with error (%s)", devMnt.MountPoint, err.Error())
+			csmlog.WithContext(ctx).Errorf("Failed to fetch filesystem for volume  (%s) with error (%s)", devMnt.MountPoint, err.Error())
 			return nil, status.Error(codes.Internal, err.Error())
 		}
-		log.Infof("Found %s filesystem mounted on volume %s", fsType, devMnt.MountPoint)
+		csmlog.WithContext(ctx).Infof("Found %s filesystem mounted on volume %s", fsType, devMnt.MountPoint)
 
 		// Resize the filesystem
 		err = gofsutil.ResizeFS(context.Background(), devMnt.MountPoint, devicePath, devMnt.PPathName, devMnt.MPathName, fsType)
 		if err != nil {
-			log.Errorf("Failed to resize filesystem: mountpoint (%s) device (%s) with error (%s)",
+			csmlog.WithContext(ctx).Errorf("Failed to resize filesystem: mountpoint (%s) device (%s) with error (%s)",
 				devMnt.MountPoint, devicePath, err.Error())
 			return nil, status.Error(codes.Internal, err.Error())
 		}
@@ -1349,11 +1394,11 @@ func (s *service) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolum
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
-	log.Infof("sdcMappedVolume %+v", sdcMappedVolume)
+	csmlog.WithContext(ctx).Infof("sdcMappedVolume %+v", sdcMappedVolume)
 	sdcDevice := strings.Replace(sdcMappedVolume.SdcDevice, "/dev/", "", 1)
-	log.Infof("sdcDevice %s", sdcDevice)
+	csmlog.WithContext(ctx).Infof("sdcDevice %s", sdcDevice)
 	devicePath := sdcMappedVolume.SdcDevice
-	log.Infof("devicePath %s", devicePath)
+	csmlog.WithContext(ctx).Infof("devicePath %s", devicePath)
 	size := req.GetCapacityRange().GetRequiredBytes()
 
 	f := csmlog.Fields{
@@ -1363,25 +1408,25 @@ func (s *service) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolum
 		"VolumePath":   volumePath,
 		"Size":         size,
 	}
-	log.WithFields(f).Info("resizing volume")
+	csmlog.WithContext(ctx).WithFields(f).Info("Resizing volume")
 
 	rc, err := goscaleio.DrvCfgQueryRescan()
-	log.Infof("Rescan all SDC devices")
+	csmlog.WithContext(ctx).Info("Rescanning all SDC devices")
 	if err != nil {
-		log.Errorf("Rescan failed with ioctl error code %s with error %s, Run rescan manually on Powerflex host", rc, err.Error())
+		csmlog.WithContext(ctx).Errorf("Rescan failed with ioctl error code %s with error %s, Run rescan manually on Powerflex host", rc, err.Error())
 	}
 
 	fsType, err := gofsutil.FindFSType(context.Background(), volumePath)
 	if err != nil {
-		log.Errorf("Failed to fetch filesystem type for mount (%s) with error (%s)", volumePath, err.Error())
+		csmlog.WithContext(ctx).Errorf("Failed to fetch filesystem type for mount (%s) with error (%s)", volumePath, err.Error())
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-	log.Infof("Found %s filesystem mounted on volume %s", fsType, volumePath)
+	csmlog.WithContext(ctx).Infof("Found %s filesystem mounted on volume %s", fsType, volumePath)
 
 	// Resize the filesystem
 	err = gofsutil.ResizeFS(context.Background(), volumePath, devicePath, "", "", fsType)
 	if err != nil {
-		log.Errorf("Failed to resize filesystem: mountpoint (%s) device (%s) with error (%s)",
+		csmlog.WithContext(ctx).Errorf("Failed to resize filesystem: mountpoint (%s) device (%s) with error (%s)",
 			volumePath, devicePath, err.Error())
 		return nil, status.Error(codes.Internal, err.Error())
 	}

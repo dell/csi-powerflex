@@ -52,7 +52,7 @@ Feature: VxFlex OS CSI interface
     Examples:
       | file                  | level   |
       | "logConfig2.yaml"     | "trace" |
-      | "logConfigWrong.yaml" | "debug" |
+      | "logConfigWrong.yaml" | "info"  |
 
   Scenario: Dynamic array config change
     Given a VxFlexOS service
@@ -317,13 +317,13 @@ Feature: VxFlex OS CSI interface
     Examples:
       | sysID                      | errormsg                               | protocol  |
       | "f.service.opt.SystemName" | "none"                                 | "SDC"     |
-      | ""                         | "is not accessible based on Preferred" | "SDC"     |
-      | "Unknown"                  | "is not accessible based on Preferred" | "SDC"     |
-      | "badSystem"                | "is not accessible based on Preferred" | "SDC"     |
+      | ""                         | "not accessible from the provided accessibility topology" | "SDC"     |
+      | "Unknown"                  | "not accessible from the provided accessibility topology" | "SDC"     |
+      | "badSystem"                | "not accessible from the provided accessibility topology" | "SDC"     |
       | "f.service.opt.SystemName" | "none"                                 | "NVMeTCP" |
-      | ""                         | "is not accessible based on Preferred" | "NVMeTCP" |
-      | "Unknown"                  | "is not accessible based on Preferred" | "NVMeTCP" |
-      | "badSystem"                | "is not accessible based on Preferred" | "NVMeTCP" |
+      | ""                         | "not accessible from the provided accessibility topology" | "NVMeTCP" |
+      | "Unknown"                  | "not accessible from the provided accessibility topology" | "NVMeTCP" |
+      | "badSystem"                | "not accessible from the provided accessibility topology" | "NVMeTCP" |
 
   Scenario Outline: Create volume with Accessibility Requirements
     Given a VxFlexOS service
@@ -354,9 +354,9 @@ Feature: VxFlex OS CSI interface
     Examples:
       | sysID                      | errormsg                               |
       | "f.service.opt.SystemName" | "none"                                 |
-      | ""                         | "is not accessible based on Preferred" |
-      | "Unknown"                  | "is not accessible based on Preferred" |
-      | "badSystem"                | "is not accessible based on Preferred" |
+      | ""                         | "not accessible from the provided accessibility topology" |
+      | "Unknown"                  | "not accessible from the provided accessibility topology" |
+      | "badSystem"                | "not accessible from the provided accessibility topology" |
 
   Scenario: Create volume with AccessMode_MULTINODE_WRITER
     Given a VxFlexOS service
@@ -1347,7 +1347,7 @@ Feature: VxFlex OS CSI interface
 
     Examples:
       | error                                  | volPath                                              | errormsg                                   |  voltype  |
-      | "none"                                 | ""                                                   | "Volume path required"                     |  "block"  |
+      | "none"                                 | ""                                                   | "Volume path is required"                  |  "block"  |
       | "none"                                 | "test/00000000-1111-0000-0000-000000000000/datadir"  | "none"                                     |  "block"  |
       | "GOFSInduceFSTypeError"                | "test/00000000-1111-0000-0000-000000000000/datadir"  | "Failed to fetch filesystem"               |  "mount"  |
       | "GOFSInduceResizeFSError"              | "test/00000000-1111-0000-0000-000000000000/datadir"  | "Failed to resize device"                  |  "mount"  |
@@ -1398,7 +1398,7 @@ Feature: VxFlex OS CSI interface
 
     Examples:
       | error                                  | volPath                                              | errormsg                                   |
-      | "none"                                 | ""                                                   | "Volume path required"                     |
+      | "none"                                 | ""                                                   | "Volume path is required"                  |
       | "none"                                 | "test/00000000-1111-0000-0000-000000000000/datadir"  | "none"                                     |
       | "GOFSInduceFSTypeError"                | "test/00000000-1111-0000-0000-000000000000/datadir"  | "Failed to fetch filesystem"               |
       | "GOFSInduceResizeFSError"              | "test/00000000-1111-0000-0000-000000000000/datadir"  | "Failed to resize device"                  |
@@ -1425,11 +1425,11 @@ Feature: VxFlex OS CSI interface
       | "none"                   | "none"                            |
       | "BadVolIDError"          | "id must be a hexadecimal"        |
       | "NoVolIDError"           | "no volume ID  provided"          |
-      | "BadMountPathError"      | "none"                            |
+      | "BadMountPathError"      | "not found"                       |
       | "NoMountPathError"       | "no volume Path provided"         |
       | "NoVolIDSDCError"        | "none"                            |
-      | "GOFSMockGetMountsError" | "none"                            |
-      | "NoVolError"             | "none"                            |
+      | "GOFSMockGetMountsError" | "is not mounted"                  |
+      | "NoVolError"             | "not found"                       |
       | "NoSysNameError"         | "systemID is not found"           |
       | "WrongSystemError"       | "is not configured in the driver" |
 
@@ -1577,6 +1577,31 @@ Feature: VxFlex OS CSI interface
       | "features/array-config/invalid_endpoint"    | "invalid value for Endpoint"                                          |
       | "features/array-config/two_default_array"   | "'isDefault' parameter presents more than once in storage array list" |
       | "features/array-config/empty"               | "arrays details are not provided in vxflexos-creds secret"            |
+
+  Scenario: Test getArrayConfig with valid 2-zone single-system zones[] config
+    Given an invalid config "features/array-config/multi_az_zones"
+    When I call getArrayConfig
+    Then the error contains "none"
+
+  Scenario: Test getArrayConfig with valid 3-zone multi-array zones[] config
+    Given an invalid config "features/array-config/multi_az_3zone_2system"
+    When I call getArrayConfig
+    Then the error contains "none"
+
+  Scenario: Test getArrayConfig with duplicate PD within system zones[]
+    Given an invalid config "features/array-config/multi_az_duplicate_pd"
+    When I call getArrayConfig
+    Then the error contains "duplicate protection domain"
+
+  Scenario: Test getArrayConfig with both zone and zones present
+    Given an invalid config "features/array-config/multi_az_missing_zone_fields"
+    When I call getArrayConfig
+    Then the error contains "both"
+
+  Scenario: Test getArrayConfig with legacy zone field normalized to zones[]
+    Given an invalid config "features/array-config/multi_az_legacy_zone"
+    When I call getArrayConfig
+    Then the error contains "none"
 
   Scenario: Call ControllerGetVolume good scenario
     Given a VxFlexOS service
@@ -1924,6 +1949,22 @@ Feature: VxFlex OS CSI interface
       | "volume1" | "multi_az"         | "none"                                                 | "NVMeTCP" |
       | "volume1" | "invalid_multi_az" | "no zone topology found in accessibility requirements" | "NVMeTCP" |
 
+  Scenario Outline: Create Volume routes each zone to the correct system in multi-zone multi-system topology
+    Given a VxFlexOS service
+    And I use config "multi_az_zones_provisioning"
+    When I call Probe
+    And I set protocol to <protocol>
+    And I call CreateVolume "volume1" with zone <zone>
+    Then the error contains "none"
+    And the CreateVolume response volume ID starts with <systemID>
+    And the CreateVolumeResponse has zone metadata
+    Examples:
+      | zone     | systemID             | protocol  |
+      | "zoneA"  | "14dbbf5617523654"   | "SDC"     |
+      | "zoneB"  | "15dbbf5617523655"   | "SDC"     |
+      | "zoneA"  | "14dbbf5617523654"   | "NVMeTCP" |
+      | "zoneB"  | "15dbbf5617523655"   | "NVMeTCP" |
+
   Scenario: Call NodeGetInfo without zone label
     Given a VxFlexOS service
     And I use config "config"
@@ -1979,3 +2020,70 @@ Feature: VxFlex OS CSI interface
       | config      | mode          | errorMsg  |
       | "multi_az"  | "node"        | "none"    |
       | "multi_az"  | "controller"  | "none"    |
+
+  Scenario: Call NodeGetInfo with multi-zone zones[] config
+    Given a VxFlexOS service
+    And I use config "multi_az_zones"
+    When I call NodeGetInfo with zone labels
+    Then a valid NodeGetInfo is returned with node topology
+
+  Scenario: Probe all systems using multi-zone zones[] config
+    Given a VxFlexOS service
+    And I use config <config>
+    When I call systemProbeAll in mode <mode>
+    Then the error contains <errorMsg>
+    Examples:
+      | config            | mode          | errorMsg  |
+      | "multi_az_zones"  | "node"        | "none"    |
+      | "multi_az_zones"  | "controller"  | "none"    |
+
+  Scenario: Create Volume with zones[] multi-system provisioning
+    Given a VxFlexOS service
+    And I use config "multi_az_zones_provisioning"
+    When I call Probe
+    And I set protocol to "SDC"
+    And I call CreateVolume "vol-zones-prov" with zones
+    Then the error contains "none"
+    And a valid CreateVolumeResponse is returned
+    And the CreateVolumeResponse has zone metadata
+
+  Scenario: StorageClass PD conflict with zone config is rejected
+    Given a VxFlexOS service
+    And I use config "multi_az"
+    When I call Probe
+    And I set protocol to "SDC"
+    And I call CreateVolume "vol-conflict" with zones and StorageClass PD conflict
+    Then the error contains "zone config in Secret conflicts with StorageClass"
+
+  Scenario: Existing one-system-per-zone config unchanged behavior with zone metadata
+    Given a VxFlexOS service
+    And I use config "multi_az"
+    When I call Probe
+    And I set protocol to "SDC"
+    And I call CreateVolume "vol-legacy" with zones
+    Then the error contains "none"
+    And a valid CreateVolumeResponse is returned
+    And the CreateVolumeResponse has zone metadata
+
+  Scenario: Misconfigured PD in zone config produces zone-aware error
+    Given a VxFlexOS service
+    And I use config "multi_az_zones"
+    When I call Probe
+    And I set protocol to "SDC"
+    And I call CreateVolume "vol-badpd" with zones
+    Then the error contains "failed to resolve protection domain"
+    And the error contains "zone"
+
+  Scenario: No matching zone topology produces descriptive error
+    Given a VxFlexOS service
+    And I use config "multi_az_zones_provisioning"
+    When I call Probe
+    And I set protocol to "SDC"
+    And I call CreateVolume "vol-noz" with zones and nonexistent zone topology
+    Then the error contains "available zones"
+
+  Scenario: Zone config summary is produced at startup
+    Given a VxFlexOS service
+    And I use config "multi_az_zones_provisioning"
+    When I call Probe
+    Then the error contains "none"

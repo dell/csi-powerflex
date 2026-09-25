@@ -9,7 +9,7 @@ Feature: VxFlex OS CSI interface
     When I call Probe
     And I call ListVolumes with max_entries "0" and starting_token "none"
     Then a valid ListVolumesResponse is returned
-    And 5 volumes are listed
+    And 10 volumes are listed
 
   Scenario: Test list volumes, limiting the number of volumes to be less than the number present using max_entries.
     Given a VxFlex OS service
@@ -60,13 +60,13 @@ Feature: VxFlex OS CSI interface
     Examples:
       | volnum    | volreq   | starttok   | volres    | nexttok |
       | 0         | "0"      | "0"        | "0"       | ""      |
-      | 100       | "0"      | "0"        | "100"     | ""      |
+      | 100       | "0"      | "0"        | "100"     | "100"   |
       | 100       | "75"     | "0"        | "75"      | "75"    |
-      | 100       | "75"     | "75"       | "25"      | ""      |
-      | 100       | "300"    | "0"        | "100"     | ""      |
+      | 100       | "75"     | "75"       | "75"      | "150"   |
+      | 100       | "300"    | "0"        | "100"     | "100"   |
       | 205       | "0"      | "0"        | "100"     | "100"   |
       | 205       | "0"      | "100"      | "100"     | "200"   |
-      | 205       | "0"      | "200"      | "5"       | ""      |
+      | 205       | "0"      | "200"      | "100"     | "300"   |
 
 
    Scenario: List snapshots

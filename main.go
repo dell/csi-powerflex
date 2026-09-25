@@ -22,10 +22,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/dell/csi-vxflexos/v2/k8sutils"
-	"github.com/dell/csi-vxflexos/v2/provider"
-	"github.com/dell/csi-vxflexos/v2/service"
-	"github.com/dell/gocsi"
+	"github.com/Ecosystems/container-storage-modules/src/csi-vxflexos/v2/k8sutils"
+	"github.com/Ecosystems/container-storage-modules/src/csi-vxflexos/v2/provider"
+	"github.com/Ecosystems/container-storage-modules/src/csi-vxflexos/v2/service"
+	"github.com/Ecosystems/container-storage-modules/src/gocsi"
 )
 
 var flags struct {
@@ -171,7 +171,7 @@ const usage = `    X_CSI_VXFLEXOS_SDCGUID
         The default value is false.
 
     X_CSI_METRICS_ENABLED
-        Enable the shared Prometheus metrics HTTP endpoint on the controller pod.
+        Enable the shared Prometheus metrics HTTP endpoint on the driver pod.
         This is the master switch; gateway monitoring has no effect unless this is true.
 
         The default value is false.

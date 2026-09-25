@@ -17,32 +17,41 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"net"
 	"os"
 	"strings"
+
+	csmlog "github.com/Ecosystems/container-storage-modules/src/csmlog"
 )
 
 const (
 	defaultNodeMdmsFile = "/data/node_mdms.txt"
 )
 
+// PreInitService is the interface for running pre-initialization service logic.
 type PreInitService interface {
 	PreInit() error
 }
 
+// NewPreInitService returns a new PreInitService instance.
 func NewPreInitService() PreInitService {
 	return &service{}
 }
 
+// ArrayConfigurationProvider provides array configuration data.
 type ArrayConfigurationProvider interface {
 	GetArrayConfiguration() ([]*ArrayConnectionData, error)
 }
 
+// FileWriterProvider provides an interface for writing files.
 type FileWriterProvider interface {
 	WriteFile(filename string, data []byte, perm os.FileMode) error
 }
 
+// DefaultArrayConfigurationProvider is the default implementation of ArrayConfigurationProvider.
 type DefaultArrayConfigurationProvider struct{}
 
+// GetArrayConfiguration returns the array configuration data.
 func (s *DefaultArrayConfigurationProvider) GetArrayConfiguration() ([]*ArrayConnectionData, error) {
 	arrayConfig, err := getArrayConfig(nil)
 	if err != nil {
@@ -57,8 +66,10 @@ func (s *DefaultArrayConfigurationProvider) GetArrayConfiguration() ([]*ArrayCon
 	return connectionData, nil
 }
 
+// DefaultFileWriterProvider is the default implementation of FileWriterProvider.
 type DefaultFileWriterProvider struct{}
 
+// WriteFile writes data to a file with the specified permissions.
 func (s *DefaultFileWriterProvider) WriteFile(filename string, data []byte, perm os.FileMode) error {
 	return os.WriteFile(filename, data, perm)
 }
@@ -70,7 +81,7 @@ var (
 )
 
 func (s *service) PreInit() error {
-	log.Infof("PreInit running")
+	csmlog.Infof("PreInit running")
 
 	arrayConfig, err := arrayConfigurationProviderImpl.GetArrayConfiguration()
 	if err != nil {
@@ -82,10 +93,29 @@ func (s *service) PreInit() error {
 		return fmt.Errorf("unable to get zone label key: %v", err)
 	}
 
+	// Validate and trim MDM IPs for all arrays.
+	for i := range arrayConfig {
+		if arrayConfig[i].Mdm != "" {
+			validated, err := validateAndTrimMDM(i, arrayConfig[i].SystemID, arrayConfig[i].Mdm)
+			if err != nil {
+				return err
+			}
+			arrayConfig[i].Mdm = validated
+		} else {
+			// Validate that arrays requiring MDM (SDC/auto protocol) have it configured
+			proto := strings.ToLower(arrayConfig[i].BlockProtocol)
+			if proto == "sdc" || proto == "auto" || proto == "" {
+				errMsg := fmt.Sprintf("array at index %d (systemID: %s) requires MDM for blockProtocol %q but the 'mdm' field is not set in the config secret", i, arrayConfig[i].SystemID, arrayConfig[i].BlockProtocol)
+				csmlog.Errorf(errMsg)
+				return fmt.Errorf("%s", errMsg)
+			}
+		}
+	}
+
 	var mdmData string
 
 	if labelKey == "" {
-		log.Debug("No zone key found, will configure all MDMs")
+		csmlog.Debug("No zone key found, will configure all MDMs")
 		sb := strings.Builder{}
 		for _, connectionData := range arrayConfig {
 			if connectionData.Mdm != "" {
@@ -97,7 +127,7 @@ func (s *service) PreInit() error {
 		}
 		mdmData = sb.String()
 	} else {
-		log.Infof("Zone key detected, will configure MDMs for this node, key: %s", labelKey)
+		csmlog.Infof("Zone key detected, will configure MDMs for this node, key: %s", labelKey)
 		nodeLabels, err := s.GetNodeLabels(context.Background())
 		if err != nil {
 			return fmt.Errorf("unable to get node labels: %v", err)
@@ -106,11 +136,11 @@ func (s *service) PreInit() error {
 		zone, ok := nodeLabels[labelKey]
 
 		if ok && zone == "" {
-			log.Errorf("node key found but zone is missing, will not configure MDMs for this node, key: %s", labelKey)
+			csmlog.Errorf("node key found but zone is missing, will not configure MDMs for this node, key: %s", labelKey)
 		}
 
 		if zone != "" {
-			log.Infof("zone found, will configure MDMs for this node, zone: %s", zone)
+			csmlog.Infof("zone found, will configure MDMs for this node, zone: %s", zone)
 			mdmData, err = getMdmList(arrayConfig, labelKey, zone)
 			if err != nil {
 				return fmt.Errorf("unable to get MDM list: %v", err)
@@ -118,7 +148,7 @@ func (s *service) PreInit() error {
 		}
 	}
 
-	log.Infof("Saving MDM list to %s, MDM=%s", nodeMdmsFile, mdmData)
+	csmlog.Infof("Saving MDM list to %s for %d array(s)", nodeMdmsFile, len(arrayConfig))
 	err = fileWriterProviderImpl.WriteFile(nodeMdmsFile, []byte(fmt.Sprintf("MDM=%s\n", mdmData)), fs.FileMode(0o444))
 	return err
 }
@@ -146,6 +176,33 @@ func getMdmList(connectionData []*ArrayConnectionData, key, zone string) (string
 	}
 
 	return sb.String(), nil
+}
+
+// validateAndTrimMDM validates that each IP in the comma-separated MDM string
+// is a valid IPv4 address. Leading/trailing whitespace is trimmed from each IP
+// . Returns the trimmed MDM string or an error identifying the array
+// index and invalid value.
+func validateAndTrimMDM(index int, systemID, mdm string) (string, error) {
+	ips := strings.Split(mdm, ",")
+	trimmed := make([]string, 0, len(ips))
+	for _, raw := range ips {
+		ip := strings.TrimSpace(raw)
+		if ip == "" {
+			continue
+		}
+		parsed := net.ParseIP(ip)
+		if parsed == nil || parsed.To4() == nil {
+			errMsg := fmt.Sprintf("array at index %d (systemID: %s) has invalid MDM value %q; only numeric IPv4 addresses are accepted", index, systemID, ip)
+			csmlog.Errorf(errMsg)
+			return "", fmt.Errorf("%s", errMsg)
+		}
+		trimmed = append(trimmed, ip)
+	}
+	if len(trimmed) == 0 {
+		csmlog.Errorf("array at index %d (systemID: %s) has no valid MDM addresses; only whitespace found", index, systemID)
+		return "", fmt.Errorf("array at index %d (systemID: %s) has no valid MDM addresses; only whitespace found", index, systemID)
+	}
+	return strings.Join(trimmed, ","), nil
 }
 
 // Returns the label key for the given set of array configurations.

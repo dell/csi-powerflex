@@ -16,6 +16,7 @@
 
 rm -f unix_sock
 source ../../env.sh
+export X_CSI_HEALTH_MONITOR_ENABLED=true
 
 echo "Starting the csi-vxflexos driver. You should wait until the node setup is complete before running tests."
 

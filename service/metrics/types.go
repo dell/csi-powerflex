@@ -73,6 +73,14 @@ type GatewayMonitor struct {
 	mu         sync.RWMutex
 }
 
+// GranularityMetrics holds the three ER-K8S-BR64714-001-powerflex-gen2-1gb-granularity Prometheus counters for
+// PowerFlex Gen2/EC 1GB volume size granularity tracking.
+type GranularityMetrics struct {
+	detectionErrors prometheus.Counter
+	roundedTotal    *prometheus.CounterVec
+	roundedBytes    prometheus.Counter
+}
+
 // credentialLabelKeys is the set of label key names that must not appear in metric labels.
 var credentialLabelKeys = map[string]struct{}{
 	"password":   {},

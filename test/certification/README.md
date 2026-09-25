@@ -9,8 +9,8 @@ This directory contains information for running the RedHat OpenShift certificati
 * The driver already installed with controller pods scheduled to master nodes.
 * A container runner, e.g. docker or podman.
 * A Kubeconfig from the target cluster named `kubeconfig.yaml`.
-* A [storage class](https://github.com/dell/csi-powerflex/tree/main/samples/storageclass) named `storageclass.yaml`
-* A [volume snapshot class](https://github.com/dell/csi-powerflex/tree/main/samples/volumesnapshotclass) named `snapclass.yaml`
+* A [storage class](https://github.com/Ecosystems/container-storage-modules/src/csi-powerflex/tree/main/samples/storageclass) named `storageclass.yaml`
+* A [volume snapshot class](https://github.com/Ecosystems/container-storage-modules/src/csi-powerflex/tree/main/samples/volumesnapshotclass) named `snapclass.yaml`
 
 ## Running the tests
 1. Ensure all YAML manifests are in the same directory.

@@ -27,10 +27,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dell/csmlog"
-	"github.com/dell/gobrick"
-	"github.com/dell/gofsutil"
-	"github.com/dell/goscaleio"
+	"github.com/Ecosystems/container-storage-modules/src/csmlog"
+	"github.com/Ecosystems/container-storage-modules/src/gobrick"
+	"github.com/Ecosystems/container-storage-modules/src/gofsutil"
+	"github.com/Ecosystems/container-storage-modules/src/goscaleio"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -46,11 +46,16 @@ const (
 type StageStatus int
 
 const (
-	StageNotFound    StageStatus = iota // no mount at stagingPath
-	StageReady                          // mounted and publish-ready
-	StageDeletedLink                    // mount source points to a deleted path
-	StageMpathMember                    // mounted device is a multipath member path
-	StageProbeError                     // failed to probe mounts or device format
+	// StageNotFound indicates no mount at stagingPath.
+	StageNotFound StageStatus = iota // no mount at stagingPath
+	// StageReady indicates the volume is mounted and publish-ready.
+	StageReady // mounted and publish-ready
+	// StageDeletedLink indicates the mount source points to a deleted path.
+	StageDeletedLink // mount source points to a deleted path
+	// StageMpathMember indicates the mounted device is a multipath member path.
+	StageMpathMember // mounted device is a multipath member path
+	// StageProbeError indicates a failure to probe mounts or device format.
+	StageProbeError // failed to probe mounts or device format
 )
 
 func (s StageStatus) String() string {
@@ -92,7 +97,6 @@ type NVMeStager struct {
 
 // Stage stages volume by connecting it through NVMe/TCP and creating bind mount to staging path.
 func (n *NVMeStager) Stage(ctx context.Context, req *csi.NodeStageVolumeRequest, stagingPath string, logFields csmlog.Fields, volID string) (*csi.NodeStageVolumeResponse, error) {
-	log := log.WithContext(ctx)
 	logFields["VolumeID"] = volID
 	logFields["StagingPath"] = stagingPath
 
@@ -134,32 +138,31 @@ func (n *NVMeStager) Stage(ctx context.Context, req *csi.NodeStageVolumeRequest,
 
 	logFields["Targets"] = nvmeTargets
 	logFields["WWN"] = nguid
-	ctx = csmlog.SetLogFields(ctx, logFields)
 
 	// Ensure staging directory exists
 	if err := os.MkdirAll(stagingPath, defaultDirPerm); err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to create staging path %s: %s", stagingPath, err.Error())
 	}
-	log.WithFields(logFields).Info("staging path created")
+	csmlog.WithContext(ctx).WithFields(logFields).Info("Staging path created")
 
 	// Check staging status
 	stageStatus, err := isAlreadyStaged(ctx, stagingPath)
-	log.WithFields(logFields).Debugf("staging status detected: %s", stageStatus.String())
+	csmlog.WithContext(ctx).WithFields(logFields).Debugf("Detected staging status: %s", stageStatus.String())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to probe staging state: %v", err)
 	}
 
 	switch stageStatus {
 	case StageReady:
-		log.WithFields(logFields).Info("device already staged")
+		csmlog.WithContext(ctx).WithFields(logFields).Info("Device is already staged")
 		return &csi.NodeStageVolumeResponse{}, nil
 	case StageDeletedLink, StageMpathMember:
-		log.WithFields(logFields).Warnf("unsafe staging state (%s); performing cleanup", stageStatus)
+		csmlog.WithContext(ctx).WithFields(logFields).Warnf("Unsafe staging state detected (%s); performing cleanup", stageStatus)
 		if _, err := n.Unstage(ctx, stagingPath, logFields, volID); err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to cleanup staging path: %v", err)
 		}
 	case StageNotFound:
-		log.WithFields(logFields).Info("device not staged; proceeding with staging")
+		csmlog.WithContext(ctx).WithFields(logFields).Info("Device is not staged; proceeding with staging")
 	default:
 		return nil, status.Errorf(codes.Internal, "unknown stage status: %v", stageStatus)
 	}
@@ -186,26 +189,26 @@ func (n *NVMeStager) Stage(ctx context.Context, req *csi.NodeStageVolumeRequest,
 		if fs == "xfs" {
 			mntFlags = append(mntFlags, "nouuid")
 		}
-		log.Infof("[NodeStage] PV Name: %s", pvName)
+		csmlog.WithContext(ctx).Infof("[NodeStage] PV Name: %s", pvName)
 
 		id := req.GetVolumeId()
-		log.Infof("[NodeStage] VolumeID: %s", id)
+		csmlog.WithContext(ctx).Infof("[NodeStage] VolumeID: %s", id)
 		if err := handlePrivFSMount(ctx, accMode, sysDevice, mntFlags, fs, stagingPath, fsFormatOption, pvName, id); err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to mount disk %s to staging path: %s", devicePath, err.Error())
 		}
 	}
 
-	log.WithFields(logFields).Info("stage complete")
+	csmlog.WithContext(ctx).WithFields(logFields).Info("Staging completed")
 	return &csi.NodeStageVolumeResponse{}, nil
 }
 
+// Unstage removes the staging path for an NVMe volume.
 func (n *NVMeStager) Unstage(ctx context.Context, stagingPath string, logFields csmlog.Fields, volID string) (*csi.NodeUnstageVolumeResponse, error) {
-	log := log.WithContext(ctx)
-
 	mounts, err := getPathMounts(ctx, stagingPath)
 	if err != nil {
-		log.Errorf("NodeUnstageVolume: failed to get mounts for staging path: %v", err)
-		return &csi.NodeUnstageVolumeResponse{}, nil
+		csmlog.WithContext(ctx).Errorf("NodeUnstageVolume: failed to get mounts for staging path: %v", err)
+		return nil, status.Errorf(codes.Internal,
+			"failed to get mounts for staging path %s: %v", stagingPath, err)
 	}
 
 	var devicePath string
@@ -216,59 +219,73 @@ func (n *NVMeStager) Unstage(ctx context.Context, stagingPath string, logFields 
 		}
 	}
 
-	// Unmount the staging target path.
-	log.WithFields(logFields).Info("unmounting directory")
-	if err := gofsutil.Unmount(ctx, stagingPath); err != nil && !os.IsNotExist(err) {
-		log.Errorf("Unable to Unmount staging target path: %s", err)
+	// Check if staging path is actually mounted before attempting to unmount
+	if len(mounts) == 0 {
+		csmlog.WithContext(ctx).WithFields(logFields).Info("Staging path is not mounted; skipping unmount")
+	} else {
+		// Unmount the staging target path.
+		csmlog.WithContext(ctx).WithFields(logFields).Info("Unmounting staging directory")
+		if err := gofsutil.Unmount(ctx, stagingPath); err != nil && !os.IsNotExist(err) {
+			csmlog.WithContext(ctx).Errorf("Unable to Unmount staging target path: %s", err)
+			return nil, status.Errorf(codes.Internal,
+				"Unable to Unmount staging target path %s: %v", stagingPath, err)
+		}
 	}
 
-	log.WithFields(logFields).Info("removing directory")
+	csmlog.WithContext(ctx).WithFields(logFields).Info("Removing staging directory")
 	if err := os.Remove(stagingPath); err != nil && !os.IsNotExist(err) {
-		log.Errorf("Unable to remove staging target path: %v", err)
+		csmlog.WithContext(ctx).Errorf("Unable to remove staging target path: %v", err)
 	}
 
 	// If we found a backing device and it looks like NVME, disconnect it.
 	if devicePath != "" {
-		log.Infof("NodeUnsatgeVolume: disconnecting NVME device %s for volumeID= %s", devicePath, volID)
+		csmlog.WithContext(ctx).Infof("NodeUnstageVolume: disconnecting NVMe device %s for volume ID %s", devicePath, volID)
 		if err := n.disconnectNVMEDevice(ctx, devicePath); err != nil {
-			log.Errorf("Node Unstage volume: failed to disconnect NVMEdevice %s: %v", devicePath, err)
+			csmlog.WithContext(ctx).Errorf("NodeUnstageVolume: failed to disconnect NVMe device %s: %v", devicePath, err)
 			return nil, status.Errorf(codes.Internal, "Failed to disconnect NVME device %s: %v", devicePath, err)
 		}
 	} else {
-		log.Infof("NodeUnsatgeVolume: no backing device found for stagingPath=%s; skipping NVME disconnect", stagingPath)
+		csmlog.WithContext(ctx).Infof("NodeUnstageVolume: no backing device found for staging path %s; skipping NVMe disconnect", stagingPath)
 	}
 
-	log.WithFields(logFields).Info("unstage complete")
+	csmlog.WithContext(ctx).WithFields(logFields).Info("Unstaging completed")
 	return &csi.NodeUnstageVolumeResponse{}, nil
 }
 
 func (n *NVMeStager) connectDevice(ctx context.Context, data deviceInfo) (string, error) {
-	log := log.WithContext(ctx)
 	if !n.useNVME {
-		log.Warn("invalid operation: node is not NVMe-enabled")
+		csmlog.WithContext(ctx).Warn("invalid operation: node is not NVMe-enabled")
 		return "", status.Errorf(codes.FailedPrecondition, "node does not support NVMe")
 	}
 
 	device, err := n.connectNVMEDevice(ctx, data)
 	if err != nil {
-		log.Errorf("unable to find device after multiple discovery attempts: %s", err.Error())
+		csmlog.WithContext(ctx).Errorf("unable to find device after multiple discovery attempts: %s", err.Error())
 		return "", status.Errorf(codes.Internal, "unable to find device: %s", err.Error())
 	}
 
 	return filepath.Join("/dev", device.Name), nil
 }
 
-func (n *NVMeStager) connectNVMEDevice(ctx context.Context, data deviceInfo) (gobrick.Device, error) {
-	logFields := csmlog.ExtractFieldsFromContext(ctx)
+func (n *NVMeStager) connectNVMEDevice(_ context.Context, data deviceInfo) (gobrick.Device, error) {
 	var targets []gobrick.NVMeTargetInfo
 	for _, t := range data.nvmeTargets {
+		if t.Target == "" || t.Portal == "" {
+			// Skip portals whose NQN was not discovered — this happens when NVMe zoning
+			// blocks the discovery packet from a subset of SDTs at node startup (ECS01F-964).
+			// Passing an empty Target to gobrick causes it to reject the entire call.
+			csmlog.Warnf("connectNVMEDevice: skipping portal %q with empty NQN (NVMe zoning or unreachable SDT)", t.Portal)
+			continue
+		}
 		targets = append(targets, gobrick.NVMeTargetInfo{Target: t.Target, Portal: t.Portal})
+	}
+	if len(targets) == 0 {
+		return gobrick.Device{}, fmt.Errorf("connectNVMEDevice: no valid NVMe targets after filtering — all SDT portals have empty NQN")
 	}
 
 	// separate context to prevent 15 seconds cancel from kubernetes
 	connectorCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
-	connectorCtx = csmlog.SetLogFields(connectorCtx, logFields)
 
 	return n.nvmeConnector.ConnectVolume(connectorCtx, gobrick.NVMeVolumeInfo{
 		Targets: targets,
@@ -283,17 +300,17 @@ func (n *NVMeStager) disconnectNVMEDevice(ctx context.Context, devicePath string
 	}
 
 	if !strings.HasPrefix(devName, "nvme") {
-		log.Infof("disconnectNVMEdevice: device %s does not look like nvme skipping", devName)
+		csmlog.WithContext(ctx).Infof("disconnectNVMEDevice: device %s does not look like an NVMe device; skipping disconnect", devName)
 		return nil
 	}
 
-	log.Infof("disconnectNVMEDevices: disconnecting NVME device %s via connector", devName)
+	csmlog.WithContext(ctx).Infof("disconnectNVMEDevices: disconnecting NVME device %s via connector", devName)
 
 	if err := n.nvmeConnector.DisconnectVolumeByDeviceName(ctx, devName); err != nil {
 		return fmt.Errorf("disconnectNVMEDevice: connector failed for %s: %w", devName, err)
 	}
 
-	log.Infof("disconnectNVMEDevice: successfully disconnect NVME device %s", devName)
+	csmlog.WithContext(ctx).Infof("disconnectNVMEDevice: successfully disconnect NVME device %s", devName)
 	return nil
 }
 
@@ -304,13 +321,13 @@ func isAlreadyStaged(ctx context.Context, stagingPath string) (StageStatus, erro
 		return StageProbeError, fmt.Errorf("get mounts: %w", err)
 	}
 	if len(mnts) == 0 {
-		log.Debug("isAlreadyStaged: no mounts found at stagingPath")
+		csmlog.WithContext(ctx).Debug("isAlreadyStaged: no mounts found at stagingPath")
 		return StageNotFound, nil
 	}
 
 	for _, m := range mnts {
 		if strings.HasSuffix(m.Source, "deleted") {
-			log.Warnf("isAlreadyStaged: mount source is deleted: src=%s", m.Source)
+			csmlog.WithContext(ctx).Warnf("isAlreadyStaged: mount source is deleted: src=%s", m.Source)
 			return StageDeletedLink, nil
 		}
 	}
@@ -320,7 +337,7 @@ func isAlreadyStaged(ctx context.Context, stagingPath string) (StageStatus, erro
 		return StageProbeError, fmt.Errorf("disk format probe: %w", err)
 	}
 	if devFS == "mpath_member" {
-		log.Warn("isAlreadyStaged: device is a multipath member (not the DM map)")
+		csmlog.WithContext(ctx).Warn("isAlreadyStaged: device is a multipath member (not the DM map)")
 		return StageMpathMember, nil
 	}
 

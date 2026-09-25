@@ -26,8 +26,6 @@ import (
 	"github.com/cucumber/godog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	messages "github.com/cucumber/messages/go/v21"
 )
 
 // ---------------------------------------------------------------------------
@@ -324,7 +322,7 @@ func (f *gatewayMonitoringFeature) noMetricsServerIsRunning() error {
 }
 
 func (f *gatewayMonitoringFeature) noHTTPListenerExistsOnTheMetricsPort() error {
-	// Verify port ":9090" (default) is not listening
+	// Verify the metrics port is not listening (default is :9090).
 	// Since no server was started, this should simply pass
 	if f.serverAddr != "" {
 		client := &http.Client{Timeout: 200 * time.Millisecond}
@@ -417,7 +415,7 @@ func (f *gatewayMonitoringFeature) theMetricsBodyDoesNotContain(forbidden string
 
 // cleanupScenario tears down server and monitor after each scenario.
 // Signature matches godog.AfterScenarioHook: func(ctx context.Context, sc *Scenario, err error) (context.Context, error)
-func (f *gatewayMonitoringFeature) cleanupScenario(ctx context.Context, _ *messages.Pickle, _ error) (context.Context, error) {
+func (f *gatewayMonitoringFeature) cleanupScenario(ctx context.Context, _ *godog.Scenario, _ error) (context.Context, error) {
 	if f.cancel != nil {
 		f.cancel()
 	}
