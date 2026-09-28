@@ -19,6 +19,7 @@ import (
 	"net"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -30,6 +31,23 @@ var (
 	latestServer   *SharedMetricsServer
 	latestServerMu sync.Mutex
 )
+
+const (
+	metricsReadHeaderTimeout = 5 * time.Second
+	metricsReadTimeout       = 30 * time.Second
+	metricsWriteTimeout      = 30 * time.Second
+	metricsIdleTimeout       = 60 * time.Second
+)
+
+func newHTTPServer(handler http.Handler) *http.Server {
+	return &http.Server{
+		Handler:           handler,
+		ReadHeaderTimeout: metricsReadHeaderTimeout,
+		ReadTimeout:       metricsReadTimeout,
+		WriteTimeout:      metricsWriteTimeout,
+		IdleTimeout:       metricsIdleTimeout,
+	}
+}
 
 // NewSharedMetricsServer creates a new SharedMetricsServer with an isolated
 // prometheus.Registry and HTTP handler. Callers MUST call Start() or StartTLS()
@@ -59,6 +77,13 @@ func (s *SharedMetricsServer) Register(collector prometheus.Collector) error {
 	return s.registry.Register(collector)
 }
 
+// GetRegistry returns the prometheus registry used by this server.
+func (s *SharedMetricsServer) GetRegistry() prometheus.Registerer {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.registry
+}
+
 // Start begins listening on port for HTTP metrics requests.
 // port may be a bare number ("9090") or a colon-prefixed address (":9090");
 // both formats are normalised by FormatMetricsAddr before binding.
@@ -72,7 +97,7 @@ func (s *SharedMetricsServer) Start(port string) error {
 	}
 
 	s.addr = ln.Addr().String()
-	s.server = &http.Server{Handler: s.mux}
+	s.server = newHTTPServer(s.mux)
 
 	go func() {
 		_ = s.server.Serve(ln)
@@ -110,10 +135,8 @@ func (s *SharedMetricsServer) StartTLS(port, certFile, keyFile string) error {
 	}
 
 	s.addr = ln.Addr().String()
-	s.server = &http.Server{
-		Handler:   s.mux,
-		TLSConfig: tlsCfg,
-	}
+	s.server = newHTTPServer(s.mux)
+	s.server.TLSConfig = tlsCfg
 
 	go func() {
 		tlsLn := tls.NewListener(ln, tlsCfg)

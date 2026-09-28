@@ -20,7 +20,7 @@ import (
 	"testing"
 
 	"github.com/dell/csi-metadata-retriever/retriever"
-	"github.com/dell/csi-vxflexos/v2/k8sutils"
+	"github.com/dell/csi-powerflex/v2/k8sutils"
 	"github.com/dell/gofsutil"
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/stretchr/testify/assert"

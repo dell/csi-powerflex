@@ -1,3 +1,13 @@
+# Copyright (c) 2026 Dell Inc. or its subsidiaries. All Rights Reserved.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 	http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
  
 #Note: there is some new Gherkin,  'controller published ephemeral volume'. 
 #Why are we allowing the controller to publish an ephemeral volume when in practice, 
@@ -63,7 +73,7 @@ Examples:
  | "csi-d0f055a700000000"  | "30Gi"         | ""                       | "14dbbf5617523654" | "inline ephemeral create volume failed" |
  | ""                      | "30Gi"         | ""                       | "14dbbf5617523654" | "Volume name not specified"             |
  | "csi-thisnameisalittleover31characters"  | "30Gi"         | ""      | "14dbbf5617523654" | "Volume name too long"                  |
- | "csi-d0f055a700000000"  | "30Gi"         | "viki_pool_HDD_20181031" | "does-not-exist"   | "not recgonized"                        |
+ | "csi-d0f055a700000000"  | "30Gi"         | "viki_pool_HDD_20181031" | "does-not-exist"   | "none"                                  |
  | "csi-d0f055a700012345"  | "30Gi"         | "viki_pool_HDD_20181031" | "15dbbf5617523655" | "not published"             |
 
 Scenario Outline: Node publish and unpublish ephemeral volume for NVMeTCP Fails
