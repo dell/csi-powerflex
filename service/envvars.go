@@ -48,6 +48,10 @@ const (
 	// the Node Service.
 	EnvSDCPrefix = "X_CSI_RENAME_SDC_PREFIX"
 
+	// EnvTrimSDCNameEnabled is the name of the environment variable that specifies if SDC names should be
+	// truncated to 31 characters (PowerFlex limit) when rename is enabled. This is only used by the Node Service.
+	EnvTrimSDCNameEnabled = "X_CSI_TRIM_SDC_NAME_ENABLED"
+
 	// EnvIsApproveSDCEnabled is the name of the environment variable that specifies if the SDC approval is to be
 	// carried out or not.
 	EnvIsApproveSDCEnabled = "X_CSI_APPROVE_SDC_ENABLED"
@@ -85,7 +89,14 @@ const (
 	// EnvPodmonArrayConnectivityPollRate indicates the polling frequency to check array connectivity
 	EnvPodmonArrayConnectivityPollRate = "X_CSI_PODMON_ARRAY_CONNECTIVITY_POLL_RATE"
 
-	// EnvAuthTyoe is the name of the environment variable which stores the authentication type such as OIDC or Standard Username Password
+	// EnvPodmonAPIToken is the shared secret token used to authenticate requests
+	// between the CSI controller and node podmon API endpoints.
+	// When set, both the node HTTP server and the controller HTTP client
+	// will use Bearer token authentication. If unset, authentication is skipped
+	// for backward compatibility.
+	EnvPodmonAPIToken = "X_CSI_PODMON_API_TOKEN" // #nosec G101
+
+	// EnvAuthType is the name of the environment variable which stores the authentication type such as OIDC or Standard Username Password
 	EnvAuthType = "X_CSI_AUTH_TYPE"
 
 	// EnvFsCheckEnabled is the name of the environment variable that specifies
@@ -137,4 +148,37 @@ const (
 
 	// EnvSpaceReclamationTimeout is per-volume timeout in seconds.
 	EnvSpaceReclamationTimeout = "X_CSI_SPACE_RECLAMATION_TIMEOUT"
+
+	// EnvMetricsLeaderElectionEnabled enables leader election for array-level metrics collection.
+	EnvMetricsLeaderElectionEnabled = "X_CSI_METRICS_LEADER_ELECTION_ENABLED"
+
+	// EnvMetricsLeaderElectionLeaseDuration is the duration that the current leader will hold the lease.
+	EnvMetricsLeaderElectionLeaseDuration = "X_CSI_METRICS_LEADER_ELECTION_LEASE_DURATION"
+
+	// EnvMetricsLeaderElectionRenewDeadline is the duration that the acting leader will retry refreshing leadership before giving up.
+	EnvMetricsLeaderElectionRenewDeadline = "X_CSI_METRICS_LEADER_ELECTION_RENEW_DEADLINE"
+
+	// EnvMetricsLeaderElectionRetryPeriod is the duration the leader election client should wait between attempts.
+	EnvMetricsLeaderElectionRetryPeriod = "X_CSI_METRICS_LEADER_ELECTION_RETRY_PERIOD"
+
+	// EnvMetricsCollectionInterval is the polling interval for background metrics collection.
+	EnvMetricsCollectionInterval = "X_CSI_METRICS_COLLECTION_INTERVAL"
+
+	// EnvMetricsCollectionCacheTTL is the cache TTL for metrics collection responses.
+	EnvMetricsCollectionCacheTTL = "X_CSI_METRICS_COLLECTION_CACHE_TTL"
+
+	// EnvMetricsArrayRateLimit is the rate limit for metrics API calls.
+	EnvMetricsArrayRateLimit = "X_CSI_METRICS_ARRAY_RATE_LIMIT"
+
+	// EnvMetricsArrayTimeout is the timeout for metrics API calls.
+	EnvMetricsArrayTimeout = "X_CSI_METRICS_ARRAY_TIMEOUT"
+
+	// EnvMetricsArrayCBThreshold is the circuit breaker failure threshold for metrics API calls.
+	EnvMetricsArrayCBThreshold = "X_CSI_METRICS_ARRAY_CB_THRESHOLD"
+
+	// EnvMetricsArrayCBResetTimeout is the circuit breaker reset timeout for metrics API calls.
+	EnvMetricsArrayCBResetTimeout = "X_CSI_METRICS_ARRAY_CB_RESET_TIMEOUT"
+
+	// EnvPodName is the name of the pod running the CSI driver.
+	EnvPodName = "X_CSI_POD_NAME"
 )

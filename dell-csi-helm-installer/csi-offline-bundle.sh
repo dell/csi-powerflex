@@ -231,7 +231,7 @@ CREATE="false"
 PREPARE="false"
 REGISTRY=""
 DRIVER="csi-vxflexos"
-DEFAULT_VERSION="v2.17.0"
+DEFAULT_VERSION="v2.18.0"
 
 # some directories
 SCRIPTDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"

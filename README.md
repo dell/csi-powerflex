@@ -1,9 +1,9 @@
 # CSI Driver for Dell PowerFlex
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/dell/csi-vxflexos?style=flat-square)](https://goreportcard.com/report/github.com/dell/csi-vxflexos)
-[![License](https://img.shields.io/github/license/dell/csi-vxflexos?style=flat-square&color=blue&label=License)](https://github.com/dell/csi-vxflexos/blob/master/LICENSE)
+[![Go Report Card](https://goreportcard.com/badge/github.com/dell/csi-powerflex?style=flat-square)](https://goreportcard.com/report/github.com/dell/csi-vxflexos)
+[![License](https://img.shields.io/github/license/dell/csi-vxflexos?style=flat-square&color=blue&label=License)](https://github.com/dell/csi-powerflex/blob/master/LICENSE)
 [![Docker](https://img.shields.io/docker/pulls/dellemc/csi-vxflexos.svg?logo=docker&style=flat-square&label=Pulls)](https://hub.docker.com/r/dellemc/csi-vxflexos)
-[![Last Release](https://img.shields.io/github/v/release/dell/csi-vxflexos?label=Latest&style=flat-square&logo=go)](https://github.com/dell/csi-vxflexos/releases)
+[![Last Release](https://img.shields.io/github/v/release/dell/csi-vxflexos?label=Latest&style=flat-square&logo=go)](https://github.com/dell/csi-powerflex/releases)
 
 **Repository for CSI Driver for Dell PowerFlex**
 
@@ -42,7 +42,7 @@ You can run an integration test on a Linux system by populating the file `env.sh
 with values for your PowerFlex system and then run "make integration-test".
 
 ## Runtime Dependencies
-The Node portion of the driver can only be run on nodes which have network connectivity to a “`PowerFlex Cluster`” via PowerFlex SDC Client (which is used by the driver). This means that the `scini` kernel module must be loaded. 
+The Node portion of the driver can only be run on nodes which have network connectivity to a "PowerFlex Cluster" via PowerFlex SDC Client (which is used by the driver). This means that the `scini` kernel module must be loaded. 
 
 Also, if the `X_CSI_VXFLEXOS_SDCGUID` environment variable is not set, the driver will attempt to query the SDC GUID automatically. If this fails, the driver will not run.
 
@@ -65,3 +65,24 @@ Sample manifests:
 - [`samples/rbac/`](samples/rbac/) — RBAC ClusterRole for VGS CRDs
 - [`samples/helm/`](samples/helm/) — Helm values for snapshot-controller / csi-snapshotter sidecars
 
+## Metrics Compatibility
+
+CSI operation metrics are published in two series for compatibility:
+
+- Legacy metrics retain the existing `system_id` label so current dashboards keep working.
+- New driver-level metrics are published with the `global_id` label for multi-array-friendly queries.
+
+Example legacy series:
+```
+dell_csi_operation_total{system_id="181417dd2057c40f", operation="CreateVolume", status="success"} 5
+```
+
+Example driver-level series:
+```
+dell_csi_operation_total_by_global_id{global_id="csi-vxflexos.dellemc.com", operation="CreateVolume", status="success"} 5
+```
+
+Other PowerFlex metrics (storage pools, volumes, arrays) continue to use `system_id`/`array_id` labels unchanged.
+
+## Documentation
+For more detailed information on the driver, please refer to [Container Storage Modules documentation](https://www.dell.com/support/product-details/en-us/product/container-storage-modules/resources/manuals).

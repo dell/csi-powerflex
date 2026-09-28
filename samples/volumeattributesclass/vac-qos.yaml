@@ -1,0 +1,8 @@
+apiVersion: storage.k8s.io/v1
+kind: VolumeAttributesClass
+metadata:
+  name: powerflex-qos
+driverName: csi-vxflexos.dellemc.com
+parameters:
+  bandwidthLimitInKbps: "1024"
+  iopsLimit: "500"

@@ -37,9 +37,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/dell/csi-vxflexos/v2/k8sutils"
+	"github.com/dell/csi-powerflex/v2/k8sutils"
 
-	"github.com/dell/csi-vxflexos/v2/service"
+	"github.com/dell/csi-powerflex/v2/service"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

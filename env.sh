@@ -21,7 +21,7 @@ export X_CSI_QUOTA_ENABLED="true"
 export CSI_ENDPOINT=`pwd`/unix_sock
 export STORAGE_POOL=""
 export NFS_STORAGE_POOL=""
-export SDC_GUID=$(/bin/emc/scaleio/drv_cfg --query_guid)
+export SDC_GUID=$(/opt/emc/scaleio/sdc/bin/drv_cfg --query_guid)
 # Alternate GUID is for another system for testing expose volume to multiple hosts
 export ALT_GUID=
 export X_CSI_POWERFLEX_KUBE_NODE_NAME="node1"

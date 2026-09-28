@@ -25,7 +25,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dell/csi-vxflexos/v2/service/metrics"
+	"github.com/dell/csi-powerflex/v2/service/metrics"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

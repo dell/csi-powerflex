@@ -1,0 +1,63 @@
+{
+    "lagReceivedInMillis": 5000,
+    "lagAppliedInMillis": 4500,
+    "lagPersistentInMillis": 4000,
+    "lagReceivedSkew": false,
+    "lagAppliedSkew": false,
+    "lagPersistentSkew": false,
+    "rplTransmitBwc": {
+        "totalWeightInKb": 102400,
+        "numOccured": 100,
+        "numSeconds": 10
+    },
+    "rplReceiveBwc": {
+        "totalWeightInKb": 51200,
+        "numOccured": 50,
+        "numSeconds": 10
+    },
+    "rplRemoteApplyBwc": {
+        "totalWeightInKb": 0,
+        "numOccured": 0,
+        "numSeconds": 0
+    },
+    "rcgLocalWriteBwc": {
+        "totalWeightInKb": 0,
+        "numOccured": 0,
+        "numSeconds": 0
+    },
+    "rcgLocalReadBwc": {
+        "totalWeightInKb": 0,
+        "numOccured": 0,
+        "numSeconds": 0
+    },
+    "rcgRemoteWriteBwc": {
+        "totalWeightInKb": 0,
+        "numOccured": 0,
+        "numSeconds": 0
+    },
+    "rcgRemoteReadBwc": {
+        "totalWeightInKb": 0,
+        "numOccured": 0,
+        "numSeconds": 0
+    },
+    "rplTransmitLatency": {
+        "totalWeightInKb": 0,
+        "numOccured": 0,
+        "numSeconds": 0
+    },
+    "rplReceiveLatency": {
+        "totalWeightInKb": 0,
+        "numOccured": 0,
+        "numSeconds": 0
+    },
+    "rplApplyLatency": {
+        "totalWeightInKb": 0,
+        "numOccured": 0,
+        "numSeconds": 0
+    },
+    "rplPairIds": [],
+    "numOfRplPairs": 0,
+    "initialCopyProgress": 100.0,
+    "freezeTransmit": false,
+    "isInSlimMode": false
+}

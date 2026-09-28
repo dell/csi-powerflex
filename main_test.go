@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dell/csi-vxflexos/v2/k8sutils"
+	"github.com/dell/csi-powerflex/v2/k8sutils"
 	"github.com/dell/gocsi"
 	"github.com/stretchr/testify/assert"
 	"k8s.io/client-go/kubernetes"
